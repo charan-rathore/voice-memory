@@ -36,9 +36,14 @@ export function createVoiceAdapter({
       if (typeof token !== "string" || token.length < 32)
         throw Error("Invalid voice capability.");
       // An operator-provided (fixed) capability is a singleton: binding it
-      // while already bound would silently retarget live callers to another
-      // session's documents.
-      if (grants.has(token)) throw Error("Voice capability already in use.");
+      // while a grant is LIVE would silently retarget live callers to another
+      // session's documents. An EXPIRED grant is a lapsed liveness artifact,
+      // not a revocation: sweep it and allow rebind. Revocation removes the
+      // grant entirely, and the server retires a revoked fixed credential
+      // separately, so this never resurrects a retired capability.
+      const existing = grants.get(token);
+      if (existing && existing.expires > now())
+        throw Error("Voice capability already in use.");
       grants.set(token, {
         bundle,
         expires: now() + ttlMs,

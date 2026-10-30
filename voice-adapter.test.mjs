@@ -281,3 +281,18 @@ test("GET /v1/models lists the served model behind the voice capability", async 
   adapter.revoke(token);
   assert.equal((await models(token)).status, 401);
 });
+test("an expired grant never blocks rebinding the same capability", () => {
+  let n = 0;
+  const a = createVoiceAdapter({ ttlMs: 10, now: () => n });
+  const t = "f".repeat(64);
+  a.bind(b(), t);
+  n = 20; // grant lapsed (bound at 0 with ttlMs 10)
+  // Before this fix the stale grant made rebind throw "already in use", and
+  // the UI prescribed a fatal reset for a credential that had merely lapsed.
+  // Expiry is a liveness artifact, not a revocation: sweep and rebind.
+  assert.equal(a.bind(b(), t), t);
+  // A grant that is still live still blocks a second bind (singleton).
+  const u = "e".repeat(64);
+  a.bind(b(), u);
+  assert.throws(() => a.bind(b(), u), /already in use/);
+});

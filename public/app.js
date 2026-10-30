@@ -166,17 +166,23 @@ $("files").onchange = async (e) => {
     ),
   );
 };
+$("northstar").onclick = async () => {
+  const r = await fetch("/api/demo-corpus");
+  if (!r.ok) return status("Demo corpus is unavailable on this server.", true);
+  await load((await r.json()).documents);
+};
 $("sample").onclick = () =>
-  load([
-    {
-      title: "Fictional · client review.md",
-      text: "# Fictional client review\n\nPilot launch is proposed for Tuesday. Security sign-off is still pending. Maya owns the security review.\n\n## Decisions\n- Budget of ₹50,000 approved by Maya.\n\n## Actions\n- Maya to send security review by Friday.",
-    },
-    {
-      title: "Fictional · next meeting.md",
-      text: "# Fictional next meeting\n\nThe pilot launch is not approved. Security sign-off remains pending. Budget approval is unchanged. Next discussion will review security findings.",
-    },
-  ]);
+  ($("sample").onclick = () =>
+    load([
+      {
+        title: "Fictional · client review.md",
+        text: "# Fictional client review\n\nPilot launch is proposed for Tuesday. Security sign-off is still pending. Maya owns the security review.\n\n## Decisions\n- Budget of ₹50,000 approved by Maya.\n\n## Actions\n- Maya to send security review by Friday.",
+      },
+      {
+        title: "Fictional · next meeting.md",
+        text: "# Fictional next meeting\n\nThe pilot launch is not approved. Security sign-off remains pending. Budget approval is unchanged. Next discussion will review security findings.",
+      },
+    ]));
 $("ask").onsubmit = async (e) => {
   e.preventDefault();
   draftAllowed = false;

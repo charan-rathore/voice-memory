@@ -108,7 +108,7 @@ test("fixed capability: exclusive binding, cross-session revoke protection, no s
     // A second session cannot steal the live capability.
     const bStart = await B.post("/api/voice/start", {});
     assert.equal(bStart.status, 400);
-    assert.match(bStart.out?.error ?? "", /in use by another session/);
+    assert.match(bStart.out?.error ?? "", /live in another session/);
     // The capability serves A's bundle, not B's.
     const call1 = await bolnaCall(base, FIXED);
     assert.equal(call1.status, 200);

@@ -258,3 +258,21 @@ test("HTTP disconnect propagates abort and suppresses delayed retrieval state", 
     await new Promise((r) => local.close(r));
   }
 });
+
+test("demo corpus route serves the 7 Northstar documents to a session", async () => {
+  const s = await session();
+  const r = await fetch(root + "/api/demo-corpus", {
+    headers: { cookie: s.cookie },
+  });
+  assert.equal(r.status, 200);
+  const { documents } = await r.json();
+  assert.equal(documents.length, 7);
+  assert.deepEqual(
+    documents.map((d) => d.title.slice(0, 2)),
+    ["01", "02", "03", "04", "05", "06", "07"],
+  );
+  assert.match(
+    documents.find((d) => d.title.startsWith("03")).text,
+    /\$42,000/,
+  );
+});

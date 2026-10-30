@@ -1,5 +1,5 @@
 import http from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { importBundle, answer, draft } from "./dist/engine.mjs";
 import { createVoiceAdapter } from "./voice-adapter.mjs";
@@ -242,6 +242,22 @@ export function createLocalServer({
         res.end(JSON.stringify({ configured: !!(bolnaKey && bolnaAgent) }));
         return;
       }
+      // One-click demo fixture: the engineered 7-doc Northstar corpus, plain
+      // filenames so claim supersession behaves (title prefixes are
+      // extraction-sensitive). Session-gated like every app route.
+      if (req.method === "GET" && req.url === "/api/demo-corpus") {
+        const dir = new URL("./corpus-md/", import.meta.url);
+        const documents = [];
+        for (const f of (await readdir(dir))
+          .filter((f) => f.endsWith(".md"))
+          .sort())
+          documents.push({
+            title: f,
+            text: await readFile(new URL(f, dir), "utf8"),
+          });
+        res.end(JSON.stringify({ documents }));
+        return;
+      }
       // The web-call SDK cannot carry our CSRF header, so /api/bolna-session
       // relies on the SameSite=Strict session cookie plus the Origin check
       // above: a cross-site POST reaches this route with neither.
@@ -323,7 +339,7 @@ export function createLocalServer({
             // Idempotent: this session already owns the live capability.
           } else if (voice.isBound(fixedCap)) {
             throw Error(
-              "Voice capability is in use by another session. Reset that session before starting a new one.",
+              "Voice capability is live in another session. Reset that session, or wait for its voice grant to lapse, before starting voice here.",
             );
           } else if (retiredFixed?.token === fixedCap) {
             throw Error(
