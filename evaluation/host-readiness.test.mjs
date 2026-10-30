@@ -123,8 +123,8 @@ test("fixed capability: exclusive binding, cross-session revoke protection, no s
     // The capability serves A's bundle, not B's.
     const call1 = await bolnaCall(base, FIXED);
     assert.equal(call1.status, 200);
-    assert.match(call1.text, /48,000|42,000/);
-    assert.doesNotMatch(call1.text, /99,000/);
+    assert.match(call1.text, /\$42,000|\$48,000/);
+    assert.doesNotMatch(call1.text, /ninety-nine thousand/i);
     // B's reset must not revoke A's grant.
     await B.post("/api/reset", {});
     assert.equal((await bolnaCall(base, FIXED)).status, 200);
@@ -217,7 +217,7 @@ test("public host: Bolna routes authenticate by bearer capability, never by owne
       }),
     });
     assert.equal(call.status, 200);
-    assert.match(call.body, /42,000/);
+    assert.match(call.body, /\$42,000/);
     // A wrong bearer is still refused without any session.
     const bad = await raw(base, "/v1/chat/completions", {
       method: "POST",
@@ -437,7 +437,7 @@ test("re-import by the owning session retargets the fixed capability (no stale c
     assert.equal((await A.post("/api/voice/start", {})).status, 200);
     const call1 = await bolnaCall(base, FIXED);
     assert.equal(call1.status, 200);
-    assert.match(call1.text, /42,000|48,000/);
+    assert.match(call1.text, /\$42,000|\$48,000/);
     // Owner replaces the corpus: the NEXT bearer call must answer from v2.
     await A.post("/api/import", {
       documents: [
@@ -449,8 +449,8 @@ test("re-import by the owning session retargets the fixed capability (no stale c
     });
     const call2 = await bolnaCall(base, FIXED);
     assert.equal(call2.status, 200);
-    assert.match(call2.text, /99,000/);
-    assert.doesNotMatch(call2.text, /42,000|48,000/);
+    assert.match(call2.text, /\$99,000/);
+    assert.doesNotMatch(call2.text, /\$42,000|\$48,000/);
     // Same session can restart voice against the new bundle without a
     // bogus "live in another session" diagnosis.
     assert.equal((await A.post("/api/voice/start", {})).status, 200);

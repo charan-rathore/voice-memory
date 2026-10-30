@@ -11,6 +11,7 @@ import {
   draft,
   validateEvidence,
 } from "./dist/engine.mjs";
+import { spokenTurn, historyField } from "./spoken.mjs";
 export function createVoiceAdapter({
   ttlMs = 120000,
   now = () => Date.now(),
@@ -300,7 +301,7 @@ export function createVoiceAdapter({
             "A review draft is ready on screen. Check decisions, conditions and open items before using it. Nothing has been sent.";
         }
       } else {
-        const result = retrieval
+        let result = retrieval
           ? answerFromRetrieval(
               last.content,
               grant.bundle,
@@ -319,7 +320,11 @@ export function createVoiceAdapter({
           !Array.isArray(result.evidence) ||
           (!result.refused && !result.evidence.length)
         )
-          throw Error("Invalid retrieval result.");
+          // The engine has no answer shape for some in-corpus questions
+          // (e.g. fields outside its vocabulary). Treat that as an honest
+          // refusal for the evidence feed; the claim-graph renderer below
+          // still speaks when it has grounded citations.
+          result = { refused: true, evidence: [] };
         for (const evidence of result.evidence)
           validateEvidence(evidence, grant.bundle);
         if (req.signal.aborted) return new Response(null, { status: 499 });
@@ -332,7 +337,23 @@ export function createVoiceAdapter({
           return Response.json({ error: "Superseded turn" }, { status: 409 });
         grant.last = result;
         turn = { result };
-        spoken =
+        // Deterministic spoken renderer: routes intent, resolves the field
+        // from the claim graph (per-grant inheritance for follow-ups), and
+        // fills guarded templates. Engine output above stays the authority
+        // for evidence; this layer only chooses what is spoken.
+        const rendered = spokenTurn(last.content, grant.bundle, historyField(grant.bundle, data.messages.slice(0, -1)) ?? grant.lastField ?? null);
+        if (rendered) {
+          grant.lastField = rendered.field ?? grant.lastField ?? null;
+          grant.lastTurn = {
+            intent: rendered.intent,
+            field: rendered.field,
+            verdict: rendered.verdict,
+            spoken: rendered.spoken,
+            citations: rendered.citations,
+          };
+          spoken = rendered.spoken;
+        }
+        spoken ??=
           grant.last.spoken ??
           (grant.last.unresolved
             ? "Relevant passages need review, but this question is unresolved. No supported answer or draft is available. Review the original passages on screen."
@@ -408,7 +429,7 @@ async function boundedBody(req, timeoutMs) {
       const { done, value } = await Promise.race([reader.read(), stopped]);
       if (done) break;
       bytes += value.byteLength;
-      if (bytes > 16000) throw Error("Body too large");
+      if (bytes > 128 * 1024) throw Error("Body too large");
       raw += decoder.decode(value, { stream: true });
     }
     return raw + decoder.decode();

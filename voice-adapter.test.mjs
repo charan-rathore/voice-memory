@@ -261,15 +261,19 @@ test("spoken output carries claim safeguards, not a generic wrapper", async () =
   const fee = await spokenOf(
     "What is the engagement fee and how is it invoiced?",
   );
-  assert.match(fee, /Record status: fee: current record \$42,000/);
-  assert.match(fee, /superseded record\(s\): \$48,000/);
-  assert.match(fee, /approval is not established by this check/);
+  // Spoken form: verified values in words, grounded verdict, no record dump.
+  assert.match(fee, /\$42,000 is the latest proposal/);
+  assert.match(fee, /it is not approved/);
   assert.ok(!fee.includes("I found "), fee);
+  assert.ok(!fee.includes(".md"), fee);
+  assert.ok(fee.split(/\s+/).length <= 40, fee);
   const conflict = await spokenOf(
     "What payment terms did we finally agree to?",
   );
-  assert.match(conflict, /unresolved competing statements/);
-  assert.match(conflict, /50\/50 \(04_Steering_Committee_Notes\.md/);
+  assert.match(conflict, /still open/);
+  assert.match(conflict, /40\/60/);
+  assert.match(conflict, /50\/50/);
+  assert.ok(!conflict.includes(".md"), conflict);
   const timing = await spokenOf("When is signoff expected?");
   assert.match(timing, /no timing for sign-off is established/);
   assert.ok(!timing.includes("could not find supporting"), timing);
