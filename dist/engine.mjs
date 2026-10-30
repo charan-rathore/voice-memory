@@ -12609,6 +12609,9 @@ export {
   answer,
   answerFromRetrieval,
   draft,
+  extractClaims,
   importBundle,
+  questionFields,
+  resolveClaims,
   validateEvidence
 };

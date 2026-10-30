@@ -8,6 +8,10 @@ import {
   scopeEntitiesOf,
 } from "./claim-check";
 
+// Re-exported for the spoken renderer layer (spoken.mjs): the claim graph is
+// the renderer's only source of facts. Additive; no behaviour change.
+export { extractClaims, questionFields, resolveClaims };
+
 export type QueryTransformInfo = {
   original: string;
   expanded: string;
