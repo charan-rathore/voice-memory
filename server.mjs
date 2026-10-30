@@ -319,15 +319,16 @@ export function createLocalServer({
         // documents, or the boot-pinned fictional demo corpus. Naming the
         // pinned corpus explicitly keeps "no import yet" from reading as
         // "voice demo broken" - the pinned corpus IS the demo.
-        const corpusKind = s.bundle
-          ? "session"
-          : demoBundle
-            ? "pinned-demo"
-            : null;
-        const corpusDocuments = s.bundle
-          ? s.bundle.sources.length
-          : demoBundle
-            ? demoBundle.sources.length
+        // The pinned demo credential ALWAYS answers the pinned corpus -
+        // owner imports never retarget it, so a typed upload must not
+        // relabel what the voice call reads. Typed docs are reported
+        // separately as sessionDocuments.
+        const pinned = !!demoBundle;
+        const corpusKind = pinned ? "pinned-demo" : s.bundle ? "session" : null;
+        const corpusDocuments = pinned
+          ? demoBundle.sources.length
+          : s.bundle
+            ? s.bundle.sources.length
             : 0;
         res.end(
           JSON.stringify({
@@ -335,6 +336,7 @@ export function createLocalServer({
             corpusLoaded: corpusKind !== null,
             corpusKind,
             documents: corpusDocuments,
+            sessionDocuments: s.bundle ? s.bundle.sources.length : 0,
             voice: {
               fixedCapability: !!fixedCap,
               bound,

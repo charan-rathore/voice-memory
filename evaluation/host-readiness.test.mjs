@@ -547,3 +547,40 @@ test("readiness: pinned corpus bound but Bolna unconfigured is NOT ready-voice",
     cleanup();
   }
 });
+
+test("readiness: typed import in demo mode must NOT relabel the pinned voice corpus", async () => {
+  const { server, base, cleanup } = await start({
+    VM_VOICE_CAPABILITY: FIXED,
+    VM_VOICE_TTL_MS: String(3 * 60 * 60 * 1000),
+    VM_VOICE_HARD_EXPIRES_AT: String(Date.now() + 3600000),
+    VM_DEMO_BUNDLE: "northstar",
+    BOLNA_API_KEY: "test-bolna-key",
+    BOLNA_AGENT_ID: "test-bolna-agent",
+  });
+  try {
+    const b = browser(base, `127.0.0.1:${server.address().port}`);
+    await b.getSession();
+    // Owner imports a private document; the pinned credential still
+    // answers from Northstar (boot-pin: import never retargets it).
+    assert.equal(
+      (
+        await b.post("/api/import", {
+          documents: [
+            {
+              title: "Private.md",
+              text: "# Private\nAuthor: T. Date: 2026-10-01. Type: note.\n1. The engagement fee is $99,000 and it is approved.",
+            },
+          ],
+        })
+      ).status,
+      200,
+    );
+    const r = (await b.get("/api/readiness")).out;
+    assert.equal(r.corpusKind, "pinned-demo");
+    assert.equal(r.documents, 7);
+    assert.equal(r.sessionDocuments, 1);
+    assert.equal(r.ready, true);
+  } finally {
+    cleanup();
+  }
+});

@@ -410,7 +410,11 @@ ready.then(async () => {
       : "";
     $("readiness-status").textContent = r.ready
       ? r.corpusKind === "pinned-demo"
-        ? `Voice demo ready: Northstar (${r.documents} fictional documents) pinned for the call; no typed documents loaded.${expiry}`
+        ? `Voice demo ready: Northstar (${r.documents} fictional documents) pinned for the call; ${
+            r.sessionDocuments
+              ? `${r.sessionDocuments} typed document(s) loaded for on-screen Q&A - the call still answers the pinned corpus.`
+              : "no typed documents loaded."
+          }${expiry}`
         : `Ready: ${r.documents} documents loaded, voice bound.${expiry}`
       : r.corpusKind === "pinned-demo"
         ? `Voice demo not ready: ${missing.join("; ")}.`
