@@ -13,13 +13,24 @@ function status(text, error = false) {
 // of the last verified voice turn and show exactly what was spoken plus its
 // citations. Single-call correlation only; silent on transient errors.
 let voicePoll = null;
-async function renderVoiceTurn() {
+async function renderVoiceTurn(final = false) {
   try {
     const r = await fetch("/api/voice/last").then((x) => x.json());
     const st = r.turn?.spokenTurn;
-    if (!st) return;
+    if (!st) {
+      if (final && !$("voice-turn").hidden) {
+        $("voice-turn").textContent = "No verified voice turn in the last call.";
+        $("voice-turn-evidence").replaceChildren();
+      }
+      return;
+    }
+    // The turn's own server-side timestamp: never presented as "just now",
+    // and a turn from an earlier call keeps its real time.
+    const when = new Date(st.at ?? Date.now()).toLocaleTimeString();
     $("voice-turn").hidden = false;
-    $("voice-turn").textContent = `Heard just now (${st.verdict}): ${st.spoken}`;
+    $("voice-turn").textContent = `${
+      final ? "Final verified turn of the last call" : "Last verified turn"
+    } (${st.verdict}, ${when}): ${st.spoken}`;
     $("voice-turn-evidence").replaceChildren(
       ...(st.citations ?? []).map((c) => {
         const d = document.createElement("details"),
@@ -37,6 +48,12 @@ async function renderVoiceTurn() {
 }
 function startVoicePoll() {
   stopVoicePoll();
+  // New call, new sequence: the panel waits for THIS call's first verified
+  // turn instead of showing the previous call's last one.
+  $("voice-turn").hidden = false;
+  $("voice-turn").textContent =
+    "Listening for the first verified turn of this call\u2026";
+  $("voice-turn-evidence").replaceChildren();
   const tick = () => {
     renderVoiceTurn().finally(() => {
       if (voicePoll) voicePoll = setTimeout(tick, 3000);
@@ -469,7 +486,7 @@ ready.then(async () => {
         if (call !== c) return;
         call = null;
         stopVoicePoll();
-        renderVoiceTurn();
+        renderVoiceTurn(true);
         setCall("Call ended.");
         $("call-end").hidden = true;
         $("call-start").disabled = false;
@@ -521,5 +538,6 @@ ready.then(async () => {
     $("call-end").hidden = true;
     $("call-start").disabled = false;
     setCall("Call ended.");
+    renderVoiceTurn(true);
   };
 });

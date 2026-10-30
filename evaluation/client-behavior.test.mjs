@@ -57,10 +57,13 @@ const flush = async (n = 12) => {
   for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r));
 };
 
+let voiceLast = null;
+
 async function boot() {
   elements.clear();
   sdkInstances = [];
   sdkStartImpl = async () => {};
+  voiceLast = null;
   globalThis.window = globalThis;
   globalThis.BolnaWebCall = StubCall;
   globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
@@ -87,6 +90,8 @@ async function boot() {
     if (u === "/api/bolna-config")
       return { ok: true, json: async () => ({ configured: true }) };
     if (u === "/api/voice/start") return { ok: true, json: async () => ({}) };
+    if (u === "/api/voice/last")
+      return { ok: true, json: async () => ({ turn: voiceLast }) };
     return { ok: true, json: async () => ({ documents: [], turns: [] }) };
   };
   await import("../public/app.js?boot=" + Math.random());
@@ -182,6 +187,54 @@ test("successful call-start cancels the watchdog", async () => {
     mock.timers.tick(120000); // long after the deadline: no timeout fires
     await flush();
     assert.match(ui.status.textContent, /Live call in progress/);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("live call polls the owner feed over GET and marks the final render as last call", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const ui = await boot();
+    sdkStartImpl = async function () {
+      sdkInstances[0].emit("call-start");
+    };
+    await ui.start.onclick();
+    await flush();
+    // New call: pending state, never the previous call's turn.
+    assert.equal(el("voice-turn").hidden, false);
+    assert.match(el("voice-turn").textContent, /first verified turn of this call/i);
+    // A verified turn lands server-side; the 3s poll renders it with its
+    // verdict and the turn's own timestamp - never "just now".
+    voiceLast = {
+      spokenTurn: {
+        verdict: "PROPOSED",
+        spoken: "$42,000 is the latest proposal, and it is not approved.",
+        at: 1730000000000,
+        citations: [],
+      },
+    };
+    mock.timers.tick(3000);
+    await flush();
+    assert.match(el("voice-turn").textContent, /^Last verified turn \(PROPOSED, /);
+    assert.match(el("voice-turn").textContent, /\$42,000 is the latest proposal/);
+    assert.doesNotMatch(el("voice-turn").textContent, /just now/i);
+    // Call end: one final render, explicitly marked as the last call's.
+    sdkInstances[0].emit("call-end");
+    await flush();
+    assert.match(el("voice-turn").textContent, /^Final verified turn of the last call/);
+    // Owner-initiated End takes its own path (the SDK handler is skipped by
+    // design); it must still land the same final, marked render.
+    sdkStartImpl = async function () {
+      sdkInstances[sdkInstances.length - 1].emit("call-start");
+    };
+    await ui.start.onclick();
+    await flush();
+    mock.timers.tick(3000);
+    await flush();
+    ui.end.onclick();
+    await flush();
+    assert.match(el("voice-turn").textContent, /^Final verified turn of the last call/);
   } finally {
     mock.timers.reset();
   }

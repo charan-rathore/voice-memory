@@ -241,7 +241,7 @@ test("injected retrieval cannot launder mismatched original source evidence", as
     }),
     t = a.bind(b());
   await assert.rejects(a.handle(request(t, "security")), /contract mismatch/);
-  assert.equal(a.lastTurn(t), undefined);
+  assert.equal(a.lastTurn(t), null);
 });
 test("spoken output carries claim safeguards, not a generic wrapper", async () => {
   const { NORTHSTAR_DOCS } = await import("./corpus-northstar.mjs");

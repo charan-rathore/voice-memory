@@ -345,6 +345,7 @@ export function createVoiceAdapter({
         if (rendered) {
           grant.lastField = rendered.field ?? grant.lastField ?? null;
           grant.lastTurn = {
+            at: Date.now(),
             intent: rendered.intent,
             field: rendered.field,
             verdict: rendered.verdict,
@@ -409,7 +410,7 @@ export function createVoiceAdapter({
     lastTurn(token) {
       const g = grants.get(token);
       if (!g || g.expires <= now()) return null;
-      return g.turn;
+      return g.turn ?? null;
     },
   };
 }

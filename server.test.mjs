@@ -22,6 +22,8 @@ const post = (s, p, body, origin = root) =>
     },
     body: JSON.stringify(body),
   });
+const get = (s, p) =>
+  fetch(root + "/api/" + p, { headers: s ? { cookie: s.cookie } : {} });
 test("same origin, CSRF and session required", async () => {
   const s = await session();
   assert.equal(
@@ -154,7 +156,7 @@ test("local session voice bridge preserves evidence and resets on replacement wi
   assert.match(r.headers.get("content-type"), /event-stream/);
   assert.match(await r.text(), /\[DONE\]/);
   assert.ok(
-    (await (await post(a, "voice/last", {})).json()).turn.result.evidence
+    (await (await get(a, "voice/last")).json()).turn.result.evidence
       .length,
   );
   await post(a, "import", {
@@ -165,7 +167,7 @@ test("local session voice bridge preserves evidence and resets on replacement wi
       },
     ],
   });
-  assert.equal((await (await post(a, "voice/last", {})).json()).turn, null);
+  assert.equal((await (await get(a, "voice/last")).json()).turn, null);
   assert.equal(
     (
       await post(a, "voice/turn", {
@@ -177,7 +179,39 @@ test("local session voice bridge preserves evidence and resets on replacement wi
   );
   await post(a, "voice/start", {});
   await post(a, "reset", {});
-  assert.equal((await (await post(a, "voice/last", {})).json()).turn, null);
+  assert.equal((await (await get(a, "voice/last")).json()).turn, null);
+});
+test("voice evidence feed is a read-only GET on the actual browser contract", async () => {
+  const a = await session();
+  await post(a, "import", {
+    documents: [
+      {
+        title: "Pilot",
+        text: "Pilot launch security review is pending. Maya owns security review and launch is not approved.",
+      },
+    ],
+  });
+  await post(a, "voice/start", {});
+  await post(a, "voice/turn", {
+    stream: true,
+    messages: [{ role: "user", content: "security pilot" }],
+  });
+  // The app fetches this with a plain GET: cookie only, no Origin, no CSRF.
+  const okRes = await get(a, "voice/last");
+  assert.equal(okRes.status, 200);
+  const feed = (await okRes.json()).turn;
+  assert.ok(feed.spokenTurn.spoken.length);
+  assert.equal(typeof feed.spokenTurn.at, "number");
+  // Another session cannot see this session's voice feed.
+  const b = await session();
+  assert.equal((await (await get(b, "voice/last")).json()).turn, null);
+  // Wrong method: refused, and the feed is not mutated.
+  const at = (await (await get(a, "voice/last")).json()).turn.spokenTurn.at;
+  assert.match(String((await post(a, "voice/last", {})).status), /^40[34]$/);
+  assert.equal(
+    (await (await get(a, "voice/last")).json()).turn.spokenTurn.at,
+    at,
+  );
 });
 test("HTTP disconnect propagates abort and suppresses delayed retrieval state", async () => {
   const { createLocalServer } = await import("./server.mjs");
@@ -253,7 +287,7 @@ test("HTTP disconnect propagates abort and suppresses delayed retrieval state", 
     assert.equal(signal.aborted, true);
     release();
     await new Promise((r) => setImmediate(r));
-    assert.equal(voice.lastTurn(token), undefined);
+    assert.equal(voice.lastTurn(token), null);
   } finally {
     release?.();
     await new Promise((r) => local.close(r));

@@ -182,3 +182,56 @@ test("demo boot pin: expired credential at boot keeps the server alive, voice st
     server.close();
   }
 });
+
+test("demo owner evidence feed: plain GET with owner cookie, 403 without, wrong method safe", async () => {
+  const { server, base } = await start(DEMO_ENV());
+  try {
+    // No session cookie: refused (production owner gate).
+    const noauth = await raw(base, "/api/voice/last", { headers: { host: HOST } });
+    assert.equal(noauth.status, 403);
+    // Owner sign-in, then a real voice turn through the pinned credential.
+    const signin = await raw(base, "/owner-signin", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+      body: "key=" + encodeURIComponent(OWNER),
+    });
+    const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
+    assert.ok(cookie);
+    const before = JSON.parse(
+      (await raw(base, "/api/voice/last", { headers: { host: HOST, cookie } })).body,
+    );
+    assert.equal(before.turn, null);
+    const t = await bearer(base, "Was the $42,000 revision finalized?");
+    assert.equal(t.status, 200);
+    // The app's actual contract: plain GET, cookie only - no Origin, no CSRF.
+    const feedRes = await raw(base, "/api/voice/last", { headers: { host: HOST, cookie } });
+    assert.equal(feedRes.status, 200);
+    const feed = JSON.parse(feedRes.body).turn;
+    assert.match(feed.spokenTurn.spoken, /\$42,000/);
+    assert.equal(feed.spokenTurn.verdict, "PROPOSED");
+    assert.equal(typeof feed.spokenTurn.at, "number");
+    assert.ok(feed.spokenTurn.citations.length > 0);
+    // Wrong method is refused and does not mutate the feed.
+    const sess = JSON.parse(
+      (await raw(base, "/api/session", { headers: { cookie, host: HOST } })).body,
+    );
+    const wrong = await raw(base, "/api/voice/last", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie,
+        "x-csrf-token": sess.csrf,
+        origin: `https://${HOST}`,
+        host: HOST,
+      },
+      body: "{}",
+    });
+    assert.match(String(wrong.status), /^40[34]$/);
+    const after = JSON.parse(
+      (await raw(base, "/api/voice/last", { headers: { host: HOST, cookie } })).body,
+    );
+    assert.equal(after.turn.spokenTurn.at, feed.spokenTurn.at);
+  } finally {
+    server.close();
+  }
+});

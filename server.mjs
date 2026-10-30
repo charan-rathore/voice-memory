@@ -340,6 +340,18 @@ export function createLocalServer({
         );
         return;
       }
+      // Owner-session evidence feed, read-only like /api/readiness: a plain
+      // browser GET with the session cookie - no Origin or CSRF header, so it
+      // must not live behind the mutating-POST gate. Demo mode correlates
+      // honestly to the single pinned credential's last turn; no
+      // multi-user claim.
+      if (req.method === "GET" && req.url === "/api/voice/last") {
+        const token = s.voiceToken ?? (demoBundle ? fixedCap : null);
+        res.end(
+          JSON.stringify({ turn: token ? voice.lastTurn(token) : null }),
+        );
+        return;
+      }
       // One-click demo fixture: the engineered 7-doc Northstar corpus, plain
       // filenames so claim supersession behaves (title prefixes are
       // extraction-sensitive). Session-gated like every app route.
@@ -518,11 +530,6 @@ export function createLocalServer({
         }
         if (!res.destroyed) res.end();
         return;
-      } else if (req.url === "/api/voice/last") {
-        // Owner-session evidence feed. Demo mode correlates honestly to the
-        // single pinned credential's last turn; no multi-user claim.
-        const token = s.voiceToken ?? (demoBundle ? fixedCap : null);
-        out = { turn: token ? voice.lastTurn(token) : null };
       } else if (req.url === "/api/reset") {
         if (demoBundle && fixedCap) voice.retire(fixedCap);
         retireVoice(s);
