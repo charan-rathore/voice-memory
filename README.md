@@ -42,8 +42,11 @@ each state explicitly. All documents are fictional.
 
 ## Voice capability lifecycle
 
-- One fixed bearer credential, injected by environment, minted once. There is no
-  reset or extend endpoint.
+- One fixed bearer credential, injected by environment, minted once. No endpoint
+  extends or un-retires it. The owner's session reset terminally retires the
+  credential; bringing voice back then requires a new credential (new environment
+  value, redeploy, and provider update), and the retired one fails closed with
+  401.
 - Absolute hard expiry is part of the credential: `2026-11-02T00:00:00Z` for this
   deployment. Rotation means a new environment value, a redeploy, and a provider
   update; the old credential then fails closed with 401.
@@ -56,8 +59,9 @@ each state explicitly. All documents are fictional.
   connection failures, and retries cleanly; a late success from a timed-out
   attempt cannot reopen a second call.
 
-Voice runs through Bolna on the account's existing credits; no paid inference is
-added.
+The local retrieval and answer renderer make no model API calls. Voice calls run
+through Bolna and spend the account's existing credits; nothing here makes voice
+free.
 
 ## Run locally
 
