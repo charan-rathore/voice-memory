@@ -3,10 +3,17 @@ import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { importBundle, answer, draft } from "./dist/engine.mjs";
 import { createVoiceAdapter } from "./voice-adapter.mjs";
+const voiceTtlMs = () => Number(process.env.VM_VOICE_TTL_MS || 10 * 60 * 1000);
+// Human-readable grant window for runtime guidance; must track the
+// configured TTL, never a hardcoded duration.
+const lapseText = (ms) => {
+  const m = Math.round(ms / 60000);
+  return m >= 90 && m % 60 === 0
+    ? `about ${m / 60} hours`
+    : `about ${m} minutes`;
+};
 export function createLocalServer({
-  voice = createVoiceAdapter({
-    ttlMs: Number(process.env.VM_VOICE_TTL_MS || 10 * 60 * 1000),
-  }),
+  voice = createVoiceAdapter({ ttlMs: voiceTtlMs() }),
   port = Number(process.env.PORT || 4317),
 } = {}) {
   // Deployment configuration (all optional; unset = local-only behavior):
@@ -339,7 +346,7 @@ export function createLocalServer({
             // Idempotent: this session already owns the live capability.
           } else if (voice.isBound(fixedCap)) {
             throw Error(
-              "Voice capability is live in another session. Wait for its voice grant to lapse (about ten minutes of voice inactivity), then start voice here again. Do not reset a session to free it: resetting retires this credential permanently.",
+              `Voice capability is live in another session. Wait for its voice grant to lapse (${lapseText(voiceTtlMs())} of voice inactivity), then start voice here again. Do not reset a session to free it: resetting retires this credential permanently.`,
             );
           } else if (retiredFixed?.token === fixedCap) {
             throw Error(

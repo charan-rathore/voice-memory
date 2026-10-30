@@ -81,7 +81,10 @@ async function bolnaCall(base, token) {
 }
 
 test("fixed capability: exclusive binding, cross-session revoke protection, no silent revive", async () => {
-  const { server, base, cleanup } = await start({ VM_VOICE_CAPABILITY: FIXED });
+  const { server, base, cleanup } = await start({
+    VM_VOICE_CAPABILITY: FIXED,
+    VM_VOICE_TTL_MS: String(3 * 60 * 60 * 1000),
+  });
   try {
     const A = browser(base, `127.0.0.1:${server.address().port}`);
     const B = browser(base, `127.0.0.1:${server.address().port}`);
@@ -114,6 +117,8 @@ test("fixed capability: exclusive binding, cross-session revoke protection, no s
     // lapse-and-retry path instead.
     assert.doesNotMatch(bStart.out?.error ?? "", /Reset that session/);
     assert.match(bStart.out?.error ?? "", /lapse/);
+    // Guidance must state the CONFIGURED grant window, not a hardcoded one.
+    assert.match(bStart.out?.error ?? "", /about 3 hours/);
     // The capability serves A's bundle, not B's.
     const call1 = await bolnaCall(base, FIXED);
     assert.equal(call1.status, 200);
