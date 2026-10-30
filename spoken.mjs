@@ -23,6 +23,7 @@ const FIELD_CANONICAL = {
 };
 
 const INTENTS = [
+  ["SUMMARY", /\b(overall|where do we stand|recap|summar)\b/i],
   ["WHY", /\bwhy\b|\breason\b/i],
   ["MUTATE", /\b(mark|update|record|edit|approve it|set the|make it)\b/i],
   ["REJECTED", /\b(reject\w*|turned down|refused|declined)\b/i],
@@ -143,9 +144,11 @@ const FIELD_CUES = {
 
 const MONTH_RE = "(?:January|February|March|April|May|June|July|August|September|October|November|December)";
 const SUPPLEMENT_PATTERNS = [
-  { field: "deadline", cue: /deadline|date|target|readiness/i, re: new RegExp("\\b(\\d{1,2} " + MONTH_RE + "(?: \\d{4})?)\\b", "g") },
-  { field: "scope", cue: /scope|region|depot|area|site|phase|covering/i, re: /\b((?:two|three|four|five|six|seven|\d+) (?:regions?|depots?|areas?|sites?|phases?)(?:\s*\([^)]*\))?)/gi },
-  { field: "reporting", cue: /report/i, re: /\b(weekly|fortnightly|monthly|biweekly|daily)\b/gi },
+  // Cue and value must share ONE sentence: a stray "target practice" or
+  // "weekly sales report" line must not mint a deadline or reporting claim.
+  { field: "deadline", cue: /\b(deadline|readiness|delivery target|due date)\b/i, re: new RegExp("\\b(\\d{1,2} " + MONTH_RE + "(?: \\d{4})?)\\b", "g") },
+  { field: "scope", cue: /\b(scope|regions?|depots?|areas?|sites?)\b/i, re: /\b((?:two|three|four|five|six|seven|\d+) (?:regions?|depots?|areas?|sites?|phases?)(?:\s*\([^)]*\))?)/gi },
+  { field: "reporting", cue: /\breporting\b/i, re: /\b(weekly|fortnightly|monthly|biweekly|daily)\b/gi },
 ];
 
 function statusOfLine(line) {
@@ -174,22 +177,26 @@ function mergedClaims(bundle, fields) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
-      for (const p of SUPPLEMENT_PATTERNS) {
-        if (!wanted.has(p.field) || !p.cue.test(line)) continue;
-        p.re.lastIndex = 0;
-        for (const m of line.matchAll(p.re)) {
-          const value = m[1].replace(/\s+\(/, "(").replace(/\s+/g, " ").trim();
-          const key = `${p.field}|${src.title}|${value.toLowerCase().replace(/\s+/g, "")}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          extra.push({
-            field: p.field, value, quote: line, title: src.title,
-            docDate: srcDate,
-            firstLine: i + 1, lastLine: i + 1,
-            status: statusOfLine(line), hash: null,
-            scopeEntities: entities,
-            supersedes: /narrow|revis|supersed|instead of|retain/i.test(line),
-          });
+      for (const sentence of line.split(/(?<=[.!?])\s+/)) {
+        const sent = sentence.replace(/^\s*\d+\.\s*/, "").trim();
+        if (!sent) continue;
+        for (const p of SUPPLEMENT_PATTERNS) {
+          if (!wanted.has(p.field) || !p.cue.test(sent)) continue;
+          p.re.lastIndex = 0;
+          for (const m of sent.matchAll(p.re)) {
+            const value = m[1].replace(/\s+\(/, "(").replace(/\s+/g, " ").trim();
+            const key = `${p.field}|${src.title}|${value.toLowerCase().replace(/\s+/g, "")}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            extra.push({
+              field: p.field, value, quote: sent, title: src.title,
+              docDate: srcDate,
+              firstLine: i + 1, lastLine: i + 1,
+              status: statusOfLine(sent), hash: null,
+              scopeEntities: entities,
+              supersedes: /narrow|revis|supersed|instead of|retain/i.test(sent),
+            });
+          }
         }
       }
     }
@@ -274,17 +281,18 @@ function verdictFor(field, resolved, claims, question, intent, bundle) {
     return "NO-RECORD";
   if (current.status === "approved") return "CONFIRMED";
   if (REJECT_RE.test(current.quote)) return "REJECTED-EXPLICIT";
-  if (field === "scope" || field === "reporting") return "CONFIRMED";
+  if (field === "scope") return "CONFIRMED";
   return "PROPOSED";
 }
 
 const words = (s) => s.split(/\s+/).filter(Boolean).length;
 
 function render({ intent, verdict, field, current, history, citations, claims, question }) {
-  const value = current ? current.value : null;
+  const disp = (v) => (v ? v.replace(/(\S)\(/, "$1 (") : v);
+  const value = current ? disp(current.value) : null;
   const label = current ? docLabel(current) : null;
   const earlier = history.length ? history[history.length - 1] : null;
-  const earlierVal = earlier ? earlier.value : null;
+  const earlierVal = earlier ? disp(earlier.value) : null;
   const neg = verdict === "NO-RECORD" ? scopedNegative(field, citations, question) : null;
   const lowerFirst = (t) => (t ? t[0].toLowerCase() + t.slice(1) : t);
   if (verdict === "NO-RECORD" && neg) {
@@ -301,12 +309,13 @@ function render({ intent, verdict, field, current, history, citations, claims, q
     return `I cannot change the records by voice. ${value ? `${cap(value)} stays` : "It stays"} a proposal until a signed approval is added to the documents.`;
 
   if (field === "scope" && current)
-    return `The current working scope is ${current.value}.`;
+    return `The current working scope is ${value}.`;
   if (field === "reporting" && current) {
     const cadence = (current.quote + " " + (current.value ?? "")).match(/\b(weekly|daily|fortnightly|monthly|biweekly|twice weekly)\b/i)?.[1];
-    return cadence
+    if (!cadence) return `${cap(docLabel(current))} records the reporting arrangement.`;
+    return verdict === "CONFIRMED"
       ? `The client agreed to ${cadence.toLowerCase()} progress reporting, per ${docLabel(current)}.`
-      : `${cap(docLabel(current))} records the reporting arrangement.`;
+      : `The record proposes ${cadence.toLowerCase()} progress reporting, per ${docLabel(current)}; confirmation is not recorded.`;
   }
 
   switch (`${intent}:${verdict}`) {
@@ -367,7 +376,7 @@ function render({ intent, verdict, field, current, history, citations, claims, q
     case "SOURCE:OPEN":
     case "SOURCE:CONFIRMED":
       return citations.length
-        ? `${cap(citations.map((c) => docLabel(c)).slice(0, 2).join(" and "))} ${citations.length > 1 ? "say" : "says"}: ${trimQuote(citations[0].quote, 110)}`
+        ? `${cap(docLabel(citations[0]))} says: ${trimQuote(citations[0].quote, 110)}${citations.length > 1 ? ` It is also recorded in ${docLabel(citations[1])}.` : ""}`
         : `I cannot point to a document for that.`;
     case "REJECTED:PROPOSED":
     case "REJECTED:UNKNOWN":
@@ -441,12 +450,91 @@ export function historyField(bundle, messages) {
   return null;
 }
 
+// "Where do we stand overall?": one grounded clause per field on record,
+// never an invented single verdict.
+function summarize(claims) {
+  const fields = [
+    ["fee", "the fee"],
+    ["paymentSplit", "the payment split"],
+    ["deadline", "the deadline"],
+    ["scope", "the scope"],
+  ];
+  const clauses = [];
+  for (const [field, label] of fields) {
+    const resolved = resolveClaims(claims.filter((c) => c.field === field));
+    const actives = resolved.active.get(field) ?? [];
+    if (!actives.length) continue;
+    const approved = resolved.approved.get(field) ?? [];
+    const values = dedupeValues(actives.map((c) => c.value));
+    if (approved.length)
+      clauses.push(`${label} is confirmed at ${approved[0].value}`);
+    else if (values.length > 1)
+      clauses.push(`${label} is open between ${values.join(" and ")}`);
+    else if (field === "scope")
+      clauses.push(`${label} is ${values[0]}`);
+    else clauses.push(`${label} is ${values[0]}, still a proposal`);
+  }
+  if (!clauses.length) return null;
+  const spoken = cap(clauses.join("; ")) + ".";
+  return words(spoken) <= 40 ? spoken : null;
+}
+
 // Main entry: one voice turn. Returns { spoken, verdict, field, intent,
 // citations } or null when the caller should use its existing generic path.
+const PROPER_STOP = new Set((
+  "What When Where Which Who Whose Why How Was Were Is Are Did Does Do Has Have Had The This That These Those " +
+  "But Okay Ok So And Or If Then Can Could Would Should Will Shall May Any Much Many Now Today Yesterday Tomorrow " +
+  "January February March April May June July August September October November December " +
+  "Monday Tuesday Wednesday Thursday Friday Saturday Sunday"
+).split(" "));
+
+// A capitalized name the documents never mention (wrong client, invented
+// party): abstain rather than answer from the records we do hold.
+function unknownNamedEntity(question, bundle) {
+  const hay = bundle.sources
+    .map((s) => `${s.title} ${s.text}`)
+    .join(" ")
+    .toLowerCase();
+  for (const t of question.match(/\b[A-Z][a-z]{2,}\b/g) ?? []) {
+    if (PROPER_STOP.has(t)) continue;
+    if (!hay.includes(t.toLowerCase())) return t;
+  }
+  return null;
+}
+
 export function spokenTurn(question, bundle, prevField = null) {
   if (!bundle?.sources?.length) return null;
   const intent = routeIntent(question);
   const claims = mergedClaims(bundle, ALL_FIELDS);
+  if (unknownNamedEntity(question, bundle))
+    return {
+      spoken: "I don't see that in these documents.",
+      verdict: "UNKNOWN",
+      field: null,
+      intent,
+      citations: [],
+    };
+  // An explicit amount with no matching claim: never answer with a
+  // different figure as if it were the one asked about.
+  const askedAmounts = question.match(/[$€£₹]\s?[\d,]+|\b\d{1,3}(?:,\d{3})+\b/g) ?? [];
+  if (askedAmounts.length) {
+    const match = askedAmounts.some((a) =>
+      claims.some((c) => c.value && c.value.replace(/[^\d]/g, "") === a.replace(/[^\d]/g, "")),
+    );
+    if (!match)
+      return {
+        spoken: `I don't see ${askedAmounts[0]} in these documents.`,
+        verdict: "UNKNOWN",
+        field: null,
+        intent,
+        citations: [],
+      };
+  }
+  if (intent === "SUMMARY") {
+    const spoken = summarize(claims);
+    if (spoken)
+      return { spoken, verdict: "OPEN", field: null, intent, citations: claims.map((c) => ({ title: c.title, docDate: c.docDate, quote: c.quote, firstLine: c.firstLine, lastLine: c.lastLine, hash: c.hash })) };
+  }
   const field = resolveField(question, claims, null) ?? (prevField ? resolveField(question, claims, prevField) : null);
   if (!field) {
     return {
@@ -461,7 +549,10 @@ export function spokenTurn(question, bundle, prevField = null) {
   const resolved = resolveClaims(fieldClaims);
   const verdict = verdictFor(field, resolved, claims, question, intent, bundle);
   const actives = resolved.active.get(field) ?? [];
-  const current = actives[0] ?? null;
+  const current =
+    verdict === "CONFIRMED"
+      ? (resolved.approved.get(field) ?? [])[0] ?? actives[0] ?? null
+      : actives[0] ?? null;
   const supersededForField = resolved.superseded.filter((c) => c.field === field);
   const citations = [...actives, ...supersededForField, ...(resolved.approved.get(field) ?? [])];
   if (verdict === "NO-RECORD") {

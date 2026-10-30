@@ -56,18 +56,11 @@ for (const [name, dir, v] of [
   ["northstar", new URL("../corpus-md/", import.meta.url).pathname, {
     fee: "42,000", oldFee: "48,000", feeSpoken: "42,000", oldFeeSpoken: "48,000", splitA: "40/60", splitB: "50/50",
   }],
-  ["bluebird", "/tmp/blind20/alt-corpus", {
+  ["bluebird", new URL("./fixtures/alt-corpus-bluebird/", import.meta.url).pathname, {
     fee: "12,250", oldFee: "17,500", feeSpoken: "12,250", oldFeeSpoken: "17,500", splitA: "30/70", splitB: "50/50",
   }],
 ]) {
-  const values = v ?? (() => {
-    // Alternate corpus: derive expected values from the fixture value_map if
-    // present, else skip - never hardcode one corpus's values into another.
-    try {
-      const fx = JSON.parse(readFileSync("/tmp/blind20/vm-tdemo20-fixture.json", "utf8"));
-      return fx.value_map?.bluebird ?? null;
-    } catch { return null; }
-  })();
+  const values = v;
   const bundle = load(dir);
   const voice = server(bundle);
   for (const c of CASES(values)) {

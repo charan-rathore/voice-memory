@@ -134,6 +134,7 @@ test("local session voice bridge preserves evidence and resets on replacement wi
   assert.deepEqual(start, {
     ready: true,
     mode: "local-contract",
+    demo: false,
     audioConnected: false,
     synthesisConnected: false,
   });

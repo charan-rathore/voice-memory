@@ -3,6 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { importBundle, answer, draft } from "./dist/engine.mjs";
 import { createVoiceAdapter } from "./voice-adapter.mjs";
+import { NORTHSTAR_DOCS } from "./corpus-northstar.mjs";
 const voiceTtlMs = () => Number(process.env.VM_VOICE_TTL_MS || 10 * 60 * 1000);
 // Immutable cutoff for the fixed bearer, from server boot: covers the demo
 // window without making a leaked credential live forever.
@@ -39,6 +40,12 @@ export function createLocalServer({
   const publicOrigin = process.env.VM_PUBLIC_ORIGIN || null;
   const ownerKey = process.env.VM_OWNER_KEY || null;
   const fixedCap = process.env.VM_VOICE_CAPABILITY || null;
+  // VM_DEMO_BUNDLE: explicit fictional-demo mode. Boot-pins the fixed voice
+  // capability to the built-in fictional corpus so a fresh process serves
+  // voice turns with no owner import. Owner imports NEVER retarget the
+  // pinned credential to a non-demo bundle; explicit owner reset retires it
+  // (terminal within this process: rotate env + redeploy to revive).
+  const demoBundleName = process.env.VM_DEMO_BUNDLE || null;
   // Session cleanup (sweep, eviction, re-import) RELEASES the voice grant but
   // never retires the fixed credential: unattended demos survive, and the next
   // authenticated Bolna request rebinds at admission. A grant with admission
@@ -60,6 +67,16 @@ export function createLocalServer({
     if (s.voiceToken) voice.retire(s.voiceToken);
     s.voiceToken = null;
   };
+  let demoBundle = null;
+  if (demoBundleName) {
+    if (!fixedCap) throw Error("VM_DEMO_BUNDLE requires VM_VOICE_CAPABILITY.");
+    if (!voiceHardExpiresAtMs())
+      throw Error("VM_DEMO_BUNDLE requires VM_VOICE_HARD_EXPIRES_AT (absolute expiry).");
+    if (demoBundleName !== "northstar")
+      throw Error("Unknown VM_DEMO_BUNDLE: " + demoBundleName);
+    demoBundle = importBundle(NORTHSTAR_DOCS);
+    voice.bind(demoBundle, fixedCap);
+  }
   const signinFails = new Map();
   const SIGNIN_PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Owner sign-in</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;max-width:22rem;margin:4rem auto"><h1>Voice Memory</h1><form method="post" action="/owner-signin" enctype="application/x-www-form-urlencoded"><label>Owner key <input type="password" name="key" required autocomplete="current-password" style="width:100%"></label><p><button type="submit">Sign in</button></p></form></body></html>`;
   // Bolna web-call session minting: credentials live in env (vault at deploy
@@ -289,6 +306,7 @@ export function createLocalServer({
         const bolnaConfigured = !!(bolnaKey && bolnaAgent);
         res.end(
           JSON.stringify({
+            demo: !!demoBundle,
             corpusLoaded: !!s.bundle,
             documents: s.bundle ? s.bundle.sources.length : 0,
             voice: {
@@ -350,7 +368,7 @@ export function createLocalServer({
         // a generic release would leave the 10-minute active-call guard
         // pinning the OLD bundle, so bearer traffic would keep answering
         // from the stale corpus until hard expiry.
-        if (fixedCap && s.voiceToken === fixedCap)
+        if (fixedCap && s.voiceToken === fixedCap && !demoBundle)
           voice.retarget(fixedCap, bundle);
         else releaseVoice(s);
         s.bundle = bundle;
@@ -408,8 +426,21 @@ export function createLocalServer({
         }
         out = await mint.json();
       } else if (req.url === "/api/voice/start") {
-        if (!s.bundle) throw Error("Add documents first.");
-        if (fixedCap) {
+        if (!s.bundle && !demoBundle) throw Error("Add documents first.");
+        if (fixedCap && demoBundle) {
+          if (!voice.isBound(fixedCap)) {
+            try {
+              voice.bind(demoBundle, fixedCap);
+            } catch (e) {
+              if (/retired|hard expiry/i.test(e.message))
+                throw Error(
+                  "Voice capability was retired or expired. Rotate it by redeploying with a new capability.",
+                );
+              throw e;
+            }
+          }
+          s.voiceToken = null;
+        } else if (fixedCap) {
           if (!voiceHardExpiresAtMs())
             throw Error(
               "Voice capability has no configured absolute expiry (VM_VOICE_HARD_EXPIRES_AT). Set a fixed timestamp and redeploy.",
@@ -438,6 +469,7 @@ export function createLocalServer({
         out = {
           ready: true,
           mode: "local-contract",
+          demo: !!demoBundle,
           audioConnected: false,
           synthesisConnected: false,
         };
@@ -478,6 +510,7 @@ export function createLocalServer({
       } else if (req.url === "/api/voice/last") {
         out = { turn: s.voiceToken ? voice.lastTurn(s.voiceToken) : null };
       } else if (req.url === "/api/reset") {
+        if (demoBundle && fixedCap) voice.retire(fixedCap);
         retireVoice(s);
         s.bundle = null;
         s.result = null;
