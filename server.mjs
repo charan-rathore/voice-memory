@@ -339,7 +339,7 @@ export function createLocalServer({
             // Idempotent: this session already owns the live capability.
           } else if (voice.isBound(fixedCap)) {
             throw Error(
-              "Voice capability is live in another session. Reset that session, or wait for its voice grant to lapse, before starting voice here.",
+              "Voice capability is live in another session. Wait for its voice grant to lapse (about ten minutes of voice inactivity), then start voice here again. Do not reset a session to free it: resetting retires this credential permanently.",
             );
           } else if (retiredFixed?.token === fixedCap) {
             throw Error(

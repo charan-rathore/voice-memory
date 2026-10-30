@@ -109,6 +109,11 @@ test("fixed capability: exclusive binding, cross-session revoke protection, no s
     const bStart = await B.post("/api/voice/start", {});
     assert.equal(bStart.status, 400);
     assert.match(bStart.out?.error ?? "", /live in another session/);
+    // Fixed-mode conflict guidance must never PRESCRIBE a reset (resetting
+    // retires the fixed credential permanently); it must point at the
+    // lapse-and-retry path instead.
+    assert.doesNotMatch(bStart.out?.error ?? "", /Reset that session/);
+    assert.match(bStart.out?.error ?? "", /lapse/);
     // The capability serves A's bundle, not B's.
     const call1 = await bolnaCall(base, FIXED);
     assert.equal(call1.status, 200);
