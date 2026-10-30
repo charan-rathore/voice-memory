@@ -9,9 +9,14 @@ sleeps after 15 idle minutes and takes about a minute to wake).
 
 ## What is verified
 
-Suites on this checkpoint: 15 unit, 46 boundary, 104 evaluation cases across 16
-files (including three frozen adversarial exchanges), blind-20 scored 21/21 on
-both corpuses, clean `tsc` and production build, plus a browser journey.
+Suites on this checkpoint (588489e): 15 unit, 46 boundary, and 104 evaluation
+cases across 16 files (including three frozen adversarial exchanges), clean `tsc`
+and production build, plus a browser journey. Separately, a frozen fixture-based
+adversarial evaluation passed 21/21 checks on each of two synthetic corpuses
+(Northstar and Bluebird) using unchanged questions with corpus-specific expected
+values. That fixture tests independence from particular names and values; it is
+not evidence of accuracy on arbitrary real-world documents. The suite counts are
+reported per suite, not summed.
 
 Verified live against the deployed service on 2026-10-31 (server-to-server, over
 the voice SSE contract):
@@ -44,9 +49,10 @@ each state explicitly. All documents are fictional.
 
 - One fixed bearer credential, injected by environment, minted once. No endpoint
   extends or un-retires it. The owner's session reset terminally retires the
-  credential; bringing voice back then requires a new credential (new environment
-  value, redeploy, and provider update), and the retired one fails closed with
-  401.
+  credential, and the retired one fails closed with 401. Retirement is
+  process-local: it holds for the life of the running process, and a restart or
+  redeploy re-binds the environment credential. Lasting revocation therefore
+  couples retirement with rotation to a new value.
 - Absolute hard expiry is part of the credential: `2026-11-02T00:00:00Z` for this
   deployment. Rotation means a new environment value, a redeploy, and a provider
   update; the old credential then fails closed with 401.
@@ -55,8 +61,9 @@ each state explicitly. All documents are fictional.
 - The bearer scopes only the OpenAI-compatible SSE routes
   (`POST /v1/chat/completions`, `GET /v1/models`). Every other route stays behind
   the owner-key bootstrap, session cookie, and CSRF checks.
-- One live call at a time. The client runs a 45-second setup watchdog, surfaces
-  connection failures, and retries cleanly; a late success from a timed-out
+- The demo client runs one live call at a time, and each call mints a fresh
+  single-use Bolna session server-side. A 45-second setup watchdog surfaces
+  connection failures and retries cleanly; a late success from a timed-out
   attempt cannot reopen a second call.
 
 The local retrieval and answer renderer make no model API calls. Voice calls run
