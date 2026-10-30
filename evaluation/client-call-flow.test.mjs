@@ -12,8 +12,8 @@ const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 
 test("call.start() is awaited so a mint failure lands in the catch", () => {
   assert.ok(
-    /await\s+call\.start\(\)/.test(src),
-    "call.start() must be awaited inside the try so SDK rejections reach the catch"
+    /await\s+c\.start\(\)\.catch\(/.test(src),
+    "c.start() must be awaited (with a generation-guarded catch) so SDK rejections reach the catch",
   );
 });
 
@@ -25,9 +25,12 @@ test("the start-flow catch surfaces the error and re-enables the button", () => 
   const catchAt = onclick.indexOf("catch (e)");
   assert.ok(catchAt > -1, "onclick has a catch (e) block");
   const tail = onclick.slice(catchAt);
-  assert.ok(tail.includes("setCall("), "catch shows the failure in call status");
+  assert.ok(
+    tail.includes("setCall("),
+    "catch shows the failure in call status",
+  );
   assert.ok(
     tail.includes('$("call-start").disabled = false'),
-    "catch re-enables the start button"
+    "catch re-enables the start button",
   );
 });

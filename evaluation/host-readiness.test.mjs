@@ -84,6 +84,7 @@ test("fixed capability: exclusive binding, cross-session revoke protection, no s
   const { server, base, cleanup } = await start({
     VM_VOICE_CAPABILITY: FIXED,
     VM_VOICE_TTL_MS: String(3 * 60 * 60 * 1000),
+    VM_VOICE_HARD_EXPIRES_AT: String(Date.now() + 24 * 60 * 60 * 1000),
   });
   try {
     const A = browser(base, `127.0.0.1:${server.address().port}`);
@@ -113,7 +114,7 @@ test("fixed capability: exclusive binding, cross-session revoke protection, no s
     assert.equal(bStart.status, 400);
     assert.match(bStart.out?.error ?? "", /live in another session/);
     // Fixed-mode conflict guidance must never PRESCRIBE a reset (resetting
-    // retires the fixed credential permanently); it must point at the
+    // retires the fixed credential for this deployment); it must point at the
     // lapse-and-retry path instead.
     assert.doesNotMatch(bStart.out?.error ?? "", /Reset that session/);
     assert.match(bStart.out?.error ?? "", /lapse/);
@@ -161,6 +162,7 @@ test("public host: Bolna routes authenticate by bearer capability, never by owne
     VM_PUBLIC_ORIGIN: "https://app.example",
     VM_OWNER_KEY: OWNER,
     VM_VOICE_CAPABILITY: FIXED,
+    VM_VOICE_HARD_EXPIRES_AT: String(Date.now() + 24 * 60 * 60 * 1000),
   });
   const host = "app.example";
   try {
@@ -394,6 +396,27 @@ test("local host stays open to the operator without an owner key", async () => {
   try {
     const r = await raw(base, "/");
     assert.equal(r.status, 200);
+  } finally {
+    cleanup();
+  }
+});
+
+test("fixed capability fails closed without a configured absolute hard expiry", async () => {
+  const { server, base, cleanup } = await start({
+    VM_VOICE_CAPABILITY: FIXED,
+  });
+  try {
+    const A = browser(base, `127.0.0.1:${server.address().port}`);
+    await A.getSession();
+    assert.equal(
+      (await A.post("/api/import", { documents: NORTHSTAR_DOCS })).status,
+      200,
+    );
+    const r = await A.post("/api/voice/start", {});
+    assert.equal(r.status, 400);
+    assert.match(r.out?.error ?? "", /absolute expiry/);
+    // And the bearer is not silently serving without a bounded lifetime.
+    assert.equal((await bolnaCall(base, FIXED)).status, 401);
   } finally {
     cleanup();
   }

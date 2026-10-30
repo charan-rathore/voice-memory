@@ -185,13 +185,35 @@ test("body stream byte bound and internal deadline cancel before unbounded read"
         canceled = true;
       },
     });
-    const req = new Request("http://localhost", {
+    const req = new Request("http://localhost/v1/chat/completions", {
       method: "POST",
       headers: { authorization: "Bearer " + t },
       body: stream,
       duplex: "half",
     });
     assert.equal((await a.handle(req)).status, 400);
+    assert.equal(canceled, true);
+  }
+  // Early reject on a non-completions path: no unbounded read, body canceled.
+  {
+    let canceled = false;
+    const a = createVoiceAdapter({ bodyTimeoutMs: 20 }),
+      t = a.bind(b());
+    const stream = new ReadableStream({
+      pull() {
+        return new Promise(() => {});
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    const req = new Request("http://localhost/v1/other", {
+      method: "POST",
+      headers: { authorization: "Bearer " + t },
+      body: stream,
+      duplex: "half",
+    });
+    assert.equal((await a.handle(req)).status, 405);
     assert.equal(canceled, true);
   }
 });

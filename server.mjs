@@ -4,6 +4,17 @@ import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { importBundle, answer, draft } from "./dist/engine.mjs";
 import { createVoiceAdapter } from "./voice-adapter.mjs";
 const voiceTtlMs = () => Number(process.env.VM_VOICE_TTL_MS || 10 * 60 * 1000);
+// Immutable cutoff for the fixed bearer, from server boot: covers the demo
+// window without making a leaked credential live forever.
+// Absolute hard expiry for the fixed bearer capability: an externally fixed
+// timestamp (ISO-8601 or epoch ms), never derived from process start, so a
+// restart or redeploy cannot extend the credential's absolute lifetime.
+const voiceHardExpiresAtMs = () => {
+  const v = process.env.VM_VOICE_HARD_EXPIRES_AT;
+  if (!v) return null;
+  const ms = /^\d+$/.test(v) ? Number(v) : Date.parse(v);
+  return Number.isSafeInteger(ms) && ms > 0 ? ms : null;
+};
 // Human-readable grant window for runtime guidance; must track the
 // configured TTL, never a hardcoded duration.
 const lapseText = (ms) => {
@@ -13,7 +24,10 @@ const lapseText = (ms) => {
     : `about ${m} minutes`;
 };
 export function createLocalServer({
-  voice = createVoiceAdapter({ ttlMs: voiceTtlMs() }),
+  voice = createVoiceAdapter({
+    ttlMs: voiceTtlMs(),
+    hardExpiresAtMs: voiceHardExpiresAtMs(),
+  }),
   port = Number(process.env.PORT || 4317),
 } = {}) {
   // Deployment configuration (all optional; unset = local-only behavior):
@@ -25,15 +39,25 @@ export function createLocalServer({
   const publicOrigin = process.env.VM_PUBLIC_ORIGIN || null;
   const ownerKey = process.env.VM_OWNER_KEY || null;
   const fixedCap = process.env.VM_VOICE_CAPABILITY || null;
-  // A retired fixed capability stays dead for everyone, including the
-  // session that retired it: rotation requires a NEW credential (redeploy).
-  let retiredFixed = null;
-  const revokeVoice = (s) => {
+  // Session cleanup (sweep, eviction, re-import) RELEASES the voice grant but
+  // never retires the fixed credential: unattended demos survive, and the next
+  // authenticated Bolna request rebinds at admission. A grant with admission
+  // activity inside 10 minutes is treated as a live call and left alone.
+  const releaseVoice = (s) => {
     if (s.voiceToken) {
-      voice.revoke(s.voiceToken);
       if (fixedCap && s.voiceToken === fixedCap)
-        retiredFixed = { token: fixedCap };
+        voice.releaseIdle(s.voiceToken, 10 * 60 * 1000);
+      else voice.release(s.voiceToken);
     }
+    s.voiceToken = null;
+  };
+  // Explicit owner reset retires the fixed credential. HONEST SCOPE: the
+  // tombstone is process-local - an instance restart forgets it, and the
+  // same env credential could bind again until its absolute hard expiry.
+  // Revoking a LEAKED credential is therefore ONE runbook action: retire
+  // here AND immediately rotate VM_VOICE_CAPABILITY + redeploy.
+  const retireVoice = (s) => {
+    if (s.voiceToken) voice.retire(s.voiceToken);
     s.voiceToken = null;
   };
   const signinFails = new Map();
@@ -70,7 +94,7 @@ export function createLocalServer({
     if (sessions.size > 50) {
       const oldest = sessions.keys().next().value;
       if (oldest !== id) {
-        revokeVoice(sessions.get(oldest));
+        releaseVoice(sessions.get(oldest));
         sessions.delete(oldest);
       }
     }
@@ -128,7 +152,7 @@ export function createLocalServer({
     }
     for (const [id, s] of sessions)
       if (Date.now() - s.at > 3600000) {
-        revokeVoice(s);
+        releaseVoice(s);
         sessions.delete(id);
       }
     // Owner bootstrap on the public host: a sign-in FORM posts the
@@ -287,7 +311,7 @@ export function createLocalServer({
       let out;
       if (req.url === "/api/import") {
         const bundle = importBundle(data.documents);
-        revokeVoice(s);
+        releaseVoice(s);
         s.bundle = bundle;
         s.result = null;
         out = {
@@ -345,21 +369,29 @@ export function createLocalServer({
       } else if (req.url === "/api/voice/start") {
         if (!s.bundle) throw Error("Add documents first.");
         if (fixedCap) {
+          if (!voiceHardExpiresAtMs())
+            throw Error(
+              "Voice capability has no configured absolute expiry (VM_VOICE_HARD_EXPIRES_AT). Set a fixed timestamp and redeploy.",
+            );
           if (s.voiceToken === fixedCap && voice.isBound(fixedCap)) {
             // Idempotent: this session already owns the live capability.
           } else if (voice.isBound(fixedCap)) {
             throw Error(
-              `Voice capability is live in another session. Wait for its voice grant to lapse (${lapseText(voiceTtlMs())} of voice inactivity), then start voice here again. Do not reset a session to free it: resetting retires this credential permanently.`,
-            );
-          } else if (retiredFixed?.token === fixedCap) {
-            throw Error(
-              "Voice capability was retired. Rotate it by redeploying with a new capability.",
+              `Voice capability is live in another session. Wait for its voice grant to lapse (${lapseText(voiceTtlMs())} of voice inactivity), then start voice here again. Do not reset a session to free it: resetting retires this credential for the rest of this deployment.`,
             );
           } else {
-            s.voiceToken = voice.bind(s.bundle, fixedCap);
+            try {
+              s.voiceToken = voice.bind(s.bundle, fixedCap);
+            } catch (e) {
+              if (/retired|hard expiry/i.test(e.message))
+                throw Error(
+                  "Voice capability was retired or expired. Rotate it by redeploying with a new capability.",
+                );
+              throw e;
+            }
           }
         } else {
-          revokeVoice(s);
+          releaseVoice(s);
           s.voiceToken = voice.bind(s.bundle);
         }
         out = {
@@ -372,7 +404,7 @@ export function createLocalServer({
         if (!s.voiceToken)
           throw Error("Start a local voice-contract session first.");
         const response = await voice.handle(
-          new Request(origin + req.url, {
+          new Request(origin + "/v1/chat/completions", {
             signal: disconnected.signal,
             method: "POST",
             headers: { authorization: "Bearer " + s.voiceToken },
@@ -405,7 +437,7 @@ export function createLocalServer({
       } else if (req.url === "/api/voice/last") {
         out = { turn: s.voiceToken ? voice.lastTurn(s.voiceToken) : null };
       } else if (req.url === "/api/reset") {
-        revokeVoice(s);
+        retireVoice(s);
         s.bundle = null;
         s.result = null;
         out = { reset: true };

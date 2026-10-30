@@ -16,6 +16,8 @@ export function createVoiceAdapter({
   now = () => Date.now(),
   retrieval = null,
   bodyTimeoutMs = 5000,
+  hardTtlMs = null,
+  hardExpiresAtMs = null,
 } = {}) {
   if (
     !Number.isSafeInteger(ttlMs) ||
@@ -23,6 +25,10 @@ export function createVoiceAdapter({
     !Number.isSafeInteger(bodyTimeoutMs) ||
     bodyTimeoutMs < 1 ||
     bodyTimeoutMs > 30000 ||
+    (hardTtlMs !== null &&
+      (!Number.isSafeInteger(hardTtlMs) || hardTtlMs < 1)) ||
+    (hardExpiresAtMs !== null &&
+      (!Number.isSafeInteger(hardExpiresAtMs) || hardExpiresAtMs < 1)) ||
     (retrieval !== null &&
       (typeof retrieval.retrieve !== "function" ||
         !["keyword", "dense", "hybrid"].includes(retrieval.actualMode) ||
@@ -30,6 +36,44 @@ export function createVoiceAdapter({
   )
     throw Error("Invalid voice adapter config.");
   const grants = new Map();
+  // Operator-provided (fixed) credentials get a durable record that survives
+  // grant release: bundle binding, immutable hard expiry, retirement.
+  const credentials = new Map();
+  const admit = (token) => {
+    const cred = credentials.get(token);
+    if (cred) {
+      if (cred.retiredAt !== null || now() >= cred.hardExpiresAt)
+        return { status: 401 };
+      let grant = grants.get(token);
+      if (!grant || grant.expires <= now()) {
+        // Rebind at admission: the credential, not the owner session, owns
+        // the bundle; a lapsed or swept grant is recreated here.
+        const generation = cred.generation + 1;
+        cred.generation = generation;
+        grant = {
+          bundle: cred.bundle,
+          expires: Math.min(now() + ttlMs, cred.hardExpiresAt),
+          last: null,
+          sequence: 0,
+          generation,
+          lastAdmission: now(),
+        };
+        grants.set(token, grant);
+      } else {
+        // Renewable lease: each authorized turn extends up to the hard cap.
+        grant.expires = Math.min(now() + ttlMs, cred.hardExpiresAt);
+        grant.lastAdmission = now();
+      }
+      return { grant };
+    }
+    const grant = grants.get(token);
+    if (!grant || grant.expires <= now()) {
+      grants.delete(token);
+      return { status: 401 };
+    }
+    grant.lastAdmission = now();
+    return { grant };
+  };
   return {
     bind(bundle, provided) {
       const token = provided ?? randomBytes(32).toString("hex");
@@ -44,16 +88,84 @@ export function createVoiceAdapter({
       const existing = grants.get(token);
       if (existing && existing.expires > now())
         throw Error("Voice capability already in use.");
+      if (provided) {
+        const prior = credentials.get(token);
+        if (prior && prior.retiredAt !== null)
+          throw Error(
+            "Voice capability was retired. It cannot rebind in this deployment.",
+          );
+        const hardExpiresAt =
+          prior?.hardExpiresAt ??
+          hardExpiresAtMs ??
+          (hardTtlMs !== null ? now() + hardTtlMs : Number.MAX_SAFE_INTEGER);
+        if (now() >= hardExpiresAt)
+          throw Error("Voice capability has passed its hard expiry.");
+        const generation = (prior?.generation ?? 0) + 1;
+        credentials.set(token, {
+          bundle,
+          hardExpiresAt,
+          retiredAt: null,
+          generation,
+        });
+        grants.set(token, {
+          bundle,
+          expires: Math.min(now() + ttlMs, hardExpiresAt),
+          last: null,
+          sequence: 0,
+          generation,
+          lastAdmission: now(),
+        });
+        return token;
+      }
       grants.set(token, {
         bundle,
         expires: now() + ttlMs,
         last: null,
         sequence: 0,
+        generation: 0,
+        lastAdmission: now(),
       });
       return token;
     },
+    // Explicit revocation sticks: for an operator-provided credential this
+    // retires the credential itself, so admission cannot silently rebind a
+    // revoked capability. Session cleanup must use release()/releaseIdle().
     revoke(token) {
       grants.delete(token);
+      const cred = credentials.get(token);
+      if (cred) cred.retiredAt = now();
+    },
+    // Session cleanup (sweep/eviction): release the grant, never the
+    // credential. A stale generation observed before a rebind is a no-op.
+    release(token, generation) {
+      const g = grants.get(token);
+      if (!g) return;
+      if (generation !== undefined && g.generation !== generation) return;
+      grants.delete(token);
+    },
+    // Sweep/eviction guard: a grant with admission activity inside idleMs is
+    // treated as a live call and left alone.
+    releaseIdle(token, idleMs, generation) {
+      const g = grants.get(token);
+      if (!g) return;
+      if (now() - (g.lastAdmission ?? 0) < idleMs) return;
+      this.release(token, generation);
+    },
+    // Explicit owner revocation. Process-local tombstone: an instance
+    // restart forgets it, so leaked-credential rotation is redeploy-with-new-
+    // value (the server's runbook couples retire + rotate as one action).
+    // Within a process it is permanent - rebind always refuses.
+    retire(token) {
+      const cred = credentials.get(token);
+      if (cred) cred.retiredAt = now();
+      grants.delete(token);
+    },
+    grantGeneration(token) {
+      return (
+        grants.get(token)?.generation ??
+        credentials.get(token)?.generation ??
+        null
+      );
     },
     isBound(token) {
       const grant = grants.get(token);
@@ -71,13 +183,24 @@ export function createVoiceAdapter({
         // OpenAI-style model list: the registering console calls this with the
         // bearer to validate key and model name at save time. Same capability
         // gate as completions; read-only, advances no turn state.
-        const grant = grants.get(bearer);
-        if (!grant || grant.expires <= now()) {
-          grants.delete(bearer);
-          return Response.json(
-            { error: "Invalid or expired session capability" },
-            { status: 401 },
-          );
+        const cred = credentials.get(bearer);
+        if (cred) {
+          // Read-only validation for the registering console: never creates,
+          // renews or deletes a grant.
+          if (cred.retiredAt !== null || now() >= cred.hardExpiresAt)
+            return Response.json(
+              { error: "Invalid or expired session capability" },
+              { status: 401 },
+            );
+        } else {
+          const grant = grants.get(bearer);
+          if (!grant || grant.expires <= now()) {
+            grants.delete(bearer);
+            return Response.json(
+              { error: "Invalid or expired session capability" },
+              { status: 401 },
+            );
+          }
         }
         return Response.json({
           object: "list",
@@ -91,17 +214,22 @@ export function createVoiceAdapter({
           ],
         });
       }
-      if (req.method !== "POST")
+      if (
+        req.method !== "POST" ||
+        new URL(req.url).pathname !== "/v1/chat/completions"
+      ) {
+        // Reject early but never leave an unread body hanging.
+        req.body?.cancel().catch(() => {});
         return Response.json({ error: "Method not allowed" }, { status: 405 });
+      }
       const token = bearer;
-      const grant = grants.get(token);
-      if (!grant || grant.expires <= now()) {
-        grants.delete(token);
+      const admitted = admit(token);
+      if (admitted.status)
         return Response.json(
           { error: "Invalid or expired session capability" },
-          { status: 401 },
+          { status: admitted.status },
         );
-      }
+      const grant = admitted.grant;
       const sequence = ++grant.sequence;
       let data;
       try {
@@ -122,7 +250,6 @@ export function createVoiceAdapter({
         );
       }
       if (grants.get(token) !== grant || grant.expires <= now()) {
-        grants.delete(token);
         return Response.json(
           { error: "Invalid or expired session capability" },
           { status: 401 },

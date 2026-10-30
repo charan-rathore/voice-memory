@@ -333,9 +333,41 @@ ready.then(async () => {
     $("call-status").textContent = t;
   };
   let call = null;
+  let setupTimer = null;
+  // Attempt generation: incremented on timeout or manual end. Any SDK event
+  // or start() settlement arriving for an older generation is stale and
+  // ignored - a late SDK resolution must never reopen a timed-out call.
+  let attemptId = 0;
+  const SETUP_TIMEOUT_MS = 45000;
+  const clearSetup = () => {
+    if (setupTimer) clearTimeout(setupTimer);
+    setupTimer = null;
+  };
   $("call-start").onclick = async () => {
+    // One attempt at a time (also covers a double click).
+    if (setupTimer || call) return;
     $("call-start").disabled = true;
     setCall("Preparing call…");
+    const id = ++attemptId;
+    const current = () => id === attemptId;
+    // App-owned setup deadline, independent of any SDK-internal timeout:
+    // getUserMedia can pend forever and a mint can stall, so the UI must
+    // recover on its own clock.
+    setupTimer = setTimeout(() => {
+      if (!current()) return;
+      attemptId++;
+      const stale = call;
+      call = null;
+      setupTimer = null;
+      try {
+        stale?.stop?.();
+      } catch {}
+      $("call-end").hidden = true;
+      $("call-start").disabled = false;
+      setCall(
+        "Call setup timed out. If the browser is still asking for microphone permission, allow it and try again.",
+      );
+    }, SETUP_TIMEOUT_MS);
     try {
       // Bind this session's imported documents to the voice capability
       // BEFORE minting: a live call must answer from these documents, and
@@ -352,30 +384,67 @@ ready.then(async () => {
           document.head.append(el);
         });
       }
-      call = new BolnaWebCall({ sessionUrl: "/api/bolna-session" });
-      call.on("call-start", () => {
+      if (!current()) return;
+      const c = new BolnaWebCall({ sessionUrl: "/api/bolna-session" });
+      call = c;
+      c.on("call-start", () => {
+        if (!current() || call !== c) return;
+        clearSetup();
         setCall("Live call in progress.");
         $("call-end").hidden = false;
       });
-      call.on("call-end", () => {
+      c.on("call-end", () => {
+        if (call !== c) return;
+        call = null;
         setCall("Call ended.");
         $("call-end").hidden = true;
         $("call-start").disabled = false;
       });
-      call.on("error", (e) => {
-        setCall("Call error: " + (e?.message || "unknown") + ".");
+      c.on("error", (e) => {
+        if (call !== c) return;
+        clearSetup();
+        call = null;
+        setCall(
+          "Call error: " +
+            (e?.message || "unknown") +
+            ". Check microphone permission and try again.",
+        );
         $("call-end").hidden = true;
         $("call-start").disabled = false;
       });
-      await call.start();
+      await c.start().catch((e) => {
+        // A rejection for an already-invalidated attempt (timeout/End) is
+        // expected SDK noise, not a new error.
+        if (!current() || call !== c) return;
+        throw e;
+      });
+      if (!current() || call !== c) {
+        // Resolved after the attempt was invalidated: close the stale call
+        // so the SDK cannot keep a live session behind the UI's back.
+        try {
+          c.stop?.();
+        } catch {}
+        return;
+      }
+      clearSetup();
     } catch (e) {
+      if (!current()) return;
+      clearSetup();
+      call = null;
       setCall(e.message || "Could not start the call.");
       $("call-start").disabled = false;
     }
   };
   $("call-end").onclick = () => {
+    attemptId++;
+    clearSetup();
+    const stale = call;
+    call = null;
     try {
-      call?.stop?.();
+      stale?.stop?.();
     } catch {}
+    $("call-end").hidden = true;
+    $("call-start").disabled = false;
+    setCall("Call ended.");
   };
 });
