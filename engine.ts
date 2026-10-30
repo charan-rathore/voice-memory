@@ -19,14 +19,14 @@ export type RetrievalStagesInfo = {
   candidateCount: number;
 } | null;
 import { createHash, randomUUID } from "node:crypto";
-import { parseText } from "../../../memorable/src/import/text/parse-text";
+import { parseText } from "./vendor/memorable/src/import/text/parse-text";
 import {
   retrieveFromRows,
   type SearchRow,
   type RetrieveResult,
-} from "../../web/src/lib/rag/retrieve-core";
-import { chunkDocument } from "../../web/src/lib/rag/chunking";
-import { extractiveAnswer } from "../../web/src/lib/rag/extractive";
+} from "./vendor/web/src/lib/rag/retrieve-core";
+import { chunkDocument } from "./vendor/web/src/lib/rag/chunking";
+import { extractiveAnswer } from "./vendor/web/src/lib/rag/extractive";
 
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 export function importBundle(docs: Array<{ title: string; text: string }>) {

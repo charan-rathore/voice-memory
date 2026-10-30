@@ -114,10 +114,7 @@ test("a refused answer never carries a partial notice", () => {
   // inherited the retrieval-level partial flag and notice, so the UI showed
   // "No supporting evidence found" alongside an amber "Partial: cited
   // passages are real evidence..." notice. A refused answer cites nothing.
-  const r = answer(
-    "When is signoff expected?",
-    importBundle(NORTHSTAR_DOCS),
-  );
+  const r = answer("When is signoff expected?", importBundle(NORTHSTAR_DOCS));
   assert.equal(r.refused, true);
   assert.equal(r.partial, false);
   assert.equal(r.partialNotice, null);

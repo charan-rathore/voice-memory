@@ -3,7 +3,7 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url),
-  memo = path.resolve("../../../memorable/src");
+  memo = path.resolve("vendor/memorable/src");
 await build({
   entryPoints: ["engine.ts", "query-expand.ts", "evaluation/baseline-entry.ts"],
   bundle: true,

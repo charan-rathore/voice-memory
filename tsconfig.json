@@ -8,7 +8,7 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["../../../memorable/src/*"],
+      "@/*": ["vendor/memorable/src/*"],
       "zod": ["node_modules/zod"]
     },
     "types": ["node"]
