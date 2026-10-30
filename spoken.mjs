@@ -183,7 +183,13 @@ function mergedClaims(bundle, fields) {
         for (const p of SUPPLEMENT_PATTERNS) {
           if (!wanted.has(p.field) || !p.cue.test(sent)) continue;
           p.re.lastIndex = 0;
-          for (const m of sent.matchAll(p.re)) {
+          let matches = [...sent.matchAll(p.re)];
+          // A change sentence ("narrow from three regions to two regions")
+          // records the OUTCOME only: the pre-change value is history, not
+          // a competing current claim.
+          if (matches.length > 1 && /\bfrom\b.{0,60}\bto\b|narrow|reduce|shrink/i.test(sent))
+            matches = matches.slice(-1);
+          for (const m of matches) {
             const value = m[1].replace(/\s+\(/, "(").replace(/\s+/g, " ").trim();
             const key = `${p.field}|${src.title}|${value.toLowerCase().replace(/\s+/g, "")}`;
             if (seen.has(key)) continue;

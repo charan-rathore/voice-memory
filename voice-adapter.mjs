@@ -352,6 +352,9 @@ export function createVoiceAdapter({
             citations: rendered.citations,
           };
           spoken = rendered.spoken;
+          // Expose the verified spoken turn (verdict + citations) to the
+          // owner's evidence feed alongside the engine result.
+          turn = { result, spokenTurn: grant.lastTurn };
         }
         spoken ??=
           grant.last.spoken ??

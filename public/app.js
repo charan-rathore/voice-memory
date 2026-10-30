@@ -9,6 +9,47 @@ function status(text, error = false) {
   $("status").textContent = text;
   $("status").classList.toggle("error", error);
 }
+// Owner evidence feed for the live voice call: poll the server-side record
+// of the last verified voice turn and show exactly what was spoken plus its
+// citations. Single-call correlation only; silent on transient errors.
+let voicePoll = null;
+async function renderVoiceTurn() {
+  try {
+    const r = await fetch("/api/voice/last").then((x) => x.json());
+    const st = r.turn?.spokenTurn;
+    if (!st) return;
+    $("voice-turn").hidden = false;
+    $("voice-turn").textContent = `Heard just now (${st.verdict}): ${st.spoken}`;
+    $("voice-turn-evidence").replaceChildren(
+      ...(st.citations ?? []).map((c) => {
+        const d = document.createElement("details"),
+          s = document.createElement("summary"),
+          p = document.createElement("pre");
+        s.textContent = `${c.title} · lines ${c.firstLine}-${c.lastLine}`;
+        p.textContent = c.quote;
+        d.append(s, p);
+        return d;
+      }),
+    );
+  } catch {
+    /* transient during call setup/teardown */
+  }
+}
+function startVoicePoll() {
+  stopVoicePoll();
+  const tick = () => {
+    renderVoiceTurn().finally(() => {
+      if (voicePoll) voicePoll = setTimeout(tick, 3000);
+    });
+  };
+  voicePoll = setTimeout(tick, 3000);
+  renderVoiceTurn();
+}
+function stopVoicePoll() {
+  if (voicePoll) clearTimeout(voicePoll);
+  voicePoll = null;
+}
+
 async function api(path, data) {
   await ready;
   const r = await fetch("/api/" + path, {
@@ -422,10 +463,13 @@ ready.then(async () => {
         clearSetup();
         setCall("Live call in progress.");
         $("call-end").hidden = false;
+        startVoicePoll();
       });
       c.on("call-end", () => {
         if (call !== c) return;
         call = null;
+        stopVoicePoll();
+        renderVoiceTurn();
         setCall("Call ended.");
         $("call-end").hidden = true;
         $("call-start").disabled = false;
@@ -468,6 +512,7 @@ ready.then(async () => {
   $("call-end").onclick = () => {
     attemptId++;
     clearSetup();
+    stopVoicePoll();
     const stale = call;
     call = null;
     try {

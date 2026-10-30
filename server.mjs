@@ -75,7 +75,18 @@ export function createLocalServer({
     if (demoBundleName !== "northstar")
       throw Error("Unknown VM_DEMO_BUNDLE: " + demoBundleName);
     demoBundle = importBundle(NORTHSTAR_DOCS);
-    voice.bind(demoBundle, fixedCap);
+    try {
+      voice.bind(demoBundle, fixedCap);
+    } catch (e) {
+      // An expired (or previously retired) credential must not take the
+      // whole server down: voice stays strictly 401 while the owner UI and
+      // readiness report the inactive state. Any OTHER boot error is
+      // unexpected and still fails closed by crashing.
+      if (!/retired|hard expiry/i.test(e.message)) throw e;
+      console.warn(
+        "VM_DEMO_BUNDLE: fixed voice capability is not live (" + e.message + "). Voice answers 401 until it is rotated and redeployed.",
+      );
+    }
   }
   const signinFails = new Map();
   const SIGNIN_PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Owner sign-in</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;max-width:22rem;margin:4rem auto"><h1>Voice Memory</h1><form method="post" action="/owner-signin" enctype="application/x-www-form-urlencoded"><label>Owner key <input type="password" name="key" required autocomplete="current-password" style="width:100%"></label><p><button type="submit">Sign in</button></p></form></body></html>`;
@@ -508,7 +519,10 @@ export function createLocalServer({
         if (!res.destroyed) res.end();
         return;
       } else if (req.url === "/api/voice/last") {
-        out = { turn: s.voiceToken ? voice.lastTurn(s.voiceToken) : null };
+        // Owner-session evidence feed. Demo mode correlates honestly to the
+        // single pinned credential's last turn; no multi-user claim.
+        const token = s.voiceToken ?? (demoBundle ? fixedCap : null);
+        out = { turn: token ? voice.lastTurn(token) : null };
       } else if (req.url === "/api/reset") {
         if (demoBundle && fixedCap) voice.retire(fixedCap);
         retireVoice(s);

@@ -157,3 +157,28 @@ test("demo boot pin: explicit owner reset retires terminally, no silent revive",
     server.close();
   }
 });
+
+test("demo boot pin: expired credential at boot keeps the server alive, voice strictly 401", async () => {
+  const env = DEMO_ENV();
+  env.VM_VOICE_HARD_EXPIRES_AT = String(Date.now() - 60000); // already past
+  const { server, base } = await start(env);
+  try {
+    // Bearer is strictly unauthorized; no silent extension or re-arm.
+    const turn = await bearer(base, "What is the engagement fee?");
+    assert.equal(turn.status, 401);
+    // Owner UI and readiness stay up and report the inactive voice state.
+    const signin = await raw(base, "/owner-signin", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+      body: "key=" + encodeURIComponent(OWNER),
+    });
+    const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
+    const ready = JSON.parse(
+      (await raw(base, "/api/readiness", { headers: { host: HOST, cookie } })).body,
+    );
+    assert.equal(ready.demo, true);
+    assert.equal(ready.voice.bound, false);
+  } finally {
+    server.close();
+  }
+});
