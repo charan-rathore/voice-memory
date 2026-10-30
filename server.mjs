@@ -435,12 +435,21 @@ export function createLocalServer({
         // (official SDK backend pattern): the Bolna API key never reaches
         // the browser. A remote voice call must be bound to this session's
         // documents first: no imported bundle or no voice grant, no mint.
-        if (!s.bundle) {
+        // Pinned-demo parity: demo mode binds the fixed credential to the
+        // pinned corpus at /api/voice/start and keeps no session-local
+        // bundle or grant, so the mint follows the adapter's pinned-
+        // credential admission: isBound is live only while the grant is
+        // unretired, unlapsed, and inside the immutable hard expiry
+        // (grant lifetime is capped at the credential's hard expiry).
+        // An expired or retired pin never reaches Bolna.
+        const demoPinned =
+          !!fixedCap && !!demoBundle && voice.isBound(fixedCap);
+        if (!demoPinned && !s.bundle) {
           const e = Error("Import documents before starting a live call.");
           e.status = 400;
           throw e;
         }
-        if (!s.voiceToken) {
+        if (!demoPinned && !s.voiceToken) {
           const e = Error("Voice grant not started for this session.");
           e.status = 400;
           throw e;

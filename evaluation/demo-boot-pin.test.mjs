@@ -235,3 +235,178 @@ test("demo owner evidence feed: plain GET with owner cookie, 403 without, wrong 
     server.close();
   }
 });
+
+// Regression: in pinned-demo mode the web-call session mint must follow the
+// same pinned-credential admission as voice/start. Before the fix the mint
+// route demanded session-local import + grant state that demo mode never
+// sets, so every Start click died with HTTP 400 after a successful
+// voice/start (production repro 2026-10-31).
+test("demo pin: mint route mirrors pinned admission, gates still hold", async () => {
+  const mintCalls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    mintCalls.push({ url: String(url), body: JSON.parse(init.body) });
+    return new Response(
+      JSON.stringify({
+        run_id: "run-test-1",
+        wss_url: "wss://calls.example/run-test-1",
+        sip_username: "sip-test",
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+  const { server, base } = await start({
+    ...DEMO_ENV(),
+    BOLNA_API_KEY: "test-bolna-key",
+    BOLNA_AGENT_ID: "agent-test-1",
+  });
+  try {
+    const signin = await raw(base, "/owner-signin", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+      body: "key=" + encodeURIComponent(OWNER),
+    });
+    const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
+    const sess = JSON.parse(
+      (await raw(base, "/api/session", { headers: { cookie, host: HOST } })).body,
+    );
+    const authed = (path, data) =>
+      raw(base, path, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie,
+          "x-csrf-token": sess.csrf,
+          origin: `https://${HOST}`,
+          host: HOST,
+        },
+        body: JSON.stringify(data ?? {}),
+      });
+    // Anonymous and CSRF-less mints stay closed and never reach Bolna.
+    assert.equal(
+      (await raw(base, "/api/bolna-session", {
+        method: "POST",
+        headers: { "content-type": "application/json", host: HOST },
+        body: "{}",
+      })).status,
+      403,
+    );
+    assert.equal(
+      (await raw(base, "/api/bolna-session", {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie, host: HOST },
+        body: "{}",
+      })).status,
+      403,
+    );
+    assert.equal(mintCalls.length, 0);
+    // Demo start binds the pinned credential, then the mint must proceed
+    // against the pinned corpus with the identical user_data contract.
+    assert.equal((await authed("/api/voice/start")).status, 200);
+    const mint = await authed("/api/bolna-session", {
+      user_data: { documents: [{ title: "Demo pin", blocks: 7 }] },
+    });
+    assert.equal(mint.status, 200, mint.body);
+    assert.equal(JSON.parse(mint.body).run_id, "run-test-1");
+    assert.equal(mintCalls.length, 1);
+    assert.equal(mintCalls[0].body.agent_id, "agent-test-1");
+    assert.equal(mintCalls[0].body.user_data.documents[0].title, "Demo pin");
+  } finally {
+    server.close();
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("demo pin: expired or retired credential never mints a Bolna session", async () => {
+  const mintCalls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    mintCalls.push(String(url));
+    return new Response("{}", { status: 200 });
+  };
+  try {
+    // Expired hard cap: start and mint both refuse, nothing reaches Bolna.
+    const expired = await start({
+      ...DEMO_ENV(),
+      VM_VOICE_HARD_EXPIRES_AT: String(Date.now() - 1000),
+      BOLNA_API_KEY: "test-bolna-key",
+      BOLNA_AGENT_ID: "agent-test-1",
+    });
+    try {
+      const signin = await raw(expired.base, "/owner-signin", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+        body: "key=" + encodeURIComponent(OWNER),
+      });
+      const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
+      const sess = JSON.parse(
+        (await raw(expired.base, "/api/session", { headers: { cookie, host: HOST } })).body,
+      );
+      const authed = (path) =>
+        raw(expired.base, path, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie,
+            "x-csrf-token": sess.csrf,
+            origin: `https://${HOST}`,
+            host: HOST,
+          },
+          body: "{}",
+        });
+      assert.equal((await authed("/api/voice/start")).status, 400);
+      const mint = await authed("/api/bolna-session");
+      assert.match(String(mint.status), /^4\d\d$/);
+      assert.equal(mintCalls.length, 0);
+    } finally {
+      expired.server.close();
+    }
+    // Owner reset retires the pinned credential: mint stays closed.
+    const live = await start({
+      ...DEMO_ENV(),
+      BOLNA_API_KEY: "test-bolna-key",
+      BOLNA_AGENT_ID: "agent-test-1",
+    });
+    try {
+      const signin = await raw(live.base, "/owner-signin", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+        body: "key=" + encodeURIComponent(OWNER),
+      });
+      const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
+      const sess = JSON.parse(
+        (await raw(live.base, "/api/session", { headers: { cookie, host: HOST } })).body,
+      );
+      const authed = (path) =>
+        raw(live.base, path, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie,
+            "x-csrf-token": sess.csrf,
+            origin: `https://${HOST}`,
+            host: HOST,
+          },
+          body: "{}",
+        });
+      assert.equal((await authed("/api/reset")).status, 200);
+      const mint = await raw(live.base, "/api/bolna-session", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie,
+          "x-csrf-token": sess.csrf,
+          origin: `https://${HOST}`,
+          host: HOST,
+        },
+        body: "{}",
+      });
+      assert.match(String(mint.status), /^4\d\d$/);
+      assert.equal(mintCalls.length, 0);
+    } finally {
+      live.server.close();
+    }
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
