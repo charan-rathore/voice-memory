@@ -367,7 +367,7 @@ ready.then(async () => {
         $("call-end").hidden = true;
         $("call-start").disabled = false;
       });
-      call.start();
+      await call.start();
     } catch (e) {
       setCall(e.message || "Could not start the call.");
       $("call-start").disabled = false;
