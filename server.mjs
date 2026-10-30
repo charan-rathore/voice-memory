@@ -165,8 +165,11 @@ export function createLocalServer({
         res.end();
         return;
       }
-      s = session(req, res, { create: false });
-      if (!s) {
+      // Bolna server-to-server routes authenticate by the bearer capability
+      // inside the adapter; they carry no browser session and must not be
+      // gated by one (localhost tests never exercised this branch).
+      s = isBolnaRoute ? null : session(req, res, { create: false });
+      if (!isBolnaRoute && !s) {
         if (
           req.method === "GET" &&
           ["/", "/app.js", "/style.css"].includes(req.url)
@@ -182,7 +185,7 @@ export function createLocalServer({
     } else {
       s = session(req, res);
     }
-    s.at = Date.now();
+    if (s) s.at = Date.now();
     try {
       if (
         req.method === "GET" &&

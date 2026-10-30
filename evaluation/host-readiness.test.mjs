@@ -155,6 +155,87 @@ test("fixed capability: exclusive binding, cross-session revoke protection, no s
   }
 });
 
+test("public host: Bolna routes authenticate by bearer capability, never by owner session", async () => {
+  const { server, base, cleanup } = await start({
+    VM_PUBLIC_HOST: "app.example",
+    VM_PUBLIC_ORIGIN: "https://app.example",
+    VM_OWNER_KEY: OWNER,
+    VM_VOICE_CAPABILITY: FIXED,
+  });
+  const host = "app.example";
+  try {
+    // Owner signs in (cookie path), imports and binds the voice capability.
+    const boot = await raw(base, "/owner-signin", {
+      method: "POST",
+      headers: { host, "content-type": "application/x-www-form-urlencoded" },
+      body: "key=" + encodeURIComponent(OWNER),
+    });
+    assert.equal(boot.status, 302);
+    const cookie = boot.headers["set-cookie"]?.[0]?.split(";")[0];
+    const sess = await raw(base, "/api/session", { headers: { host, cookie } });
+    const { csrf } = JSON.parse(sess.body);
+    const ok = await raw(base, "/api/import", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        host,
+        cookie,
+        "x-csrf-token": csrf,
+        origin: "https://app.example",
+      },
+      body: JSON.stringify({ documents: NORTHSTAR_DOCS }),
+    });
+    assert.equal(ok.status, 200);
+    const vs = await raw(base, "/api/voice/start", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        host,
+        cookie,
+        "x-csrf-token": csrf,
+        origin: "https://app.example",
+      },
+      body: "{}",
+    });
+    assert.equal(vs.status, 200);
+    // Server-to-server Bolna traffic carries no cookie: the bearer alone
+    // authenticates it. A session gate here would break the integration on
+    // the public deployment while localhost tests keep passing.
+    const call = await raw(base, "/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        host,
+        "content-type": "application/json",
+        authorization: "Bearer " + FIXED,
+      },
+      body: JSON.stringify({
+        model: "x",
+        stream: true,
+        messages: [{ role: "user", content: "What is the engagement fee?" }],
+      }),
+    });
+    assert.equal(call.status, 200);
+    assert.match(call.body, /42,000/);
+    // A wrong bearer is still refused without any session.
+    const bad = await raw(base, "/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        host,
+        "content-type": "application/json",
+        authorization: "Bearer wrong",
+      },
+      body: JSON.stringify({
+        model: "x",
+        stream: true,
+        messages: [{ role: "user", content: "fee?" }],
+      }),
+    });
+    assert.notEqual(bad.status, 200);
+  } finally {
+    cleanup();
+  }
+});
+
 test("public host: owner sign-in form gates UI, session and docs; checks intact", async () => {
   const { server, base, cleanup } = await start({
     VM_PUBLIC_HOST: "app.example",
