@@ -1,4 +1,4 @@
-// ../../web/src/lib/rag/text.ts
+// vendor/web/src/lib/rag/text.ts
 var TOKEN_PATTERN = /[\p{L}\p{N}]+/gu;
 var QUERY_STOPWORDS = /* @__PURE__ */ new Set([
   "the",
@@ -231,10 +231,10 @@ function parseEmbedding(raw) {
   }
 }
 
-// ../../web/src/lib/rag/corpus-scope.ts
+// vendor/web/src/lib/rag/corpus-scope.ts
 var SEED_CORPUS_ID = "seed-lab";
 
-// ../../web/src/lib/rag/types.ts
+// vendor/web/src/lib/rag/types.ts
 var EMBEDDING_MODEL = "gemini-embedding-2";
 var RRF_K = 60;
 var CONTEXT_TOKEN_BUDGET = 1400;
@@ -242,7 +242,7 @@ var CONTEXT_RELATIVE_FLOOR = 0.62;
 var CONTEXT_ABSOLUTE_FLOOR = 0.24;
 var CONTEXT_SOLO_MARGIN = 1.35;
 
-// ../../web/src/lib/rag/ranking.ts
+// vendor/web/src/lib/rag/ranking.ts
 var SCORE_SEMANTICS = "Dense = raw cosine. Keyword = raw BM25. Hybrid = raw RRF (1/(60+rank)). Rerank = calibrated mix (not a cross-encoder, not confidence). The context gate is calibrated-score floor 0.24 AND 62% of rank-1. not an absolute 0.55 cosine threshold.";
 function buildIdf(corpusTexts) {
   const df = /* @__PURE__ */ new Map();
@@ -627,7 +627,7 @@ function distinctiveTerms(query) {
   );
 }
 
-// ../../web/src/lib/rag/evidence.ts
+// vendor/web/src/lib/rag/evidence.ts
 var MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 function extractQueryDates(query) {
   const forms = [];
@@ -822,7 +822,7 @@ ${packedText}`);
   return gate("positive", "Packed chunks have distinctive overlap with the question or a strong dense match.", stats);
 }
 
-// ../../web/src/lib/rag/bm25.ts
+// vendor/web/src/lib/rag/bm25.ts
 var BM25Index = class {
   k1 = 1.5;
   b = 0.75;
@@ -883,7 +883,7 @@ var BM25Index = class {
   }
 };
 
-// ../../web/src/lib/rag/trace.ts
+// vendor/web/src/lib/rag/trace.ts
 var STOP = /* @__PURE__ */ new Set([
   "the",
   "and",
@@ -925,7 +925,7 @@ function overlapTerms(query, text, limit = 5) {
   return hits;
 }
 
-// ../../web/src/lib/rag/retrieve-core.ts
+// vendor/web/src/lib/rag/retrieve-core.ts
 function toRetrieved(chunkId, meta, score, rank, retriever) {
   const row = meta.get(chunkId);
   if (!row) return null;

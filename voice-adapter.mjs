@@ -151,6 +151,20 @@ export function createVoiceAdapter({
       if (now() - (g.lastAdmission ?? 0) < idleMs) return;
       this.release(token, generation);
     },
+    // Owner re-import: atomically retarget a fixed credential to the new
+    // bundle. The old grant is dropped (any generation), so in-flight
+    // old-generation requests reject at the next recheck instead of
+    // answering from the stale corpus, and the next admission rebinds to
+    // the new bundle. Never resurrects a retired credential and never
+    // extends past the pinned hard expiry.
+    retarget(token, bundle) {
+      const cred = credentials.get(token);
+      if (!cred || cred.retiredAt !== null || now() >= cred.hardExpiresAt)
+        return false;
+      cred.bundle = bundle;
+      grants.delete(token);
+      return true;
+    },
     // Explicit owner revocation. Process-local tombstone: an instance
     // restart forgets it, so leaked-credential rotation is redeploy-with-new-
     // value (the server's runbook couples retire + rotate as one action).

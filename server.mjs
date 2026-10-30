@@ -311,7 +311,13 @@ export function createLocalServer({
       let out;
       if (req.url === "/api/import") {
         const bundle = importBundle(data.documents);
-        releaseVoice(s);
+        // If THIS session owns the fixed capability, retarget it atomically:
+        // a generic release would leave the 10-minute active-call guard
+        // pinning the OLD bundle, so bearer traffic would keep answering
+        // from the stale corpus until hard expiry.
+        if (fixedCap && s.voiceToken === fixedCap)
+          voice.retarget(fixedCap, bundle);
+        else releaseVoice(s);
         s.bundle = bundle;
         s.result = null;
         out = {

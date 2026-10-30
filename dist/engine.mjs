@@ -4628,7 +4628,7 @@ function resolveClaims(claims) {
 // engine.ts
 import { createHash, randomUUID } from "node:crypto";
 
-// ../../../memorable/src/domain/memory/limits.ts
+// vendor/memorable/src/domain/memory/limits.ts
 var LIMITS = {
   /** Maximum raw source size: 1 MiB. */
   maxInputBytes: 1048576,
@@ -4665,7 +4665,7 @@ var LIMITS = {
   aiTimeoutMs: 45e3
 };
 
-// ../../../memorable/src/import/text/patterns.ts
+// vendor/memorable/src/import/text/patterns.ts
 var BULLET = /^\s*(?:[-*•])\s+(.*)$/;
 var NUMBERED = /^\s*(\d{1,3})[.)]\s+(.*)$/;
 var TASK = /^\s*[-*]\s+\[([ xX])\]\s+(.*)$/;
@@ -5417,7 +5417,7 @@ function parseActionLineLenient(raw) {
   return entry;
 }
 
-// ../../../memorable/src/import/text/sections.ts
+// vendor/memorable/src/import/text/sections.ts
 var HEADING_KEYWORDS = {
   // snapshot — what this document is
   snapshot: "snapshot",
@@ -5720,7 +5720,7 @@ function isStructuralLine(line) {
   return false;
 }
 
-// ../../../memorable/src/understanding/language.ts
+// vendor/memorable/src/understanding/language.ts
 var STOPWORDS = /* @__PURE__ */ new Set([
   "a",
   "about",
@@ -6150,7 +6150,7 @@ function speakList(items) {
   return `${clean.slice(0, -1).join(", ")} and ${clean[clean.length - 1]}`;
 }
 
-// ../../../memorable/src/understanding/concepts.ts
+// vendor/memorable/src/understanding/concepts.ts
 var MAX_PHRASE_WORDS = 3;
 var MIN_SPREAD_FOR_THEME = 2;
 var META_TERMS = /* @__PURE__ */ new Set([
@@ -6345,7 +6345,7 @@ function labelFor(sentence, concepts, maxWords = 6) {
   return shorten(sentence, maxWords);
 }
 
-// ../../../memorable/src/understanding/projection.ts
+// vendor/memorable/src/understanding/projection.ts
 function obligationDateConfidence(text) {
   const line = text.trim();
   const obligation = parseObligationDateLine(line);
@@ -6423,7 +6423,7 @@ function isInvoiceArchetype(archetype) {
   return archetype === "invoice";
 }
 
-// ../../../memorable/src/understanding/inference.ts
+// vendor/memorable/src/understanding/inference.ts
 var CONDITIONAL = [
   /^if\s+(.{6,160}?),?\s+then\s+(.{4,200})$/i,
   /^if\s+(.{6,160}?),\s+(.{6,200})$/i,
@@ -6702,7 +6702,7 @@ function firstMatch(text, patterns) {
   return null;
 }
 
-// ../../../memorable/src/import/text/entity-groups.ts
+// vendor/memorable/src/import/text/entity-groups.ts
 var BOLD_LEAD = /^\s*\*\*[^*]+\*\*/;
 var MONTH_NAME = /(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)/i;
 var MONTH_INDEX = {
@@ -6900,12 +6900,12 @@ function buildTimelineFromGroup(group, now = /* @__PURE__ */ new Date()) {
   };
 }
 
-// ../../../memorable/src/reliability/result.ts
+// vendor/memorable/src/reliability/result.ts
 function ok(value, warnings = []) {
   return { ok: true, value, warnings };
 }
 
-// ../../../memorable/src/understanding/graph.ts
+// vendor/memorable/src/understanding/graph.ts
 var LINK_THRESHOLD = 0.2;
 var MIN_SHARED_TOKENS = 2;
 var MAX_EDGES_PER_MEMORY = 2;
@@ -7068,7 +7068,7 @@ function dedupe(relations) {
   return out;
 }
 
-// ../../../memorable/src/utils/sha256.ts
+// vendor/memorable/src/utils/sha256.ts
 var K = [
   1116352408,
   1899447441,
@@ -7206,7 +7206,7 @@ function sha256Hex(input) {
   return hex;
 }
 
-// ../../../memorable/src/domain/memory/canonicalize.ts
+// vendor/memorable/src/domain/memory/canonicalize.ts
 function normalizeString(value) {
   return value.normalize("NFC").replace(/\r\n?/g, "\n");
 }
@@ -7269,7 +7269,7 @@ function shortHash(fullHex, length = 12) {
   return fullHex.slice(0, length);
 }
 
-// ../../../memorable/src/domain/memory/schema.ts
+// vendor/memorable/src/domain/memory/schema.ts
 var import_zod = __toESM(require_zod());
 var BLOCK_KINDS = [
   "snapshot",
@@ -7548,7 +7548,7 @@ var BLOCK_KIND_SUBTITLES = {
   actions: "What someone should do next"
 };
 
-// ../../../memorable/src/domain/memory/normalize.ts
+// vendor/memorable/src/domain/memory/normalize.ts
 function buildBlockId(kind, title, payload, locator) {
   return `blk_${kind}_${shortHash(stableBlockId({ kind, title, payload, locator }))}`;
 }
@@ -7581,7 +7581,7 @@ function finalizeDocument(input) {
   return { ...draft2, contentHash: hash2, documentId: `doc_${shortHash(hash2)}` };
 }
 
-// ../../../memorable/src/understanding/archetype.ts
+// vendor/memorable/src/understanding/archetype.ts
 var MIN_SCORE = 10;
 var MIN_MARGIN = 4;
 var SPECIALIZED = [
@@ -7754,7 +7754,7 @@ ${input.bodySample.slice(0, 4e3)}`;
   };
 }
 
-// ../../../memorable/src/understanding/intent.ts
+// vendor/memorable/src/understanding/intent.ts
 var TITLE_MARKERS = [
   [/\b(guide|playbook|handbook|tutorial|how\s?to|walkthrough|workflow|method|framework|approach|cookbook|primer)\b/i, "guide"],
   [/\b(spec|specification|rfc|design\s+doc|architecture|requirements?|prd|product requirements?|contract|standard)\b/i, "spec"],
@@ -7837,7 +7837,7 @@ function subjectOf(title) {
   return stripped;
 }
 
-// ../../../memorable/src/understanding/insights.ts
+// vendor/memorable/src/understanding/insights.ts
 var EXTRACTIVE_ARCHETYPES = /* @__PURE__ */ new Set(["resume", "invoice"]);
 var LEVERAGE = /\b(therefore|so that|because|means|signals|indicates|suggests|points to|drives|unlocks|enables|prevents|avoids|instead of|rather than|but|however|yet|while|although|trade[- ]?off|constraint|root cause|bottleneck|non-negotiable|key|takeaway|insight|lesson|aha|matters)\b/i;
 var PRODUCT_PHILOSOPHY = /\b(memory|recall|understand|semantic|source[- ]?linked|evidence|trust|audit|trace|workflow|decision|risk|action|timeline|block|projection|classification|architecture|reliability|failure)\b/i;
@@ -7905,7 +7905,7 @@ function overlapsSignal(a, b) {
   return r.filter((w) => l.has(w)).length / Math.min(l.size, r.length) >= 0.6;
 }
 
-// ../../../memorable/src/understanding/infer-events.ts
+// vendor/memorable/src/understanding/infer-events.ts
 var DECIDED = /\b(we|i|the team)\s+(?:have\s+)?(?:decided|chose|chosen|committed|approved|agreed)\b|^decision\s*[:—-]/i;
 var TODO_HINT = /\b(should|need to|needs to|have to|todo|to-do|follow[- ]?up|action item|please\s+\w+|someone (?:should|must|needs to)|we need to|let'?s)\b/i;
 var SCHEDULE_ORDINAL_MARKER = /^(phase|task|step|stage|milestone|sprint|iteration|week|day)\b/i;
@@ -8043,7 +8043,7 @@ function inferActions(statements, unheadedClaim = null) {
   return out;
 }
 
-// ../../../memorable/src/understanding/recall.ts
+// vendor/memorable/src/understanding/recall.ts
 var KIND_NOUN = {
   guide: "guide",
   plan: "plan",
@@ -8213,7 +8213,7 @@ function recallHeading(title, intent) {
   return sentenceCase(`${KIND_NOUN[intent.kind]} ${intent.subject}`.trim());
 }
 
-// ../../../memorable/src/understanding/temporal.ts
+// vendor/memorable/src/understanding/temporal.ts
 var EXPLICIT_ANCHOR = /\b(?:as of|dated|date[:\s]|prepared.*?·|letterhead)\s*([A-Z][a-z]{2,8}\.?\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}|[A-Z][a-z]{2,8}\s+\d{4})/i;
 var ISO_OR_FULL = /\b((?:19|20)\d{2}-\d{2}-\d{2}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2},?\s+\d{4})\b/i;
 var RELATIVE_ONLY = /^(?:today|tomorrow|yesterday|tonight|(?:this|next|last)\s+(?:week|month|quarter|year)|end\s+of\s+(?:the\s+)?(?:week|month|quarter|year)|in\s+\d{1,3}\s+(?:days?|weeks?|months?|years?)|soon|eventually|asap)$/i;
@@ -8306,7 +8306,7 @@ function isHardDate(date) {
   return /^\d{4}-\d{2}-\d{2}/.test(d) || /\b(?:19|20)\d{2}\b/.test(d) || /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i.test(d) || /^Q[1-4]/i.test(d) || /^H[12]/i.test(d);
 }
 
-// ../../../memorable/src/understanding/research.ts
+// vendor/memorable/src/understanding/research.ts
 var ROLE_PATTERNS = [
   { role: "abstract", pattern: /\babstract\b/i },
   { role: "introduction", pattern: /\b(introduction|background|related\s+work)\b/i },
@@ -8857,7 +8857,7 @@ function buildResearchWorldModel(input) {
   return built;
 }
 
-// ../../../memorable/src/understanding/knowledge-graph.ts
+// vendor/memorable/src/understanding/knowledge-graph.ts
 var ROLE_PATTERNS2 = [
   { role: "abstract", pattern: /\babstract\b/i },
   { role: "introduction", pattern: /\b(introduction|background|related\s+work)\b/i },
@@ -9129,7 +9129,7 @@ function dedupeGraphEntities(graph) {
   };
 }
 
-// ../../../memorable/src/understanding/projection-profiles.ts
+// vendor/memorable/src/understanding/projection-profiles.ts
 var NOT_APPLICABLE_NOTE = "Not applicable for this document type.";
 var GENERIC_KNOWLEDGE_FURNITURE = {
   snapshot: { label: BLOCK_KIND_LABELS.snapshot, subtitle: BLOCK_KIND_SUBTITLES.snapshot },
@@ -9297,7 +9297,7 @@ function projectAdaptiveMemories(blocks, archetype) {
   return out;
 }
 
-// ../../../memorable/src/understanding/segment.ts
+// vendor/memorable/src/understanding/segment.ts
 var PAGE_MARK = /^<!--\s*page:(\d+)\s*-->$/i;
 var IMAGE_MARK = /^<!--\s*image:page=(\d+)/i;
 var ATX = /^(#{1,6})\s+(.+?)\s*$/;
@@ -9496,7 +9496,7 @@ function classifyNode(segment) {
   return "prose";
 }
 
-// ../../../memorable/src/understanding/index.ts
+// vendor/memorable/src/understanding/index.ts
 function understand(input) {
   const headings = input.sections.map((s) => s.headingText).filter((h) => h !== null);
   const sectionLines = input.sections.map((s) => s.lines.map((l) => plainContentOf(l.text)));
@@ -9616,13 +9616,13 @@ function firstProseParagraph(sections) {
   return "";
 }
 
-// ../../../memorable/src/import/json/import-json.ts
+// vendor/memorable/src/import/json/import-json.ts
 function capExcerpt(text) {
   const single = text.replace(/\s+/g, " ").trim();
   return single.length > LIMITS.maxExcerptLength ? single.slice(0, LIMITS.maxExcerptLength - 1) + "\u2026" : single;
 }
 
-// ../../../memorable/src/import/text/parse-text.ts
+// vendor/memorable/src/import/text/parse-text.ts
 function parseText(input) {
   const { label } = input;
   const segmented = hybridSegment(input.text);
@@ -10538,7 +10538,7 @@ function buildSnapshotPayload(contentLines, notes, ctx) {
   };
 }
 
-// ../../web/src/lib/rag/text.ts
+// vendor/web/src/lib/rag/text.ts
 var TOKEN_PATTERN = /[\p{L}\p{N}]+/gu;
 var QUERY_STOPWORDS = /* @__PURE__ */ new Set([
   "the",
@@ -10774,10 +10774,10 @@ function parseEmbedding(raw) {
   }
 }
 
-// ../../web/src/lib/rag/corpus-scope.ts
+// vendor/web/src/lib/rag/corpus-scope.ts
 var SEED_CORPUS_ID = "seed-lab";
 
-// ../../web/src/lib/rag/types.ts
+// vendor/web/src/lib/rag/types.ts
 var EMBEDDING_MODEL = "gemini-embedding-2";
 var CHUNK_SIZE_TOKENS = 512;
 var CHUNK_OVERLAP_TOKENS = 25;
@@ -10787,7 +10787,7 @@ var CONTEXT_RELATIVE_FLOOR = 0.62;
 var CONTEXT_ABSOLUTE_FLOOR = 0.24;
 var CONTEXT_SOLO_MARGIN = 1.35;
 
-// ../../web/src/lib/rag/ranking.ts
+// vendor/web/src/lib/rag/ranking.ts
 var SCORE_SEMANTICS = "Dense = raw cosine. Keyword = raw BM25. Hybrid = raw RRF (1/(60+rank)). Rerank = calibrated mix (not a cross-encoder, not confidence). The context gate is calibrated-score floor 0.24 AND 62% of rank-1. not an absolute 0.55 cosine threshold.";
 function buildIdf(corpusTexts) {
   const df = /* @__PURE__ */ new Map();
@@ -11172,7 +11172,7 @@ function distinctiveTerms(query) {
   );
 }
 
-// ../../web/src/lib/rag/evidence.ts
+// vendor/web/src/lib/rag/evidence.ts
 var MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 function extractQueryDates(query) {
   const forms = [];
@@ -11367,7 +11367,7 @@ ${packedText}`);
   return gate("positive", "Packed chunks have distinctive overlap with the question or a strong dense match.", stats);
 }
 
-// ../../web/src/lib/rag/bm25.ts
+// vendor/web/src/lib/rag/bm25.ts
 var BM25Index = class {
   k1 = 1.5;
   b = 0.75;
@@ -11428,7 +11428,7 @@ var BM25Index = class {
   }
 };
 
-// ../../web/src/lib/rag/trace.ts
+// vendor/web/src/lib/rag/trace.ts
 var STOP = /* @__PURE__ */ new Set([
   "the",
   "and",
@@ -11470,7 +11470,7 @@ function overlapTerms(query, text, limit = 5) {
   return hits;
 }
 
-// ../../web/src/lib/rag/retrieve-core.ts
+// vendor/web/src/lib/rag/retrieve-core.ts
 function toRetrieved(chunkId, meta, score, rank, retriever) {
   const row = meta.get(chunkId);
   if (!row) return null;
@@ -11708,7 +11708,7 @@ ${r.chunk.text}` })));
   };
 }
 
-// ../../web/src/lib/rag/chunking.ts
+// vendor/web/src/lib/rag/chunking.ts
 var SEPARATORS = ["\n## ", "\n### ", "\n#### ", "\n\n", "\n", ". ", " "];
 var CODE_BOUNDARY = {
   typescript: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\*?|class|const|let|type|interface|enum)\s+(\w+)/m,
@@ -12043,7 +12043,7 @@ function chunkDocument(body, opts = {}) {
   return chunkProse(normalized, chunkSize, overlap2, extras);
 }
 
-// ../../web/src/lib/rag/extractive.ts
+// vendor/web/src/lib/rag/extractive.ts
 function extractiveAnswer(question, chunks) {
   const terms = new Set(tokenize2(question).filter((t) => !QUERY_STOPWORDS.has(t)));
   const extracts = chunks.slice(0, 3).map((chunk, index) => {
@@ -12503,6 +12503,10 @@ function answer(question, bundle) {
     evidenceNote: found.evidenceNote,
     candidateCount: found.candidateCount
   };
+  if (result.refused || result.unresolved) {
+    result.partial = false;
+    result.partialNotice = null;
+  }
   return result;
 }
 function answerFromRetrieval(question, bundle, found, expected, start = performance.now()) {

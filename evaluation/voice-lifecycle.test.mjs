@@ -200,3 +200,48 @@ test("T16: fixed credential hard expiry is an externally pinned absolute time", 
   });
   assert.throws(() => restarted.bind(b(), FIXED), /hard expiry/);
 });
+
+test("T17: retarget on re-import is atomic and rejects in-flight old-generation requests", async () => {
+  const c = clock();
+  const a = createVoiceAdapter({
+    ttlMs: 1000,
+    now: c.now,
+    hardExpiresAtMs: 5000,
+  });
+  const v1 = b();
+  a.bind(v1, FIXED);
+  // In-flight request on the OLD grant: body pending.
+  let controller;
+  const body = new ReadableStream({
+    start(ctrl) {
+      controller = ctrl;
+    },
+  });
+  const pending = a.handle(
+    new Request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: { authorization: "Bearer " + FIXED },
+      body,
+      duplex: "half",
+    }),
+  );
+  // Owner re-imports: retarget to v2.
+  assert.equal(a.retarget(FIXED, b()), true);
+  controller.enqueue(
+    new TextEncoder().encode(
+      JSON.stringify({
+        stream: true,
+        messages: [{ role: "user", content: "pilot launch" }],
+      }),
+    ),
+  );
+  controller.close();
+  // The old-generation request must reject, never answer from stale corpus.
+  assert.equal((await pending).status, 401);
+  // Admission rebinds to v2.
+  assert.equal((await a.handle(completions(FIXED))).status, 200);
+  // Retarget refuses on a retired credential (no resurrection).
+  a.retire(FIXED);
+  assert.equal(a.retarget(FIXED, b()), false);
+  assert.equal((await a.handle(completions(FIXED))).status, 401);
+});

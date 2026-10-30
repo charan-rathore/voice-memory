@@ -421,3 +421,57 @@ test("fixed capability fails closed without a configured absolute hard expiry", 
     cleanup();
   }
 });
+
+test("re-import by the owning session retargets the fixed capability (no stale corpus)", async () => {
+  const { server, base, cleanup } = await start({
+    VM_VOICE_CAPABILITY: FIXED,
+    VM_VOICE_TTL_MS: String(3 * 60 * 60 * 1000),
+    VM_VOICE_HARD_EXPIRES_AT: String(Date.now() + 24 * 60 * 60 * 1000),
+  });
+  try {
+    const A = browser(base, `127.0.0.1:${server.address().port}`);
+    const B = browser(base, `127.0.0.1:${server.address().port}`);
+    await A.getSession();
+    await B.getSession();
+    await A.post("/api/import", { documents: NORTHSTAR_DOCS });
+    assert.equal((await A.post("/api/voice/start", {})).status, 200);
+    const call1 = await bolnaCall(base, FIXED);
+    assert.equal(call1.status, 200);
+    assert.match(call1.text, /42,000|48,000/);
+    // Owner replaces the corpus: the NEXT bearer call must answer from v2.
+    await A.post("/api/import", {
+      documents: [
+        {
+          title: "V2.md",
+          text: "# V2\nAuthor: T. Date: 2026-10-31. Type: note.\n1. The engagement fee is $99,000, finalized and approved.",
+        },
+      ],
+    });
+    const call2 = await bolnaCall(base, FIXED);
+    assert.equal(call2.status, 200);
+    assert.match(call2.text, /99,000/);
+    assert.doesNotMatch(call2.text, /42,000|48,000/);
+    // Same session can restart voice against the new bundle without a
+    // bogus "live in another session" diagnosis.
+    assert.equal((await A.post("/api/voice/start", {})).status, 200);
+    // Cross-session lock still holds (B has its own documents, so the
+    // refusal is the capability lock, not a missing bundle).
+    await B.post("/api/import", {
+      documents: [
+        {
+          title: "B.md",
+          text: "# B\nAuthor: T. Date: 2026-09-01. Type: note.\n1. The catering budget is $5,000.",
+        },
+      ],
+    });
+    const bStart = await B.post("/api/voice/start", {});
+    assert.equal(bStart.status, 400);
+    assert.match(bStart.out?.error ?? "", /live in another session/);
+    // Explicit reset retires; the credential must not resurrect via rebind.
+    await A.post("/api/reset", {});
+    assert.equal((await bolnaCall(base, FIXED)).status, 401);
+    assert.equal((await bolnaCall(base, FIXED)).status, 401);
+  } finally {
+    cleanup();
+  }
+});
