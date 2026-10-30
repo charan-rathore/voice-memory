@@ -13,7 +13,9 @@ export type ClaimField =
   | "deadline"
   | "signoffWho"
   | "signoffTiming"
-  | "launchApproval";
+  | "launchApproval"
+  | "scope"
+  | "reporting";
 export type ClaimStatus =
   | "proposed"
   | "discussed"
@@ -23,6 +25,10 @@ export type ClaimStatus =
   | "unresolved";
 
 export type Claim = {
+  phase?: "pilot" | "expansion" | null;
+  /** Four-digit year stated on the claim's own line, when present. Phase
+   * buckets ("expansion") are not identity: the year distinguishes them. */
+  year?: string;
   field: ClaimField;
   value: string;
   status: ClaimStatus;
@@ -81,6 +87,14 @@ export function questionFields(q: string): ClaimField[] {
   }
   if (/launch/i.test(q) && /approv|authoriz|signed off|sign-?off|who/i.test(q))
     out.add("launchApproval");
+  if (/\bregion|\bscope\b|\bareas?\b|\bcover(?:s|age|ed|ing)?\b/i.test(q))
+    out.add("scope");
+  if (
+    /\b(?:weekly|daily|biweekly|monthly|cadence|progress report|reporting|status update)/i.test(
+      q,
+    )
+  )
+    out.add("reporting");
   return [...out];
 }
 
@@ -96,7 +110,7 @@ const GENERIC_HEADING_WORDS = new Set(
  * "Meridian Advisory"). Unigram token overlap is not identity: a shared
  * company or brand word must not link two different engagements.
  */
-function scopeEntitiesOf(title: string, h1: string): string[] {
+export function scopeEntitiesOf(title: string, h1: string): string[] {
   const out = new Set<string>();
   for (const text of [title, h1]) {
     const words = text.match(/[A-Za-z][A-Za-z'-]*/g) ?? [];
@@ -117,6 +131,45 @@ function scopeEntitiesOf(title: string, h1: string): string[] {
 
 /** The clause of a line that contains offset `idx`: approval or negation in
  * a different clause of the same sentence must not color this claim. */
+const FIELD_NOUN: Record<ClaimField, RegExp> = {
+  fee: /\bfee\b|\$\d|price|cost|charge/i,
+  paymentSplit: /payment|split|installment|upfront/i,
+  deadline: /deadline|date|timeline/i,
+  signoffWho: /sign/i,
+  signoffTiming: /sign/i,
+  launchApproval: /launch/i,
+  scope: /region|scope/i,
+  reporting: /report|digest|cadence/i,
+};
+const NEG_RE =
+  /never approved|no longer approved|not approved|rescinded?|withdrawn|withdrew|revoked|rejected/gi;
+/** A negation/rescission applies to a claim only when its own clause names
+ * the claim's object (field noun or value), or a rescission verb refers back
+ * with a pronoun ("rescinded it entirely"). */
+const negationBinds = (
+  field: ClaimField,
+  value: string,
+  line: string,
+): boolean => {
+  NEG_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = NEG_RE.exec(line))) {
+    const negClause = clauseAround(line, m.index);
+    const bare = value.replace(/[$%,\s]/g, "");
+    if (
+      FIELD_NOUN[field].test(negClause) ||
+      negClause.toLowerCase().includes(value.toLowerCase()) ||
+      (bare.length > 1 && negClause.replace(/[$%,\s]/g, "").includes(bare)) ||
+      (/rescind|withdraw|revoke|never approved|no longer approved|not approved/i.test(
+        m[0],
+      ) &&
+        /\b(it|this|that)\b/i.test(negClause))
+    )
+      return true;
+  }
+  return false;
+};
+
 function clauseAround(line: string, idx: number): string {
   const bounds = /;\s+|\.\s+|,\s+(?:and|but|while|whereas|although|though)\s+/g;
   let start = 0;
@@ -173,11 +226,15 @@ export function extractClaims(
         // the claim's own anchor: "the fee is $45,000, and the hiring plan
         // was approved" is an approved HIRING PLAN, not an approved fee.
         const clause = clauseAround(line, anchorIdx);
-        const status = statusOf(clause);
+        let status = statusOf(clause);
+        // Negation or rescission colors the claim only when it binds to the
+        // claim's own object: "the fee was never approved" negates the fee;
+        // "the fee was approved; the hiring plan was rejected" does not.
+        if (negationBinds(field, value, line)) status = "unresolved";
         // An unresolved/open-decision line that merely REFERENCES a revision
         // never supersedes anything; neither does a line listing alternatives.
         const supersedes =
-          /revis|supersed|replaces/i.test(clause) &&
+          /revis|supersed|replaces|narrow/i.test(clause) &&
           status !== "unresolved" &&
           !/\bvs\b|open decision|disput/i.test(clause);
         claims.push({ field, value, status, supersedes, ...base });
@@ -229,6 +286,119 @@ export function extractClaims(
           /\b\d{1,2}\s+(November|October|December)|date|by\s+\w+\s+\d/i,
         );
         if (tm) push("signoffTiming", "stated", tm.index);
+      }
+      // Region-count claims: a narrowing "from A to B" line records only B
+      // as the current claim; A stays recorded by the original document. A
+      // rejected option is not a claim at all. Scope claims carry their phase
+      // so an approved 2027-expansion scope can never displace pilot scope.
+      // Scope work only on region lines: the 55k-doc cost stays flat.
+      if (/regions?\b/i.test(line)) {
+        const scopePhase =
+          /expansion|national\b|\b20\d{2}\b|phase\s*(2|two|ii)\b/i.test(line)
+            ? ("expansion" as const)
+            : /\bpilot\b|first phase|phase\s*(1|one)\b/i.test(line)
+              ? ("pilot" as const)
+              : null;
+        const lineYear = line.match(/\b(20\d{2})\b/)?.[1];
+        const pushScope = (value: string, idx: number) => {
+          if (scopeRejected(value)) return;
+          const before = claims.length;
+          push("scope", value, idx);
+          if (claims.length > before) {
+            claims[claims.length - 1].phase = scopePhase;
+            if (lineYear) claims[claims.length - 1].year = lineYear;
+          }
+        };
+        // A rejection skips only the claim it binds to, never a neighbor.
+        const scopeRejected = (value: string): boolean => {
+          const R = /reject\w*|rule out|ruled out|declined/gi;
+          let m: RegExpExecArray | null;
+          while ((m = R.exec(line))) {
+            const cl = clauseAround(line, m.index);
+            if (
+              /region|scope/i.test(cl) ||
+              cl.toLowerCase().includes(value.toLowerCase())
+            )
+              return true;
+          }
+          return false;
+        };
+        {
+          const narrowing = line.match(
+            /narrow[^.]*?\bto\s+(\w+)\s+regions?\s*(\([^)]*\))?/i,
+          );
+          if (narrowing) {
+            pushScope(
+              `${narrowing[1]} regions${narrowing[2] ?? ""}`,
+              narrowing.index ?? 0,
+            );
+          } else {
+            const before = claims.length;
+            for (const m of line.matchAll(
+              /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:retail\s+)?regions?\s*(\([^)]*\))?/gi,
+            )) {
+              pushScope(`${m[1]} regions${m[2] ?? ""}`, m.index);
+            }
+            if (claims.length === before) {
+              // Incomplete extraction fails CLOSED: a scope assertion whose
+              // count token we cannot normalize is still recorded raw, so it
+              // competes instead of vanishing and letting a neighbor win.
+              const raw = line.match(
+                /\b([a-z]+)\s+(?:retail\s+)?regions?\s*(\([^)]*\))?/i,
+              );
+              const RAW_STOP = new Set(
+                "the a an all these those both some many any our their its few more other each every which that this no".split(
+                  " ",
+                ),
+              );
+              if (
+                raw &&
+                !RAW_STOP.has(raw[1].toLowerCase()) &&
+                /confirm|approv|agree|decid|narrow|cover|expan|pilot|scope|phase/i.test(
+                  line,
+                )
+              )
+                pushScope(
+                  `${raw[1].toLowerCase()} regions${raw[2] ?? ""}`,
+                  raw.index ?? 0,
+                );
+            }
+          }
+        }
+      }
+      // Reporting-cadence claims normalize to the cadence token so a
+      // proposal's "weekly progress reporting" and a later "weekly reporting
+      // is confirmed" resolve as records about the same commitment.
+      // The cadence token must modify the report itself: "monthly summary of
+      // the weekly report" is a WEEKLY report summarized monthly. Replacement
+      // direction is honored: "weekly digest replaced the monthly report"
+      // makes weekly current and the replaced cadence is not a live claim.
+      const CAD = "weekly|daily|biweekly|monthly";
+      const fwd = line.match(
+        new RegExp(
+          `\\b(${CAD})\\b[^.]{0,50}?\\breplac\\w+[^.]{0,50}?\\b(${CAD})\\s+(?:progress\\s+)?report`,
+          "i",
+        ),
+      );
+      const rev = line.match(
+        new RegExp(
+          `\\b(${CAD})\\s+(?:progress\\s+)?report\\b[^.]{0,50}?\\breplac\\w+\\s+by\\b[^.]{0,50}?\\b(${CAD})\\b`,
+          "i",
+        ),
+      );
+      const replacedCad = fwd
+        ? fwd[2].toLowerCase()
+        : rev
+          ? rev[1].toLowerCase()
+          : null;
+      const replacingCad = fwd ? fwd[1] : rev ? rev[2] : null;
+      if (replacingCad)
+        push("reporting", replacingCad.toLowerCase(), (fwd ?? rev)!.index ?? 0);
+      for (const m of line.matchAll(
+        /\b(weekly|daily|biweekly|monthly)\s+(?:progress\s+)?report/gi,
+      )) {
+        if (replacedCad && m[1].toLowerCase() === replacedCad) continue;
+        push("reporting", m[1].toLowerCase(), m.index);
       }
       const lm = line.match(/production launch|launch authorization/i);
       if (lm) {
@@ -289,6 +459,9 @@ export function resolveClaims(claims: Claim[]): {
     const superseding = list.filter((c) => c.supersedes);
     for (const sup of superseding) {
       const supDate = sup.docDate || null;
+      // An undated revision supersedes nothing: recency unestablished means
+      // the records compete; it never silently demotes a dated record.
+      if (!supDate) continue;
       for (const c of list) {
         if (c === sup || c.supersedes) continue;
         if (!sharesEngagement(sup, c)) continue; // engagement not established

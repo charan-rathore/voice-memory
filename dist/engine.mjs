@@ -4356,6 +4356,12 @@ function questionFields(q) {
   }
   if (/launch/i.test(q) && /approv|authoriz|signed off|sign-?off|who/i.test(q))
     out.add("launchApproval");
+  if (/\bregion|\bscope\b|\bareas?\b|\bcover(?:s|age|ed|ing)?\b/i.test(q))
+    out.add("scope");
+  if (/\b(?:weekly|daily|biweekly|monthly|cadence|progress report|reporting|status update)/i.test(
+    q
+  ))
+    out.add("reporting");
   return [...out];
 }
 var GENERIC_HEADING_WORDS = new Set(
@@ -4381,6 +4387,30 @@ function scopeEntitiesOf(title, h1) {
   }
   return [...out];
 }
+var FIELD_NOUN = {
+  fee: /\bfee\b|\$\d|price|cost|charge/i,
+  paymentSplit: /payment|split|installment|upfront/i,
+  deadline: /deadline|date|timeline/i,
+  signoffWho: /sign/i,
+  signoffTiming: /sign/i,
+  launchApproval: /launch/i,
+  scope: /region|scope/i,
+  reporting: /report|digest|cadence/i
+};
+var NEG_RE = /never approved|no longer approved|not approved|rescinded?|withdrawn|withdrew|revoked|rejected/gi;
+var negationBinds = (field, value, line) => {
+  NEG_RE.lastIndex = 0;
+  let m;
+  while (m = NEG_RE.exec(line)) {
+    const negClause = clauseAround(line, m.index);
+    const bare = value.replace(/[$%,\s]/g, "");
+    if (FIELD_NOUN[field].test(negClause) || negClause.toLowerCase().includes(value.toLowerCase()) || bare.length > 1 && negClause.replace(/[$%,\s]/g, "").includes(bare) || /rescind|withdraw|revoke|never approved|no longer approved|not approved/i.test(
+      m[0]
+    ) && /\b(it|this|that)\b/i.test(negClause))
+      return true;
+  }
+  return false;
+};
 function clauseAround(line, idx) {
   const bounds = /;\s+|\.\s+|,\s+(?:and|but|while|whereas|although|though)\s+/g;
   let start = 0;
@@ -4422,8 +4452,9 @@ function extractClaims(bundle, fields) {
       const push = (field, value, anchorIdx = 0) => {
         if (!fields.includes(field)) return;
         const clause = clauseAround(line, anchorIdx);
-        const status = statusOf(clause);
-        const supersedes = /revis|supersed|replaces/i.test(clause) && status !== "unresolved" && !/\bvs\b|open decision|disput/i.test(clause);
+        let status = statusOf(clause);
+        if (negationBinds(field, value, line)) status = "unresolved";
+        const supersedes = /revis|supersed|replaces|narrow/i.test(clause) && status !== "unresolved" && !/\bvs\b|open decision|disput/i.test(clause);
         claims.push({ field, value, status, supersedes, ...base });
       };
       for (const m of line.matchAll(/\$\d[\d,]*\d/g)) {
@@ -4459,6 +4490,87 @@ function extractClaims(bundle, fields) {
         );
         if (tm) push("signoffTiming", "stated", tm.index);
       }
+      if (/regions?\b/i.test(line)) {
+        const scopePhase = /expansion|national\b|\b20\d{2}\b|phase\s*(2|two|ii)\b/i.test(line) ? "expansion" : /\bpilot\b|first phase|phase\s*(1|one)\b/i.test(line) ? "pilot" : null;
+        const lineYear = line.match(/\b(20\d{2})\b/)?.[1];
+        const pushScope = (value, idx) => {
+          if (scopeRejected(value)) return;
+          const before = claims.length;
+          push("scope", value, idx);
+          if (claims.length > before) {
+            claims[claims.length - 1].phase = scopePhase;
+            if (lineYear) claims[claims.length - 1].year = lineYear;
+          }
+        };
+        const scopeRejected = (value) => {
+          const R = /reject\w*|rule out|ruled out|declined/gi;
+          let m;
+          while (m = R.exec(line)) {
+            const cl = clauseAround(line, m.index);
+            if (/region|scope/i.test(cl) || cl.toLowerCase().includes(value.toLowerCase()))
+              return true;
+          }
+          return false;
+        };
+        {
+          const narrowing = line.match(
+            /narrow[^.]*?\bto\s+(\w+)\s+regions?\s*(\([^)]*\))?/i
+          );
+          if (narrowing) {
+            pushScope(
+              `${narrowing[1]} regions${narrowing[2] ?? ""}`,
+              narrowing.index ?? 0
+            );
+          } else {
+            const before = claims.length;
+            for (const m of line.matchAll(
+              /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:retail\s+)?regions?\s*(\([^)]*\))?/gi
+            )) {
+              pushScope(`${m[1]} regions${m[2] ?? ""}`, m.index);
+            }
+            if (claims.length === before) {
+              const raw = line.match(
+                /\b([a-z]+)\s+(?:retail\s+)?regions?\s*(\([^)]*\))?/i
+              );
+              const RAW_STOP = new Set(
+                "the a an all these those both some many any our their its few more other each every which that this no".split(
+                  " "
+                )
+              );
+              if (raw && !RAW_STOP.has(raw[1].toLowerCase()) && /confirm|approv|agree|decid|narrow|cover|expan|pilot|scope|phase/i.test(
+                line
+              ))
+                pushScope(
+                  `${raw[1].toLowerCase()} regions${raw[2] ?? ""}`,
+                  raw.index ?? 0
+                );
+            }
+          }
+        }
+      }
+      const CAD = "weekly|daily|biweekly|monthly";
+      const fwd = line.match(
+        new RegExp(
+          `\\b(${CAD})\\b[^.]{0,50}?\\breplac\\w+[^.]{0,50}?\\b(${CAD})\\s+(?:progress\\s+)?report`,
+          "i"
+        )
+      );
+      const rev = line.match(
+        new RegExp(
+          `\\b(${CAD})\\s+(?:progress\\s+)?report\\b[^.]{0,50}?\\breplac\\w+\\s+by\\b[^.]{0,50}?\\b(${CAD})\\b`,
+          "i"
+        )
+      );
+      const replacedCad = fwd ? fwd[2].toLowerCase() : rev ? rev[1].toLowerCase() : null;
+      const replacingCad = fwd ? fwd[1] : rev ? rev[2] : null;
+      if (replacingCad)
+        push("reporting", replacingCad.toLowerCase(), (fwd ?? rev).index ?? 0);
+      for (const m of line.matchAll(
+        /\b(weekly|daily|biweekly|monthly)\s+(?:progress\s+)?report/gi
+      )) {
+        if (replacedCad && m[1].toLowerCase() === replacedCad) continue;
+        push("reporting", m[1].toLowerCase(), m.index);
+      }
       const lm = line.match(/production launch|launch authorization/i);
       if (lm) {
         push(
@@ -4492,6 +4604,7 @@ function resolveClaims(claims) {
     const superseding = list.filter((c) => c.supersedes);
     for (const sup of superseding) {
       const supDate = sup.docDate || null;
+      if (!supDate) continue;
       for (const c of list) {
         if (c === sup || c.supersedes) continue;
         if (!sharesEngagement(sup, c)) continue;
@@ -12022,6 +12135,7 @@ function answer(question, bundle) {
     },
     corpusScope: { kind: "corpus", corpusId: bundle.scope }
   });
+  const fields = questionFields(question);
   let found = retrieve(question);
   let expansionUsed = null;
   if (found.evidence !== "positive") {
@@ -12034,6 +12148,48 @@ function answer(question, bundle) {
       }
     }
   }
+  let rephraseUsed = null;
+  if (found.evidence === "negative_not_found" && fields.length === 0) {
+    const entities = /* @__PURE__ */ new Map();
+    for (const s of bundle.sources) {
+      const h1 = s.text.split("\n").find((l) => l.startsWith("#")) ?? "";
+      for (const e of scopeEntitiesOf(s.title, h1.replace(/^#+\s*/, ""))) {
+        const cur = entities.get(e);
+        entities.set(e, { text: e, docs: (cur?.docs ?? 0) + 1 });
+      }
+    }
+    const primary = [...entities.values()].sort((a, b) => b.docs - a.docs)[0];
+    const STOP2 = new Set(
+      "which what are is the in for of did we our does do can i my there any this that when who how has have had was were will would should could been being be to a an and or on at by with from as it its if not no yes so but me us them they he she you your their his her".split(
+        " "
+      )
+    );
+    const contentTerms = [
+      ...new Set(
+        (question.toLowerCase().match(/[a-z]{3,}/g) ?? []).filter(
+          (t) => !STOP2.has(t) && !entities.has(t)
+        )
+      )
+    ];
+    if (primary && contentTerms.length) {
+      const rephrased = [...contentTerms, primary.text].join(" ");
+      const retry = retrieve(rephrased);
+      if (retry.evidence === "positive") {
+        const chunkText = retry.chunks.map((c) => c.text.toLowerCase()).join("\n");
+        const covered = contentTerms.every(
+          (t) => new RegExp(`\\b${t}\\b`, "i").test(chunkText)
+        );
+        if (covered) {
+          found = retry;
+          rephraseUsed = {
+            original: question,
+            rephrased,
+            entity: primary.text
+          };
+        }
+      }
+    }
+  }
   const result = answerFromRetrieval(
     question,
     bundle,
@@ -12041,13 +12197,67 @@ function answer(question, bundle) {
     { actualMode: "keyword", embeddingModel: null },
     start
   );
-  const fields = questionFields(question);
+  let claimsVerdict = false;
   if (fields.length) {
-    const claims = extractClaims(bundle, fields);
-    claims.forEach((c) => validateEvidence(c, bundle));
+    const allClaims = extractClaims(bundle, fields);
+    allClaims.forEach((c) => validateEvidence(c, bundle));
+    const qPhase = /expansion|national\b|\b20\d{2}\b|phase\s*(2|two|ii)\b/i.test(question) ? "expansion" : /\bpilot\b|first phase|phase\s*(1|one)\b/i.test(question) ? "pilot" : null;
+    const offPhase = qPhase ? allClaims.filter(
+      (c) => c.field === "scope" && c.phase && c.phase !== qPhase
+    ) : (() => {
+      const scopeClaims = allClaims.filter((c) => c.field === "scope");
+      return scopeClaims.some((c) => c.phase === "pilot") ? scopeClaims.filter((c) => c.phase === "expansion") : [];
+    })();
+    const qYear = question.match(/\b(20\d{2})\b/)?.[1] ?? null;
+    const offYear = qYear ? allClaims.filter(
+      (c) => c.field === "scope" && (!c.year || c.year !== qYear) && !offPhase.includes(c)
+    ) : [];
+    const GENERIC_Q = new Set(
+      "what which when where who whose why how is are was were can could does do did the a an in on at for to of as it this that i we my our has have had first second phase pilot regions region scope areas cover weekly daily monthly reporting report fee payment deadline signoff launch january february march april may june july august september october november december north south east west".split(
+        " "
+      )
+    );
+    const qEnts = (question.match(/\b[A-Z][a-zA-Z]+\b/g) ?? []).map((w) => w.toLowerCase()).filter((w) => w.length > 2 && !GENERIC_Q.has(w));
+    const entTokOf = (c) => new Set(
+      (c.scopeEntities ?? []).flatMap((e) => e.split(" ")).map((t) => t.toLowerCase()).filter((t) => t.length > 2)
+    );
+    let claims = offPhase.length || offYear.length ? allClaims.filter((c) => !offPhase.includes(c) && !offYear.includes(c)) : allClaims;
+    if (qEnts.length) {
+      claims = claims.filter((c) => {
+        const toks = entTokOf(c);
+        if (toks.size === 0) return true;
+        return qEnts.some((e) => toks.has(e));
+      });
+    }
     const { active, superseded, approved } = resolveClaims(claims);
     const claimInfo = (c) => `${c.value} (${c.title}${c.docDate ? ", " + c.docDate : ""}; status: ${c.status})`;
-    if (fields.includes("signoffTiming") && !claims.some((c) => c.field === "signoffTiming")) {
+    const phaseNote = offPhase.length ? " Separate-phase record(s): " + [
+      ...new Map(
+        offPhase.map((c) => [c.value + "|" + c.title, claimInfo(c)])
+      ).values()
+    ].join("; ") + "." : "";
+    const noteOf = (list, label) => list.length ? " " + label + ": " + [
+      ...new Map(
+        list.map((c) => [c.value + "|" + c.title, claimInfo(c)])
+      ).values()
+    ].join("; ") + "." : "";
+    const yearNote = noteOf(
+      offYear.filter((c) => c.year),
+      "Separate-period record(s)"
+    ) + noteOf(
+      offYear.filter((c) => !c.year),
+      "Undated-period record(s)"
+    );
+    if (qYear && fields.includes("scope") && offYear.length && !claims.some((c) => c.field === "scope")) {
+      result.refused = true;
+      result.supported = false;
+      result.unresolved = false;
+      result.evidence = [];
+      result.reviewEvidence = offYear;
+      result.evidenceStatus = "insufficient";
+      result.answer = `The documents do not tie a region scope to ${qYear}: no record states a region count for that year.` + yearNote;
+      result.spoken = result.answer;
+    } else if (fields.includes("signoffTiming") && !claims.some((c) => c.field === "signoffTiming")) {
       const conditions = claims.filter((c) => c.field === "signoffWho");
       result.refused = true;
       result.supported = false;
@@ -12058,6 +12268,54 @@ function answer(question, bundle) {
       result.answer = "The record mentions sign-off only as a condition; no timing for sign-off is established in these documents." + (conditions.length ? " Related condition: " + conditions.map((c) => `"${c.quote}" (${c.title})`).join("; ") : "");
       result.spoken = result.answer;
     } else {
+      const GENERIC_TOK = /* @__PURE__ */ new Set([
+        "proposal",
+        "notes",
+        "kickoff",
+        "pilot",
+        "log",
+        "internal",
+        "action",
+        "update",
+        "updates",
+        "minutes",
+        "plan",
+        "client",
+        "memo",
+        "revision",
+        "steering",
+        "agreement",
+        "board",
+        "weekly",
+        "report",
+        "reporting",
+        "summary",
+        "retail"
+      ]);
+      const shareTok = (a, b) => {
+        const tok = (c) => (c.scopeEntities ?? []).flatMap((e) => e.split(" ")).map((t) => t.toLowerCase()).filter((t) => t.length > 2 && !GENERIC_TOK.has(t));
+        const A = new Set(tok(a));
+        for (const t of tok(b)) if (A.has(t)) return true;
+        return false;
+      };
+      const NUMWORD = {
+        one: "1",
+        two: "2",
+        three: "3",
+        four: "4",
+        five: "5",
+        six: "6",
+        seven: "7",
+        eight: "8",
+        nine: "9",
+        ten: "10",
+        eleven: "11",
+        twelve: "12"
+      };
+      const normValue = (v) => v.toLowerCase().replace(
+        /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/g,
+        (w) => NUMWORD[w]
+      );
       const conflicts = [];
       const histories = [];
       const approvedNotes = [];
@@ -12065,9 +12323,23 @@ function answer(question, bundle) {
         const appr = (approved.get(field) ?? []).filter(
           (c) => list.includes(c)
         );
-        const apprValues = [...new Set(appr.map((c) => c.value))];
-        if (apprValues.length === 1) {
-          const others = list.filter((c) => c.status !== "approved");
+        const apprValues = [...new Set(appr.map((c) => normValue(c.value)))];
+        const crossEngagementConflict = apprValues.length === 1 && list.some((c) => {
+          if (normValue(c.value) === apprValues[0] || shareTok(appr[0], c))
+            return false;
+          return (c.scopeEntities ?? []).some(
+            (e) => e.split(" ").filter((t) => t.length > 2 && !GENERIC_TOK.has(t)).length > 0
+          );
+        });
+        if (apprValues.length === 1 && !crossEngagementConflict) {
+          const others = list.filter((c) => {
+            if (c.status === "approved") return false;
+            if (shareTok(appr[0], c)) return true;
+            const foreign = (c.scopeEntities ?? []).some(
+              (e) => e.split(" ").filter((t) => t.length > 2 && !GENERIC_TOK.has(t)).length > 0
+            );
+            return !foreign;
+          });
           approvedNotes.push(
             `${field}: approved record ${claimInfo(appr[0])}` + (others.length ? "; non-authoritative record(s): " + [
               ...new Map(
@@ -12080,13 +12352,15 @@ function answer(question, bundle) {
           );
           continue;
         }
-        const values = [...new Set(list.map((c) => c.value))];
+        const values = [...new Set(list.map((c) => normValue(c.value)))];
         if (apprValues.length > 1 || values.length > 1) {
           conflicts.push(`${field}: ` + list.map(claimInfo).join(" vs "));
         } else if (values.length === 1) {
           const sup = superseded.filter((c) => c.field === field);
-          const cur = list[0];
-          if (sup.length && cur.status !== "approved") {
+          const cur = [...list].sort(
+            (a, b) => (b.docDate || "").localeCompare(a.docDate || "")
+          )[0];
+          if (cur.status !== "approved") {
             const seen = /* @__PURE__ */ new Set();
             const supInfo = sup.filter((c) => {
               const k = c.value + "|" + c.title;
@@ -12095,12 +12369,13 @@ function answer(question, bundle) {
               return true;
             }).map(claimInfo).join("; ");
             histories.push(
-              `${field}: current record ${claimInfo(cur)} - status ${cur.status}; approval is not established by this check; earlier superseded record(s): ` + supInfo
+              `${field}: current record ${claimInfo(cur)} - status ${cur.status}; approval is not established by this check` + (sup.length ? "; earlier superseded record(s): " + supInfo : "")
             );
           }
         }
       }
       if (conflicts.length) {
+        claimsVerdict = true;
         result.unresolved = true;
         result.supported = false;
         result.partial = false;
@@ -12114,6 +12389,7 @@ function answer(question, bundle) {
         result.answer = "The record contains unresolved competing statements. " + conflicts.map((c) => "Competing records - " + c).join(" ") + (supInfo2 ? " Superseded record(s): " + supInfo2 + "." : "") + " No supported current answer is available until these are reconciled.";
         result.spoken = result.answer;
       } else if (histories.length) {
+        claimsVerdict = true;
         const currentQuotes = [...active.values()].flat().filter(
           (c, i, arr) => arr.findIndex((x) => x.quote === c.quote) === i
         ).map((c) => `"${c.quote}" (${c.title})`).join("; ");
@@ -12121,17 +12397,19 @@ function answer(question, bundle) {
         result.supported = true;
         result.unresolved = false;
         result.partial = true;
-        result.partialNotice = histories.join(" ");
+        result.partialNotice = histories.join(" ") + phaseNote + yearNote;
         result.evidence = claims;
-        result.answer = "Record status: " + histories.join(" ") + (currentQuotes ? "\nCurrent record: " + currentQuotes : "");
+        result.answer = "Record status: " + histories.join(" ") + phaseNote + yearNote + (currentQuotes ? "\nCurrent record: " + currentQuotes : "");
         result.spoken = result.answer.replace(/\n/g, " ");
       } else if (approvedNotes.length) {
+        claimsVerdict = true;
+        const retrievalTail = result.refused ? "" : "\n\n" + result.answer;
         result.refused = false;
         result.supported = true;
         result.unresolved = false;
         result.partial = false;
         result.partialNotice = null;
-        result.answer = "Record status: " + approvedNotes.join(" ") + "\n\n" + result.answer;
+        result.answer = "Record status: " + approvedNotes.join(" ") + phaseNote + yearNote + retrievalTail;
         result.spoken = "Record status: " + approvedNotes.join(" ") + " The cited passages are on screen.";
       }
       if (fields.includes("signoffWho") && result.supported) {
@@ -12146,11 +12424,75 @@ function answer(question, bundle) {
       }
     }
   }
-  result.queryTransform = expansionUsed;
+  if (!claimsVerdict && result.supported && result.evidence?.length) {
+    const exText = result.evidence.map((e) => e.quote ?? "").join("\n").toLowerCase();
+    const ids = question.match(/\b[A-Z]{2,}-\d+\b/g) ?? [];
+    const idMiss = ids.some((id) => !exText.includes(id.toLowerCase()));
+    const quantitative = /\brevenue|budget|turnover|profit|margin|sales|price|amount|how much|how many\b/i.test(
+      question
+    );
+    const hasQuantity = /[$€£₹]\s?\d|\d[\d,]*\s*%|\b(?!19\d{2}\b|20\d{2}\b)\d{5,}\b|\b\d{1,3}(?:,\d{3})+\b|\b\d+(?:\.\d+)?\s*(?:million|billion|thousand|lakh|crore)\b/i.test(
+      exText
+    );
+    const metricQ = question.match(
+      /\b(revenue|budget|turnover|profit|margin|sales|cost|price|amount)\b/i
+    );
+    let quantOk = hasQuantity;
+    if (quantitative && hasQuantity && metricQ) {
+      const asked = metricQ[1].toLowerCase();
+      quantOk = false;
+      for (const sentence of exText.split(/[.!?\n]/)) {
+        for (const q of sentence.matchAll(
+          /[$€£₹]\s?\d[\d,]*|\b(?!19\d{2}\b|20\d{2}\b)\d{5,}\b|\b\d{1,3}(?:,\d{3})+\b|\b\d+(?:\.\d+)?\s*(?:million|billion|thousand|lakh|crore)\b/gi
+        )) {
+          const left = sentence.slice(0, q.index);
+          const nouns = [
+            ...left.matchAll(
+              /(revenue|budget|turnover|profit|margin|sales|cost|price|amount|spend|fee|charge)/gi
+            )
+          ];
+          if (nouns.length && nouns[nouns.length - 1][1].toLowerCase() === asked) {
+            quantOk = true;
+            break;
+          }
+        }
+        if (quantOk) break;
+      }
+    }
+    const QSTOP = new Set(
+      "what which when where who whose why how is are was were can could does do did the a an in on at for to of as it this that i we my our has have had january february march april may june july august september october november december north south east west".split(
+        " "
+      )
+    );
+    const qEnts = (question.match(/\b[A-Z][a-zA-Z]+\b/g) ?? []).map((w) => w.toLowerCase()).filter((w) => w.length > 2 && !QSTOP.has(w));
+    const entMiss = qEnts.some((e) => !exText.includes(e));
+    if (idMiss || quantitative && !quantOk || entMiss) {
+      result.reviewEvidence = result.evidence;
+      result.evidence = [];
+      result.refused = true;
+      result.supported = false;
+      result.unresolved = result.evidenceStatus === "ambiguous";
+      result.evidenceStatus = "insufficient";
+      result.partial = false;
+      result.partialNotice = null;
+      result.answer = "The documents do not establish an answer to this question: the closest passages do not contain the asked fact. They are on screen for review.";
+      result.spoken = result.answer;
+    }
+  }
   result.queryTransform = expansionUsed ? {
     original: expansionUsed.original,
     expanded: expansionUsed.expanded,
     applied: expansionUsed.applied
+  } : rephraseUsed ? {
+    original: rephraseUsed.original,
+    expanded: rephraseUsed.rephrased,
+    applied: [
+      {
+        from: rephraseUsed.original,
+        to: rephraseUsed.rephrased,
+        kind: "dictionary"
+      }
+    ]
   } : null;
   result.retrievalStages = {
     keyword: found.stages.keyword.map((r) => ({

@@ -5,6 +5,7 @@ import {
   questionFields,
   resolveClaims,
   type Claim,
+  scopeEntitiesOf,
 } from "./claim-check";
 
 export type QueryTransformInfo = {
@@ -129,6 +130,7 @@ export function answer(
     });
   // Original query wins. Expansion is a disclosed recall-recovery fallback,
   // only attempted when the untouched question grounds nothing.
+  const fields = questionFields(question);
   let found = retrieve(question);
   let expansionUsed: ReturnType<typeof expandQuery> | null = null;
   if (found.evidence !== "positive") {
@@ -138,6 +140,64 @@ export function answer(
       if (widened.evidence === "positive") {
         found = widened;
         expansionUsed = expansion;
+      }
+    }
+  }
+  // Second disclosed recall-recovery fallback for questions the claim layer
+  // does not cover: an entity-grounded rephrase (question content terms + the
+  // engagement's primary entity) retries retrieval, and the retry is used only
+  // when the question's own content terms are all present in the retrieved
+  // chunks. Questions about facts the corpus does not contain keep the
+  // original refusal; the retry can never manufacture evidence for them.
+  // It runs only when retrieval found NOTHING relevant (negative): an
+  // ambiguous result means competing passages exist, and a rephrase must
+  // never adjudicate between them.
+  let rephraseUsed: {
+    original: string;
+    rephrased: string;
+    entity: string;
+  } | null = null;
+  if (found.evidence === "negative_not_found" && fields.length === 0) {
+    const entities = new Map<string, { text: string; docs: number }>();
+    for (const s of bundle.sources) {
+      const h1 =
+        s.text.split("\n").find((l: string) => l.startsWith("#")) ?? "";
+      for (const e of scopeEntitiesOf(s.title, h1.replace(/^#+\s*/, ""))) {
+        const cur = entities.get(e);
+        entities.set(e, { text: e, docs: (cur?.docs ?? 0) + 1 });
+      }
+    }
+    const primary = [...entities.values()].sort((a, b) => b.docs - a.docs)[0];
+    const STOP = new Set(
+      "which what are is the in for of did we our does do can i my there any this that when who how has have had was were will would should could been being be to a an and or on at by with from as it its if not no yes so but me us them they he she you your their his her".split(
+        " ",
+      ),
+    );
+    const contentTerms = [
+      ...new Set(
+        (question.toLowerCase().match(/[a-z]{3,}/g) ?? []).filter(
+          (t) => !STOP.has(t) && !entities.has(t),
+        ),
+      ),
+    ];
+    if (primary && contentTerms.length) {
+      const rephrased = [...contentTerms, primary.text].join(" ");
+      const retry = retrieve(rephrased);
+      if (retry.evidence === "positive") {
+        const chunkText = retry.chunks
+          .map((c) => c.text.toLowerCase())
+          .join("\n");
+        const covered = contentTerms.every((t) =>
+          new RegExp(`\\b${t}\\b`, "i").test(chunkText),
+        );
+        if (covered) {
+          found = retry;
+          rephraseUsed = {
+            original: question,
+            rephrased,
+            entity: primary.text,
+          };
+        }
       }
     }
   }
@@ -151,14 +211,125 @@ export function answer(
   // Narrow claim-to-source/state repair: stop stale positives, distinguish
   // proposed/discussed from agreed, and refuse timing questions answered only
   // by a condition.
-  const fields = questionFields(question);
+  let claimsVerdict = false;
   if (fields.length) {
-    const claims = extractClaims(bundle, fields);
-    claims.forEach((c) => validateEvidence(c, bundle));
+    const allClaims = extractClaims(bundle, fields);
+    allClaims.forEach((c) => validateEvidence(c, bundle));
+    // Phase isolation for scope claims: an approved 2027-expansion scope is
+    // reported as a separate-phase record, never as the answer to a pilot
+    // question, and it never supersedes pilot-phase records.
+    const qPhase =
+      /expansion|national\b|\b20\d{2}\b|phase\s*(2|two|ii)\b/i.test(question)
+        ? "expansion"
+        : /\bpilot\b|first phase|phase\s*(1|one)\b/i.test(question)
+          ? "pilot"
+          : null;
+    const offPhase = qPhase
+      ? allClaims.filter(
+          (c) => c.field === "scope" && c.phase && c.phase !== qPhase,
+        )
+      : (() => {
+          // Phase-less question: when both pilot and expansion scope exist,
+          // the expansion claims are a separate phase, not current scope.
+          const scopeClaims = allClaims.filter((c) => c.field === "scope");
+          return scopeClaims.some((c) => c.phase === "pilot")
+            ? scopeClaims.filter((c) => c.phase === "expansion")
+            : [];
+        })();
+    // Year binding: a question naming a year resolves scope claims carrying
+    // that year; claims of another stated year are a separate period, never
+    // the answer, and a neighbor year can never win by default.
+    const qYear = question.match(/\b(20\d{2})\b/)?.[1] ?? null;
+    const offYear = qYear
+      ? allClaims.filter(
+          (c) =>
+            c.field === "scope" &&
+            (!c.year || c.year !== qYear) &&
+            !offPhase.includes(c),
+        )
+      : [];
+    // Entity scoping: a question naming an engagement entity resolves only
+    // claims whose documents share it; documents with an established but
+    // foreign entity drop out, entity-less documents stay (caution).
+    const GENERIC_Q = new Set(
+      "what which when where who whose why how is are was were can could does do did the a an in on at for to of as it this that i we my our has have had first second phase pilot regions region scope areas cover weekly daily monthly reporting report fee payment deadline signoff launch january february march april may june july august september october november december north south east west".split(
+        " ",
+      ),
+    );
+    const qEnts = (question.match(/\b[A-Z][a-zA-Z]+\b/g) ?? [])
+      .map((w) => w.toLowerCase())
+      .filter((w) => w.length > 2 && !GENERIC_Q.has(w));
+    const entTokOf = (c: Claim) =>
+      new Set(
+        (c.scopeEntities ?? [])
+          .flatMap((e) => e.split(" "))
+          .map((t) => t.toLowerCase())
+          .filter((t) => t.length > 2),
+      );
+    let claims =
+      offPhase.length || offYear.length
+        ? allClaims.filter((c) => !offPhase.includes(c) && !offYear.includes(c))
+        : allClaims;
+    if (qEnts.length) {
+      claims = claims.filter((c) => {
+        const toks = entTokOf(c);
+        if (toks.size === 0) return true; // unestablished: stays (caution)
+        return qEnts.some((e) => toks.has(e));
+      });
+    }
     const { active, superseded, approved } = resolveClaims(claims);
     const claimInfo = (c: Claim) =>
       `${c.value} (${c.title}${c.docDate ? ", " + c.docDate : ""}; status: ${c.status})`;
+    const phaseNote = offPhase.length
+      ? " Separate-phase record(s): " +
+        [
+          ...new Map(
+            offPhase.map((c) => [c.value + "|" + c.title, claimInfo(c)]),
+          ).values(),
+        ].join("; ") +
+        "."
+      : "";
+    const noteOf = (list: Claim[], label: string) =>
+      list.length
+        ? " " +
+          label +
+          ": " +
+          [
+            ...new Map(
+              list.map((c) => [c.value + "|" + c.title, claimInfo(c)]),
+            ).values(),
+          ].join("; ") +
+          "."
+        : "";
+    const yearNote =
+      noteOf(
+        offYear.filter((c) => c.year),
+        "Separate-period record(s)",
+      ) +
+      noteOf(
+        offYear.filter((c) => !c.year),
+        "Undated-period record(s)",
+      );
     if (
+      qYear &&
+      fields.includes("scope") &&
+      offYear.length &&
+      !claims.some((c) => c.field === "scope")
+    ) {
+      // The question asserts a period no claim is bound to: a yearless or
+      // other-year record must not fill it implicitly - say so and disclose.
+      result.refused = true;
+      result.supported = false;
+      result.unresolved = false;
+      result.evidence = [];
+      result.reviewEvidence =
+        offYear as unknown as typeof result.reviewEvidence;
+      result.evidenceStatus = "insufficient";
+      result.answer =
+        `The documents do not tie a region scope to ${qYear}: no record states a region count for that year.` +
+        yearNote;
+      result.spoken = result.answer;
+    } else if (
       fields.includes("signoffTiming") &&
       !claims.some((c) => c.field === "signoffTiming")
     ) {
@@ -178,6 +349,63 @@ export function answer(
           : "");
       result.spoken = result.answer;
     } else {
+      const GENERIC_TOK = new Set([
+        "proposal",
+        "notes",
+        "kickoff",
+        "pilot",
+        "log",
+        "internal",
+        "action",
+        "update",
+        "updates",
+        "minutes",
+        "plan",
+        "client",
+        "memo",
+        "revision",
+        "steering",
+        "agreement",
+        "board",
+        "weekly",
+        "report",
+        "reporting",
+        "summary",
+        "retail",
+      ]);
+      const shareTok = (a: Claim, b: Claim) => {
+        const tok = (c: Claim) =>
+          (c.scopeEntities ?? [])
+            .flatMap((e) => e.split(" "))
+            .map((t) => t.toLowerCase())
+            .filter((t) => t.length > 2 && !GENERIC_TOK.has(t));
+        const A = new Set(tok(a));
+        for (const t of tok(b)) if (A.has(t)) return true;
+        return false;
+      };
+      // Number words and digits are the same count: "8 regions" and "eight
+      // regions" must agree, never compete. Display values stay as written.
+      const NUMWORD: Record<string, string> = {
+        one: "1",
+        two: "2",
+        three: "3",
+        four: "4",
+        five: "5",
+        six: "6",
+        seven: "7",
+        eight: "8",
+        nine: "9",
+        ten: "10",
+        eleven: "11",
+        twelve: "12",
+      };
+      const normValue = (v: string) =>
+        v
+          .toLowerCase()
+          .replace(
+            /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/g,
+            (w) => NUMWORD[w],
+          );
       const conflicts: string[] = [];
       const histories: string[] = [];
       const approvedNotes: string[] = [];
@@ -185,11 +413,40 @@ export function answer(
         const appr = (approved.get(field) ?? []).filter((c) =>
           list.includes(c),
         );
-        const apprValues = [...new Set(appr.map((c) => c.value))];
-        if (apprValues.length === 1) {
+        const apprValues = [...new Set(appr.map((c) => normValue(c.value)))];
+        // Only an ESTABLISHED foreign engagement conflicts: a claim whose
+        // document names distinctive entities sharing none with the approved
+        // record. Entity-less claims cannot establish foreign-ness.
+        const crossEngagementConflict =
+          apprValues.length === 1 &&
+          list.some((c) => {
+            if (normValue(c.value) === apprValues[0] || shareTok(appr[0], c))
+              return false;
+            return (c.scopeEntities ?? []).some(
+              (e) =>
+                e.split(" ").filter((t) => t.length > 2 && !GENERIC_TOK.has(t))
+                  .length > 0,
+            );
+          });
+        if (apprValues.length === 1 && !crossEngagementConflict) {
           // An explicitly approved record is authoritative over proposals and
           // discussion; newer non-approved records are named but cannot displace it.
-          const others = list.filter((c) => c.status !== "approved");
+          // Non-authoritative context records must belong to the approved
+          // record's own engagement: an unrelated document that merely shares
+          // a keyword (a newsletter's "weekly report") is not context.
+          // Keep same-engagement and entity-less records; drop only records
+          // with an established FOREIGN entity (distinctive tokens, none
+          // shared with the approved record's engagement).
+          const others = list.filter((c) => {
+            if (c.status === "approved") return false;
+            if (shareTok(appr[0], c)) return true;
+            const foreign = (c.scopeEntities ?? []).some(
+              (e) =>
+                e.split(" ").filter((t) => t.length > 2 && !GENERIC_TOK.has(t))
+                  .length > 0,
+            );
+            return !foreign;
+          });
           approvedNotes.push(
             `${field}: approved record ${claimInfo(appr[0])}` +
               (others.length
@@ -206,13 +463,17 @@ export function answer(
           );
           continue;
         }
-        const values = [...new Set(list.map((c) => c.value))];
+        const values = [...new Set(list.map((c) => normValue(c.value)))];
         if (apprValues.length > 1 || values.length > 1) {
           conflicts.push(`${field}: ` + list.map(claimInfo).join(" vs "));
         } else if (values.length === 1) {
           const sup = superseded.filter((c) => c.field === field);
-          const cur = list[0];
-          if (sup.length && cur.status !== "approved") {
+          // The current record of a value is its newest dated claim:
+          // extraction order never silently outranks recency.
+          const cur = [...list].sort((a, b) =>
+            (b.docDate || "").localeCompare(a.docDate || ""),
+          )[0];
+          if (cur.status !== "approved") {
             const seen = new Set<string>();
             const supInfo = sup
               .filter((c) => {
@@ -224,13 +485,16 @@ export function answer(
               .map(claimInfo)
               .join("; ");
             histories.push(
-              `${field}: current record ${claimInfo(cur)} - status ${cur.status}; approval is not established by this check; earlier superseded record(s): ` +
-                supInfo,
+              `${field}: current record ${claimInfo(cur)} - status ${cur.status}; approval is not established by this check` +
+                (sup.length
+                  ? "; earlier superseded record(s): " + supInfo
+                  : ""),
             );
           }
         }
       }
       if (conflicts.length) {
+        claimsVerdict = true;
         result.unresolved = true;
         result.supported = false;
         result.partial = false;
@@ -249,6 +513,7 @@ export function answer(
           " No supported current answer is available until these are reconciled.";
         result.spoken = result.answer;
       } else if (histories.length) {
+        claimsVerdict = true;
         // Compose from claims only: no raw excerpt may follow that reasserts a
         // superseded value as current or a proposed value as agreed.
         const currentQuotes = [...active.values()]
@@ -262,23 +527,33 @@ export function answer(
         result.supported = true;
         result.unresolved = false;
         result.partial = true;
-        result.partialNotice = histories.join(" ");
+        result.partialNotice = histories.join(" ") + phaseNote + yearNote;
         result.evidence = claims as unknown as typeof result.evidence;
         result.answer =
           "Record status: " +
           histories.join(" ") +
+          phaseNote +
+          yearNote +
           (currentQuotes ? "\nCurrent record: " + currentQuotes : "");
         result.spoken = result.answer.replace(/\n/g, " ");
       } else if (approvedNotes.length) {
+        claimsVerdict = true;
         // A claims-derived definitive verdict owns the flags: do not leave a
-        // stale retrieval-level refusal attached to a supported answer.
+        // stale retrieval-level refusal attached to a supported answer. A
+        // retrieval refusal tail is never appended to a claims verdict - the
+        // verdict carries its own provenance.
+        const retrievalTail = result.refused ? "" : "\n\n" + result.answer;
         result.refused = false;
         result.supported = true;
         result.unresolved = false;
         result.partial = false;
         result.partialNotice = null;
         result.answer =
-          "Record status: " + approvedNotes.join(" ") + "\n\n" + result.answer;
+          "Record status: " +
+          approvedNotes.join(" ") +
+          phaseNote +
+          yearNote +
+          retrievalTail;
         result.spoken =
           "Record status: " +
           approvedNotes.join(" ") +
@@ -300,14 +575,102 @@ export function answer(
       }
     }
   }
-  result.queryTransform = expansionUsed;
+  // Honest-response guard for excerpt-only positives (no claims verdict):
+  // an excerpt dump is not an answer when it cannot contain the asked fact -
+  // a specific artifact ID absent from the evidence, a quantity the evidence
+  // does not contain, or an entity the question names that appears nowhere in
+  // the evidence. Shared retrieval core untouched; this is demo-layer only.
+  if (!claimsVerdict && result.supported && result.evidence?.length) {
+    const exText = result.evidence
+      .map((e) => (e as { quote?: string }).quote ?? "")
+      .join("\n")
+      .toLowerCase();
+    const ids = question.match(/\b[A-Z]{2,}-\d+\b/g) ?? [];
+    const idMiss = ids.some((id) => !exText.includes(id.toLowerCase()));
+    const quantitative =
+      /\brevenue|budget|turnover|profit|margin|sales|price|amount|how much|how many\b/i.test(
+        question,
+      );
+    // A bare year is not a quantity: require currency, percent, scale, a
+    // comma-grouped number, or a bare 5+ digit figure that is not a year.
+    const hasQuantity =
+      /[$€£₹]\s?\d|\d[\d,]*\s*%|\b(?!19\d{2}\b|20\d{2}\b)\d{5,}\b|\b\d{1,3}(?:,\d{3})+\b|\b\d+(?:\.\d+)?\s*(?:million|billion|thousand|lakh|crore)\b/i.test(
+        exText,
+      );
+    const metricQ = question.match(
+      /\b(revenue|budget|turnover|profit|margin|sales|cost|price|amount)\b/i,
+    );
+    let quantOk = hasQuantity;
+    if (quantitative && hasQuantity && metricQ) {
+      // The asked metric must own the quantity: the nearest metric noun to
+      // the left of a quantity in its sentence must be that metric, so
+      // "marketing spend was $2,000,000" never answers a revenue question.
+      const asked = metricQ[1].toLowerCase();
+      quantOk = false;
+      for (const sentence of exText.split(/[.!?\n]/)) {
+        for (const q of sentence.matchAll(
+          /[$€£₹]\s?\d[\d,]*|\b(?!19\d{2}\b|20\d{2}\b)\d{5,}\b|\b\d{1,3}(?:,\d{3})+\b|\b\d+(?:\.\d+)?\s*(?:million|billion|thousand|lakh|crore)\b/gi,
+        )) {
+          const left = sentence.slice(0, q.index);
+          const nouns = [
+            ...left.matchAll(
+              /(revenue|budget|turnover|profit|margin|sales|cost|price|amount|spend|fee|charge)/gi,
+            ),
+          ];
+          if (
+            nouns.length &&
+            nouns[nouns.length - 1][1].toLowerCase() === asked
+          ) {
+            quantOk = true;
+            break;
+          }
+        }
+        if (quantOk) break;
+      }
+    }
+    const QSTOP = new Set(
+      "what which when where who whose why how is are was were can could does do did the a an in on at for to of as it this that i we my our has have had january february march april may june july august september october november december north south east west".split(
+        " ",
+      ),
+    );
+    const qEnts = (question.match(/\b[A-Z][a-zA-Z]+\b/g) ?? [])
+      .map((w) => w.toLowerCase())
+      .filter((w) => w.length > 2 && !QSTOP.has(w));
+    const entMiss = qEnts.some((e) => !exText.includes(e));
+    if (idMiss || (quantitative && !quantOk) || entMiss) {
+      result.reviewEvidence =
+        result.evidence as unknown as typeof result.reviewEvidence;
+      result.evidence = [];
+      result.refused = true;
+      result.supported = false;
+      result.unresolved = result.evidenceStatus === "ambiguous";
+      result.evidenceStatus = "insufficient";
+      result.partial = false;
+      result.partialNotice = null;
+      result.answer =
+        "The documents do not establish an answer to this question: the closest passages do not contain the asked fact. They are on screen for review.";
+      result.spoken = result.answer;
+    }
+  }
   result.queryTransform = expansionUsed
     ? {
         original: expansionUsed.original,
         expanded: expansionUsed.expanded,
         applied: expansionUsed.applied,
       }
-    : null;
+    : rephraseUsed
+      ? {
+          original: rephraseUsed.original,
+          expanded: rephraseUsed.rephrased,
+          applied: [
+            {
+              from: rephraseUsed.original,
+              to: rephraseUsed.rephrased,
+              kind: "dictionary" as const,
+            },
+          ],
+        }
+      : null;
   result.retrievalStages = {
     keyword: found.stages.keyword.map((r) => ({
       title: r.title,
