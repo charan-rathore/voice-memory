@@ -61,6 +61,12 @@ function browser(base, host) {
     setCookie(c) {
       cookie = c;
     },
+    async get(path) {
+      const r = await raw(base, path, {
+        headers: { ...(cookie ? { cookie } : {}), host },
+      });
+      return { status: r.status, out: JSON.parse(r.body || "null") };
+    },
   };
 }
 
@@ -471,6 +477,72 @@ test("re-import by the owning session retargets the fixed capability (no stale c
     await A.post("/api/reset", {});
     assert.equal((await bolnaCall(base, FIXED)).status, 401);
     assert.equal((await bolnaCall(base, FIXED)).status, 401);
+  } finally {
+    cleanup();
+  }
+});
+
+test("readiness names the pinned demo corpus: voice demo ready with no import", async () => {
+  const { server, base, cleanup } = await start({
+    VM_VOICE_CAPABILITY: FIXED,
+    VM_VOICE_TTL_MS: String(3 * 60 * 60 * 1000),
+    VM_VOICE_HARD_EXPIRES_AT: String(Date.now() + 3600000),
+    VM_DEMO_BUNDLE: "northstar",
+    BOLNA_API_KEY: "test-bolna-key",
+    BOLNA_AGENT_ID: "test-bolna-agent",
+  });
+  try {
+    const b = browser(base, `127.0.0.1:${server.address().port}`);
+    await b.getSession();
+    const r = (await b.get("/api/readiness")).out;
+    assert.equal(r.corpusLoaded, true);
+    assert.equal(r.corpusKind, "pinned-demo");
+    assert.equal(r.documents, 7);
+    assert.equal(r.voice.bound, true);
+    assert.equal(r.ready, true);
+  } finally {
+    cleanup();
+  }
+});
+
+test("readiness: expired pinned credential reports inactive, corpus still named honestly", async () => {
+  const { server, base, cleanup } = await start({
+    VM_VOICE_CAPABILITY: FIXED,
+    VM_VOICE_TTL_MS: String(3 * 60 * 60 * 1000),
+    VM_VOICE_HARD_EXPIRES_AT: String(Date.now() - 1000),
+    VM_DEMO_BUNDLE: "northstar",
+    BOLNA_API_KEY: "test-bolna-key",
+    BOLNA_AGENT_ID: "test-bolna-agent",
+  });
+  try {
+    const b = browser(base, `127.0.0.1:${server.address().port}`);
+    await b.getSession();
+    const r = (await b.get("/api/readiness")).out;
+    assert.equal(r.corpusLoaded, true);
+    assert.equal(r.corpusKind, "pinned-demo");
+    assert.equal(r.voice.bound, false);
+    assert.equal(r.voice.secondsRemaining, 0);
+    assert.equal(r.ready, false);
+  } finally {
+    cleanup();
+  }
+});
+
+test("readiness: pinned corpus bound but Bolna unconfigured is NOT ready-voice", async () => {
+  const { server, base, cleanup } = await start({
+    VM_VOICE_CAPABILITY: FIXED,
+    VM_VOICE_TTL_MS: String(3 * 60 * 60 * 1000),
+    VM_VOICE_HARD_EXPIRES_AT: String(Date.now() + 3600000),
+    VM_DEMO_BUNDLE: "northstar",
+  });
+  try {
+    const b = browser(base, `127.0.0.1:${server.address().port}`);
+    await b.getSession();
+    const r = (await b.get("/api/readiness")).out;
+    assert.equal(r.corpusKind, "pinned-demo");
+    assert.equal(r.voice.bound, true);
+    assert.equal(r.voice.bolnaConfigured, false);
+    assert.equal(r.ready, false);
   } finally {
     cleanup();
   }

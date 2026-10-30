@@ -405,12 +405,16 @@ ready.then(async () => {
       missing.push("the voice credential has reached its fixed expiry");
     if (r.voice.fixedCapability && !r.voice.bolnaConfigured)
       missing.push("Bolna calling is not configured on this server");
+    const expiry = r.voice.hardExpiresAt
+      ? ` Voice credential valid until ${new Date(r.voice.hardExpiresAt).toLocaleString()}.`
+      : "";
     $("readiness-status").textContent = r.ready
-      ? `Ready: ${r.documents} documents loaded, voice bound` +
-        (r.voice.hardExpiresAt
-          ? `, voice credential valid until ${new Date(r.voice.hardExpiresAt).toLocaleString()}.`
-          : ".")
-      : `Not ready: ${missing.join("; ")}.`;
+      ? r.corpusKind === "pinned-demo"
+        ? `Voice demo ready: Northstar (${r.documents} fictional documents) pinned for the call; no typed documents loaded.${expiry}`
+        : `Ready: ${r.documents} documents loaded, voice bound.${expiry}`
+      : r.corpusKind === "pinned-demo"
+        ? `Voice demo not ready: ${missing.join("; ")}.`
+        : `Not ready: ${missing.join("; ")}.`;
   };
   const checkReadiness = async () => {
     try {

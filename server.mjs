@@ -315,11 +315,26 @@ export function createLocalServer({
         const hardMs = voiceHardExpiresAtMs();
         const hardOk = !fixedCap || (hardMs !== null && hardMs > Date.now());
         const bolnaConfigured = !!(bolnaKey && bolnaAgent);
+        // The corpus a call actually answers from: this session's imported
+        // documents, or the boot-pinned fictional demo corpus. Naming the
+        // pinned corpus explicitly keeps "no import yet" from reading as
+        // "voice demo broken" - the pinned corpus IS the demo.
+        const corpusKind = s.bundle
+          ? "session"
+          : demoBundle
+            ? "pinned-demo"
+            : null;
+        const corpusDocuments = s.bundle
+          ? s.bundle.sources.length
+          : demoBundle
+            ? demoBundle.sources.length
+            : 0;
         res.end(
           JSON.stringify({
             demo: !!demoBundle,
-            corpusLoaded: !!s.bundle,
-            documents: s.bundle ? s.bundle.sources.length : 0,
+            corpusLoaded: corpusKind !== null,
+            corpusKind,
+            documents: corpusDocuments,
             voice: {
               fixedCapability: !!fixedCap,
               bound,
@@ -335,7 +350,10 @@ export function createLocalServer({
               bolnaConfigured,
             },
             ready:
-              !!s.bundle && bound && hardOk && (!fixedCap || bolnaConfigured),
+              corpusKind !== null &&
+              bound &&
+              hardOk &&
+              (!fixedCap || bolnaConfigured),
           }),
         );
         return;
