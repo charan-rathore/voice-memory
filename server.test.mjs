@@ -156,8 +156,7 @@ test("local session voice bridge preserves evidence and resets on replacement wi
   assert.match(r.headers.get("content-type"), /event-stream/);
   assert.match(await r.text(), /\[DONE\]/);
   assert.ok(
-    (await (await get(a, "voice/last")).json()).turn.result.evidence
-      .length,
+    (await (await get(a, "voice/last")).json()).turn.result.evidence.length,
   );
   await post(a, "import", {
     documents: [

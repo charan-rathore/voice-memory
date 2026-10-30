@@ -27,21 +27,52 @@ const INTENTS = [
   ["WHY", /\bwhy\b|\breason\b/i],
   ["MUTATE", /\b(mark|update|record|edit|approve it|set the|make it)\b/i],
   ["REJECTED", /\b(reject\w*|turned down|refused|declined)\b/i],
-  ["SOURCE", /\bwhich (document|doc|file|source)|says that|supports? that|where does it say/i],
-  ["HISTORY", /\b(earlier|before|original(?:ly)?|remember|used to|previous|wasn'?t it|weren'?t it)\b/i],
-  ["FINALIZED", /\b(finali[sz]ed?|final|agreed?|signed|locked|confirmed?|approv\w*|authori[sz]\w*|definitely|for sure|done deal)\b/i],
+  [
+    "SOURCE",
+    /\bwhich (document|doc|file|source)|says that|supports? that|where does it say/i,
+  ],
+  [
+    "HISTORY",
+    /\b(earlier|before|original(?:ly)?|remember|used to|previous|wasn'?t it|weren'?t it)\b/i,
+  ],
+  [
+    "FINALIZED",
+    /\b(finali[sz]ed?|final|agreed?|signed|locked|confirmed?|approv\w*|authori[sz]\w*|definitely|for sure|done deal)\b/i,
+  ],
   ["LATEST", /\b(latest|current|now|today|split|fee|amount|status)\b/i],
 ];
 
 const ALL_FIELDS = Object.keys(FIELD_CANONICAL);
 
 const NUM_WORDS = {
-  0: "zero", 1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
-  6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten", 11: "eleven",
-  12: "twelve", 13: "thirteen", 14: "fourteen", 15: "fifteen",
-  16: "sixteen", 17: "seventeen", 18: "eighteen", 19: "nineteen",
-  20: "twenty", 30: "thirty", 40: "forty", 50: "fifty", 60: "sixty",
-  70: "seventy", 80: "eighty", 90: "ninety",
+  0: "zero",
+  1: "one",
+  2: "two",
+  3: "three",
+  4: "four",
+  5: "five",
+  6: "six",
+  7: "seven",
+  8: "eight",
+  9: "nine",
+  10: "ten",
+  11: "eleven",
+  12: "twelve",
+  13: "thirteen",
+  14: "fourteen",
+  15: "fifteen",
+  16: "sixteen",
+  17: "seventeen",
+  18: "eighteen",
+  19: "nineteen",
+  20: "twenty",
+  30: "thirty",
+  40: "forty",
+  50: "fifty",
+  60: "sixty",
+  70: "seventy",
+  80: "eighty",
+  90: "ninety",
 };
 function spellNumber(n) {
   n = Math.round(Number(n));
@@ -51,11 +82,18 @@ function spellNumber(n) {
     return NUM_WORDS[Math.floor(n / 10) * 10] + "-" + NUM_WORDS[n % 10];
   if (n < 1000) {
     const rest = n % 100;
-    return NUM_WORDS[Math.floor(n / 100)] + " hundred" + (rest ? " " + spellNumber(rest) : "");
+    return (
+      NUM_WORDS[Math.floor(n / 100)] +
+      " hundred" +
+      (rest ? " " + spellNumber(rest) : "")
+    );
   }
   if (n < 1000000) {
-    const th = Math.floor(n / 1000), rest = n % 1000;
-    return spellNumber(th) + " thousand" + (rest ? " " + spellNumber(rest) : "");
+    const th = Math.floor(n / 1000),
+      rest = n % 1000;
+    return (
+      spellNumber(th) + " thousand" + (rest ? " " + spellNumber(rest) : "")
+    );
   }
   return n.toLocaleString("en-US");
 }
@@ -68,7 +106,20 @@ function speakAmount(raw, { dollars = false } = {}) {
   return spellNumber(n) + (dollars ? " dollars" : "");
 }
 
-const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 function speakDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
   if (!m) return iso || "";
@@ -87,9 +138,10 @@ function docLabel(claim) {
   const date = speakDate(claim.docDate);
   // A code-like title ("v2", "doc") is a filename read-aloud, not a source
   // description; fall back to the document's date.
-  const speakable = base.replace(/[^a-z]/g, "").length >= 4 && /[aeyiou]/.test(base)
-    ? base
-    : null;
+  const speakable =
+    base.replace(/[^a-z]/g, "").length >= 4 && /[aeyiou]/.test(base)
+      ? base
+      : null;
   if (!speakable) return `the document${date ? ` from ${date}` : ""}`;
   return `the ${speakable}${date ? ` from ${date}` : ""}`;
 }
@@ -122,12 +174,16 @@ function resolveField(q, claims, prevField) {
   if (/\b(split|upfront|instal|percent|%)\b/i.test(q)) {
     if (claims.some((c) => c.field === "paymentSplit")) return "paymentSplit";
   }
-  const anaphora = /\b(that|it|this|the earlier one|the amount|number|which one|which number)\b/i.test(q);
+  const anaphora =
+    /\b(that|it|this|the earlier one|the amount|number|which one|which number)\b/i.test(
+      q,
+    );
   if (anaphora && prevField) return prevField;
   return null;
 }
 
-const NEGATIVE_RE = /\bno signed\b|\bnot recorded\b|\bdoes not exist\b|\bnot authorized\b|\bnever signed\b|\bnot been signed\b|\bno\b[^.;]{0,40}\b(?:approved|agreement|exists|signed|recorded|authorized)\b|\bnot\b[^.;]{0,25}\bapproved\b/i;
+const NEGATIVE_RE =
+  /\bno signed\b|\bnot recorded\b|\bdoes not exist\b|\bnot authorized\b|\bnever signed\b|\bnot been signed\b|\bno\b[^.;]{0,40}\b(?:approved|agreement|exists|signed|recorded|authorized)\b|\bnot\b[^.;]{0,25}\bapproved\b/i;
 const REJECT_RE = /\brejected|turned down|declined|refused/i;
 
 const FIELD_CUES = {
@@ -141,19 +197,36 @@ const FIELD_CUES = {
   reporting: /report|cadence|weekly|daily|fortnight|monthly|status update/i,
 };
 
-
-const MONTH_RE = "(?:January|February|March|April|May|June|July|August|September|October|November|December)";
+const MONTH_RE =
+  "(?:January|February|March|April|May|June|July|August|September|October|November|December)";
 const SUPPLEMENT_PATTERNS = [
   // Cue and value must share ONE sentence: a stray "target practice" or
   // "weekly sales report" line must not mint a deadline or reporting claim.
-  { field: "deadline", cue: /\b(deadline|readiness|delivery target|due date)\b/i, re: new RegExp("\\b(\\d{1,2} " + MONTH_RE + "(?: \\d{4})?)\\b", "g") },
-  { field: "scope", cue: /\b(scope|regions?|depots?|areas?|sites?)\b/i, re: /\b((?:two|three|four|five|six|seven|\d+) (?:regions?|depots?|areas?|sites?|phases?)(?:\s*\([^)]*\))?)/gi },
-  { field: "reporting", cue: /\breporting\b/i, re: /\b(weekly|fortnightly|monthly|biweekly|daily)\b/gi },
+  {
+    field: "deadline",
+    cue: /\b(deadline|readiness|delivery target|due date)\b/i,
+    re: new RegExp("\\b(\\d{1,2} " + MONTH_RE + "(?: \\d{4})?)\\b", "g"),
+  },
+  {
+    field: "scope",
+    cue: /\b(scope|regions?|depots?|areas?|sites?)\b/i,
+    re: /\b((?:two|three|four|five|six|seven|\d+) (?:regions?|depots?|areas?|sites?|phases?)(?:\s*\([^)]*\))?)/gi,
+  },
+  {
+    field: "reporting",
+    cue: /\breporting\b/i,
+    re: /\b(weekly|fortnightly|monthly|biweekly|daily)\b/gi,
+  },
 ];
 
 function statusOfLine(line) {
   if (/open decision|not resolved/i.test(line)) return "unresolved";
-  if (/\bnot\b[^.;]{0,25}\bapproved\b|\bno\b[^.;]{0,40}\b(approved|agreement|exists|signed|recorded|authorized)\b/i.test(line)) return "unresolved";
+  if (
+    /\bnot\b[^.;]{0,25}\bapproved\b|\bno\b[^.;]{0,40}\b(approved|agreement|exists|signed|recorded|authorized)\b/i.test(
+      line,
+    )
+  )
+    return "unresolved";
   if (/internal (delivery )?target/i.test(line)) return "internal-target";
   if (/confirmed|approved/i.test(line)) return "approved";
   if (/asks|requested|retain/i.test(line)) return "requested";
@@ -165,14 +238,22 @@ function statusOfLine(line) {
 // field+title+normalized value; shared-core claims always win.
 function mergedClaims(bundle, fields) {
   const base = extractClaims(bundle, fields);
-  const seen = new Set(base.map((c) => `${c.field}|${c.title}|${String(c.value).toLowerCase().replace(/\s+/g, "")}`));
+  const seen = new Set(
+    base.map(
+      (c) =>
+        `${c.field}|${c.title}|${String(c.value).toLowerCase().replace(/\s+/g, "")}`,
+    ),
+  );
   // resolveClaims (shared core) expects engagement parties and supersede
   // markers on every claim; derive both so line-scan claims behave alike.
-  const entities = base.find((c) => c.scopeEntities?.length)?.scopeEntities ?? [];
+  const entities =
+    base.find((c) => c.scopeEntities?.length)?.scopeEntities ?? [];
   const extra = [];
   const wanted = new Set(fields);
   for (const src of bundle?.sources ?? []) {
-    const srcDate = (String(src.text ?? "").match(/Date:\s*(\d{4}-\d{2}-\d{2})/) ?? [])[1] ?? null;
+    const srcDate =
+      (String(src.text ?? "").match(/Date:\s*(\d{4}-\d{2}-\d{2})/) ?? [])[1] ??
+      null;
     const lines = String(src.text ?? "").split("\n");
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -187,18 +268,29 @@ function mergedClaims(bundle, fields) {
           // A change sentence ("narrow from three regions to two regions")
           // records the OUTCOME only: the pre-change value is history, not
           // a competing current claim.
-          if (matches.length > 1 && /\bfrom\b.{0,60}\bto\b|narrow|reduce|shrink/i.test(sent))
+          if (
+            matches.length > 1 &&
+            /\bfrom\b.{0,60}\bto\b|narrow|reduce|shrink/i.test(sent)
+          )
             matches = matches.slice(-1);
           for (const m of matches) {
-            const value = m[1].replace(/\s+\(/, "(").replace(/\s+/g, " ").trim();
+            const value = m[1]
+              .replace(/\s+\(/, "(")
+              .replace(/\s+/g, " ")
+              .trim();
             const key = `${p.field}|${src.title}|${value.toLowerCase().replace(/\s+/g, "")}`;
             if (seen.has(key)) continue;
             seen.add(key);
             extra.push({
-              field: p.field, value, quote: sent, title: src.title,
+              field: p.field,
+              value,
+              quote: sent,
+              title: src.title,
               docDate: srcDate,
-              firstLine: i + 1, lastLine: i + 1,
-              status: statusOfLine(sent), hash: null,
+              firstLine: i + 1,
+              lastLine: i + 1,
+              status: statusOfLine(sent),
+              hash: null,
               scopeEntities: entities,
               supersedes: /narrow|revis|supersed|instead of|retain/i.test(sent),
             });
@@ -213,27 +305,36 @@ function mergedClaims(bundle, fields) {
 // Value comparison key: punctuation/conjunction-insensitive so "two depots
 // (East, Central)" and "two depots (East and Central)" are one value.
 function canonValue(v) {
-  return String(v ?? "").toLowerCase().replace(/\band\b/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
+  return String(v ?? "")
+    .toLowerCase()
+    .replace(/\band\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 // A negative claim counts for this field only when its own quote names the
 // field's subject (never bleed a deadline negative into a fee verdict).
 function scopedNegative(field, claims, question, bundle = null) {
   const cue = FIELD_CUES[field];
-  const asksSigning = /\bsigned|agreement|countersign|executed\b/i.test(question);
+  const asksSigning = /\bsigned|agreement|countersign|executed\b/i.test(
+    question,
+  );
   const relevant = (quote) =>
     NEGATIVE_RE.test(quote) &&
     ((cue && cue.test(quote)) ||
       (asksSigning && /signed|agreement|countersign/i.test(quote)));
-  const inClaims = claims.find((c) => c.field === field && NEGATIVE_RE.test(c.quote))
-    ?? claims.find((c) => relevant(c.quote));
+  const inClaims =
+    claims.find((c) => c.field === field && NEGATIVE_RE.test(c.quote)) ??
+    claims.find((c) => relevant(c.quote));
   if (inClaims) return inClaims;
   // The shared extractor can skip amount-free negative statements; scan the
   // source lines directly so an explicit "no ..." sentence still grounds a
   // NO-RECORD verdict with a real citation.
   if (bundle?.sources) {
     for (const src of bundle.sources) {
-      const srcDate = (String(src.text ?? "").match(/Date:\s*(\d{4}-\d{2}-\d{2})/) ?? [])[1] ?? null;
+      const srcDate =
+        (String(src.text ?? "").match(/Date:\s*(\d{4}-\d{2}-\d{2})/) ??
+          [])[1] ?? null;
       const lines = String(src.text ?? "").split("\n");
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].replace(/^\s*\d+\.\s*/, "").trim();
@@ -243,9 +344,14 @@ function scopedNegative(field, claims, question, bundle = null) {
         for (const sentence of line.split(/(?<=[.!?])\s+/)) {
           if (relevant(sentence)) {
             return {
-              field, value: null, quote: sentence.trim(), title: src.title,
+              field,
+              value: null,
+              quote: sentence.trim(),
+              title: src.title,
               docDate: src.docDate ?? src.date ?? null,
-              firstLine: i + 1, lastLine: i + 1, status: "unresolved",
+              firstLine: i + 1,
+              lastLine: i + 1,
+              status: "unresolved",
             };
           }
         }
@@ -283,7 +389,10 @@ function verdictFor(field, resolved, claims, question, intent, bundle) {
   // Amount-bearing claims stay grounded PROPOSED; an explicit field-scoped
   // negative upgrades to NO-RECORD only for non-amount fields or signing
   // questions (never a flat "no" on an amount).
-  if (neg && (field !== "fee" || /\bsigned|agreement|countersign\b/i.test(question)))
+  if (
+    neg &&
+    (field !== "fee" || /\bsigned|agreement|countersign\b/i.test(question))
+  )
     return "NO-RECORD";
   if (current.status === "approved") return "CONFIRMED";
   if (REJECT_RE.test(current.quote)) return "REJECTED-EXPLICIT";
@@ -293,22 +402,40 @@ function verdictFor(field, resolved, claims, question, intent, bundle) {
 
 const words = (s) => s.split(/\s+/).filter(Boolean).length;
 
-function render({ intent, verdict, field, current, history, citations, claims, question }) {
+function render({
+  intent,
+  verdict,
+  field,
+  current,
+  history,
+  citations,
+  claims,
+  question,
+}) {
   const disp = (v) => (v ? v.replace(/(\S)\(/, "$1 (") : v);
   const value = current ? disp(current.value) : null;
   const label = current ? docLabel(current) : null;
   const earlier = history.length ? history[history.length - 1] : null;
   const earlierVal = earlier ? disp(earlier.value) : null;
-  const neg = verdict === "NO-RECORD" ? scopedNegative(field, citations, question) : null;
+  const neg =
+    verdict === "NO-RECORD" ? scopedNegative(field, citations, question) : null;
   const lowerFirst = (t) => (t ? t[0].toLowerCase() + t.slice(1) : t);
   if (verdict === "NO-RECORD" && neg) {
     // A cited line can hold several sentences; speak only the sentence that
     // carries this field's negative.
-    const asksSigning = /\bsigned|agreement|countersign|executed\b/i.test(question);
+    const asksSigning = /\bsigned|agreement|countersign|executed\b/i.test(
+      question,
+    );
     const cue = FIELD_CUES[field];
-    const sentence = neg.quote.split(/(?<=[.!?])\s+/).find((p) =>
-      NEGATIVE_RE.test(p) && ((cue && cue.test(p)) || (asksSigning && /signed|agreement|countersign/i.test(p))),
-    ) ?? neg.quote;
+    const sentence =
+      neg.quote
+        .split(/(?<=[.!?])\s+/)
+        .find(
+          (p) =>
+            NEGATIVE_RE.test(p) &&
+            ((cue && cue.test(p)) ||
+              (asksSigning && /signed|agreement|countersign/i.test(p))),
+        ) ?? neg.quote;
     return `No. Per ${docLabel(neg)}: ${lowerFirst(trimQuote(sentence, 110))}`;
   }
   if (intent === "MUTATE")
@@ -317,8 +444,11 @@ function render({ intent, verdict, field, current, history, citations, claims, q
   if (field === "scope" && current)
     return `The current working scope is ${value}.`;
   if (field === "reporting" && current) {
-    const cadence = (current.quote + " " + (current.value ?? "")).match(/\b(weekly|daily|fortnightly|monthly|biweekly|twice weekly)\b/i)?.[1];
-    if (!cadence) return `${cap(docLabel(current))} records the reporting arrangement.`;
+    const cadence = (current.quote + " " + (current.value ?? "")).match(
+      /\b(weekly|daily|fortnightly|monthly|biweekly|twice weekly)\b/i,
+    )?.[1];
+    if (!cadence)
+      return `${cap(docLabel(current))} records the reporting arrangement.`;
     return verdict === "CONFIRMED"
       ? `The client agreed to ${cadence.toLowerCase()} progress reporting, per ${docLabel(current)}.`
       : `The record proposes ${cadence.toLowerCase()} progress reporting, per ${docLabel(current)}; confirmation is not recorded.`;
@@ -365,10 +495,14 @@ function render({ intent, verdict, field, current, history, citations, claims, q
         )
         .map((c) => ({
           c,
-          shared: (c.quote.toLowerCase().match(/[a-z]{5,}/g) ?? []).filter((w) => currentWords.has(w)).length,
+          shared: (c.quote.toLowerCase().match(/[a-z]{5,}/g) ?? []).filter(
+            (w) => currentWords.has(w),
+          ).length,
         }))
-        .sort((a, b) =>
-          (b.c.field === "scope" ? 1 : 0) - (a.c.field === "scope" ? 1 : 0) || b.shared - a.shared,
+        .sort(
+          (a, b) =>
+            (b.c.field === "scope" ? 1 : 0) - (a.c.field === "scope" ? 1 : 0) ||
+            b.shared - a.shared,
         );
       const motivator = candidates[0]?.c ?? null;
       if (motivator && current)
@@ -390,8 +524,7 @@ function render({ intent, verdict, field, current, history, citations, claims, q
     case "REJECTED:REJECTED-EXPLICIT":
       return `Yes. ${cap(label)} records the rejection.`;
     default:
-      if (verdict === "UNKNOWN")
-        return `I don't see that in these documents.`;
+      if (verdict === "UNKNOWN") return `I don't see that in these documents.`;
       if (verdict === "OPEN")
         return `That is still open: ${dedupeValues(citations.map((c) => c.value)).join(" versus ")} are both on record.`;
       if (verdict === "PROPOSED" && value)
@@ -411,13 +544,19 @@ function dedupeValues(values) {
     if (!byCanon.has(k) || v.length > byCanon.get(k).length) byCanon.set(k, v);
   }
   const uniq = [...byCanon.values()];
-  return uniq.filter((v) => !uniq.some((o) => o !== v && canonValue(o).includes(canonValue(v))));
+  return uniq.filter(
+    (v) => !uniq.some((o) => o !== v && canonValue(o).includes(canonValue(v))),
+  );
 }
 
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 function trimQuote(q, max = 140) {
-  const t = q.trim().replace(/^\d+\.\s*/, "").replace(/\s+/g, " ");
-  const cut = t.length > max ? t.slice(0, max - 3).replace(/\s\S*$/, "") + "..." : t;
+  const t = q
+    .trim()
+    .replace(/^\d+\.\s*/, "")
+    .replace(/\s+/g, " ");
+  const cut =
+    t.length > max ? t.slice(0, max - 3).replace(/\s\S*$/, "") + "..." : t;
   return /[.!?]$/.test(cut) ? cut : cut + ".";
 }
 
@@ -427,17 +566,31 @@ function trimQuote(q, max = 140) {
 function guard(spoken, citations, verdict) {
   if (!spoken) return false;
   if (words(spoken) > 40) return false;
-  const citedText = citations.map((c) => `${c.quote} ${c.value} ${c.docDate}`).join(" ");
+  const citedText = citations
+    .map((c) => `${c.quote} ${c.value} ${c.docDate}`)
+    .join(" ");
   const norm = (d) => String(parseInt(d.replace(/,/g, ""), 10));
-  const citedDigits = new Set((citedText.match(/\b\d[\d,]*\b/g) || []).map(norm));
+  const citedDigits = new Set(
+    (citedText.match(/\b\d[\d,]*\b/g) || []).map(norm),
+  );
   for (const d of spoken.match(/\b\d[\d,]*\b/g) || []) {
     if (!citedDigits.has(norm(d))) return false;
   }
   if (/\b(approved|final|signed|agreed|confirmed)\b/i.test(spoken)) {
-    if (verdict !== "CONFIRMED" && verdict !== "NO-RECORD" && !/\bnot approved|no approval|not final|isn't approved|not recorded|stays? a proposal|still not approved|is not final|neither is approved\b/i.test(spoken))
+    if (
+      verdict !== "CONFIRMED" &&
+      verdict !== "NO-RECORD" &&
+      !/\bnot approved|no approval|not final|isn't approved|not recorded|stays? a proposal|still not approved|is not final|neither is approved\b/i.test(
+        spoken,
+      )
+    )
       return false;
   }
-  if (/\brejected\b/i.test(spoken) && verdict !== "REJECTED-EXPLICIT" && !/no record shows a rejection/i.test(spoken))
+  if (
+    /\brejected\b/i.test(spoken) &&
+    verdict !== "REJECTED-EXPLICIT" &&
+    !/no record shows a rejection/i.test(spoken)
+  )
     return false;
   if (/\.md\b|_/.test(spoken)) return false;
   return true;
@@ -476,8 +629,7 @@ function summarize(claims) {
       clauses.push(`${label} is confirmed at ${approved[0].value}`);
     else if (values.length > 1)
       clauses.push(`${label} is open between ${values.join(" and ")}`);
-    else if (field === "scope")
-      clauses.push(`${label} is ${values[0]}`);
+    else if (field === "scope") clauses.push(`${label} is ${values[0]}`);
     else clauses.push(`${label} is ${values[0]}, still a proposal`);
   }
   if (!clauses.length) return null;
@@ -487,12 +639,14 @@ function summarize(claims) {
 
 // Main entry: one voice turn. Returns { spoken, verdict, field, intent,
 // citations } or null when the caller should use its existing generic path.
-const PROPER_STOP = new Set((
-  "What When Where Which Who Whose Why How Was Were Is Are Did Does Do Has Have Had The This That These Those " +
-  "But Okay Ok So And Or If Then Can Could Would Should Will Shall May Any Much Many Now Today Yesterday Tomorrow " +
-  "January February March April May June July August September October November December " +
-  "Monday Tuesday Wednesday Thursday Friday Saturday Sunday"
-).split(" "));
+const PROPER_STOP = new Set(
+  (
+    "What When Where Which Who Whose Why How Was Were Is Are Did Does Do Has Have Had The This That These Those " +
+    "But Okay Ok So And Or If Then Can Could Would Should Will Shall May Any Much Many Now Today Yesterday Tomorrow " +
+    "January February March April May June July August September October November December " +
+    "Monday Tuesday Wednesday Thursday Friday Saturday Sunday"
+  ).split(" "),
+);
 
 // A capitalized name the documents never mention (wrong client, invented
 // party): abstain rather than answer from the records we do hold.
@@ -522,10 +676,14 @@ export function spokenTurn(question, bundle, prevField = null) {
     };
   // An explicit amount with no matching claim: never answer with a
   // different figure as if it were the one asked about.
-  const askedAmounts = question.match(/[$€£₹]\s?[\d,]+|\b\d{1,3}(?:,\d{3})+\b/g) ?? [];
+  const askedAmounts =
+    question.match(/[$€£₹]\s?[\d,]+|\b\d{1,3}(?:,\d{3})+\b/g) ?? [];
   if (askedAmounts.length) {
     const match = askedAmounts.some((a) =>
-      claims.some((c) => c.value && c.value.replace(/[^\d]/g, "") === a.replace(/[^\d]/g, "")),
+      claims.some(
+        (c) =>
+          c.value && c.value.replace(/[^\d]/g, "") === a.replace(/[^\d]/g, ""),
+      ),
     );
     if (!match)
       return {
@@ -539,9 +697,24 @@ export function spokenTurn(question, bundle, prevField = null) {
   if (intent === "SUMMARY") {
     const spoken = summarize(claims);
     if (spoken)
-      return { spoken, verdict: "OPEN", field: null, intent, citations: claims.map((c) => ({ title: c.title, docDate: c.docDate, quote: c.quote, firstLine: c.firstLine, lastLine: c.lastLine, hash: c.hash })) };
+      return {
+        spoken,
+        verdict: "OPEN",
+        field: null,
+        intent,
+        citations: claims.map((c) => ({
+          title: c.title,
+          docDate: c.docDate,
+          quote: c.quote,
+          firstLine: c.firstLine,
+          lastLine: c.lastLine,
+          hash: c.hash,
+        })),
+      };
   }
-  const field = resolveField(question, claims, null) ?? (prevField ? resolveField(question, claims, prevField) : null);
+  const field =
+    resolveField(question, claims, null) ??
+    (prevField ? resolveField(question, claims, prevField) : null);
   if (!field) {
     return {
       spoken: "I don't see that in these documents.",
@@ -557,10 +730,16 @@ export function spokenTurn(question, bundle, prevField = null) {
   const actives = resolved.active.get(field) ?? [];
   const current =
     verdict === "CONFIRMED"
-      ? (resolved.approved.get(field) ?? [])[0] ?? actives[0] ?? null
-      : actives[0] ?? null;
-  const supersededForField = resolved.superseded.filter((c) => c.field === field);
-  const citations = [...actives, ...supersededForField, ...(resolved.approved.get(field) ?? [])];
+      ? ((resolved.approved.get(field) ?? [])[0] ?? actives[0] ?? null)
+      : (actives[0] ?? null);
+  const supersededForField = resolved.superseded.filter(
+    (c) => c.field === field,
+  );
+  const citations = [
+    ...actives,
+    ...supersededForField,
+    ...(resolved.approved.get(field) ?? []),
+  ];
   if (verdict === "NO-RECORD") {
     const negC = scopedNegative(field, claims, question, bundle);
     if (negC && !citations.includes(negC)) citations.push(negC);
@@ -572,7 +751,16 @@ export function spokenTurn(question, bundle, prevField = null) {
   // structured answer either: defer to the caller's existing engine-answer
   // path, which carries the engine's own honest wording.
   if (engineResult.refused && (verdict === "UNKNOWN" || !current)) return null;
-  let spoken = render({ intent, verdict, field, current, history: supersededForField, citations, claims, question });
+  let spoken = render({
+    intent,
+    verdict,
+    field,
+    current,
+    history: supersededForField,
+    citations,
+    claims,
+    question,
+  });
   if (!guard(spoken, citations, verdict)) {
     spoken = current
       ? `${cap(docLabel(current))} records ${current.value}, with no approval recorded.`
@@ -580,5 +768,18 @@ export function spokenTurn(question, bundle, prevField = null) {
     if (!guard(spoken, citations, verdict))
       spoken = "I can't verify that from these documents.";
   }
-  return { spoken, verdict, field, intent, citations: citations.map((c) => ({ title: c.title, docDate: c.docDate, quote: c.quote, firstLine: c.firstLine, lastLine: c.lastLine, hash: c.hash })) };
+  return {
+    spoken,
+    verdict,
+    field,
+    intent,
+    citations: citations.map((c) => ({
+      title: c.title,
+      docDate: c.docDate,
+      quote: c.quote,
+      firstLine: c.firstLine,
+      lastLine: c.lastLine,
+      hash: c.hash,
+    })),
+  };
 }

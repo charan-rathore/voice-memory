@@ -341,7 +341,13 @@ export function createVoiceAdapter({
         // from the claim graph (per-grant inheritance for follow-ups), and
         // fills guarded templates. Engine output above stays the authority
         // for evidence; this layer only chooses what is spoken.
-        const rendered = spokenTurn(last.content, grant.bundle, historyField(grant.bundle, data.messages.slice(0, -1)) ?? grant.lastField ?? null);
+        const rendered = spokenTurn(
+          last.content,
+          grant.bundle,
+          historyField(grant.bundle, data.messages.slice(0, -1)) ??
+            grant.lastField ??
+            null,
+        );
         if (rendered) {
           grant.lastField = rendered.field ?? grant.lastField ?? null;
           grant.lastTurn = {

@@ -71,7 +71,9 @@ export function createLocalServer({
   if (demoBundleName) {
     if (!fixedCap) throw Error("VM_DEMO_BUNDLE requires VM_VOICE_CAPABILITY.");
     if (!voiceHardExpiresAtMs())
-      throw Error("VM_DEMO_BUNDLE requires VM_VOICE_HARD_EXPIRES_AT (absolute expiry).");
+      throw Error(
+        "VM_DEMO_BUNDLE requires VM_VOICE_HARD_EXPIRES_AT (absolute expiry).",
+      );
     if (demoBundleName !== "northstar")
       throw Error("Unknown VM_DEMO_BUNDLE: " + demoBundleName);
     demoBundle = importBundle(NORTHSTAR_DOCS);
@@ -84,7 +86,9 @@ export function createLocalServer({
       // unexpected and still fails closed by crashing.
       if (!/retired|hard expiry/i.test(e.message)) throw e;
       console.warn(
-        "VM_DEMO_BUNDLE: fixed voice capability is not live (" + e.message + "). Voice answers 401 until it is rotated and redeployed.",
+        "VM_DEMO_BUNDLE: fixed voice capability is not live (" +
+          e.message +
+          "). Voice answers 401 until it is rotated and redeployed.",
       );
     }
   }
@@ -367,9 +371,7 @@ export function createLocalServer({
       // multi-user claim.
       if (req.method === "GET" && req.url === "/api/voice/last") {
         const token = s.voiceToken ?? (demoBundle ? fixedCap : null);
-        res.end(
-          JSON.stringify({ turn: token ? voice.lastTurn(token) : null }),
-        );
+        res.end(JSON.stringify({ turn: token ? voice.lastTurn(token) : null }));
         return;
       }
       // One-click demo fixture: the engineered 7-doc Northstar corpus, plain
