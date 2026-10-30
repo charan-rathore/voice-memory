@@ -332,6 +332,36 @@ ready.then(async () => {
   const setCall = (t) => {
     $("call-status").textContent = t;
   };
+  // Readiness is a read-only snapshot for the operator (morning demo,
+  // cold-start recovery): it reports state, it never changes it.
+  const renderReadiness = (r) => {
+    const missing = [];
+    if (!r.corpusLoaded) missing.push("load the demo documents");
+    if (!r.voice.bound)
+      missing.push(
+        r.voice.fixedCapability
+          ? "start a live call once to bind the voice credential"
+          : "start voice",
+      );
+    if (r.voice.fixedCapability && r.voice.secondsRemaining === 0)
+      missing.push("the voice credential has reached its fixed expiry");
+    if (r.voice.fixedCapability && !r.voice.bolnaConfigured)
+      missing.push("Bolna calling is not configured on this server");
+    $("readiness-status").textContent = r.ready
+      ? `Ready: ${r.documents} documents loaded, voice bound` +
+        (r.voice.hardExpiresAt
+          ? `, voice credential valid until ${new Date(r.voice.hardExpiresAt).toLocaleString()}.`
+          : ".")
+      : `Not ready: ${missing.join("; ")}.`;
+  };
+  const checkReadiness = async () => {
+    try {
+      const r = await fetch("/api/readiness");
+      if (r.ok) renderReadiness(await r.json());
+    } catch {}
+  };
+  $("readiness-check").onclick = checkReadiness;
+  checkReadiness();
   let call = null;
   let setupTimer = null;
   // Attempt generation: incremented on timeout or manual end. Any SDK event

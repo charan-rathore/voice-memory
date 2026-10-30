@@ -276,3 +276,34 @@ test("demo corpus route serves the 7 Northstar documents to a session", async ()
     /\$42,000/,
   );
 });
+test("readiness tracks corpus, voice binding and lifecycle", async () => {
+  const s = await session();
+  const get = () =>
+    fetch(root + "/api/readiness", { headers: { cookie: s.cookie } });
+  let r = await (await get()).json();
+  assert.equal(r.corpusLoaded, false);
+  assert.equal(r.voice.bound, false);
+  assert.equal(r.ready, false);
+  assert.equal(typeof r.voice.fixedCapability, "boolean");
+  await post(s, "import", {
+    documents: [
+      {
+        title: "Readiness source",
+        text: "Pilot security review is pending. Maya owns the security review.",
+      },
+    ],
+  });
+  r = await (await get()).json();
+  assert.equal(r.corpusLoaded, true);
+  assert.equal(r.documents, 1);
+  assert.equal(r.ready, false);
+  assert.equal((await post(s, "voice/start", {})).status, 200);
+  r = await (await get()).json();
+  assert.equal(r.voice.bound, true);
+  assert.equal(r.ready, true);
+  await post(s, "reset", {});
+  r = await (await get()).json();
+  assert.equal(r.corpusLoaded, false);
+  assert.equal(r.voice.bound, false);
+  assert.equal(r.ready, false);
+});

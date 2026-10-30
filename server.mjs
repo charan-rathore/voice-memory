@@ -276,6 +276,41 @@ export function createLocalServer({
         res.end(JSON.stringify({ configured: !!(bolnaKey && bolnaAgent) }));
         return;
       }
+      // Explicit, session-scoped readiness: what a live demo needs right now
+      // (corpus present, voice grant bound, fixed credential within its
+      // absolute expiry, Bolna mint configured). Read-only; never binds,
+      // imports or revives anything - recovery stays an explicit UI action.
+      if (req.method === "GET" && req.url === "/api/readiness") {
+        const bound = fixedCap
+          ? voice.isBound(fixedCap)
+          : !!(s.voiceToken && voice.isBound(s.voiceToken));
+        const hardMs = voiceHardExpiresAtMs();
+        const hardOk = !fixedCap || (hardMs !== null && hardMs > Date.now());
+        const bolnaConfigured = !!(bolnaKey && bolnaAgent);
+        res.end(
+          JSON.stringify({
+            corpusLoaded: !!s.bundle,
+            documents: s.bundle ? s.bundle.sources.length : 0,
+            voice: {
+              fixedCapability: !!fixedCap,
+              bound,
+              ownedByThisSession: fixedCap
+                ? s.voiceToken === fixedCap && voice.isBound(fixedCap)
+                : bound,
+              hardExpiresAt:
+                fixedCap && hardMs ? new Date(hardMs).toISOString() : null,
+              secondsRemaining:
+                fixedCap && hardMs
+                  ? Math.max(0, Math.floor((hardMs - Date.now()) / 1000))
+                  : null,
+              bolnaConfigured,
+            },
+            ready:
+              !!s.bundle && bound && hardOk && (!fixedCap || bolnaConfigured),
+          }),
+        );
+        return;
+      }
       // One-click demo fixture: the engineered 7-doc Northstar corpus, plain
       // filenames so claim supersession behaves (title prefixes are
       // extraction-sensitive). Session-gated like every app route.
