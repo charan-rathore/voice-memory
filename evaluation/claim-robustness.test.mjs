@@ -108,3 +108,24 @@ test("an unresolved open-decision line never supersedes the records it reports",
     /Superseded record\(s\):[^]*50\/50 \(04_Steering_Committee_Notes\.md/,
   );
 });
+
+test("a refused answer never carries a partial notice", () => {
+  // Regression: the signoff-timing refusal (and any claims-guard refusal)
+  // inherited the retrieval-level partial flag and notice, so the UI showed
+  // "No supporting evidence found" alongside an amber "Partial: cited
+  // passages are real evidence..." notice. A refused answer cites nothing.
+  const r = answer(
+    "When is signoff expected?",
+    importBundle(NORTHSTAR_DOCS),
+  );
+  assert.equal(r.refused, true);
+  assert.equal(r.partial, false);
+  assert.equal(r.partialNotice, null);
+  const r2 = answer(
+    "What payment terms did we finally agree to?",
+    importBundle(NORTHSTAR_DOCS),
+  );
+  assert.equal(r2.unresolved, true);
+  assert.equal(r2.partial, false);
+  assert.equal(r2.partialNotice, null);
+});

@@ -680,6 +680,12 @@ export function answer(
     evidenceNote: found.evidenceNote,
     candidateCount: found.candidateCount,
   };
+  // A refusal or unresolved verdict never carries a partial notice: the
+  // notice speaks of cited passages, and a refused answer cites none.
+  if (result.refused || result.unresolved) {
+    result.partial = false;
+    result.partialNotice = null;
+  }
   return result;
 }
 export function answerFromRetrieval(
