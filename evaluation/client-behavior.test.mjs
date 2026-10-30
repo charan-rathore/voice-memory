@@ -203,7 +203,10 @@ test("live call polls the owner feed over GET and marks the final render as last
     await flush();
     // New call: pending state, never the previous call's turn.
     assert.equal(el("voice-turn").hidden, false);
-    assert.match(el("voice-turn").textContent, /first verified turn of this call/i);
+    assert.match(
+      el("voice-turn").textContent,
+      /first verified turn of this call/i,
+    );
     // A verified turn lands server-side; the 3s poll renders it with its
     // verdict and the turn's own timestamp - never "just now".
     voiceLast = {
@@ -216,13 +219,22 @@ test("live call polls the owner feed over GET and marks the final render as last
     };
     mock.timers.tick(3000);
     await flush();
-    assert.match(el("voice-turn").textContent, /^Last verified turn \(PROPOSED, /);
-    assert.match(el("voice-turn").textContent, /\$42,000 is the latest proposal/);
+    assert.match(
+      el("voice-turn").textContent,
+      /^Last verified turn \(PROPOSED, /,
+    );
+    assert.match(
+      el("voice-turn").textContent,
+      /\$42,000 is the latest proposal/,
+    );
     assert.doesNotMatch(el("voice-turn").textContent, /just now/i);
     // Call end: one final render, explicitly marked as the last call's.
     sdkInstances[0].emit("call-end");
     await flush();
-    assert.match(el("voice-turn").textContent, /^Final verified turn of the last call/);
+    assert.match(
+      el("voice-turn").textContent,
+      /^Final verified turn of the last call/,
+    );
     // Owner-initiated End takes its own path (the SDK handler is skipped by
     // design); it must still land the same final, marked render.
     sdkStartImpl = async function () {
@@ -234,8 +246,103 @@ test("live call polls the owner feed over GET and marks the final render as last
     await flush();
     ui.end.onclick();
     await flush();
-    assert.match(el("voice-turn").textContent, /^Final verified turn of the last call/);
+    assert.match(
+      el("voice-turn").textContent,
+      /^Final verified turn of the last call/,
+    );
   } finally {
     mock.timers.reset();
   }
+});
+
+// Stale-readiness regressions: after a redeploy or session wipe the readiness
+// probe fails (403 / 5xx / network). A previously rendered green "ready" line
+// MUST be invalidated - never preserved as if still verified.
+const READY_JSON = {
+  demo: true,
+  corpusLoaded: true,
+  corpusKind: "pinned-demo",
+  documents: 7,
+  sessionDocuments: 0,
+  voice: {
+    fixedCapability: true,
+    bound: true,
+    ownedByThisSession: false,
+    hardExpiresAt: "2026-11-02T00:00:00.000Z",
+    secondsRemaining: 100000,
+    bolnaConfigured: true,
+  },
+  ready: true,
+};
+const stubReadiness = (impl) => {
+  globalThis.fetch = async (u, opts) => {
+    if (String(u) === "/api/readiness") return impl();
+    if (String(u) === "/api/session")
+      return { ok: true, json: async () => ({ csrf: "t" }) };
+    if (String(u) === "/api/bolna-config")
+      return { ok: true, json: async () => ({ configured: true }) };
+    return { ok: true, json: async () => ({ documents: [], turns: [] }) };
+  };
+};
+const renderReady = async () => {
+  stubReadiness(() => ({
+    ok: true,
+    status: 200,
+    json: async () => READY_JSON,
+  }));
+  await el("readiness-check").onclick();
+  await flush();
+  assert.match(el("readiness-status").textContent, /Voice demo ready/);
+};
+
+test("a previous ready is invalidated when the probe returns 403 (session ended)", async () => {
+  await boot();
+  await renderReady();
+  stubReadiness(() => ({
+    ok: false,
+    status: 403,
+    json: async () => ({ error: "Owner access required." }),
+  }));
+  await el("readiness-check").onclick();
+  await flush();
+  const t = el("readiness-status").textContent;
+  assert.doesNotMatch(t, /Voice demo ready/);
+  assert.match(t, /sign in/i);
+});
+
+test("a previous ready is invalidated when the probe returns 5xx", async () => {
+  await boot();
+  await renderReady();
+  stubReadiness(() => ({
+    ok: false,
+    status: 503,
+    json: async () => ({}),
+  }));
+  await el("readiness-check").onclick();
+  await flush();
+  const t = el("readiness-status").textContent;
+  assert.doesNotMatch(t, /Voice demo ready/);
+  assert.match(t, /not verified/i);
+});
+
+test("a previous ready is invalidated when the probe throws (network/cold start)", async () => {
+  await boot();
+  await renderReady();
+  stubReadiness(() => {
+    throw new Error("fetch failed");
+  });
+  await el("readiness-check").onclick();
+  await flush();
+  const t = el("readiness-status").textContent;
+  assert.doesNotMatch(t, /Voice demo ready/);
+  assert.match(t, /not verified/i);
+});
+
+test("readiness recovers to a fresh ready render after a failed probe", async () => {
+  await boot();
+  stubReadiness(() => ({ ok: false, status: 403, json: async () => ({}) }));
+  await el("readiness-check").onclick();
+  await flush();
+  assert.match(el("readiness-status").textContent, /not verified|sign in/i);
+  await renderReady();
 });

@@ -19,7 +19,8 @@ async function renderVoiceTurn(final = false) {
     const st = r.turn?.spokenTurn;
     if (!st) {
       if (final && !$("voice-turn").hidden) {
-        $("voice-turn").textContent = "No verified voice turn in the last call.";
+        $("voice-turn").textContent =
+          "No verified voice turn in the last call.";
         $("voice-turn-evidence").replaceChildren();
       }
       return;
@@ -421,10 +422,23 @@ ready.then(async () => {
         : `Not ready: ${missing.join("; ")}.`;
   };
   const checkReadiness = async () => {
+    // A failed probe MUST invalidate any earlier ready line: after a redeploy
+    // or session wipe the old green text would silently lie about the state
+    // of a fresh process. Only a fresh 200 renders readiness.
     try {
       const r = await fetch("/api/readiness");
-      if (r.ok) renderReadiness(await r.json());
-    } catch {}
+      if (r.ok) {
+        renderReadiness(await r.json());
+        return;
+      }
+      $("readiness-status").textContent =
+        r.status === 401 || r.status === 403
+          ? "Voice demo readiness is not verified: your owner session has ended. Sign in again at /owner-signin, then re-check before the call."
+          : `Voice demo readiness is not verified (server answered ${r.status}). Do not rely on an earlier ready state - wait a moment and re-check.`;
+    } catch {
+      $("readiness-status").textContent =
+        "Voice demo readiness is not verified: the server did not answer (it may be waking from sleep). Do not rely on an earlier ready state - re-check in about a minute.";
+    }
   };
   $("readiness-check").onclick = checkReadiness;
   checkReadiness();
