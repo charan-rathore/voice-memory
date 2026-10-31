@@ -178,7 +178,9 @@
       </div>
       <div class="cites">${cites
         .map((c, i) => {
-          const st = c.status || statusOfDoc(c.title);
+          // Report status (preliminary / amended) is what a reader needs on a
+          // lab citation; claim status lives in the verdict line above.
+          const st = statusOfDoc(c.title);
           return `<button class="cite" type="button" data-cite="${i}" style="animation-delay:${200 + i * 90}ms">
             <span class="cite-n">${i + 1}</span>
             <span class="cite-doc">${esc(shortTitle(c.title))}${st ? `<span class="tagline tag-${esc(st)}">${esc(st)}</span>` : ""}${
@@ -231,11 +233,45 @@
     const c = cites[i];
     if (!c) return;
     $$(".cite").forEach((b) => b.classList.toggle("on", Number(b.dataset.cite) === i));
-    // Same page cited more than once (amended vs preliminary): all boxes on it.
+    // Lab answers that rest on several reports (a correction, a refused
+    // comparison) show every cited page, the selected one first.
+    const pdfTitles = [...new Set(cites.filter((x) => /\.pdf$/i.test(x.title ?? "")).map((x) => x.title))];
+    if (/\.pdf$/i.test(c.title ?? "") && pdfTitles.length > 1) {
+      const order = [c.title, ...pdfTitles.filter((t) => t !== c.title)];
+      $$("#doc-rail button").forEach((b) => b.classList.toggle("on", order.includes(b.dataset.doc)));
+      $("#viewer-title").textContent = `${order.length} reports cited`;
+      $("#viewer-meta").textContent = order.map((t) => shortTitle(t)).join(" · ");
+      $("#viewer-body").innerHTML = order
+        .map((t, k) => pageHtml(t, cites.filter((x) => x.title === t), k === 0 ? c : cites.find((x) => x.title === t), k))
+        .join("");
+      return;
+    }
     const samePage = cites.filter((x) => x.title === c.title);
     openDoc(c.title, samePage, c);
   }
 
+  function boxesFor(cites) {
+    return cites
+      .map((c) => ({ c, r: c.location?.focus?.regions?.[0] }))
+      .filter((x) => x.r?.bbox)
+      .map(({ c, r }, k) => {
+        const [x0, y0, x1, y1] = r.bbox;
+        const pad = 3;
+        const old = statusOfDoc(c.title) === "preliminary";
+        return `<span class="box${old ? " old" : ""}" style="left:${((x0 - pad) / 595) * 100}%;top:${((y0 - pad) / 400) * 100}%;width:${
+          ((x1 - x0 + pad * 2) / 595) * 100
+        }%;height:${((y1 - y0 + pad * 2) / 400) * 100}%;animation-delay:${250 + k * 120}ms"></span>`;
+      })
+      .join("");
+  }
+  function pageHtml(title, cites, primary, k = 0, boxes = boxesFor(cites)) {
+    const base = title.replace(/\.pdf$/i, "");
+    const st = statusOfDoc(title);
+    return `<div class="page${k ? " stacked" : ""}" style="animation-delay:${k * 160}ms"><img src="pages/${esc(base)}.png" alt="Page 1 of ${esc(title)}, a synthetic lab report" />${boxes}</div>
+      <p class="page-note"><span class="verdict-chip ${st === "preliminary" ? "v-no" : st === "amended" ? "v-latest" : "v-ask"}">${esc(shortTitle(title))}${
+        st ? " · " + esc(st) : ""
+      }</span>${primary ? esc(prettyQuote(primary.quote)) : "Original page, rendered from the PDF"}</p>`;
+  }
   async function openDoc(title, cites = [], primary = null) {
     $$("#doc-rail button").forEach((b) => b.classList.toggle("on", b.dataset.doc === title));
     $("#viewer-title").textContent = shortTitle(title);
@@ -255,10 +291,7 @@
           }%;height:${((y1 - y0 + pad * 2) / 400) * 100}%;animation-delay:${250 + k * 120}ms"></span>`;
         })
         .join("");
-      $("#viewer-body").innerHTML = `<div class="page"><img src="pages/${esc(base)}.png" alt="Page 1 of ${esc(title)}, a synthetic lab report" />${boxes}</div>
-        <p class="page-note">${
-          primary ? `<span class="verdict-chip ${st === "preliminary" ? "v-no" : "v-latest"}">${st ? esc(st) + " report" : "cited row"}</span>` : ""
-        }${primary ? esc(prettyQuote(primary.quote)) : "Original page, rendered from the PDF"}</p>`;
+      $("#viewer-body").innerHTML = pageHtml(title, cites, primary, 0, boxes);
       return;
     }
     $("#viewer-meta").textContent = title;
