@@ -477,6 +477,33 @@ export function answer(
             conditions.map((c) => `"${c.quote}" (${c.title})`).join("; ")
           : "");
       result.spoken = result.answer;
+    } else if (
+      fields.includes("signedAgreement") &&
+      claims.some((c) => c.field === "signedAgreement")
+    ) {
+      // Agreement-existence question with a recorded negative fact on file:
+      // the record's own statement IS the answer. Surface it verbatim with
+      // provenance; never infer later execution, and never let fee or
+      // payment-split claims compete over a question they do not answer.
+      claimsVerdict = true;
+      const recorded = claims.filter((c) => c.field === "signedAgreement");
+      result.refused = false;
+      result.supported = true;
+      result.unresolved = false;
+      result.partial = false;
+      result.partialNotice = null;
+      result.evidenceStatus = "positive";
+      result.evidence = recorded as unknown as typeof result.evidence;
+      result.answer =
+        "The record states: " +
+        recorded
+          .map(
+            (c) =>
+              `"${c.quote}" (${c.title}${c.docDate ? ", " + c.docDate : ""})`,
+          )
+          .join("; ") +
+        ". No signed agreement is on record for the revised terms; these documents do not establish that one was later executed.";
+      result.spoken = result.answer;
     } else {
       const GENERIC_TOK = new Set([
         "proposal",
