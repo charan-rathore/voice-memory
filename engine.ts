@@ -33,6 +33,32 @@ import { chunkDocument } from "./vendor/web/src/lib/rag/chunking";
 import { extractiveAnswer } from "./vendor/web/src/lib/rag/extractive";
 
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
+// Per-document text cap. Matches the ingestion pipeline's canonical-text limit
+// (ingest/errors.mjs LIMITS.maxTextChars) so a parsed PDF is never truncated.
+export const MAX_DOC_CHARS = 250000;
+
+// Exact source span for a chunk, resolved at index time. Chunks after the
+// first carry an overlap tail and table chunks may carry a repeated header,
+// so the chunk text is often NOT a verbatim substring of the source. The
+// chunk's own core (the chunk minus up to k leading lines) is, and searching
+// from just after the previous chunk's anchor resolves repeated text (page
+// boilerplate, repeated headings) to the right occurrence instead of failing
+// closed. No anchor -> the chunk can never be cited (still fail-closed).
+function anchorChunk(
+  src: string,
+  chunk: string,
+  from: number,
+): { start: number; end: number } | null {
+  const lines = chunk.split("\n");
+  for (let k = 0; k < Math.min(lines.length, 8); k++) {
+    const core = lines.slice(k).join("\n").trim();
+    if (core.length < 20 && k > 0) break;
+    const at = src.indexOf(core, from);
+    if (at >= 0) return { start: at, end: at + core.length };
+  }
+  return null;
+}
+
 export function importBundle(docs: Array<{ title: string; text: string }>) {
   if (!Array.isArray(docs) || !docs.length || docs.length > 10)
     throw Error("Add between 1 and 10 text documents.");
@@ -42,11 +68,11 @@ export function importBundle(docs: Array<{ title: string; text: string }>) {
       typeof d.title !== "string" ||
       typeof d.text !== "string" ||
       d.text.length < 40 ||
-      d.text.length > 60000 ||
+      d.text.length > MAX_DOC_CHARS ||
       d.title.length > 160
     )
       throw Error(
-        "Each document needs a title and 40-60,000 characters of text.",
+        "Each document needs a title and 40-250,000 characters of text.",
       );
     const text = d.text.replace(/\r\n?/g, "\n");
     const memory = parseText({ text, label: d.title });
@@ -59,32 +85,45 @@ export function importBundle(docs: Array<{ title: string; text: string }>) {
       memory: memory.value,
     };
   });
-  const rows: SearchRow[] = sources.flatMap((s) =>
-    chunkDocument(s.text).map((c) => ({
-      title: s.title,
-      slug: s.id,
-      indexedAt: null,
-      corpusId: scope,
-      chunk: {
-        id: randomUUID(),
-        document_id: s.id,
-        ordinal: c.ordinal,
-        text: c.text,
-        token_count: c.tokenCount,
-        heading: c.heading,
-        embedding: null,
-        embedding_model: null,
-        content_hash: hash(c.text),
-        created_at: new Date().toISOString(),
-        filepath: null,
-        language: null,
-        symbol: null,
-        chunk_kind: "prose",
-        corpus_id: scope,
-      },
-    })),
-  );
-  return { scope, sources, rows };
+  const anchors = new Map<string, { start: number; end: number }>();
+  let unanchored = 0;
+  const rows: SearchRow[] = sources.flatMap((s) => {
+    let cursor = 0;
+    return chunkDocument(s.text)
+      .map((c) => {
+        const id = randomUUID();
+        const a = anchorChunk(s.text, c.text, cursor);
+        if (a) {
+          anchors.set(id, a);
+          cursor = a.start + 1;
+        } else unanchored++;
+        return { c, id };
+      })
+      .map(({ c, id }) => ({
+        title: s.title,
+        slug: s.id,
+        indexedAt: null,
+        corpusId: scope,
+        chunk: {
+          id,
+          document_id: s.id,
+          ordinal: c.ordinal,
+          text: c.text,
+          token_count: c.tokenCount,
+          heading: c.heading,
+          embedding: null,
+          embedding_model: null,
+          content_hash: hash(c.text),
+          created_at: new Date().toISOString(),
+          filepath: null,
+          language: null,
+          symbol: null,
+          chunk_kind: "prose",
+          corpus_id: scope,
+        },
+      }));
+  });
+  return { scope, sources, rows, anchors, unanchored };
 }
 export function validateEvidence(
   c: any,
@@ -605,6 +644,23 @@ export function answer(
       /\b(revenue|budget|turnover|profit|margin|sales|cost|price|amount)\b/i,
     );
     let quantOk = hasQuantity;
+    // "How many <things>": a small count is still a count. Accept a plain
+    // number only when it directly precedes the asked head noun in the
+    // evidence ("recorded 81 open items"); a year, an ID or a number attached
+    // to some other noun never answers it.
+    const countQ =
+      /\bhow many\s+((?:[a-z-]+\s+){0,3}?[a-z-]+?)(?:\s+(?:did|do|does|are|is|were|was|has|have|had|will|can|could|should|would|in|on|for|at|of)\b|[?.!]|$)/i.exec(
+        question,
+      );
+    if (quantitative && !hasQuantity && countQ && !metricQ) {
+      const head = countQ[1].trim().split(/\s+/).pop()!.toLowerCase();
+      const stem = head.replace(/(es|s)$/, "");
+      if (stem.length >= 3)
+        quantOk = new RegExp(
+          `\\b(?!(?:19|20)\\d{2}\\b)\\d{1,4}(?:\\.\\d+)?\\s+(?:[a-z-]+\\s+){0,2}${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\w*\\b`,
+          "i",
+        ).test(exText);
+    }
     if (quantitative && hasQuantity && metricQ) {
       // The asked metric must own the quantity: the nearest metric noun to
       // the left of a quantity in its sentence must be that metric, so
@@ -726,29 +782,39 @@ export function answerFromRetrieval(
     )
       throw Error("Retrieval corpus/model contract mismatch.");
   }
+  const cited = new Set<string>();
   const evidence = found.chunks.flatMap((chunk) => {
     const source = bundle.sources.find((s) => s.id === chunk.documentId);
     if (!source) return [];
-    const offset = source.text.indexOf(chunk.text);
-    if (offset < 0 || source.text.indexOf(chunk.text, offset + 1) !== -1)
-      return [];
+    // Index-time anchor first (exact span, repeat-safe). Bundles built
+    // without anchors keep the original unique-substring rule.
+    const anchor = bundle.anchors?.get(chunk.chunkId);
+    let offset: number;
+    let end: number;
+    if (anchor) {
+      offset = anchor.start;
+      end = anchor.end;
+    } else {
+      offset = source.text.indexOf(chunk.text);
+      if (offset < 0 || source.text.indexOf(chunk.text, offset + 1) !== -1)
+        return [];
+      end = offset + chunk.text.length;
+    }
     const c = {
       sourceId: source.id,
       title: source.title,
       hash: source.hash,
       start: offset,
-      end: offset + chunk.text.length,
+      end,
       firstLine: source.text.slice(0, offset).split("\n").length,
-      lastLine: source.text.slice(0, offset + chunk.text.length).split("\n")
-        .length,
-      quote: chunk.text,
+      lastLine: source.text.slice(0, end).split("\n").length,
+      quote: source.text.slice(offset, end),
     };
     validateEvidence(c, bundle);
+    cited.add(chunk.chunkId);
     return [c];
   });
-  const chunks = found.chunks.filter((c) =>
-    evidence.some((e) => e.sourceId === c.documentId && e.quote === c.text),
-  );
+  const chunks = found.chunks.filter((c) => cited.has(c.chunkId));
   const refused = found.evidence !== "positive" || !chunks.length;
   const review = contextReview(bundle, validateEvidence);
   return {
