@@ -26,6 +26,8 @@ import {
 import { extractReport } from "./clinical/observations.mjs";
 import { detectLang } from "./clinical/explain.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
+import { createMemory, recordTurn, liveEpisodes } from "./memory/memory.mjs";
+import { buildGraph } from "./memory/graph.mjs";
 import { createAnswerCache } from "./cache.mjs";
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "./corpus-northstar.mjs";
@@ -258,6 +260,13 @@ export function createLocalServer({
     return timingSafeEqual(ha, hb);
   };
   const sessions = new Map();
+  // Voice turns land in the episodic memory of the session that owns the
+  // token, and only while that session still holds the same documents.
+  voice.setOnTurn?.((token, t) => {
+    for (const ss of sessions.values())
+      if (ss.voiceToken === token && ss.bundle?.scope === t.scope)
+        recordTurn(ss.memory, { ...t, channel: "voice" });
+  });
   const origin = `http://127.0.0.1:${port}`;
   function session(req, res, { create = true, secure = false } = {}) {
     let id = (req.headers.cookie || "")
@@ -270,6 +279,7 @@ export function createLocalServer({
       sessions.set(id, {
         sid: id,
         at: Date.now(),
+        memory: createMemory(),
         csrf: randomBytes(32).toString("hex"),
       });
       res.setHeader(
@@ -579,6 +589,30 @@ export function createLocalServer({
         res.end(JSON.stringify({ turn: token ? voice.lastTurn(token) : null }));
         return;
       }
+      // Memory and knowledge graph (owner session, read-only GETs). The graph
+      // is rebuilt from evidence + episodes on each request: it cannot drift
+      // from the documents, and it grows with every answered question.
+      if (req.method === "GET" && req.url.startsWith("/api/graph")) {
+        const focus =
+          new URL(req.url, origin).searchParams.get("focus") || "overview";
+        if (!/^[\w:./%-]{1,200}$/.test(focus)) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: "Bad focus" }));
+          return;
+        }
+        res.end(JSON.stringify(buildGraph(s.bundle, s.memory, focus)));
+        return;
+      }
+      if (req.method === "GET" && req.url === "/api/memory") {
+        res.end(
+          JSON.stringify({
+            working: s.memory.working,
+            episodes: liveEpisodes(s.memory, s.bundle).slice(-50),
+            total: s.memory.episodes.length,
+          }),
+        );
+        return;
+      }
       // Voice lab feed: the transcript Bolna actually delivered for each
       // turn plus server receipt / first-byte wall-clock times and the
       // server's current time (for browser clock alignment). Same owner
@@ -802,6 +836,17 @@ export function createLocalServer({
         out = cached.shown;
         if (out.lead) s.lastField = out.lead.field ?? s.lastField ?? null;
         out.cache = cache;
+        // Episodic memory: interaction only, exact spans, never authority.
+        out.episode = recordTurn(s.memory, {
+          question: data.question,
+          lead: out.lead,
+          result: out,
+          channel: data.channel === "note" ? "note" : "typed",
+          scope: bundle.scope,
+        }).id;
+      } else if (req.url === "/api/memory/forget") {
+        s.memory = createMemory();
+        out = { ok: true };
       } else if (req.url === "/api/draft") {
         if (!s.bundle || !s.result) throw Error("Ask a question first.");
         out = draft(s.result, s.bundle);

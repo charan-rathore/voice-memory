@@ -27,6 +27,9 @@ export function createVoiceAdapter({
   bodyTimeoutMs = 5000,
   hardTtlMs = null,
   hardExpiresAtMs = null,
+  // Called after each answered turn with (token, {question, lead, result,
+  // scope}). The server routes it into the owning session's episodic memory.
+  onTurn = null,
 } = {}) {
   if (
     !Number.isSafeInteger(ttlMs) ||
@@ -493,6 +496,16 @@ export function createVoiceAdapter({
             verdict: turn?.spokenTurn?.verdict ?? null,
             outcome: "answered",
           });
+          try {
+            onTurn?.(token, {
+              question: asked ?? last.content,
+              lead: turn?.spokenTurn ?? null,
+              result: turn?.result ?? null,
+              scope: grant.bundle?.scope ?? null,
+            });
+          } catch {
+            /* memory is best-effort; never break the call */
+          }
           for (const content of spoken.match(/.{1,64}(?:\s|$)|.{1,64}/g) ||
             []) {
             controller.enqueue(
@@ -537,6 +550,9 @@ export function createVoiceAdapter({
       const g = grants.get(token);
       if (!g || g.expires <= now()) return [];
       return [...(g.turnLog ?? [])];
+    },
+    setOnTurn(fn) {
+      onTurn = typeof fn === "function" ? fn : null;
     },
     lastTurn(token) {
       const g = grants.get(token);

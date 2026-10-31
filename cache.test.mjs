@@ -85,7 +85,9 @@ const DOCS = [
   },
 ];
 const strip = (o) => {
-  const { cache, latencyMs, ...rest } = o;
+  // Per-request metadata (cache outcome, timing, episodic-memory id) is not
+  // part of the answer.
+  const { cache, latencyMs, episode, ...rest } = o;
   return rest;
 };
 

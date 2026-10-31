@@ -25,6 +25,7 @@ import {
   sentencesOf,
 } from "./spoken-routes.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
+import { parseAsOf, bundleAsOf } from "./memory/memory.mjs";
 
 const FIELD_CANONICAL = {
   fee: "What is the fee?",
@@ -578,9 +579,34 @@ function dedupeValues(values) {
     if (!byCanon.has(k) || v.length > byCanon.get(k).length) byCanon.set(k, v);
   }
   const uniq = [...byCanon.values()];
-  return uniq.filter(
-    (v) => !uniq.some((o) => o !== v && canonValue(o).includes(canonValue(v))),
-  );
+  // Stable, meaningful order (never import order): dates chronologically,
+  // then numbers ascending, then text.
+  const MON =
+    "january february march april may june july august september october november december".split(
+      " ",
+    );
+  const key = (v) => {
+    const d = /(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{4}))?/.exec(v);
+    const mi = d ? MON.indexOf(d[2].toLowerCase()) : -1;
+    if (mi >= 0)
+      return [0, Number(d[3] ?? 0) * 10000 + mi * 100 + Number(d[1])];
+    const n = Number(
+      String(v)
+        .replace(/[^\d.]/g, "")
+        .split(".")[0],
+    );
+    return Number.isFinite(n) && /\d/.test(v) ? [1, n] : [2, 0];
+  };
+  return uniq
+    .filter(
+      (v) =>
+        !uniq.some((o) => o !== v && canonValue(o).includes(canonValue(v))),
+    )
+    .sort((a, b) => {
+      const [ka, va] = key(a);
+      const [kb, vb] = key(b);
+      return ka - kb || va - vb || a.localeCompare(b);
+    });
 }
 
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
@@ -779,6 +805,33 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   if (!bundle?.sources?.length) return null;
   // Speech notation -> document notation (numbers, ordinals, fillers).
   const question = normalizeSpoken(rawQuestion);
+  // Temporal memory: "what was the fee as of 10 September?" is answered from
+  // the records dated on/before that day only, and says so.
+  const asOf = bundle.asOf ? null : parseAsOf(question, bundle);
+  if (asOf && asOf.rest.length > 3) {
+    const view = bundleAsOf(bundle, asOf.iso, asOf.inclusive);
+    const when = `${asOf.anchor === "before" ? "Before" : "As of"} ${asOf.phrase}`;
+    if (!view.sources.length)
+      return {
+        spoken: `No document in these records is dated ${asOf.anchor === "before" ? "before" : "on or before"} ${asOf.phrase}.`,
+        verdict: "UNKNOWN",
+        field: null,
+        intent: "ASOF",
+        citations: [],
+      };
+    const r = spokenTurn(asOf.rest, view, prevField);
+    if (r)
+      return {
+        ...r,
+        asOf: asOf.iso,
+        spoken:
+          `${when}, ${r.spoken[0].toLowerCase()}${r.spoken.slice(1)}`.replace(
+            /^(As of|Before) ([^,]+), \$/,
+            "$1 $2, $",
+          ),
+      };
+    return null;
+  }
   const intent = routeIntent(question);
   // Question shapes the field graph cannot answer, each from verbatim,
   // span-validated sentences (spoken-routes.mjs).
