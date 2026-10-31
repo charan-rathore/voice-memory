@@ -60,3 +60,60 @@ test("A6: 'three retail regions' phrasing still resolves to the scope claim", ()
   const r = spokenTurn("What is the scope?", scopey);
   assert.match(r.spoken, /three regions/i);
 });
+
+test("A7: retainer/retention phrasing clarifies, never aliases, the engagement fee", () => {
+  // The corpus records an engagement fee and never says "retainer" or
+  // "retention": the system must not present the engagement figure AS the
+  // asked-for retention/retainer fee. It says the asked term is absent and
+  // names what fee the documents do record, with its own label and status.
+  for (const q of [
+    "What is the retention fee?",
+    "What is the retainer fee?",
+  ]) {
+    const r = spokenTurn(q, north);
+    assert.match(r.spoken, /don't see a (retention|retainer) fee/, q);
+    assert.match(r.spoken, /engagement fee of \$48,000/, q);
+    assert.match(r.spoken, /not approved/, q);
+  }
+});
+
+test("A9: distinct descriptors answer their own figure, not each other's", () => {
+  const both = importBundle([
+    {
+      title: "01_Northstar.md",
+      text: "# Northstar Proposal\nAuthor: M. Date: 2026-09-04. Type: proposal.\n1. Meridian proposes a pilot for Northstar Retail for a fixed engagement fee of $48,000.\n2. This proposal is an offer, not an agreement.",
+    },
+    {
+      title: "02_Notes.md",
+      text: "# Notes\nAuthor: Y. Date: 2026-09-10. Type: notes.\n1. The workshop would sit under a monthly retainer of $5,000.\n2. Lunch venue is undecided.",
+    },
+  ]);
+  const r1 = spokenTurn("What is the retainer?", both);
+  assert.match(r1.spoken, /\$5,000/);
+  assert.doesNotMatch(r1.spoken, /\$48,000/);
+  const r2 = spokenTurn("What is the engagement fee?", both);
+  assert.match(r2.spoken, /\$48,000/);
+  assert.doesNotMatch(r2.spoken, /\$5,000/);
+});
+
+test("A8: out-of-corpus attributes still abstain, not answer with a real figure", () => {
+  const marked = importBundle([
+    {
+      title: "01_Northstar.md",
+      text: "# Northstar Proposal\nAuthor: M. Date: 2026-09-04. Type: proposal.\n1. Meridian proposes a pilot for Northstar Retail for a fixed engagement fee of $48,000.\n2. This proposal is an offer, not an agreement.",
+    },
+    {
+      title: "02_Notes.md",
+      text: "# Notes\nAuthor: Y. Date: 2026-09-10. Type: notes.\n1. The campaign marked the quarter.\n2. Lunch venue is undecided.",
+    },
+  ]);
+  for (const q of [
+    "What is the marketing budget?",
+    "What is the private retainer?",
+    "What is the retention deadline?",
+  ]) {
+    const r = spokenTurn(q, marked);
+    assert.doesNotMatch(r.spoken, /\$48,000/, q);
+    assert.match(r.spoken, /don't see/, q);
+  }
+});

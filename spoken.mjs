@@ -878,7 +878,32 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   // retainer", "the marketing budget") names something the records do not
   // contain: abstain instead of answering with the engagement's own figure.
   const unknownMod = unknownModifier(question, bundle);
-  if (unknownMod && intent !== "MUTATE")
+  if (unknownMod && intent !== "MUTATE") {
+    // Clarify, never alias: when the asked-for fee term is absent but the
+    // documents do record a fee under another label, say what IS recorded
+    // with its own label and status. The caller decides whether that is
+    // the fee they meant; the figure is never presented AS the asked-for
+    // term. Only the retainer/retention-fee family gets this clarification;
+    // other unknown attributes ("marketing budget") stay a bare abstention.
+    if (/^(?:retainer|retention) fee$/.test(unknownMod)) {
+      const actives =
+        resolveClaims(claims.filter((c) => c.field === "fee")).active.get(
+          "fee",
+        ) ?? [];
+      const c = actives.find((x) => x.value && /\bfee\b/i.test(x.quote ?? ""));
+      if (c) {
+        const label = /\b([a-z][a-z-]*)\s+fees?\b/i.exec(c.quote)?.[1];
+        const named = label ? `${label.toLowerCase()} fee` : "fee";
+        const article = /^[aeiou]/.test(named) ? "an" : "a";
+        return {
+          spoken: `I don't see a ${unknownMod} in these documents. They do record ${article} ${named} of ${c.value}, ${c.status === "approved" ? "approved" : "proposed, not approved"}.`,
+          verdict: "UNKNOWN",
+          field: null,
+          intent,
+          citations: [c],
+        };
+      }
+    }
     return {
       spoken: `I don't see a ${unknownMod} in these documents.`,
       verdict: "UNKNOWN",
@@ -886,6 +911,7 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
       intent,
       citations: [],
     };
+  }
   // An explicit amount with no matching claim: never answer with a
   // different figure as if it were the one asked about.
   const askedAmounts =
@@ -955,7 +981,25 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
       reason: "no_field",
     };
   }
-  const fieldClaims = claims.filter((c) => c.field === field);
+  let fieldClaims = claims.filter((c) => c.field === field);
+  // Descriptor binding: "the retainer", "the retainer fee", "the engagement
+  // fee" ask about the figure the documents attach to that descriptor.
+  // Answer only from claims whose own sentence uses the descriptor; with no
+  // match, fall back to the unfiltered graph (which reports open conflicts
+  // instead of forcing one figure).
+  if (field === "fee") {
+    const dm =
+      /\b([a-z][a-z-]{3,})\s+(?:fees?|retainer|price|rate)\b/i.exec(
+        question,
+      ) ?? /\b(retainer)\b/i.exec(question);
+    const desc = dm?.[1]?.toLowerCase();
+    if (desc) {
+      const hit = fieldClaims.filter((c) =>
+        new RegExp(`\\b${desc}\\b`, "i").test(c.quote ?? ""),
+      );
+      if (hit.length) fieldClaims = hit;
+    }
+  }
   // Subject binding: "how much is the Dock E training change?" names a
   // subject no fee claim mentions; the fee figures must not answer it.
   // Only when the question names neither the field itself nor a value: a
