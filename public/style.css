@@ -1832,3 +1832,74 @@ mark.hl,
   font-size: 0.92rem;
   line-height: 1.45;
 }
+
+/* Landing-style hero (site/ grammar): paper, editorial serif, the
+   highlighter stroke on the operative word. The desk below is unchanged. */
+.hero {
+  background: #fbfaf2;
+  border-bottom: 1px solid var(--rule);
+  padding: 3.2rem 1.5rem 2.6rem;
+  text-align: center;
+}
+.hero-eyebrow {
+  margin: 0 auto 0.9rem;
+  max-width: 34rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hero-title {
+  margin: 0 auto;
+  max-width: 46rem;
+  font-family: "Newsreader", "Iowan Old Style", Georgia, serif;
+  font-weight: 480;
+  font-size: clamp(2rem, 4.6vw, 3.2rem);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.hero-title em {
+  font-style: italic;
+  background: linear-gradient(
+    transparent 62%,
+    var(--mark-soft) 62%,
+    var(--mark-soft) 96%,
+    transparent 96%
+  );
+}
+.hero-sub {
+  margin: 1rem auto 0;
+  max-width: 36rem;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.hero-ctas {
+  margin-top: 1.5rem;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.hero-cta {
+  display: inline-block;
+  padding: 0.68rem 1.4rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid var(--ink);
+}
+.hero-cta-primary {
+  background: var(--ink);
+  color: #fbfaf2;
+}
+.hero-cta-talk {
+  background: transparent;
+  color: var(--ink);
+}
+.public-demo #hero-talk {
+  display: none;
+}

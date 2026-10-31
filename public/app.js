@@ -20,6 +20,9 @@ export const ready = fetch("/api/session")
         "and voice calls are off in this shared demo.";
       $("column")?.prepend(banner);
     }
+    // Hero talk CTA is a shortcut to the real call control; it never
+    // appears for demo visitors (CSS gate) and just forwards the click.
+    $("hero-talk")?.addEventListener("click", () => $("call-start")?.click());
   });
 export function status(text, error = false) {
   $("status").textContent = text;
