@@ -12,6 +12,7 @@ import {
   validateEvidence,
 } from "./dist/engine.mjs";
 import { spokenTurn, historyField } from "./spoken.mjs";
+import { extractiveSpoken } from "./spoken-extract.mjs";
 export function createVoiceAdapter({
   ttlMs = 120000,
   now = () => Date.now(),
@@ -45,6 +46,9 @@ export function createVoiceAdapter({
     if (cred) {
       if (cred.retiredAt !== null || now() >= cred.hardExpiresAt)
         return { status: 401 };
+      // Retargeted to "no documents" (owner removed them all): there is no
+      // corpus this credential may answer from, so fail closed.
+      if (!cred.bundle) return { status: 401 };
       let grant = grants.get(token);
       if (!grant || grant.expires <= now()) {
         // Rebind at admission: the credential, not the owner session, owns
@@ -341,13 +345,40 @@ export function createVoiceAdapter({
         // from the claim graph (per-grant inheritance for follow-ups), and
         // fills guarded templates. Engine output above stays the authority
         // for evidence; this layer only chooses what is spoken.
-        const rendered = spokenTurn(
+        let rendered = spokenTurn(
           last.content,
           grant.bundle,
           historyField(grant.bundle, data.messages.slice(0, -1)) ??
             grant.lastField ??
             null,
         );
+        // Outside the claim graph's fields: speak one verbatim sentence or
+        // table row from the engine's already-validated evidence, or keep
+        // the abstention. Deliberate abstentions (unknown entity/amount)
+        // carry no "no_field" reason and are never overridden.
+        if (!rendered || rendered.reason === "no_field") {
+          const quoted = extractiveSpoken(
+            last.content,
+            result,
+            grant.bundle,
+            grant.bundle.locateEvidence,
+          );
+          if (quoted)
+            rendered = {
+              spoken: quoted.spoken,
+              verdict: quoted.verdict,
+              field: null,
+              intent: rendered?.intent ?? "LOOKUP",
+              citations: quoted.citations.map((c) => ({
+                title: c.title,
+                docDate: null,
+                quote: c.quote,
+                firstLine: c.firstLine,
+                lastLine: c.lastLine,
+                hash: c.hash,
+              })),
+            };
+        }
         if (rendered) {
           grant.lastField = rendered.field ?? grant.lastField ?? null;
           grant.lastTurn = {

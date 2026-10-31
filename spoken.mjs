@@ -722,6 +722,10 @@ export function spokenTurn(question, bundle, prevField = null) {
       field: null,
       intent,
       citations: [],
+      // Not a deliberate abstention (unknown entity / unknown amount above):
+      // the claim graph simply has no field for this question. The adapter
+      // may replace it with a verbatim, engine-validated quote.
+      reason: "no_field",
     };
   }
   const fieldClaims = claims.filter((c) => c.field === field);
@@ -780,6 +784,11 @@ export function spokenTurn(question, bundle, prevField = null) {
       firstLine: c.firstLine,
       lastLine: c.lastLine,
       hash: c.hash,
+      // Exact source span (additive): lets the screen open the same passage.
+      sourceId: c.sourceId,
+      start: c.start,
+      end: c.end,
+      status: c.status,
     })),
   };
 }

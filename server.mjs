@@ -1,9 +1,115 @@
 import http from "node:http";
 import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
-import { importBundle, answer, draft } from "./dist/engine.mjs";
+import {
+  importBundle,
+  answer,
+  draft,
+  validateEvidence,
+} from "./dist/engine.mjs";
 import { createVoiceAdapter } from "./voice-adapter.mjs";
+import { spokenTurn } from "./spoken.mjs";
+import { extractiveSpoken } from "./spoken-extract.mjs";
+import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "./corpus-northstar.mjs";
+import {
+  addUpload,
+  replaceWithText,
+  indexable,
+  findEntry,
+  removeEntry,
+  publicEntry,
+  documentView,
+  decorateResult,
+  libraryOf,
+  locatorFor,
+  LIMITS,
+} from "./library.mjs";
+// Static assets: explicit allow-list (no path joining from the URL).
+const STATIC = {
+  "/": ["./public/index.html", "text/html; charset=utf-8"],
+  "/app.js": ["./public/app.js", "text/javascript"],
+  "/workspace.js": ["./public/workspace.js", "text/javascript"],
+  "/viewer.js": ["./public/viewer.js", "text/javascript"],
+  "/style.css": ["./public/style.css", "text/css"],
+  "/vendor/pdf.min.mjs": [
+    "./node_modules/pdfjs-dist/build/pdf.min.mjs",
+    "text/javascript",
+  ],
+  "/vendor/pdf.worker.min.mjs": [
+    "./node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
+    "text/javascript",
+  ],
+  "/fonts/newsreader.woff2": [
+    "./node_modules/@fontsource-variable/newsreader/files/newsreader-latin-opsz-normal.woff2",
+    "font/woff2",
+  ],
+  "/fonts/newsreader-italic.woff2": [
+    "./node_modules/@fontsource-variable/newsreader/files/newsreader-latin-opsz-italic.woff2",
+    "font/woff2",
+  ],
+  "/fonts/plex-sans-400.woff2": [
+    "./node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2",
+    "font/woff2",
+  ],
+  "/fonts/plex-sans-500.woff2": [
+    "./node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-500-normal.woff2",
+    "font/woff2",
+  ],
+  "/fonts/plex-sans-600.woff2": [
+    "./node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff2",
+    "font/woff2",
+  ],
+  "/fonts/plex-mono-400.woff2": [
+    "./node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2",
+    "font/woff2",
+  ],
+  "/fonts/plex-mono-500.woff2": [
+    "./node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2",
+    "font/woff2",
+  ],
+  "/favicon.svg": ["./public/favicon.svg", "image/svg+xml"],
+};
+// pdf.js standard font data (for PDFs that use non-embedded base fonts).
+for (const f of readdirSync(
+  new URL("./node_modules/pdfjs-dist/standard_fonts/", import.meta.url),
+))
+  if (/^[\w.-]+\.(pfb|ttf)$/.test(f))
+    STATIC["/vendor/standard_fonts/" + f] = [
+      "./node_modules/pdfjs-dist/standard_fonts/" + f,
+      "application/octet-stream",
+    ];
+// The short answer shown first on screen is the SAME deterministic sentence
+// the voice call would speak (claim renderer, else one verbatim quote), so
+// screen and voice never tell different stories. Null when the spoken layer
+// abstains or disagrees; the full engine text is always returned too.
+function leadFor(question, result, bundle, prevField) {
+  try {
+    let t = spokenTurn(question, bundle, prevField);
+    if (!t || t.reason === "no_field")
+      t = extractiveSpoken(question, result, bundle, bundle.locateEvidence);
+    if (!t || t.verdict === "UNKNOWN") return null;
+    // Only claim-graph citations that still validate against the source
+    // may back a lead; anything else and the screen keeps the engine text.
+    const citations = (t.citations ?? []).filter((c) => {
+      if (typeof c.start !== "number") return false;
+      try {
+        return validateEvidence(c, bundle);
+      } catch {
+        return false;
+      }
+    });
+    if (!citations.length) return null;
+    return {
+      text: t.spoken,
+      verdict: t.verdict,
+      field: t.field ?? null,
+      citations,
+    };
+  } catch {
+    return null;
+  }
+}
 const voiceTtlMs = () => Number(process.env.VM_VOICE_TTL_MS || 10 * 60 * 1000);
 // Immutable cutoff for the fixed bearer, from server boot: covers the demo
 // window without making a leaked credential live forever.
@@ -132,6 +238,54 @@ export function createLocalServer({
     }
     return sessions.get(id);
   }
+  // Raw upload body with a hard byte cap (checked against Content-Length
+  // first, then enforced while streaming).
+  async function rawBody(req, limit) {
+    const declared = Number(req.headers["content-length"]);
+    if (Number.isFinite(declared) && declared > limit) {
+      const e = Error(
+        `This file is ${(declared / 1048576).toFixed(1)} MB. The limit is ${limit / 1048576} MB per file.`,
+      );
+      e.status = 413;
+      throw e;
+    }
+    const chunks = [];
+    let bytes = 0;
+    for await (const part of req) {
+      const buffer = Buffer.isBuffer(part) ? part : Buffer.from(part);
+      bytes += buffer.length;
+      if (bytes > limit) {
+        const e = Error(`This file is over the ${limit / 1048576} MB limit.`);
+        e.status = 413;
+        throw e;
+      }
+      chunks.push(buffer);
+    }
+    return Buffer.concat(chunks, bytes);
+  }
+  // One place that changes what a session's documents ARE. The voice grant
+  // must follow: a fixed credential this session owns is retargeted
+  // atomically (a removed document must stop answering immediately, not at
+  // grant lapse); otherwise the session's grant is released.
+  const setSessionBundle = (s, bundle) => {
+    if (fixedCap && s.voiceToken === fixedCap && !demoBundle)
+      voice.retarget(fixedCap, bundle);
+    else releaseVoice(s);
+    s.bundle = bundle;
+    s.result = null;
+    s.lastField = null;
+  };
+  const rebuildIndex = (s) => {
+    const docs = indexable(s);
+    const bundle = docs.length
+      ? importBundle(docs.map((e) => ({ title: e.title, text: e.doc.text })))
+      : null;
+    s.sourceToEntry = new Map(
+      (bundle?.sources ?? []).map((src, i) => [src.id, docs[i]]),
+    );
+    if (bundle) bundle.locateEvidence = locatorFor(s.sourceToEntry);
+    setSessionBundle(s, bundle);
+  };
   async function body(req) {
     const chunks = [];
     let bytes = 0;
@@ -226,10 +380,7 @@ export function createLocalServer({
       // gated by one (localhost tests never exercised this branch).
       s = isBolnaRoute ? null : session(req, res, { create: false });
       if (!isBolnaRoute && !s) {
-        if (
-          req.method === "GET" &&
-          ["/", "/app.js", "/style.css"].includes(req.url)
-        ) {
+        if (req.method === "GET" && STATIC[req.url]) {
           res.writeHead(302, { Location: "/owner-signin" });
           res.end();
           return;
@@ -243,20 +394,12 @@ export function createLocalServer({
     }
     if (s) s.at = Date.now();
     try {
-      if (
-        req.method === "GET" &&
-        ["/", "/app.js", "/style.css"].includes(req.url)
-      ) {
-        const file = req.url === "/" ? "index.html" : req.url.slice(1);
-        res.setHeader(
-          "Content-Type",
-          file.endsWith("html")
-            ? "text/html"
-            : file.endsWith("js")
-              ? "text/javascript"
-              : "text/css",
-        );
-        res.end(await readFile(new URL("./public/" + file, import.meta.url)));
+      if (req.method === "GET" && STATIC[req.url]) {
+        const [file, type] = STATIC[req.url];
+        res.setHeader("Content-Type", type);
+        if (type.startsWith("font/") || req.url.startsWith("/vendor/"))
+          res.setHeader("Cache-Control", "private, max-age=86400");
+        res.end(await readFile(new URL(file, import.meta.url)));
         return;
       }
       res.setHeader("Content-Type", "application/json");
@@ -374,6 +517,55 @@ export function createLocalServer({
         res.end(JSON.stringify({ turn: token ? voice.lastTurn(token) : null }));
         return;
       }
+      // Session document library (read-only GETs, cookie-scoped like
+      // /api/voice/last). Originals are served only to their own session.
+      const libPath = new URL(req.url, origin).pathname;
+      if (req.method === "GET" && libPath === "/api/library") {
+        res.end(
+          JSON.stringify({
+            documents: libraryOf(s).map(publicEntry),
+            indexed: s.bundle ? s.bundle.sources.length : 0,
+            limits: {
+              maxFileBytes: LIMITS.maxFileBytes,
+              maxPdfPages: LIMITS.maxPdfPages,
+              maxDocuments: 10,
+            },
+          }),
+        );
+        return;
+      }
+      const libMatch = /^\/api\/library\/([0-9a-f-]{36})(\/original)?$/.exec(
+        libPath,
+      );
+      if (req.method === "GET" && libMatch) {
+        const e = findEntry(s, libMatch[1]);
+        if (!e) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ error: "Not found." }));
+          return;
+        }
+        if (libMatch[2]) {
+          if (!e.original || !e.doc) {
+            res.writeHead(404);
+            res.end(JSON.stringify({ error: "Original not available." }));
+            return;
+          }
+          // Inert delivery: never executable in this origin.
+          res.setHeader("Content-Type", e.doc.mime);
+          res.setHeader(
+            "Content-Security-Policy",
+            "default-src 'none'; sandbox",
+          );
+          res.setHeader(
+            "Content-Disposition",
+            "inline; filename*=UTF-8''" + encodeURIComponent(e.filename),
+          );
+          res.end(e.original);
+          return;
+        }
+        res.end(JSON.stringify({ document: documentView(e) }));
+        return;
+      }
       // One-click demo fixture: the engineered 7-doc Northstar corpus, plain
       // filenames so claim supersession behaves (title prefixes are
       // extraction-sensitive). Session-gated like every app route.
@@ -405,19 +597,53 @@ export function createLocalServer({
         res.end(JSON.stringify({ error: "Session or origin check failed." }));
         return;
       }
-      const data = await body(req);
+      const postPath = new URL(req.url, origin).pathname;
+      const isUpload = postPath === "/api/upload";
+      const data = isUpload ? null : await body(req);
+      const libPost =
+        /^\/api\/library\/([0-9a-f-]{36})\/(include|remove)$/.exec(postPath);
       let out;
-      if (req.url === "/api/import") {
+      if (isUpload) {
+        // Binary upload, one file per request. The filename travels in a
+        // header (URI-encoded); it is display-only and never touches disk.
+        const filename = decodeURIComponent(
+          String(req.headers["x-file-name"] ?? "untitled"),
+        ).slice(0, 400);
+        const bytes = await rawBody(req, LIMITS.maxFileBytes);
+        const entry = addUpload(s, bytes, filename, rebuildIndex);
+        res.writeHead(202);
+        out = { document: publicEntry(entry) };
+      } else if (libPost) {
+        const e = findEntry(s, libPost[1]);
+        if (!e) {
+          const err = Error("That document is no longer in this session.");
+          err.status = 404;
+          throw err;
+        }
+        if (libPost[2] === "include") {
+          if (e.status !== "needs_review")
+            throw Error("Only documents waiting for review can be included.");
+          e.included = true;
+          e.updatedAt = Date.now();
+        } else {
+          removeEntry(s, e.id);
+          e.original = null;
+          e.doc = null;
+        }
+        rebuildIndex(s);
+        out = { documents: libraryOf(s).map(publicEntry) };
+      } else if (req.url === "/api/import") {
         const bundle = importBundle(data.documents);
         // If THIS session owns the fixed capability, retarget it atomically:
         // a generic release would leave the 10-minute active-call guard
         // pinning the OLD bundle, so bearer traffic would keep answering
         // from the stale corpus until hard expiry.
-        if (fixedCap && s.voiceToken === fixedCap && !demoBundle)
-          voice.retarget(fixedCap, bundle);
-        else releaseVoice(s);
-        s.bundle = bundle;
-        s.result = null;
+        replaceWithText(s, data.documents);
+        s.sourceToEntry = new Map(
+          bundle.sources.map((src, i) => [src.id, libraryOf(s)[i]]),
+        );
+        bundle.locateEvidence = locatorFor(s.sourceToEntry);
+        setSessionBundle(s, bundle);
         out = {
           sources: s.bundle.sources.map(({ id, title, hash, memory }) => ({
             id,
@@ -428,7 +654,18 @@ export function createLocalServer({
         };
       } else if (req.url === "/api/query") {
         if (!s.bundle) throw Error("Add documents first.");
-        out = s.result = answer(data.question, s.bundle);
+        s.result = answer(data.question, s.bundle);
+        out = decorateResult(s.result, s);
+        // Typed follow-ups ("so finance rejected it?") inherit the previous
+        // question's field, exactly as the voice grant does.
+        out.lead = leadFor(data.question, s.result, s.bundle, s.lastField);
+        if (out.lead) {
+          s.lastField = out.lead.field ?? s.lastField ?? null;
+          out.lead.citations = decorateResult(
+            { evidence: out.lead.citations, question: data.question },
+            s,
+          ).evidence;
+        }
       } else if (req.url === "/api/draft") {
         if (!s.bundle || !s.result) throw Error("Ask a question first.");
         out = draft(s.result, s.bundle);
@@ -566,6 +803,9 @@ export function createLocalServer({
         retireVoice(s);
         s.bundle = null;
         s.result = null;
+        s.lastField = null;
+        libraryOf(s).length = 0;
+        s.sourceToEntry = new Map();
         out = { reset: true };
       } else {
         res.writeHead(404);
