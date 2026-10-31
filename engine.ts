@@ -60,9 +60,11 @@ function anchorChunk(
   return null;
 }
 
+// Workspaces hold up to 10 documents (library.mjs); the built-in voice corpus
+// of every fictional case holds 11, so the engine's own bound is 16.
 export function importBundle(docs: Array<{ title: string; text: string }>) {
-  if (!Array.isArray(docs) || !docs.length || docs.length > 10)
-    throw Error("Add between 1 and 10 text documents.");
+  if (!Array.isArray(docs) || !docs.length || docs.length > 16)
+    throw Error("Add between 1 and 16 text documents.");
   const scope = "voice-" + randomUUID();
   const sources = docs.map((d) => {
     if (

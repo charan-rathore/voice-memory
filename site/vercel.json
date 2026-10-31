@@ -1,20 +1,22 @@
 {
   "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/public/:path*", "destination": "https://voice-memory.onrender.com/api/public/:path*" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "microphone=(self), camera=(), geolocation=()" },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://voice-memory.onrender.com"
+          "value": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; connect-src 'self' https://*.bolna.ai wss://*.bolna.ai wss: https:; media-src 'self' blob: mediastream:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         }
       ]
     },
-    {
-      "source": "/fonts/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
-    }
+    { "source": "/fonts/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+    { "source": "/pages/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }] }
   ]
 }

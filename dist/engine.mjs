@@ -31252,8 +31252,8 @@ function anchorChunk(src, chunk, from) {
   return null;
 }
 function importBundle(docs) {
-  if (!Array.isArray(docs) || !docs.length || docs.length > 10)
-    throw Error("Add between 1 and 10 text documents.");
+  if (!Array.isArray(docs) || !docs.length || docs.length > 16)
+    throw Error("Add between 1 and 16 text documents.");
   const scope = "voice-" + randomUUID();
   const sources = docs.map((d) => {
     if (typeof d.title !== "string" || typeof d.text !== "string" || d.text.length < 40 || d.text.length > MAX_DOC_CHARS || d.title.length > 160)

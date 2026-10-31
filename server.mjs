@@ -34,6 +34,7 @@ import { createStore, snapshotOf, restoreInto } from "./memory/store.mjs";
 import { createAnswerCache } from "./cache.mjs";
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "./corpus-northstar.mjs";
+import { createPublicApi, publicAnswer } from "./public-api.mjs";
 import { createRssWatchdog } from "./rss-watchdog.mjs";
 import {
   addUpload,
@@ -161,6 +162,8 @@ function leadFor(question, result, bundle, prevField) {
     return null;
   }
 }
+const LANDING_URL =
+  process.env.VM_LANDING_URL || "https://voice-memory-beige.vercel.app/";
 const voiceTtlMs = () => Number(process.env.VM_VOICE_TTL_MS || 10 * 60 * 1000);
 // Immutable cutoff for the fixed bearer, from server boot: covers the demo
 // window without making a leaked credential live forever.
@@ -240,7 +243,13 @@ export function createLocalServer({
     }
   };
   const publicOrigin = process.env.VM_PUBLIC_ORIGIN || null;
-  const ownerKey = process.env.VM_OWNER_KEY || null;
+  // VM_OWNER_SIGNIN=off removes the hosted owner workspace entirely: the
+  // public host then serves only the landing API, the Bolna routes and a
+  // redirect to the landing page (the buildathon deployment runs this way).
+  const ownerKey =
+    process.env.VM_OWNER_SIGNIN === "off"
+      ? null
+      : process.env.VM_OWNER_KEY || null;
   const fixedCap = process.env.VM_VOICE_CAPABILITY || null;
   // VM_DEMO_BUNDLE: explicit fictional-demo mode. Boot-pins the fixed voice
   // capability to the built-in fictional corpus so a fresh process serves
@@ -298,33 +307,6 @@ export function createLocalServer({
     }
   }
   const signinFails = new Map();
-  // Public synthetic demo (VM_PUBLIC_DEMO=1, off by default): /demo on the
-  // public host opens an isolated session preloaded with the fictional
-  // Northstar documents. Demo sessions can ask, map, cite and draft; they
-  // cannot upload, import, reset, start a (paid) voice call, or reach any
-  // owner session. They are evicted among themselves only, and rate-limited.
-  const publicDemo = process.env.VM_PUBLIC_DEMO === "1";
-  const DEMO_ALLOWED = new Set([
-    "GET /api/session",
-    "GET /api/library",
-    "GET /api/graph",
-    "GET /api/memory",
-    "GET /api/demo-corpus",
-    "POST /api/query",
-    "POST /api/draft",
-    "POST /api/memory/forget",
-  ]);
-  const demoHits = new Map(); // ip -> { n, windowStart }
-  const demoRateOk = (ip) => {
-    const now = Date.now();
-    const r = demoHits.get(ip) ?? { n: 0, windowStart: now };
-    if (now - r.windowStart > 60000)
-      Object.assign(r, { n: 0, windowStart: now });
-    r.n++;
-    demoHits.set(ip, r);
-    if (demoHits.size > 5000) demoHits.delete(demoHits.keys().next().value);
-    return r.n <= 40;
-  };
   // Process-wide answer cache (keys are scoped per index build; see cache.mjs).
   const answerCache = createAnswerCache({
     max: Number(process.env.VM_CACHE_MAX || 1000),
@@ -342,7 +324,34 @@ export function createLocalServer({
   const sessions = new Map();
   // Voice turns land in the episodic memory of the session that owns the
   // token, and only while that session still holds the same documents.
+  const voiceCase = {
+    sid: "case:voice",
+    memory: createMemory(),
+    internal: true,
+  };
+  // Verified turns of public calls (every fictional case answers on the
+  // fixed credential), read back only by the caller holding the ticket.
+  const publicTurns = [];
   voice.setOnTurn?.((token, t) => {
+    if (
+      token === fixedCap &&
+      voiceCase.bundle &&
+      t.scope === voiceCase.bundle.scope
+    ) {
+      const lead = t.lead
+        ? {
+            text: t.lead.spoken,
+            verdict: t.lead.verdict,
+            field: t.lead.field ?? null,
+            citations: decorateResult(
+              { evidence: t.lead.citations ?? [], question: t.question },
+              voiceCase,
+            ).evidence,
+          }
+        : null;
+      publicTurns.push({ at: Date.now(), question: t.question, lead });
+      if (publicTurns.length > 20) publicTurns.shift();
+    }
     for (const ss of sessions.values())
       if (ss.voiceToken === token && ss.bundle?.scope === t.scope) {
         recordTurn(ss.memory, { ...t, channel: "voice" });
@@ -379,16 +388,6 @@ export function createLocalServer({
     // workspace is the owner's. On a public host only /owner-signin restores.
     if (store && !publicHost && !sessions.get(id).persistNs)
       restoreOwner(sessions.get(id));
-    // Demo visitors are evicted among themselves (never an owner session).
-    const demos = [...sessions.values()].filter((x) => x.demo);
-    if (demos.length > 40) {
-      const old = demos[0];
-      if (old.sid !== id) {
-        releaseVoice(old);
-        if (old.library) old.library.length = 0; // frees the global budget
-        sessions.delete(old.sid);
-      }
-    }
     if (sessions.size > 50) {
       const oldest = sessions.keys().next().value;
       if (oldest !== id) {
@@ -472,6 +471,189 @@ export function createLocalServer({
       return Object.fromEntries(new URLSearchParams(text));
     return JSON.parse(text);
   }
+  // One deterministic answer path for the workspace, the public landing API
+  // and (via the same leadFor) the voice call: engine answer, located
+  // citations, and the short lead sentence a call would speak.
+  async function resolveAnswer(s, question, ctx) {
+    const bundle = s.bundle;
+    // Retrieval mode is part of the key: a keyword or partial-warm
+    // answer cached while the embedder was cold or warming must not
+    // outlive that state (see denseCacheSuffix in dense.mjs).
+    const key = answerCache.key(
+      bundle.scope + denseCacheSuffix(bundle),
+      question,
+      ctx,
+      detectLang(question),
+    );
+    return answerCache.resolve(key, async () => {
+      const queryVector = await embedQueryReady(question);
+      const raw = answer(question, bundle, {
+        queryVector,
+        model: DENSE_MODEL_ID,
+        available: denseAvailableFor(bundle),
+      });
+      const shown = decorateResult(raw, s);
+      // Typed follow-ups ("so finance rejected it?") inherit the previous
+      // question's field, exactly as the voice grant does.
+      shown.lead = leadFor(question, raw, bundle, ctx || null);
+      if (shown.lead)
+        shown.lead.citations = decorateResult(
+          { evidence: shown.lead.citations, question },
+          s,
+        ).evidence;
+      return { raw, shown };
+    });
+  }
+  // Built-in fictional cases for the public landing page. Each is an
+  // internal, read-only session (never reachable by cookie): the synthetic
+  // lab reports are parsed by the same ingest worker as uploads, so their
+  // citations point at real PDF pages. "voice" holds every fictional record
+  // and is what the fixed Bolna credential answers from.
+  const CASE_FILES = {
+    health: [
+      "a-2026-09.pdf",
+      "a-2026-10-prelim.pdf",
+      "a-2026-10-amended.pdf",
+      "c-2026-10.pdf",
+    ],
+  };
+  const caseSessions = {};
+  const bundleFor = (target, docsIn) => {
+    const bundle = importBundle(
+      docsIn.map((e) => ({ title: e.title, text: e.doc.text })),
+    );
+    target.sourceToEntry = new Map(
+      bundle.sources.map((src, i) => [src.id, docsIn[i]]),
+    );
+    target.library = docsIn;
+    bundle.locateEvidence = locatorFor(target.sourceToEntry);
+    bundle.clinical = clinicalReportsFor(bundle, docsIn, extractReport);
+    target.bundle = bundle;
+    return target;
+  };
+  async function loadCase(target, files, docs = null) {
+    if (docs) replaceWithText(target, docs);
+    for (const f of files ?? []) {
+      const bytes = await readFile(
+        new URL("./clinical/fixtures/files/" + f, import.meta.url),
+      );
+      addUpload(target, bytes, f, () => {});
+    }
+    for (let i = 0; i < 1200; i++) {
+      const lib = libraryOf(target);
+      if (
+        lib.every((e) => ["ready", "needs_review", "failed"].includes(e.status))
+      )
+        break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    for (const e of libraryOf(target))
+      if (e.status === "needs_review") e.included = true;
+    return bundleFor(target, indexable(target));
+  }
+  // Loaded on first use (tests that never touch /api/public pay nothing);
+  // the production entry point calls it at boot with bindVoice = true.
+  let casesReady = null;
+  const loadPublicCases = ({ bindVoice = false } = {}) => {
+    casesReady ??= (async () => {
+      const mk = (id) => ({
+        sid: "case:" + id,
+        memory: createMemory(),
+        internal: true,
+      });
+      try {
+        caseSessions.deal = await loadCase(mk("deal"), [], NORTHSTAR_DOCS);
+        caseSessions.health = await loadCase(mk("health"), CASE_FILES.health);
+        bundleFor(voiceCase, [
+          ...caseSessions.deal.library,
+          ...caseSessions.health.library,
+        ]);
+      } catch (e) {
+        console.error("case load failed:", e?.code ?? e?.message ?? "error");
+      }
+    })();
+    if (bindVoice)
+      casesReady.then(() => {
+        // The fixed Bolna credential answers every fictional case.
+        if (!fixedCap || !voiceCase.bundle) return;
+        if (voice.retarget(fixedCap, voiceCase.bundle)) return;
+        try {
+          voice.bind(voiceCase.bundle, fixedCap);
+        } catch (e) {
+          console.warn("public voice not bound:", e.message);
+        }
+      });
+    return casesReady;
+  };
+  // Bolna web-call session mint. SDK v3.0.1 expects the FreeSWITCH session
+  // shape ({run_id, wss_url, sip_username, ...}); the older /web-call/session
+  // route is only a fallback for accounts that do not have it.
+  async function mintBolna(userData) {
+    if (!bolnaKey || !bolnaAgent) {
+      const e = Error("Bolna web call is not configured on this server.");
+      e.status = 503;
+      throw e;
+    }
+    let last = null;
+    for (const route of ["/web-call/freeswitch-session", "/web-call/session"]) {
+      const r = await fetch("https://api.bolna.ai" + route, {
+        method: "POST",
+        headers: {
+          authorization: "Bearer " + bolnaKey,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          agent_id: bolnaAgent,
+          ...(userData && typeof userData === "object"
+            ? { user_data: userData }
+            : {}),
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (r.status === 404 || r.status === 405) {
+        last = r.status;
+        continue;
+      }
+      if (r.status === 429) {
+        const e = Error("All voice lines are busy. Try again shortly.");
+        e.status = 429;
+        throw e;
+      }
+      if (!r.ok) {
+        console.warn("bolna mint failed:", route, r.status);
+        const e = Error("Bolna session request failed.");
+        e.status = 502;
+        throw e;
+      }
+      return r.json();
+    }
+    console.warn("bolna mint: no session route", last);
+    const e = Error("Bolna session request failed.");
+    e.status = 502;
+    throw e;
+  }
+  const publicApi = createPublicApi({
+    cases: caseSessions,
+    resolve: async (cs, question, ctx) => {
+      const q = normalizeSpoken(question) || question;
+      const { json } = await resolveAnswer(cs, q, ctx);
+      return { ...JSON.parse(json).shown, question };
+    },
+    mintVoice: mintBolna,
+    voiceTurns: (since) =>
+      publicTurns
+        .filter((t) => t.at >= since)
+        .map((t) => ({
+          ...t,
+          lead: t.lead && publicAnswer({ lead: t.lead }).lead,
+        })),
+    voiceState: () => ({
+      configured: !!(bolnaKey && bolnaAgent),
+      ready:
+        !!voiceCase.bundle &&
+        (!fixedCap || voice.isBound(fixedCap) || !!voiceHardExpiresAtMs()),
+    }),
+  });
   const server = http.createServer(async (req, res) => {
     watchdog.beginRequest();
     res.once("close", () => watchdog.endRequest());
@@ -534,6 +716,12 @@ export function createLocalServer({
       );
       return;
     }
+    // Public landing API: key-free, read-only, rate-limited (public-api.mjs).
+    if (req.url.startsWith("/api/public/")) {
+      loadPublicCases();
+      res.setHeader("Content-Type", "application/json");
+      if (await publicApi(req, res)) return;
+    }
     const isBolnaRoute =
       req.url === "/v1/chat/completions" || req.url === "/v1/models";
     // Compare against the actual bound address (supports port 0 in tests).
@@ -559,17 +747,13 @@ export function createLocalServer({
     if (isPublicHost && !isLocalHost) {
       const reqUrl = new URL(req.url, publicOrigin ?? origin);
       if (req.method === "GET" && reqUrl.pathname === "/owner-signin") {
+        if (!ownerKey) {
+          res.writeHead(302, { Location: LANDING_URL });
+          res.end();
+          return;
+        }
         res.setHeader("Content-Type", "text/html");
         res.end(SIGNIN_PAGE);
-        return;
-      }
-      if (publicDemo && req.method === "GET" && reqUrl.pathname === "/demo") {
-        s = session(req, res, { create: true, secure: true, fresh: true });
-        s.demo = true;
-        replaceWithText(s, NORTHSTAR_DOCS);
-        rebuildIndex(s);
-        res.writeHead(302, { Location: "/" });
-        res.end();
         return;
       }
       if (req.method === "POST" && reqUrl.pathname === "/owner-signin") {
@@ -600,46 +784,19 @@ export function createLocalServer({
       // gated by one (localhost tests never exercised this branch).
       s = isBolnaRoute ? null : session(req, res, { create: false });
       if (!isBolnaRoute && !s) {
-        // Open synthetic demo (VM_PUBLIC_DEMO=1): visitors land directly in
-        // the fictional Northstar workspace - no owner sign-in wall. Only
-        // GETs bootstrap a session (the page loads before its API calls);
-        // the demo route guard and per-IP rate limit below still apply,
-        // imports/mutations stay owner-only, and no Bolna/voice route is in
-        // DEMO_ALLOWED, so visitors cannot spend shared call credits.
-        if (publicDemo && req.method === "GET") {
-          s = session(req, res, { create: true, secure: true, fresh: true });
-          s.demo = true;
-          replaceWithText(s, NORTHSTAR_DOCS);
-          rebuildIndex(s);
-        } else if (req.method === "GET" && STATIC[req.url]) {
-          res.writeHead(302, { Location: "/owner-signin" });
+        // No owner session: the hosted product is the public landing page
+        // and its key-free API (/api/public/*). Without an owner key the
+        // workspace does not exist on the public host at all.
+        if (req.method === "GET" && STATIC[req.url]) {
+          res.writeHead(302, {
+            Location: ownerKey ? "/owner-signin" : LANDING_URL,
+          });
           res.end();
           return;
-        } else {
-          res.writeHead(403);
-          res.end(JSON.stringify({ error: "Owner access required." }));
-          return;
         }
-      }
-      if (s?.demo && !(req.method === "GET" && STATIC[req.url])) {
-        const route = `${req.method} ${new URL(req.url, origin).pathname}`;
-        const lib = /^GET \/api\/library\/[\w-]+(\/original)?$/.test(route);
-        if (!DEMO_ALLOWED.has(route) && !lib) {
-          res.writeHead(403);
-          res.end(
-            JSON.stringify({ error: "Not available in the public demo." }),
-          );
-          return;
-        }
-        if (!demoRateOk(req.socket.remoteAddress ?? "unknown")) {
-          res.writeHead(429);
-          res.end(
-            JSON.stringify({
-              error: "Too many questions; try again in a minute.",
-            }),
-          );
-          return;
-        }
+        res.writeHead(403);
+        res.end(JSON.stringify({ error: "Owner access required." }));
+        return;
       }
     } else {
       s = session(req, res);
@@ -696,7 +853,7 @@ export function createLocalServer({
         return;
       }
       if (req.method === "GET" && req.url === "/api/session") {
-        res.end(JSON.stringify({ csrf: s.csrf, demo: !!s.demo }));
+        res.end(JSON.stringify({ csrf: s.csrf }));
         return;
       }
       if (req.method === "GET" && req.url === "/api/bolna-config") {
@@ -996,33 +1153,7 @@ export function createLocalServer({
               ? data.context
               : (s.lastField ?? "");
         const bundle = s.bundle;
-        // Retrieval mode is part of the key: a keyword or partial-warm
-        // answer cached while the embedder was cold or warming must not
-        // outlive that state (see denseCacheSuffix in dense.mjs).
-        const key = answerCache.key(
-          bundle.scope + denseCacheSuffix(bundle),
-          data.question,
-          ctx,
-          detectLang(data.question),
-        );
-        const { json, cache } = await answerCache.resolve(key, async () => {
-          const queryVector = await embedQueryReady(data.question);
-          const raw = answer(data.question, bundle, {
-            queryVector,
-            model: DENSE_MODEL_ID,
-            available: denseAvailableFor(bundle),
-          });
-          const shown = decorateResult(raw, s);
-          // Typed follow-ups ("so finance rejected it?") inherit the previous
-          // question's field, exactly as the voice grant does.
-          shown.lead = leadFor(data.question, raw, bundle, ctx || null);
-          if (shown.lead)
-            shown.lead.citations = decorateResult(
-              { evidence: shown.lead.citations, question: data.question },
-              s,
-            ).evidence;
-          return { raw, shown };
-        });
+        const { json, cache } = await resolveAnswer(s, data.question, ctx);
         if (s.bundle !== bundle)
           throw Error("Documents changed while answering; ask again.");
         const cached = JSON.parse(json);
@@ -1070,29 +1201,7 @@ export function createLocalServer({
           e.status = 400;
           throw e;
         }
-        if (!bolnaKey || !bolnaAgent) {
-          const e = Error("Bolna web call is not configured on this server.");
-          e.status = 503;
-          throw e;
-        }
-        const mint = await fetch("https://api.bolna.ai/web-call/session", {
-          method: "POST",
-          headers: {
-            authorization: "Bearer " + bolnaKey,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            agent_id: bolnaAgent,
-            user_data: data?.user_data,
-          }),
-          signal: AbortSignal.timeout(10000),
-        });
-        if (!mint.ok) {
-          const e = Error("Bolna session request failed.");
-          e.status = 502;
-          throw e;
-        }
-        out = await mint.json();
+        out = await mintBolna(data?.user_data);
       } else if (req.url === "/api/voice/start") {
         if (!s.bundle && !demoBundle) throw Error("Add documents first.");
         if (fixedCap && demoBundle) {
@@ -1214,6 +1323,7 @@ export function createLocalServer({
       );
     }
   });
+  server.loadPublicCases = loadPublicCases;
   return server;
 }
 export const server = createLocalServer();
@@ -1221,5 +1331,8 @@ if (process.argv[1] === new URL(import.meta.url).pathname)
   server.listen(
     Number(process.env.PORT || 4317),
     process.env.VM_BIND_HOST || "127.0.0.1",
-    () => console.log("Voice-memory server ready"),
+    () => {
+      console.log("Voice-memory server ready");
+      server.loadPublicCases({ bindVoice: true });
+    },
   );

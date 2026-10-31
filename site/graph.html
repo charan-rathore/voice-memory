@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Memory Graph · Voice Memory</title>
+    <meta name="description" content="Every value Voice Memory answers from, the sentence it came from, and what corrected or replaced it." />
+    <meta name="theme-color" content="#0a0c14" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="graph.css" />
+  </head>
+  <body>
+    <canvas id="g" aria-label="Memory graph. Use the list view for an accessible version."></canvas>
+
+    <header class="top">
+      <a class="brand" href="./">← Voice Memory</a>
+      <div class="seg" role="tablist" aria-label="Case">
+        <button role="tab" data-case="health" aria-selected="true">Lab reports</button>
+        <button role="tab" data-case="deal" aria-selected="false">Northstar deal</button>
+      </div>
+      <label class="search">
+        <span class="sr-only">Find a node</span>
+        <input id="find" type="search" placeholder="Find a value, test or document…" autocomplete="off" />
+      </label>
+    </header>
+
+    <aside class="legend" aria-label="Legend">
+      <p class="lg-title">Memory graph</p>
+      <p class="lg-sub" id="lg-sub">Patients, reports and every value, with the edges the engine answers from.</p>
+      <ul id="lg-nodes"></ul>
+      <p class="lg-title small">Edges</p>
+      <ul id="lg-edges"></ul>
+      <p class="lg-count" id="lg-count"></p>
+    </aside>
+
+    <aside class="panel" id="panel" aria-live="polite" hidden>
+      <button class="x" id="close" aria-label="Close">×</button>
+      <p class="p-kind" id="p-kind"></p>
+      <h2 class="p-title" id="p-title"></h2>
+      <div id="p-body"></div>
+    </aside>
+
+    <nav class="dock" aria-label="Graph controls">
+      <button id="zin" aria-label="Zoom in">+</button>
+      <button id="zout" aria-label="Zoom out">−</button>
+      <button id="fit">Fit</button>
+      <button id="story" class="play">▶ How the answer was chosen</button>
+    </nav>
+    <p class="story-cap" id="story-cap" aria-live="polite"></p>
+
+    <script src="snapshot.js" defer></script>
+    <script src="graph.js" defer></script>
+  </body>
+</html>

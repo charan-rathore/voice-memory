@@ -53,7 +53,9 @@ await new Promise((ok, bad) => {
 const runOne = ([name, script]) =>
   new Promise((resolve) => {
     const t = Date.now();
-    const p = spawn(npm, ["run", script], { stdio: ["ignore", "pipe", "pipe"] });
+    const p = spawn(npm, ["run", script], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let out = "";
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (out += d));
@@ -71,7 +73,9 @@ let failed = 0;
 for (const r of results) {
   const ok = r.code === 0;
   if (!ok) failed++;
-  console.log(`${ok ? "ok  " : "FAIL"} ${r.name} (${(r.ms / 1000).toFixed(1)}s)`);
+  console.log(
+    `${ok ? "ok  " : "FAIL"} ${r.name} (${(r.ms / 1000).toFixed(1)}s)`,
+  );
   if (!ok) console.log(r.out.replace(/^/gm, "  | "));
 }
 console.log(
