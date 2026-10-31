@@ -58,6 +58,22 @@ async function retrieve(q, k, bundle) {
 
 const rows = [];
 const t0 = performance.now();
+const scoreRecall = async (item) => {
+  const top = await retrieve(item.q, 5, bundleFor(item));
+  const has = (chunk, s) => chunk.text.includes(s);
+  const recallAt = (k) =>
+    item.need.every((s) => top.slice(0, k).some((c) => has(c, s)));
+  const first = top.findIndex((c) => has(c, item.need[0]));
+  return {
+    q: item.q,
+    paraphrase: !!item.p,
+    r1: recallAt(1),
+    r3: recallAt(3),
+    r5: recallAt(5),
+    rr: first < 0 ? 0 : 1 / (first + 1),
+    top: top.slice(0, 3).map((c) => c.title),
+  };
+};
 for (const item of spec.questions) {
   const top = await retrieve(item.q, 5, bundleFor(item));
   const has = (chunk, s) => chunk.text.includes(s);
@@ -74,8 +90,34 @@ for (const item of spec.questions) {
     top: top.slice(0, 3).map((c) => c.title),
   });
 }
-const ms =
-  Math.round(((performance.now() - t0) / spec.questions.length) * 10) / 10;
+const hardnegRows = [];
+for (const item of spec.hardneg ?? []) hardnegRows.push(await scoreRecall(item));
+
+// Abstention: correct behavior is the shipping evidence gate clearing the
+// whole pack (classifyEvidence "insufficient" -> zero gated chunks).
+const abstainRows = [];
+for (const item of spec.abstain ?? []) {
+  const top = await retrieve(item.q, 5, sessions[item.s ?? 0]);
+  abstainRows.push({
+    q: item.q,
+    why: item.why,
+    abstained: top.length === 0,
+    served: top.slice(0, 3).map((c) => c.title),
+  });
+}
+const abstainAccuracy =
+  abstainRows.length === 0
+    ? null
+    : Math.round(
+        (abstainRows.filter((r) => r.abstained).length / abstainRows.length) *
+          1000,
+      ) / 1000;
+
+const nQ =
+  spec.questions.length +
+  (spec.hardneg?.length ?? 0) +
+  (spec.abstain?.length ?? 0);
+const ms = Math.round(((performance.now() - t0) / nQ) * 10) / 10;
 const agg = (set) => {
   const n = set.length || 1;
   const avg = (f) =>
@@ -92,6 +134,8 @@ const res = {
   all: agg(rows),
   literal: agg(rows.filter((r) => !r.paraphrase)),
   paraphrase: agg(rows.filter((r) => r.paraphrase)),
+  hardneg: agg(hardnegRows),
+  abstain: { n: abstainRows.length, accuracy: abstainAccuracy },
 };
 let sha = "unknown";
 try {
@@ -105,12 +149,18 @@ console.log(
 console.log(line("all", res.all));
 console.log(line("literal", res.literal));
 console.log(line("paraphrase", res.paraphrase));
+console.log(line("hardneg", res.hardneg));
+console.log(
+  `abstain     n=${String(res.abstain.n).padStart(2)}  gate-correct ${(res.abstain.accuracy ?? 0).toFixed(2)}`,
+);
+for (const r of abstainRows.filter((r) => !r.abstained))
+  console.log(`  FALSE-CONFIDENCE: ${r.q} -> served ${r.served.join(", ")}`);
 mkdirSync(new URL("./results/", import.meta.url), { recursive: true });
 const file = `retrieval-hybrid-${new Date().toISOString().slice(0, 10)}-${sha}.json`;
 writeFileSync(
   new URL("./results/" + file, import.meta.url),
   JSON.stringify(
-    { sha, date: new Date().toISOString(), retriever: `hybrid RRF: BM25 + ${DENSE_MODEL_ID} (local, q8)`, documents: docs.length, chunks: sessions.flatMap((b) => b.rows).length, msPerQuery: ms, ...res, rows },
+    { sha, date: new Date().toISOString(), retriever: `hybrid RRF: BM25 + ${DENSE_MODEL_ID} (local, q8)`, documents: docs.length, chunks: sessions.flatMap((b) => b.rows).length, msPerQuery: ms, ...res, rows, hardnegRows, abstainRows },
     null,
     2,
   ),
