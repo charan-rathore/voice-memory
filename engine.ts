@@ -226,6 +226,44 @@ export function answer(
       }
     }
   }
+  // A positive result can still be the WRONG document: when the asked
+  // metric's head word is absent from the retrieved text but a disclosed
+  // expansion bridge lands on vocabulary the corpus actually uses
+  // ("thyroid ... level" -> "tsh"), retry once with the expanded query and
+  // keep it only when it retrieves positive text that carries the bridged
+  // term. Original query still wins; this fires only when the original's
+  // passages cannot contain the asked metric at all.
+  if (!expansionUsed && found.evidence === "positive") {
+    const mf = /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
+      question,
+    );
+    if (mf) {
+      const foundText = found.chunks
+        .map((c) => c.text)
+        .join("\n")
+        .toLowerCase();
+      if (!foundText.includes(mf[1].toLowerCase())) {
+        const expansion = expandQuery(question);
+        const bridges = expansion.applied
+          .flatMap((t) => t.to.toLowerCase().split(/\s+/))
+          .filter((t) => t.length > 2);
+        if (bridges.length) {
+          const widened = retrieve(expansion.expanded);
+          const wText = widened.chunks
+            .map((c) => c.text)
+            .join("\n")
+            .toLowerCase();
+          if (
+            widened.evidence === "positive" &&
+            bridges.some((b) => wText.includes(b))
+          ) {
+            found = widened;
+            expansionUsed = expansion;
+          }
+        }
+      }
+    }
+  }
   // Second disclosed recall-recovery fallback for questions the claim layer
   // does not cover: an entity-grounded rephrase (question content terms + the
   // engagement's primary entity) retries retrieval, and the retry is used only
@@ -839,8 +877,20 @@ export function answer(
     const metricField = /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
       question,
     );
+    // A disclosed expansion bridge covers the asked metric when the bridged
+    // term is what the evidence actually carries ("thyroid ... level" ->
+    // "tsh"): the transform is shown in the UI, so the answer never pretends
+    // the asked word itself was found.
+    const bridgedHits = (expansionUsed?.applied ?? []).some((t) =>
+      t.to
+        .toLowerCase()
+        .split(/\s+/)
+        .some((tok) => tok.length > 2 && exText.includes(tok)),
+    );
     const metricMiss =
-      metricField != null && !exText.includes(metricField[1].toLowerCase());
+      metricField != null &&
+      !exText.includes(metricField[1].toLowerCase()) &&
+      !bridgedHits;
     const askedFieldWord =
       /\b(penalty|penalties|severance|liquidated damages|fine|fines)\b/i;
     const fieldWordMiss =
