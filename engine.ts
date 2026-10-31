@@ -264,6 +264,42 @@ export function answer(
       }
     }
   }
+  // Authority-scoped temporal questions ("according to our team", "our
+  // internal deadline"): a positive answer drawn only from a counterparty
+  // proposal must not silence the team's own record. Widen once with
+  // disclosed team vocabulary and merge any additional records into the
+  // pack so the claims layer can render competing statuses. Original query
+  // still wins: existing chunks keep their rank; widened records only ADD
+  // missing evidence.
+  if (
+    !expansionUsed &&
+    found.evidence === "positive" &&
+    /\b(?:our|my)\s+team\b|\bour\s+internal\b|\binternally\b/i.test(question) &&
+    /\bwhen\b|\bdeadline\b|\bdue\b|\bready\b|\bexpected\b/i.test(question)
+  ) {
+    const widenedQuery = `${question} team internal delivery update target`;
+    const widened = retrieve(widenedQuery);
+    if (widened.evidence === "positive") {
+      const seen = new Set(found.chunks.map((c) => `${c.title}|${c.text}`));
+      const extra = widened.chunks.filter(
+        (c) => !seen.has(`${c.title}|${c.text}`),
+      );
+      if (extra.length) {
+        found = { ...found, chunks: [...found.chunks, ...extra] };
+        expansionUsed = {
+          original: question,
+          expanded: widenedQuery,
+          applied: [
+            {
+              from: "authority scope",
+              to: "team internal delivery update target",
+              kind: "dictionary",
+            },
+          ],
+        };
+      }
+    }
+  }
   // Second disclosed recall-recovery fallback for questions the claim layer
   // does not cover: an entity-grounded rephrase (question content terms + the
   // engagement's primary entity) retries retrieval, and the retry is used only
