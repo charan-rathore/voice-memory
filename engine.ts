@@ -128,6 +128,7 @@ export function importBundle(docs: Array<{ title: string; text: string }>) {
 // Benchmark hook (evaluation/retrieval-bench.mjs): the raw keyword ranking
 // the answer path starts from, before any claim logic or fallback. Additive;
 // the answer path does not use it.
+export { retrieveFromRows };
 export function retrieveChunks(
   query: string,
   bundle: ReturnType<typeof importBundle>,
@@ -177,6 +178,11 @@ export function validateEvidence(
 export function answer(
   question: string,
   bundle: ReturnType<typeof importBundle>,
+  dense?: {
+    queryVector: number[] | null;
+    model: string;
+    available: boolean;
+  } | null,
 ) {
   if (
     typeof question !== "string" ||
@@ -185,22 +191,26 @@ export function answer(
   )
     throw Error("Ask a question of 1-4,000 characters.");
   const start = performance.now();
-  const retrieve = (query: string) =>
-    retrieveFromRows({
+  const primaryDense =
+    dense && dense.queryVector && dense.available ? dense : null;
+  const retrieve = (query: string) => {
+    const useDense = primaryDense && query === question;
+    return retrieveFromRows({
       query,
-      queryVector: null,
-      mode: "keyword",
+      queryVector: useDense ? primaryDense.queryVector : null,
+      mode: useDense ? "hybrid" : "keyword",
       topK: 3,
-      embeddingModel: null,
+      embeddingModel: useDense ? primaryDense.model : null,
       rows: bundle.rows,
       storage: {
         backend: "ephemeral",
         durable: false,
-        denseAvailable: false,
+        denseAvailable: !!primaryDense,
         warning: null,
       },
       corpusScope: { kind: "corpus", corpusId: bundle.scope },
     });
+  };
   // Original query wins. Expansion is a disclosed recall-recovery fallback,
   // only attempted when the untouched question grounds nothing.
   const fields = questionFields(question);
@@ -278,7 +288,11 @@ export function answer(
     question,
     bundle,
     found,
-    { actualMode: "keyword", embeddingModel: null },
+    {
+      actualMode: found.actualMode,
+      embeddingModel:
+        found.actualMode === "keyword" ? null : (dense?.model ?? null),
+    },
     start,
   );
   // Narrow claim-to-source/state repair: stop stale positives, distinguish
