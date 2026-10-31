@@ -589,7 +589,11 @@ export function createLocalServer({
           return;
         }
         signinFails.delete(ip);
-        s = session(req, res, { create: true, secure: true });
+        // fresh: a visitor holding a demo session must get a NEW owner
+        // session, not the demo session upgraded; the demo flag and the
+        // synthetic corpus never attach to an owner session.
+        s = session(req, res, { create: true, secure: true, fresh: true });
+        delete s.demo;
         restoreOwner(s);
         res.writeHead(302, { Location: "/" });
         res.end();

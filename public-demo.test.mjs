@@ -108,17 +108,29 @@ test("API POST without any session is still refused", async () => {
 test("owner door remains at /owner-signin", async () => {
   const r = await req(4319, "GET", "/owner-signin");
   assert.equal(r.status, 200);
+  // Real path: the visitor already holds a demo session when signing in.
+  const { cookie: dc } = await demoSession();
   const p = await req(4319, "POST", "/owner-signin", {
+    cookie: dc,
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: "key=test-owner-key",
   });
   assert.equal(p.status, 302);
   const oc = (p.headers["set-cookie"]?.[0] ?? "").split(";")[0];
   assert.ok(oc.includes("vm="), "owner cookie set");
+  assert.notEqual(oc, dc, "owner sign-in rotates the demo session");
   const os = JSON.parse(
     (await req(4319, "GET", "/api/session", { cookie: oc })).body,
   );
   assert.equal(os.demo, false, "owner session is not a demo session");
+  const olib = JSON.parse(
+    (await req(4319, "GET", "/api/library", { cookie: oc })).body,
+  );
+  assert.equal(
+    olib.documents.length,
+    0,
+    "owner workspace is not the synthetic corpus",
+  );
 });
 
 test("flag off keeps the wall", async () => {
