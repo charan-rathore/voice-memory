@@ -17,12 +17,14 @@
     "fixtures:build": "node ingest/fixtures/build.mjs && python3 ingest/fixtures/degrade.py",
     "test:clinical": "node --test --test-concurrency=1 clinical/*.test.mjs",
     "bench:retrieval": "node evaluation/retrieval-bench.mjs",
-    "fixtures:clinical": "node clinical/fixtures/build.mjs"
+    "fixtures:clinical": "node clinical/fixtures/build.mjs",
+    "bench:hybrid": "node evaluation/retrieval-bench-hybrid.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "5.2.8",
     "@fontsource/ibm-plex-mono": "5.2.7",
     "@fontsource/ibm-plex-sans": "5.2.8",
+    "@huggingface/transformers": "^3.8.1",
     "@tesseract.js-data/eng": "1.0.0",
     "@xmldom/xmldom": "0.9.12",
     "esbuild": "0.25.12",
@@ -37,5 +39,8 @@
     "playwright": "1.62.0",
     "prettier": "3.6.2",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "sharp": "0.35.5"
   }
 }
