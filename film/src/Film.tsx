@@ -2,16 +2,34 @@
 // Timing follows the narrator's own cadence: every scene boundary is a word
 // time from the cleaned voiceover (src/captions.json), offset by VO.
 import React from "react";
-import { AbsoluteFill, Img, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig, Easing } from "remotion";
+import { AbsoluteFill, Img, OffthreadVideo, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig, Easing } from "remotion";
 import captions from "./captions.json";
 
 export const FPS = 30;
-export const VO = 1.2; // voiceover starts here (seconds)
+export const VO = 1.0; // voiceover starts here (seconds)
 const VO_LEN = 70.8;
-export const END = VO + VO_LEN + 9.3; // outro: impact + call to action
+export const SPEED = 1.06; // voiceover tempo (pitch kept), for pace
+// Real-product inserts, in voiceover seconds: the voice pauses, the product plays.
+export const GAPS = [
+  { at: 27.3, len: 7.6 }, // after "Bolna handles the speech": a real Bolna call
+  { at: 61.95, len: 10.0 }, // after "its exact source on screen": typed questions, live
+];
+const v = (x: number) => VO + x / SPEED + GAPS.filter((g) => x >= g.at).reduce((a, g) => a + g.len, 0);
+const gapStart = (i: number) => VO + GAPS[i].at / SPEED + GAPS.slice(0, i).reduce((a, g) => a + g.len, 0);
+/** Film seconds -> voiceover seconds, or null inside an insert. */
+const filmToVo = (t: number) => {
+  let shift = 0;
+  for (let i = 0; i < GAPS.length; i++) {
+    const g0 = gapStart(i);
+    if (t < g0) break;
+    if (t < g0 + GAPS[i].len) return null;
+    shift = GAPS.slice(0, i + 1).reduce((a, g) => a + g.len, 0);
+  }
+  return (t - VO - shift) * SPEED;
+};
+export const END = v(VO_LEN) + 7.4; // outro: impact + call to action
 export const TOTAL = Math.ceil(END * FPS);
 const s = (sec: number) => Math.round(sec * FPS);
-const v = (voSec: number) => voSec + VO; // voiceover time -> film time
 
 const C = {
   bg: "#07080d",
@@ -29,7 +47,7 @@ const C = {
 };
 const SERIF = "Instrument, Newsreader, Georgia, serif";
 const DISPLAY = "Bricolage, Plex, system-ui, sans-serif";
-const SANS = "Plex, system-ui, sans-serif";
+const SANS = "Plex, Deva, system-ui, sans-serif";
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 const io = Easing.bezier(0.45, 0, 0.2, 1);
@@ -47,6 +65,7 @@ const Fonts: React.FC = () => (
     @font-face { font-family: Instrument; src: url(${staticFile("fonts/instrument-italic.woff2")}) format("woff2"); font-weight: 400; font-style: italic; }
     @font-face { font-family: Bricolage; src: url(${staticFile("fonts/bricolage.woff2")}) format("woff2"); font-weight: 200 800; }
     @font-face { font-family: Plex; src: url(${staticFile("fonts/plex-sans-400.woff2")}) format("woff2"); font-weight: 400; }
+    @font-face { font-family: Deva; src: url(${staticFile("fonts/deva.woff2")}) format("woff2"); font-weight: 400 600; }
     @font-face { font-family: Plex; src: url(${staticFile("fonts/plex-sans-500.woff2")}) format("woff2"); font-weight: 500; }
     @font-face { font-family: Plex; src: url(${staticFile("fonts/plex-sans-600.woff2")}) format("woff2"); font-weight: 600; }
   `}</style>
@@ -179,7 +198,9 @@ type Cap = { text: string; s: number; e: number; words: { t: string; s: number; 
 const CAPS = captions as Cap[];
 const Captions: React.FC = () => {
   const f = useCurrentFrame();
-  const t = f / FPS - VO;
+  const tv = filmToVo(f / FPS);
+  if (tv === null) return null;
+  const t = tv;
   const cap = CAPS.find((c, i) => t >= c.s - 0.15 && t <= Math.min(c.e + 0.35, (CAPS[i + 1]?.s ?? 1e9) - 0.12));
   if (!cap) return null;
   const p = k(t, [cap.s - 0.15, cap.s + 0.1], [0, 1], out);
@@ -564,6 +585,66 @@ const Outro: React.FC<{ t: number }> = ({ t }) => {
   );
 };
 
+// Insert 1: a real Bolna call, from its call log (transcript verbatim).
+const CallLog: React.FC<{ t: number }> = ({ t }) => {
+  const bars = new Array(28).fill(0).map((_, i) => 8 + Math.abs(Math.sin(i * 0.8 + t * 10)) * 46 * (0.4 + 0.6 * Math.abs(Math.sin(i * 0.37 + t * 2.3))));
+  const user = "has the creatine got gone up क्या अपना creatine ज़्यादा हो गया है";
+  const agent = "मैं आपके दोनों Creatinine नतीजों की तुलना नहीं कर सकता: 3 सितंबर 2026 वाला mg/dL में है और 12 अक्टूबर 2026 वाला µmol/L में, और मैं यूनिट नहीं बदलता।";
+  const typed = (txt: string, a: number, cps: number) => txt.slice(0, Math.max(0, Math.floor((t - a) * cps)));
+  const pu = k(t, [0.5, 0.9], [0, 1], out);
+  const pa = k(t, [2.9, 3.3], [0, 1], out);
+  const chip = k(t, [5.3, 5.7], [0, 1], out);
+  return (
+    <Camera t={t} keys={[{ t: 0, z: 1.12, y: 30, rx: 6 }, { t: 2.5, z: 1.02, y: 0, rx: 0 }, { t: 7.6, z: 1.06, x: -20 }]}>
+      <AbsoluteFill style={{ background: `radial-gradient(1000px 640px at 50% 30%, #13213a 0%, ${C.bg} 65%)` }} />
+      <Label style={{ position: "absolute", left: 120, top: 90 }} color={C.teal}>
+        Real Bolna call · transcript from the call log
+      </Label>
+      <div style={{ position: "absolute", left: 120, top: 140, display: "flex", alignItems: "center", gap: 22 }}>
+        <div style={{ fontFamily: SERIF, fontSize: 64, color: C.ink }}>Asked in English and Hindi, on a live call</div>
+      </div>
+      <div style={{ position: "absolute", left: 120, top: 270, width: 1680, display: "flex", alignItems: "center", gap: 26, padding: "18px 26px", borderRadius: 22, background: "#121a2c", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <span style={{ width: 16, height: 16, borderRadius: 8, background: C.coral, boxShadow: `0 0 18px ${C.coral}` }} />
+        <span style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 26, color: C.ink }}>Live · Bolna web call</span>
+        <div style={{ display: "flex", gap: 5, alignItems: "center", height: 60 }}>
+          {bars.map((h, i) => <span key={i} style={{ width: 6, height: h, borderRadius: 3, background: t < 2.9 ? C.ink2 : C.mark }} />)}
+        </div>
+        <span style={{ fontFamily: SANS, fontSize: 22, color: C.ink3, marginLeft: "auto" }}>speech → Bolna ASR → Voice Memory → Bolna TTS</span>
+      </div>
+      <div style={{ position: "absolute", left: 120, top: 420, width: 1100, opacity: pu, transform: `translateY(${(1 - pu) * 20}px)` }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 20, letterSpacing: "0.12em", color: C.ink3, fontWeight: 600 }}>CALLER · AS BOLNA HEARD IT</div>
+        <div style={{ marginTop: 10, padding: "20px 26px", borderRadius: 22, background: "rgba(255,255,255,0.06)", fontFamily: SANS, fontSize: 36, color: C.ink, lineHeight: 1.4, minHeight: 70 }}>
+          “{typed(user, 0.8, 26)}”
+        </div>
+      </div>
+      <div style={{ position: "absolute", left: 600, top: 610, width: 1200, opacity: pa, transform: `translateY(${(1 - pa) * 20}px)` }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 20, letterSpacing: "0.12em", color: C.teal, fontWeight: 600 }}>VOICE MEMORY · SPOKEN BACK, IN HINDI</div>
+        <div style={{ marginTop: 10, padding: "20px 26px", borderRadius: 22, background: C.teal + "1c", border: `1.5px solid ${C.teal}77`, fontFamily: SANS, fontSize: 32, color: C.ink, lineHeight: 1.45, minHeight: 120 }}>
+          {typed(agent, 3.1, 58)}
+        </div>
+        <div style={{ marginTop: 14, display: "flex", gap: 16, alignItems: "center", opacity: chip }}>
+          <Tag text="Won't compare: units differ" color={C.red} t={t} at={5.3} />
+          <span style={{ fontFamily: SANS, fontSize: 24, color: C.ink2 }}>“I can't compare your two creatinine results: mg/dL vs µmol/L.”</span>
+        </div>
+      </div>
+      <Badge t={t} text="LIVE CALL · 1 NOV 2026, 00:24 IST" />
+    </Camera>
+  );
+};
+
+// Insert 2: typed questions answering in the real page (screen capture, 1.5x).
+const TypedClip: React.FC<{ t: number }> = ({ t }) => (
+  <>
+    <Camera t={t} keys={[{ t: 0, z: 1.0, y: 10 }, { t: 3.2, z: 1.06, x: 60, y: 40 }, { t: 6.4, z: 1.02, x: -40, y: 20 }, { t: 10, z: 1.06, x: 50, y: 30 }]} persp={2400}>
+      <AbsoluteFill style={{ background: `radial-gradient(1200px 700px at 50% 40%, #1b2136 0%, ${C.bg} 70%)` }} />
+      <div style={{ position: "absolute", left: 160, top: 70, width: 1600, borderRadius: 22, overflow: "hidden", boxShadow: "0 60px 120px -40px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08)" }}>
+        <OffthreadVideo src={staticFile("ui/typed.mp4")} playbackRate={1.5} muted style={{ width: 1600, display: "block" }} />
+      </div>
+    </Camera>
+    <Badge t={t} text="LIVE APP · SCREEN RECORDING · 1.5×" />
+  </>
+);
+
 // ---------------------------------------------------------------- film
 export const Film: React.FC = () => {
   const { width } = useVideoConfig();
@@ -574,7 +655,8 @@ export const Film: React.FC = () => {
         <Scene a={0} b={v(10.0)}>{(t) => <Hook t={t} />}</Scene>
         <Scene a={v(9.9)} b={v(17.5)}>{(t, d) => <Change t={t} d={d} />}</Scene>
         <Scene a={v(17.45)} b={v(22.8)}>{(t) => <Question t={t} />}</Scene>
-        <Scene a={v(22.75)} b={v(27.55)} fade={0.25}>{(t) => <Meet t={t} />}</Scene>
+        <Scene a={v(22.75)} b={gapStart(0) + 0.15} fade={0.25}>{(t) => <Meet t={t} />}</Scene>
+        <Scene a={gapStart(0)} b={gapStart(0) + GAPS[0].len + 0.15} fade={0.3}>{(t) => <CallLog t={t} />}</Scene>
         <Scene a={v(27.5)} b={v(36.75)}>{(t) => <Engine t={t} />}</Scene>
         <Scene a={v(36.7)} b={v(39.8)}>
           {(t) => <UI t={t} src="ui/desk-ferritin.png" w={1500} h={1003} keys={[{ t: 0, z: 0.82, rx: 8, y: 30 }, { t: 1.3, z: 1.35, x: 300, y: 110, rx: 0 }, { t: 3.1, z: 1.55, x: -260, y: 60 }]} />}
@@ -600,9 +682,10 @@ export const Film: React.FC = () => {
         </Scene>
         <Scene a={v(45.9)} b={v(48.65)}>{(t) => <Beyond t={t} />}</Scene>
         <Scene a={v(48.6)} b={v(58.65)}>{(t) => <Deal t={t} />}</Scene>
-        <Scene a={v(58.6)} b={v(62.15)}>
+        <Scene a={v(58.6)} b={gapStart(1) + 0.15}>
           {(t) => <UI t={t} src="ui/desk-deal42.png" w={1500} h={1214} keys={[{ t: 0, z: 1.35, x: 300, y: 180 }, { t: 1.6, z: 1.35, x: 300, y: 100 }, { t: 3.5, z: 1.4, x: -320, y: 220 }]} />}
         </Scene>
+        <Scene a={gapStart(1)} b={gapStart(1) + GAPS[1].len + 0.15} fade={0.3}>{(t) => <TypedClip t={t} />}</Scene>
         <Scene a={v(62.1)} b={v(70.3)}>{(t) => <Close t={t} />}</Scene>
         <Scene a={v(70.2)} b={END} fade={0.4}>{(t) => <Outro t={t} />}</Scene>
       </div>

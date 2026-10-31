@@ -78,6 +78,7 @@
   const VERDICT = {
     LATEST: ["v-latest", "Latest value"],
     COMPARED: ["v-ok", "Compared"],
+    OVERVIEW: ["v-ok", "Summary"],
     NOT_COMPARABLE: ["v-no", "Won't compare"],
     AMBIGUOUS_PATIENT: ["v-ask", "Which patient?"],
     PROPOSED: ["v-warn", "Proposed, not approved"],
