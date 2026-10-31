@@ -364,6 +364,48 @@ export function answer(
         return qEnts.some((e) => toks.has(e));
       });
     }
+    // Subject anchoring: a claims verdict answers only about the subject the
+    // question actually names. Field vocabulary and generic tokens are not
+    // subjects. When NO surviving claim mentions any asked subject, the
+    // claims layer stays silent and the excerpt path (with its honest-
+    // response guard) decides - a claims verdict must never answer a
+    // neighboring question ("solar array funding" is not the renewal fee).
+    const FIELD_TOKEN = new Set(
+      "fee fees invoice invoiced invoicing cost costs bill billed billing charg charge charged charging money commercial commercials paid pay payment payments split upfront installment installments deadline due pilot signoff launch approve approved approval authorize authorized authorization region regions scope area areas cover covers covered weekly daily biweekly monthly cadence progress report reporting status update current record records ask asked asking funding funded finance financed financing amount amounts price prices value values discount discounts structure terms revised final agree agreed proposal propose proposed quote quoted sign signing signed off timing expected date change changed discuss discussed decided decide decision".split(
+        " ",
+      ),
+    );
+    // Pronouns, adverbs and degree words carry no subject either; without
+    // this list "How will we bill them?" anchors on "them" and every plain
+    // paraphrase would fall silent.
+    const FILLER_Q = new Set(
+      "anyone anybody someone somebody everyone everybody anything something nothing them they their theirs there here himself herself itself myself ourselves yourself finally currently now yet still already just really actually ever never always often much many more most less least very only even also back again once twice about into over under with without from this that these those what which when where whom whose while does doing done have having had been being were will would shall should may might must".split(
+        " ",
+      ),
+    );
+    const qSubjects = (
+      question.toLowerCase().match(/\b[a-z][a-z-]{3,}\b/g) ?? []
+    ).filter(
+      (t) => !GENERIC_Q.has(t) && !FIELD_TOKEN.has(t) && !FILLER_Q.has(t),
+    );
+    if (qSubjects.length && claims.length) {
+      const anchored = claims.some((c) => {
+        const hay =
+          `${c.quote} ${c.title} ${(c.scopeEntities ?? []).join(" ")}`.toLowerCase();
+        return qSubjects.some((s) => hay.includes(s));
+      });
+      if (!anchored) claims = [];
+    }
+    // A when-question asks for a date: a claims verdict whose cited records
+    // contain no full date cannot answer it, whatever status they carry.
+    if (/^\s*when\b/i.test(question) && claims.length) {
+      // A when-question can be answered by a calendar date OR a relative
+      // deadline ("within 45 days", "no later than 1 March"); only a claims
+      // set with no temporal marker at all cannot answer it.
+      const TEMPORAL =
+        /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b|\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}|\b\d{4}-\d{2}-\d{2}\b|\b(?:within|no later than|by|every|per|each)\b[^.\n]{0,30}?\b\d+\s*(?:days?|weeks?|months?|hours?|years?)\b|\b\d+\s*(?:business )?(?:days?|weeks?|months?|hours?|years?)\b|\b(?:daily|weekly|biweekly|monthly|quarterly|annually|yearly)\b/i;
+      if (!claims.some((c) => TEMPORAL.test(c.quote))) claims = [];
+    }
     const { active, superseded, approved } = resolveClaims(claims);
     const claimInfo = (c: Claim) =>
       `${c.value} (${c.title}${c.docDate ? ", " + c.docDate : ""}; status: ${c.status})`;
@@ -741,7 +783,56 @@ export function answer(
       .map((w) => w.toLowerCase())
       .filter((w) => w.length > 2 && !QSTOP.has(w));
     const entMiss = qEnts.some((e) => !exText.includes(e));
-    if (idMiss || (quantitative && !quantOk) || entMiss) {
+    // Asked-attribute shapes: a passage dump that cannot contain the asked
+    // field at all is not an answer, however topical the passages are.
+    // Mirrors the credential/date/commercial guards in the shared retrieval
+    // core, kept demo-layer only.
+    const contactQ = /\b(phone|mobile|contact number|e-?mail address)\b/i.test(
+      question,
+    );
+    const phoneCand = exText.match(/\+?\d[\d\s().-]{6,}\d/g) ?? [];
+    const contactMiss =
+      contactQ &&
+      !phoneCand.some(
+        (m) =>
+          !/^\d{4}-\d{2}-\d{2}$/.test(m.trim()) &&
+          m.replace(/\D/g, "").length >= 7,
+      ) &&
+      !/[\w.+-]+@[\w-]+\.[\w.]+/.test(exText);
+    const serialMiss =
+      /\b(serial|part|registration|reference) (number|no|code)\b/i.test(
+        question,
+      ) &&
+      !/\b(?=[a-z0-9-]*\d)(?=[a-z0-9-]*[a-z])[a-z0-9-]{4,}\b/i.test(exText);
+    const whenMiss =
+      /^\s*when\b/i.test(question) &&
+      !/\b\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b|\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}|\b\d{4}-\d{2}-\d{2}\b|\b\d+\s*(?:business )?(?:days?|weeks?|months?|hours?|years?)\b|\b(?:daily|weekly|biweekly|monthly|quarterly|annually|yearly)\b/i.test(
+        exText,
+      );
+    const metricField = /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
+      question,
+    );
+    const metricMiss =
+      metricField != null && !exText.includes(metricField[1].toLowerCase());
+    const askedFieldWord =
+      /\b(penalty|penalties|severance|liquidated damages|fine|fines)\b/i;
+    const fieldWordMiss =
+      askedFieldWord.test(question) && !askedFieldWord.test(exText);
+    const vendorClass = /\b(vendor|supplier|contractor|manufacturer)\b/i;
+    const vendorMiss =
+      /\bwhich (vendor|supplier|contractor|manufacturer)\b/i.test(question) &&
+      !vendorClass.test(exText);
+    if (
+      idMiss ||
+      (quantitative && !quantOk) ||
+      entMiss ||
+      contactMiss ||
+      serialMiss ||
+      whenMiss ||
+      metricMiss ||
+      fieldWordMiss ||
+      vendorMiss
+    ) {
       result.reviewEvidence =
         result.evidence as unknown as typeof result.reviewEvidence;
       result.evidence = [];
