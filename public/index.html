@@ -101,6 +101,42 @@
           </p>
         </form>
 
+        <section
+          id="voice-notes"
+          class="vnotes"
+          aria-labelledby="vnotes-heading"
+        >
+          <div class="vnotes-row">
+            <button
+              id="note-rec"
+              type="button"
+              class="rec"
+              aria-pressed="false"
+              data-recording="false"
+            >
+              <span class="rec-dot" aria-hidden="true"></span>
+              <span id="vnotes-heading">Voice note</span>
+            </button>
+            <label class="sr-only" for="note-lang"
+              >Language you will speak</label
+            >
+            <select id="note-lang" class="note-lang">
+              <option value="en-IN">English</option>
+              <option value="hi-IN">हिन्दी</option>
+            </select>
+            <p id="note-interim" class="note-interim" aria-hidden="true"></p>
+          </div>
+          <p class="ask-hint">
+            Send as many notes as you like, even while one is being answered.
+            Each gets its own card; answers play back in order.
+          </p>
+          <p id="note-live" class="sr-only" aria-live="polite"></p>
+        </section>
+
+        <section id="convo" class="convo" hidden aria-label="Voice notes">
+          <ol id="notes" class="notes"></ol>
+        </section>
+
         <p id="status" class="status" role="status" aria-live="polite">
           Add your documents, or try the fictional example.
         </p>
@@ -140,6 +176,32 @@
             <p id="mode" class="more-note"></p>
             <div id="transform" class="transform" hidden></div>
             <div id="trace" class="trace"></div>
+          </details>
+          <details id="map" class="more map">
+            <summary>How this connects</summary>
+            <nav
+              id="map-crumbs"
+              class="map-crumbs"
+              aria-label="Map levels"
+            ></nav>
+            <div id="map-stage" class="map-stage">
+              <svg
+                id="map-svg"
+                class="map-svg"
+                role="group"
+                aria-label="Knowledge map of your documents"
+              ></svg>
+            </div>
+            <p
+              id="map-caption"
+              class="map-caption"
+              role="status"
+              aria-live="polite"
+            >
+              Click a topic, value, document or question to go one level deeper.
+              Click a line to see the sentence behind it.
+            </p>
+            <ul id="map-list" class="sr-only"></ul>
           </details>
           <div id="signals-slot"></div>
           <p class="fineprint">
@@ -247,6 +309,27 @@
           hidden
         ></div>
         <div id="voice-turn-evidence" class="voice-evidence"></div>
+        <details id="voicelab" class="more voicelab">
+          <summary>Measure this call</summary>
+          <p class="voicelab-help">
+            Read these lines aloud, one per turn, waiting for each answer.
+            Afterwards you get speech-to-answer time per stage and what the
+            recogniser heard against what you said. Nothing is sent anywhere.
+          </p>
+          <label class="voicelab-check">
+            <input id="voicelab-on" type="checkbox" /> Measure the next call
+          </label>
+          <ol id="voicelab-script" class="voicelab-script"></ol>
+          <p
+            id="voicelab-status"
+            class="voicelab-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <button id="voicelab-download" type="button" class="link" hidden>
+            Download measurement (JSON)
+          </button>
+        </details>
         <div class="readiness">
           <button id="readiness-check" type="button" class="link">
             Check demo readiness
@@ -287,5 +370,8 @@
 
     <script type="module" src="/app.js"></script>
     <script type="module" src="/workspace.js"></script>
+    <script type="module" src="/notes.js"></script>
+    <script type="module" src="/voicelab.js"></script>
+    <script type="module" src="/graph.js"></script>
   </body>
 </html>

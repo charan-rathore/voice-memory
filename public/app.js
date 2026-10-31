@@ -240,6 +240,15 @@ ready.then(async () => {
       if (!current()) return;
       const c = new BolnaWebCall({ sessionUrl: "/api/bolna-session" });
       call = c;
+      // Voice lab (public/voicelab.js) measures the live call from the same
+      // SDK object; it only listens, never controls the call.
+      try {
+        globalThis.dispatchEvent?.(
+          new CustomEvent("vm:call", { detail: { call: c } }),
+        );
+      } catch {
+        /* no DOM events (tests): measurement is optional */
+      }
       c.on("call-start", () => {
         if (!current() || call !== c) return;
         clearSetup();

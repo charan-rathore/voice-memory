@@ -10,7 +10,7 @@ import {
 
 // Re-exported for the spoken renderer layer (spoken.mjs): the claim graph is
 // the renderer's only source of facts. Additive; no behaviour change.
-export { extractClaims, questionFields, resolveClaims };
+export { extractClaims, questionFields, resolveClaims, retrieveIndexStats };
 
 export type QueryTransformInfo = {
   original: string;
@@ -25,6 +25,7 @@ export type RetrievalStagesInfo = {
 import { createHash, randomUUID } from "node:crypto";
 import { parseText } from "./vendor/memorable/src/import/text/parse-text";
 import {
+  retrieveIndexStats,
   retrieveFromRows,
   type SearchRow,
   type RetrieveResult,
@@ -234,9 +235,10 @@ export function answer(
   // term. Original query still wins; this fires only when the original's
   // passages cannot contain the asked metric at all.
   if (!expansionUsed && found.evidence === "positive") {
-    const mf = /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
-      question,
-    );
+    const mf =
+      /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
+        question,
+      );
     if (mf) {
       const foundText = found.chunks
         .map((c) => c.text)
@@ -817,7 +819,14 @@ export function answer(
       .toLowerCase();
     const ids = question.match(/\b[A-Z]{2,}-\d+\b/g) ?? [];
     const idMiss = ids.some((id) => !exText.includes(id.toLowerCase()));
+    // "Was the budget approved?" asks about a status, not a quantity: the
+    // quantity gate applies only when no status verb is the thing asked.
+    const statusQ =
+      /^\s*(?:was|were|is|are|has|have|had|did|does|do)\b[^?]*\b(?:approv\w*|sign\w*|confirm\w*|finali[sz]\w*|reject\w*|agreed|accepted|cleared|released)\b/i.test(
+        question,
+      ) && !/\bhow (?:much|many)\b/i.test(question);
     const quantitative =
+      !statusQ &&
       /\brevenue|budget|turnover|profit|margin|sales|price|amount|how much|how many\b/i.test(
         question,
       );
@@ -910,9 +919,10 @@ export function answer(
       !/\b\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b|\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}|\b\d{4}-\d{2}-\d{2}\b|\b\d+\s*(?:business )?(?:days?|weeks?|months?|hours?|years?)\b|\b(?:daily|weekly|biweekly|monthly|quarterly|annually|yearly)\b/i.test(
         exText,
       );
-    const metricField = /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
-      question,
-    );
+    const metricField =
+      /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
+        question,
+      );
     // A disclosed expansion bridge covers the asked metric when the bridged
     // term is what the evidence actually carries ("thyroid ... level" ->
     // "tsh"): the transform is shown in the UI, so the answer never pretends

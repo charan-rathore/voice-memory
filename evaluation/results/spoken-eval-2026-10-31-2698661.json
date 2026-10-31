@@ -1,0 +1,569 @@
+{
+ "sha": "2698661",
+ "date": "2026-10-31T09:57:39.292Z",
+ "note": "Engine-only timing (no ASR/TTS/network). Keyword retrieval path, as the voice adapter uses.",
+ "results": [
+  {
+   "set": "northstar-dev",
+   "heldOut": false,
+   "n": 23,
+   "answerCorrect": 23,
+   "retrievalRecall": {
+    "hit": 14,
+    "n": 21
+   },
+   "p50ms": 5.8,
+   "p95ms": 107.1,
+   "rows": [
+    {
+     "id": "n01",
+     "q": "what fee did we finally agree on",
+     "cls": "open",
+     "spoken": "$42,000 is the latest proposal, and it is not approved.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 113
+    },
+    {
+     "id": "n02",
+     "q": "um so is the forty two thousand dollar fee locked in",
+     "cls": "open",
+     "spoken": "$42,000 is the latest proposal, and it is not approved.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 17.5
+    },
+    {
+     "id": "n03",
+     "q": "did they approve forty two thousand",
+     "cls": "negative",
+     "spoken": "$42,000 is the latest proposal, and it is not approved.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 107.1
+    },
+    {
+     "id": "n04",
+     "q": "was it forty eight thousand before",
+     "cls": "answer",
+     "spoken": "Yes, the earlier record was $48,000. It was superseded by $42,000, which is still not approved.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 6.8
+    },
+    {
+     "id": "n05",
+     "q": "whats the deadline for the pilot",
+     "cls": "open",
+     "spoken": "That is still open: 15 November 2026 versus 22 November 2026 are both on record.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 11.2
+    },
+    {
+     "id": "n06",
+     "q": "when are we going live",
+     "cls": "open",
+     "spoken": "That is still open: 15 November 2026 versus 22 November 2026 are both on record.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 7.8
+    },
+    {
+     "id": "n07",
+     "q": "did northstar agree to the 22 november date",
+     "cls": "negative",
+     "spoken": "No. Per the project delivery update from October 2: the 22 November date is an internal delivery target, not a client-approved deadline.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 7.1
+    },
+    {
+     "id": "n08",
+     "q": "has the client signed anything",
+     "cls": "negative",
+     "spoken": "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 6.8
+    },
+    {
+     "id": "n09",
+     "q": "is there a signed contract",
+     "cls": "negative",
+     "spoken": "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 6.6
+    },
+    {
+     "id": "n10",
+     "q": "how many regions are we covering",
+     "cls": "answer",
+     "spoken": "The current working scope is two regions (North and South).",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 6.1
+    },
+    {
+     "id": "n11",
+     "q": "is the 50 50 split agreed",
+     "cls": "open",
+     "spoken": "That is still open: 40/60 versus 50/50 are both on record, and it is not approved.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 5.8
+    },
+    {
+     "id": "n12",
+     "q": "who needs to sign off",
+     "cls": "answer",
+     "spoken": "The terms need client finance sign-off, and that sign-off is not recorded yet.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 4.9
+    },
+    {
+     "id": "n13",
+     "q": "when will finance sign off",
+     "cls": "abstain",
+     "spoken": "The record mentions sign-off only as a condition; no timing for sign-off is established in these documents.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 5.1
+    },
+    {
+     "id": "n14",
+     "q": "what's the budget for marketing",
+     "cls": "abstain",
+     "spoken": "I don't see that in these documents.",
+     "pass": true,
+     "fails": [],
+     "retrieved": null,
+     "ms": 4
+    },
+    {
+     "id": "n15",
+     "q": "did finance reject the revised fee",
+     "cls": "negative",
+     "spoken": "No record shows a rejection. Approval is pending, which is not the same thing.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 6.5
+    },
+    {
+     "id": "n16",
+     "q": "is production launch approved",
+     "cls": "negative",
+     "spoken": "No. Per the internal action log from October 9: production launch authorization is not recorded.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 4.6
+    },
+    {
+     "id": "n17",
+     "q": "what did the client ask for in their email",
+     "cls": "answer",
+     "spoken": "The client email extract from October 6: The client asks to retain the original 15 November deadline for the pilot. The client explicitly states that no revised deadline has been approved by Northstar.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 3.4
+    },
+    {
+     "id": "n18",
+     "q": "why did the fee go down",
+     "cls": "answer",
+     "spoken": "The commercial revision from September 18 ties it to the narrower scope. Earlier, the client kickoff notes from September 11 recorded: Northstar asked to narrow the pilot from three regions to two regions (North and South) for the first phase.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 5.7
+    },
+    {
+     "id": "n19",
+     "q": "can I tell the client the fee is final",
+     "cls": "open",
+     "spoken": "$42,000 is the latest proposal, and it is not approved.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 4.5
+    },
+    {
+     "id": "n20",
+     "q": "what's still open",
+     "cls": "open",
+     "spoken": "Still open, per the internal action log from October 9: final payment schedule; and pilot deadline.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 2.8
+    },
+    {
+     "id": "n21",
+     "q": "is data access on time",
+     "cls": "answer",
+     "spoken": "Data access from Northstar is one week late as of this update. That's from 05 Project Delivery Update.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 4.3
+    },
+    {
+     "id": "n22",
+     "q": "is there a signed agreement for the revised terms",
+     "cls": "negative",
+     "spoken": "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 5.4
+    },
+    {
+     "id": "n23",
+     "q": "what is the private retainer",
+     "cls": "abstain",
+     "spoken": "I don't see a private retainer in these documents.",
+     "pass": true,
+     "fails": [],
+     "retrieved": null,
+     "ms": 3.2
+    }
+   ]
+  },
+  {
+   "set": "harbor",
+   "heldOut": false,
+   "n": 15,
+   "answerCorrect": 15,
+   "retrievalRecall": {
+    "hit": 8,
+    "n": 13
+   },
+   "p50ms": 4.6,
+   "p95ms": 11.7,
+   "rows": [
+    {
+     "id": "h01",
+     "q": "what's the monthly retainer",
+     "cls": "answer",
+     "spoken": "$9,500 is approved, per the kestrel risk log from September 25.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 6.5
+    },
+    {
+     "id": "h02",
+     "q": "is the twelve thousand eight hundred dollar retainer approved",
+     "cls": "negative",
+     "spoken": "No. Per the harbor ops review from September 2: Harbor rejected the $12,800 retainer in CR-1; the third warehouse is not funded this year. The figure in force remains $9,500.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 4
+    },
+    {
+     "id": "h03",
+     "q": "did harbor reject the change request",
+     "cls": "negative",
+     "spoken": "Yes. Per the harbor ops review from September 2: Harbor rejected the $12,800 retainer in CR-1; the third warehouse is not funded this year.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 8.8
+    },
+    {
+     "id": "h04",
+     "q": "so is the retainer still ninety five hundred",
+     "cls": "answer",
+     "spoken": "$9,500 is approved, per the kestrel risk log from September 25.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 3.7
+    },
+    {
+     "id": "h05",
+     "q": "when do we go live",
+     "cls": "open",
+     "spoken": "1 October 2026 is approved, per the harbor statement of work from July 14.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 4.5
+    },
+    {
+     "id": "h06",
+     "q": "is go live moved to november third",
+     "cls": "negative",
+     "spoken": "No. 3 November 2026 was proposed, not approved; the approved date is 1 October 2026, per the harbor statement of work from July 14.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 3.3
+    },
+    {
+     "id": "h07",
+     "q": "is the scanner shipment on time",
+     "cls": "answer",
+     "spoken": "The scanner shipment is held at customs and is now expected two weeks late. That's from 04 Hardware Status.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 4.7
+    },
+    {
+     "id": "h08",
+     "q": "is there a signed contract",
+     "cls": "answer",
+     "spoken": "Yes. The harbor statement of work from July 14 says: This statement of work was countersigned by both parties on 14 July 2026 and is in force.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 4.6
+    },
+    {
+     "id": "h09",
+     "q": "what did harbor ask for in their email",
+     "cls": "answer",
+     "spoken": "The harbor email from September 23: Harbor asks Kestrel to submit a revised go-live plan for Dock A by 30 September 2026. Harbor states that no new go-live date has been approved. Harbor asks that fortnightly status reports continue unchanged.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 2.8
+    },
+    {
+     "id": "h10",
+     "q": "what's still open",
+     "cls": "open",
+     "spoken": "Still open, per the kestrel risk log from September 25: Dock A go-live date; and scope and price of any Dock E training change.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 11.7
+    },
+    {
+     "id": "h11",
+     "q": "how often do we send status reports",
+     "cls": "answer",
+     "spoken": "The record proposes fortnightly progress reporting, per the harbor statement of work from July 14; confirmation is not recorded.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 5.5
+    },
+    {
+     "id": "h12",
+     "q": "what's the budget for the parking lot",
+     "cls": "abstain",
+     "spoken": "I don't see that in these documents.",
+     "pass": true,
+     "fails": [],
+     "retrieved": null,
+     "ms": 8.8
+    },
+    {
+     "id": "h13",
+     "q": "is dock c wiring done",
+     "cls": "answer",
+     "spoken": "Dock C wiring is complete. That's from 04 Hardware Status.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 2.3
+    },
+    {
+     "id": "h14",
+     "q": "how much is the dock e training change",
+     "cls": "abstain_or_open",
+     "spoken": "No price is agreed for that. The harbor ops review from September 2: Harbor would consider a smaller change limited to Dock E training, but no amount was agreed.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 7.4
+    },
+    {
+     "id": "h15",
+     "q": "mark the twelve thousand eight hundred retainer approved",
+     "cls": "mutate",
+     "spoken": "I cannot change the records by voice. $9,500 stays a proposal until a signed approval is added to the documents.",
+     "pass": true,
+     "fails": [],
+     "retrieved": null,
+     "ms": 4.6
+    }
+   ]
+  },
+  {
+   "set": "lumen",
+   "heldOut": false,
+   "n": 14,
+   "answerCorrect": 14,
+   "retrievalRecall": {
+    "hit": 10,
+    "n": 12
+   },
+   "p50ms": 2.4,
+   "p95ms": 4.5,
+   "rows": [
+    {
+     "id": "l01",
+     "q": "what's the fixed fee",
+     "cls": "answer",
+     "spoken": "Yes. The lumen master services agreement from May 2 records the approval of $64,000.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 4.5
+    },
+    {
+     "id": "l02",
+     "q": "is the seventy one thousand five hundred dollar fee approved",
+     "cls": "negative",
+     "spoken": "No. Per the lumen board minutes from July 1: The board declined the $71,500 fee in variation V2. The figure in force remains $64,000.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 2.4
+    },
+    {
+     "id": "l03",
+     "q": "did the board turn down the variation",
+     "cls": "negative",
+     "spoken": "The board declined the $71,500 fee in variation V2. That's from 03 Lumen Board Minutes.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 2.1
+    },
+    {
+     "id": "l04",
+     "q": "when do we launch",
+     "cls": "open",
+     "spoken": "20 August 2026 is approved, per the lumen master services agreement from May 2.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 3.3
+    },
+    {
+     "id": "l05",
+     "q": "is the launch moved to september fifteenth",
+     "cls": "negative",
+     "spoken": "No. 15 September 2026 was proposed, not approved; the approved date is 20 August 2026, per the lumen master services agreement from May 2.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 2.1
+    },
+    {
+     "id": "l06",
+     "q": "is the scheduling api on time",
+     "cls": "answer",
+     "spoken": "The clinic scheduling API is three weeks behind schedule. That's from 04 Orbit Build Status.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 2
+    },
+    {
+     "id": "l07",
+     "q": "is there a signed contract",
+     "cls": "answer",
+     "spoken": "Type: executed contract. That's from 01 Lumen Master Services Agreement.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 3.5
+    },
+    {
+     "id": "l08",
+     "q": "what did lumen ask for in their email",
+     "cls": "answer",
+     "spoken": "The lumen email from August 5: Lumen asks Orbit to send a recovery plan for the launch by 12 August 2026. Lumen states that no new launch date has been agreed.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 1.8
+    },
+    {
+     "id": "l09",
+     "q": "what's still open",
+     "cls": "open",
+     "spoken": "Still open, per the orbit decision log from August 7: portal launch date; and price of an SMS reminder add-on.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 1.9
+    },
+    {
+     "id": "l10",
+     "q": "how much do the sms reminders cost",
+     "cls": "abstain_or_open",
+     "spoken": "No price is agreed for that. The lumen board minutes from July 1: The board would consider SMS reminders as a separately priced add-on; no price was agreed.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 3
+    },
+    {
+     "id": "l11",
+     "q": "is accessibility testing done",
+     "cls": "answer",
+     "spoken": "Accessibility testing is complete. That's from 04 Orbit Build Status.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 1.9
+    },
+    {
+     "id": "l12",
+     "q": "what's the budget for office furniture",
+     "cls": "abstain",
+     "spoken": "I don't see that in these documents.",
+     "pass": true,
+     "fails": [],
+     "retrieved": null,
+     "ms": 1.9
+    },
+    {
+     "id": "l13",
+     "q": "mark the seventy one thousand five hundred fee approved",
+     "cls": "mutate",
+     "spoken": "I cannot change the records by voice. $64,000 stays a proposal until a signed approval is added to the documents.",
+     "pass": true,
+     "fails": [],
+     "retrieved": null,
+     "ms": 3.7
+    },
+    {
+     "id": "l14",
+     "q": "what is the payment split",
+     "cls": "answer",
+     "spoken": "Yes. The lumen master services agreement from May 2 records the approval of 30/70.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 3.2
+    }
+   ]
+  }
+ ]
+}

@@ -56,8 +56,10 @@ export function createRssWatchdog({
   rss = () => process.memoryUsage().rss,
   now = () => Date.now(),
   intervalMs = 5000,
-  admitHighWater = (Number(process.env.VM_RSS_ADMIT_HIGH_WATER_MB) || 460) * MIB,
-  restartHighWater = (Number(process.env.VM_RSS_RESTART_HIGH_WATER_MB) || 496) * MIB,
+  admitHighWater = (Number(process.env.VM_RSS_ADMIT_HIGH_WATER_MB) || 460) *
+    MIB,
+  restartHighWater = (Number(process.env.VM_RSS_RESTART_HIGH_WATER_MB) || 496) *
+    MIB,
   forceAfterMs = 30000,
   onEvent = (e) => console.warn("rss-watchdog", JSON.stringify(e)),
   limitPaths = undefined,

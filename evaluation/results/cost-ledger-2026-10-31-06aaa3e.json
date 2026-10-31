@@ -1,0 +1,23 @@
+{
+ "sha": "06aaa3e",
+ "date": "2026-10-31T09:55:12.134Z",
+ "measured": {
+  "questions": 104,
+  "engineCpuMsPerAnswer": 4.93,
+  "meanSpokenWords": 17.8,
+  "rssMb": 148,
+  "note": "This machine, keyword retrieval (voice path), cache cold per request. Not the Render instance."
+ },
+ "published": {
+  "bolnaPayAsYouGoUsdPerMinute": 0.06,
+  "bolnaIncludes": "STT + LLM + TTS on bundled models; telephony and a per-minute platform fee are extra and not stated on the pricing page (bolna.ai/pricing, read 2026-10-31).",
+  "customLlmNote": "Voice Memory is a custom LLM endpoint: Bolna's docs bill a custom LLM by tokens generated; whether a self-hosted endpoint is billed is not stated."
+ },
+ "derived": {
+  "engineCpuSecondsPer1000Answers": 4.9,
+  "spokenSecondsPerAnswer": 7.1,
+  "voiceUsdPerAnswerLowerBound": 0.0071,
+  "voiceUsdPerTwoMinuteCallLowerBound": 0.12,
+  "note": "Lower bounds: billed minutes include listening and silence, plus telephony and platform fees not published. The engine itself makes no paid API calls. A real call's bill is the only verification; none has been made."
+ }
+}

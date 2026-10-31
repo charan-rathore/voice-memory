@@ -291,7 +291,7 @@ a { color: inherit; }
 [data-reveal] .chips li, [data-reveal] .files li, [data-reveal] .ledger > div,
 [data-reveal] .bubble, .cols[data-reveal] > div {
   opacity: 0; transform: translateY(14px);
-  transition: opacity 600ms var(--ease), transform 600ms var(--ease);
+  transition: opacity 600ms var(--ease), transform 700ms var(--ease-spring);
   transition-delay: calc(var(--i, 0) * 90ms);
 }
 [data-reveal] .chips li, [data-reveal] .files li, [data-reveal] .ledger > div, [data-reveal] .bubble { transition-delay: calc(250ms + var(--i, 0) * 110ms); }
@@ -335,3 +335,27 @@ a { color: inherit; }
   .hl { background-size: 100% 100%; }
   .strike::after { transform: scaleX(1); }
 }
+
+/* ---------------------------------------------------------------------
+   Motion from math (see motion.js). Two easings sampled into CSS linear():
+   --ease-c2      smootherstep 6t^5-15t^4+10t^3: zero velocity AND zero
+                  acceleration at both ends, so a highlighter stroke starts
+                  and lands without a visible jolt (C2 continuity).
+   --ease-spring  step response of a damped spring, zeta 0.78: rises fast,
+                  overshoots 2% and settles, the way a placed object does.
+   Browsers without linear() keep the original --ease. */
+:root { --ease-c2: var(--ease); --ease-spring: var(--ease); }
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --ease-c2: linear(0 0%, 0.0022 6.3%, 0.0161 12.5%, 0.0488 18.8%, 0.1035 25%, 0.18 31.3%, 0.2752 37.5%, 0.384 43.8%, 0.5 50%, 0.616 56.3%, 0.7248 62.5%, 0.82 68.8%, 0.8965 75%, 0.9512 81.3%, 0.9839 87.5%, 0.9978 93.8%, 1 100%);
+    --ease-spring: linear(0 0%, 0.0636 4.2%, 0.206 8.3%, 0.3744 12.5%, 0.5374 16.7%, 0.6787 20.8%, 0.792 25%, 0.877 29.2%, 0.9371 33.3%, 0.9768 37.5%, 1.0008 41.7%, 1.0137 45.8%, 1.0191 50%, 1.0198 54.2%, 1.0179 58.3%, 1.0148 62.5%, 1.0114 66.7%, 1.0083 70.8%, 1.0056 75%, 1.0035 79.2%, 1.002 83.3%, 1.001 87.5%, 1.0003 91.7%, 0.9999 95.8%, 1 100%);
+  }
+}
+.hl { transition-timing-function: var(--ease-c2); transition-duration: 720ms; }
+.strike::after { transition-timing-function: var(--ease-c2); }
+.ans { transition: opacity 360ms var(--ease), transform 520ms var(--ease-spring); }
+.mini-page tr.hit td { transition-timing-function: var(--ease-c2); }
+/* Procedural voice bars: JS drives heights through springs, so the CSS
+   loop is switched off once the script takes over. */
+.bars.js i { animation: none !important; transition: none; }
+.hero-note { margin: 16px 4px 0; font-size: 12.5px; color: var(--ink-3); }

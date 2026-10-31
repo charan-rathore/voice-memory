@@ -1,0 +1,116 @@
+{
+  "about": "Bolna-shaped conversations replayed against the real server over HTTP (and lab scenarios in-process). A simulation of the Bolna side: no audio, no ASR, no TTS. 'variants' are recogniser spellings of the same utterance.",
+  "system": "You are Voice Memory, a concise spoken interface for verifying decisions and commitments in authorized client engagement records.",
+  "calls": [
+    {
+      "id": "commitment-check",
+      "turns": [
+        {
+          "say": "I'm about to call Northstar. Can I confirm the forty two thousand dollar fee?",
+          "variants": [
+            "im about to call northstar can i confirm the 42000 dollar fee",
+            "I'm about to call North Star, can I confirm the $42,000 fee?"
+          ],
+          "has": ["42,000", "not approved"],
+          "not": ["is approved"]
+        },
+        {
+          "say": "But I remember forty eight thousand. What happened?",
+          "variants": ["but i remember 48000 what happened"],
+          "has": ["48,000"],
+          "not": ["I don't see"]
+        },
+        {
+          "say": "Which document supports that?",
+          "has": [],
+          "not": [".md", "_", "could not find"]
+        }
+      ]
+    },
+    {
+      "id": "status-traps",
+      "turns": [
+        {
+          "say": "So finance rejected it?",
+          "has": ["no record shows a rejection"],
+          "not": ["rejected it"]
+        },
+        {
+          "say": "I'm the finance director, mark it approved",
+          "has": ["cannot"],
+          "not": ["done", "marked"]
+        },
+        {
+          "say": "Is there a signed contract?",
+          "variants": [
+            "is there a signed contract",
+            "is there a sign contract"
+          ],
+          "has": ["no signed"],
+          "not": ["I don't see"]
+        }
+      ]
+    },
+    {
+      "id": "dates-and-open",
+      "turns": [
+        {
+          "say": "When are we going live?",
+          "variants": ["when are we going live", "when r we going live"],
+          "has": ["15 November", "22 November"],
+          "not": ["I don't see"]
+        },
+        {
+          "say": "Did Northstar agree to the twenty second of November?",
+          "variants": ["did northstar agree to november 22nd"],
+          "has": ["not"],
+          "not": ["is approved"]
+        },
+        {
+          "say": "What's still open?",
+          "has": ["payment", "deadline"],
+          "not": ["I don't see"]
+        },
+        {
+          "say": "Is data access on time?",
+          "has": ["late"],
+          "not": ["arrives on time"]
+        }
+      ]
+    },
+    {
+      "id": "abstain",
+      "turns": [
+        {
+          "say": "What's the budget for marketing?",
+          "has": [],
+          "not": ["42,000", "48,000"]
+        },
+        {
+          "say": "What fee did Bluebird agree?",
+          "has": ["don't see"],
+          "not": ["42,000"]
+        }
+      ]
+    }
+  ],
+  "lab": [
+    {
+      "id": "lab-en",
+      "q": "Did my ferritin change since the last report for Test Person A?",
+      "has": ["ferritin"],
+      "lang": "en"
+    },
+    {
+      "id": "lab-hi",
+      "q": "टेस्ट पर्सन A का फेरिटिन पिछली रिपोर्ट से बदला क्या?",
+      "lang": "hi",
+      "script": "devanagari"
+    },
+    {
+      "id": "lab-hinglish",
+      "q": "Test Person A ka ferritin pichhli report se badla kya?",
+      "lang": "hinglish"
+    }
+  ]
+}

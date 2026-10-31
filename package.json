@@ -4,22 +4,25 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "VM_RSS_WATCHDOG=off node --test test.mjs",
+    "test": "node --test test.mjs spoken-normalize.test.mjs voicelab-score.test.mjs retrieval-core.test.mjs memorable-json.test.mjs dense-guard.test.mjs",
     "start": "node server.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "test:boundaries": "VM_RSS_WATCHDOG=off node --test server.test.mjs voice-adapter.test.mjs synthesis.test.mjs provider.test.mjs retrieval-bridge.test.mjs",
-    "test:browser": "node browser-check.mjs",
-    "format:check": "prettier --check *.mjs *.ts *.json public/*",
-    "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:browser",
-    "test:evaluation": "VM_RSS_WATCHDOG=off node --test evaluation/*.test.mjs",
-    "test:ingest": "VM_RSS_WATCHDOG=off node --test --test-concurrency=1 ingest/*.test.mjs",
+    "test:boundaries": "node --test server.test.mjs voice-adapter.test.mjs synthesis.test.mjs provider.test.mjs retrieval-bridge.test.mjs fictional-sample.test.mjs cache.test.mjs motion.test.mjs persistence.test.mjs",
+    "test:browser": "node browser-check.mjs && node notes-check.mjs",
+    "format:check": "prettier --check *.mjs *.ts *.json public/* memory/* evaluation/vault/* vendor-tests/*",
+    "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:vault && npm run test:browser && npm run test:graph",
+    "test:evaluation": "node --test evaluation/*.test.mjs",
+    "test:ingest": "node --test --test-concurrency=1 ingest/*.test.mjs",
     "bench:ingest": "node ingest/bench.mjs",
     "fixtures:build": "node ingest/fixtures/build.mjs && python3 ingest/fixtures/degrade.py",
     "test:clinical": "VM_RSS_WATCHDOG=off node --test --test-concurrency=1 clinical/*.test.mjs",
     "bench:retrieval": "node evaluation/retrieval-bench.mjs",
     "fixtures:clinical": "node clinical/fixtures/build.mjs",
     "bench:hybrid": "node evaluation/retrieval-bench-hybrid.mjs",
-    "bench:answer": "node evaluation/answer-quality-bench.mjs"
+    "bench:answer": "node evaluation/answer-quality-bench.mjs",
+    "test:vault": "node evaluation/vault/run.mjs",
+    "eval:spoken": "node evaluation/spoken-eval.mjs",
+    "test:graph": "node graph-check.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "5.2.8",
@@ -32,7 +35,7 @@
     "fflate": "0.8.3",
     "pdfjs-dist": "4.10.38",
     "tesseract.js": "5.1.1",
-    "zod": "^4.6.7"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

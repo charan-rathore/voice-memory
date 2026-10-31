@@ -22,11 +22,15 @@ const terms = (s) =>
   (s.toLowerCase().match(/[a-z0-9][a-z0-9.\-/%<>]*/g) ?? [])
     .map((t) => t.replace(/[.\-/]+$/, ""))
     .filter((t) => t && !STOP.has(t))
-    .map((t) =>
-      t.length > 4
-        ? t.replace(/(ies|es|s)$/, (m) => (m === "ies" ? "y" : ""))
-        : t,
-    );
+    .map(stem);
+// Light, deterministic stemming so "approved" meets "approval" and "signing"
+// meets "signed". Numbers and short words are left alone.
+function stem(t) {
+  if (t.length <= 4 || /\d/.test(t)) return t;
+  t = t.replace(/(ies|es|s)$/, (m) => (m === "ies" ? "y" : ""));
+  if (t.length > 6) t = t.replace(/(ations?|ation|ing|ed|al)$/, "");
+  return t;
+}
 
 export const isQuestion = (q) =>
   /\?\s*$/.test(q) ||
@@ -52,6 +56,13 @@ function units(quote) {
       if (s.trim()) out.push({ text: s.trim(), row: false });
   }
   return out;
+}
+
+export function mainClause(text) {
+  return text.replace(
+    /[,;]?\s*\b(?:provided(?: that)?|if|unless|as long as|assuming|subject to|on condition that|only when)\b[^.;]*/gi,
+    "",
+  );
 }
 
 const cellsOf = (row) =>
@@ -125,7 +136,10 @@ export function extractiveSpoken(
   let best = null;
   for (const ev of result.evidence) {
     for (const u of units(ev.quote)) {
-      const ut = new Set(terms(u.text));
+      // Only the main clause asserts: "readiness is targeted for 22 November,
+      // provided data access arrives on time" says nothing about whether data
+      // access IS on time. Words inside a conditional clause do not count.
+      const ut = new Set(terms(mainClause(u.text)));
       let score = 0;
       for (const t of q) if (ut.has(t)) score++;
       // A table row is "about" its first cell: naming it is the strong signal.
