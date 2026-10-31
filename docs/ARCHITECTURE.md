@@ -106,6 +106,21 @@ keyword retrieval above 90% of the limit (`dense.mjs`, `/healthz`). The voice
 path answers from the claim graph and spoken routes first, so its correctness
 does not depend on the dense stage.
 
+Uploads sit behind a process-wide retained-content budget
+(`VM_GLOBAL_DOC_MB`, default 96 MB): every ready document retains both its
+original bytes and its parsed canonical document, and both count at
+serialized size. Pre-parse admission is only a heuristic - compressed
+formats can expand far beyond their raw bytes - so the budget is enforced
+again after parsing with actual sizes, and over-budget documents fail
+closed with their bytes freed. The budget covers library content, not
+whole-process RSS. Transient parse memory is serialized by single-parse
+concurrency (one local OCR parse measured about 276 MB, a single
+measurement rather than an RSS guarantee), parser-level expansion limits
+live in `ingest/errors.mjs` (inflated-XML bytes, compression ratio, page
+and canonical-text caps), the dense guard sheds the embedder near the
+container limit, and the parse cache is byte-capped
+(`VM_PARSE_CACHE_MB`, default 24 MB).
+
 ### ADR-5: Generalise the spoken layer at the root, measure on unseen corpora
 Spoken questions failed for notation and vocabulary reasons, not retrieval:
 number words, dropped "-ed", "go live", "retainer" instead of "fee", dates in

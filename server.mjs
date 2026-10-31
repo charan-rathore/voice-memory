@@ -47,6 +47,8 @@ import {
   libraryOf,
   locatorFor,
   LIMITS,
+  globalBytes,
+  parseCacheStats,
 } from "./library.mjs";
 // Static assets: explicit allow-list (no path joining from the URL).
 const STATIC = {
@@ -519,6 +521,10 @@ export function createLocalServer({
           ok: true,
           cache: { entries: answerCache.size, ...answerCache.stats },
           // Memory only: no documents, questions or identities.
+          documents: {
+            retainedBytes: globalBytes(),
+            parseCache: { ...parseCacheStats },
+          },
           memory: denseStatus().memory,
           dense: {
             ready: denseStatus().ready,

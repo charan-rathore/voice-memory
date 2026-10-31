@@ -164,6 +164,8 @@ npm start          # http://127.0.0.1:4317
 | `VM_PUBLIC_DEMO` | `1` enables an isolated synthetic demo at `/demo` (off by default) |
 | `VM_DENSE`, `VM_MEMORY_LIMIT_MB` | `off` disables the embedder; memory limit override for the guard |
 | `VM_PARSE_CONCURRENCY` | Parallel file parses (default 1) |
+| `VM_GLOBAL_DOC_MB` | Process-wide retained-document budget in MB (default 96): originals plus parsed canonical documents (serialized size, UTF-8) across all live sessions. Pre-parse admission is a heuristic; the budget is enforced again after parsing with actual sizes and over-budget documents fail with their bytes freed. Bounds library content only, not whole-process RSS |
+| `VM_PARSE_CACHE_MB` | Byte cap for the content-addressed parse cache (default 24), LRU-evicted by size and count (24) |
 
 ## Voice capability lifecycle
 
