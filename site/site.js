@@ -106,6 +106,71 @@
   if (!q) return;
 
   const wait = (ms) => new Promise((r) => setTimeout(r, reduce ? 0 : ms));
+
+  // --- human typing rhythm --------------------------------------------
+  // Keystroke intervals are roughly log-normal: mostly quick, occasionally
+  // slow. Seeded PRNG (mulberry32) so every visitor sees the same take;
+  // longer pauses after a word, longer still after a clause.
+  function rng(seed) {
+    return () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function keyDelay(rand, ch) {
+    const z = Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
+    const base = Math.exp(Math.log(42) + 0.35 * z); // median 42 ms
+    if (/[,?.!]/.test(ch)) return base + 160;
+    if (ch === " ") return base + 45;
+    return Math.min(base, 140);
+  }
+
+  // --- voice bars: speech-like, never a visible loop --------------------
+  // Each bar follows a target made of three sines at incommensurate
+  // frequencies (a quasi-periodic signal: it never exactly repeats), through
+  // its own damped spring (second-order dynamics), so motion has inertia.
+  const bars = [...document.querySelectorAll(".bars")].map((el) => ({
+    el,
+    items: [...el.querySelectorAll("i")].map((i, k) => ({ i, x: 4, v: 0, phase: k * 1.7 })),
+  }));
+  if (!reduce && bars.length && "requestAnimationFrame" in window) {
+    bars.forEach((b) => b.el.classList.add("js"));
+    let last = 0;
+    const omega = 2 * Math.PI * 5.5; // spring natural frequency (rad/s)
+    const zeta = 0.55;
+    const frame = (now) => {
+      const dt = last ? Math.min((now - last) / 1000, 0.05) : 1 / 60;
+      last = now;
+      const t = now / 1000;
+      for (const b of bars) {
+        const host = b.el.closest(".pill");
+        const st = host ? host.dataset.state : "speaking";
+        const amp = st === "speaking" ? 1 : st === "listening" ? 0.45 : 0.08;
+        for (const it of b.items) {
+          const s =
+            0.5 + 0.5 * (0.55 * Math.sin(t * 7.3 + it.phase) + 0.3 * Math.sin(t * 11.9 + it.phase * 2.1) + 0.15 * Math.sin(t * 2.3 + it.phase * 0.7));
+          const target = 4 + amp * 12 * Math.max(0, Math.min(1, s));
+          // Semi-implicit Euler in fixed 1/240 s substeps (frame-rate independent).
+          let left = dt;
+          while (left > 1e-6) {
+            const h = Math.min(1 / 240, left);
+            it.v += (-omega * omega * (it.x - target) - 2 * zeta * omega * it.v) * h;
+            it.x += it.v * h;
+            left -= h;
+          }
+          it.i.style.height = it.x.toFixed(2) + "px";
+        }
+      }
+      if (!document.hidden) requestAnimationFrame(frame);
+      else {
+        last = 0;
+        document.addEventListener("visibilitychange", () => requestAnimationFrame(frame), { once: true });
+      }
+    };
+    requestAnimationFrame(frame);
+  }
   let run = 0;
 
   function renderPaper(t) {
@@ -136,10 +201,11 @@
     renderPaper(t);
     q.textContent = "";
     q.classList.add("typing");
+    const rand = rng(t.q.length * 7919);
     for (const ch of t.q) {
       if (id !== run) return;
       q.textContent += ch;
-      await wait(ch === " " ? 55 : 38);
+      await wait(keyDelay(rand, ch));
     }
     q.classList.remove("typing");
     await wait(450);
