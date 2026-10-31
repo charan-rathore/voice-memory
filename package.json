@@ -22,7 +22,10 @@
     "bench:answer": "node evaluation/answer-quality-bench.mjs",
     "test:vault": "node evaluation/vault/run.mjs",
     "eval:spoken": "node evaluation/spoken-eval.mjs",
-    "test:graph": "node graph-check.mjs"
+    "test:graph": "node graph-check.mjs",
+    "verify:parallel": "node scripts/verify-parallel.mjs",
+    "verify:fast": "node scripts/verify-parallel.mjs --fast",
+    "hooks:install": "git config core.hooksPath .githooks && echo 'pre-push hook installed (.githooks/pre-push)'"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "5.2.8",

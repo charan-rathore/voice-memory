@@ -1,0 +1,4 @@
+#!/bin/sh
+# Verified-feedback gate: fast parallel checks before every push.
+# Install once per clone: npm run hooks:install
+exec node scripts/verify-parallel.mjs --fast

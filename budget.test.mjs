@@ -146,7 +146,9 @@ test("compressed DOCX expanding far beyond 2x raw is accounted at actual size", 
 
 test("over-budget expanded DOCX fails closed post-parse: not indexed, not cached", async () => {
   const { zipSync, strToU8 } = await import("fflate");
-  const para = "Post-parse enforcement probe text, repeated to expand. ".repeat(40);
+  const para = "Post-parse enforcement probe text, repeated to expand. ".repeat(
+    40,
+  );
   const paras = Array.from(
     { length: 40 },
     () => `<w:p><w:r><w:t>${para}</w:t></w:r></w:p>`,
@@ -193,7 +195,8 @@ test("over-budget expanded DOCX fails closed post-parse: not indexed, not cached
 test("concurrent uploads admitted on estimates are enforced post-parse with actual sizes", async () => {
   process.env.VM_GLOBAL_DOC_MB = "0.75"; // 768 KB
   const L = await import("./library.mjs?g=" + Date.now());
-  const a = {}, b = {};
+  const a = {},
+    b = {};
   const doc = (c) => Buffer.alloc(220 * 1024, c); // 220 KB, under the 250k-char limit
   // Both admitted synchronously: estimates are made before either parse runs.
   L.addUpload(a, doc(120), "a.txt", () => {});
@@ -217,7 +220,11 @@ test("concurrent uploads admitted on estimates are enforced post-parse with actu
   const entries = [ea, eb];
   const ready = entries.filter((e) => e.status === "ready");
   const failed = entries.filter((e) => e.status === "failed");
-  assert.equal(ready.length, 1, `exactly one commits: ${entries.map((e) => e.status)}`);
+  assert.equal(
+    ready.length,
+    1,
+    `exactly one commits: ${entries.map((e) => e.status)}`,
+  );
   assert.equal(failed.length, 1);
   assert.equal(failed[0].error.code, "budget_exceeded");
   assert.equal(failed[0].original, null, "freed original bytes");
