@@ -284,6 +284,33 @@ export function createLocalServer({
     }
   }
   const signinFails = new Map();
+  // Public synthetic demo (VM_PUBLIC_DEMO=1, off by default): /demo on the
+  // public host opens an isolated session preloaded with the fictional
+  // Northstar documents. Demo sessions can ask, map, cite and draft; they
+  // cannot upload, import, reset, start a (paid) voice call, or reach any
+  // owner session. They are evicted among themselves only, and rate-limited.
+  const publicDemo = process.env.VM_PUBLIC_DEMO === "1";
+  const DEMO_ALLOWED = new Set([
+    "GET /api/session",
+    "GET /api/library",
+    "GET /api/graph",
+    "GET /api/memory",
+    "GET /api/demo-corpus",
+    "POST /api/query",
+    "POST /api/draft",
+    "POST /api/memory/forget",
+  ]);
+  const demoHits = new Map(); // ip -> { n, windowStart }
+  const demoRateOk = (ip) => {
+    const now = Date.now();
+    const r = demoHits.get(ip) ?? { n: 0, windowStart: now };
+    if (now - r.windowStart > 60000)
+      Object.assign(r, { n: 0, windowStart: now });
+    r.n++;
+    demoHits.set(ip, r);
+    if (demoHits.size > 5000) demoHits.delete(demoHits.keys().next().value);
+    return r.n <= 40;
+  };
   // Process-wide answer cache (keys are scoped per index build; see cache.mjs).
   const answerCache = createAnswerCache({
     max: Number(process.env.VM_CACHE_MAX || 1000),
@@ -309,11 +336,17 @@ export function createLocalServer({
       }
   });
   const origin = `http://127.0.0.1:${port}`;
-  function session(req, res, { create = true, secure = false } = {}) {
-    let id = (req.headers.cookie || "")
-      .split("; ")
-      .find((c) => c.startsWith("vm="))
-      ?.slice(3);
+  function session(
+    req,
+    res,
+    { create = true, secure = false, fresh = false } = {},
+  ) {
+    let id = fresh
+      ? null
+      : (req.headers.cookie || "")
+          .split("; ")
+          .find((c) => c.startsWith("vm="))
+          ?.slice(3);
     if ((!id || !sessions.has(id)) && !create) return null;
     if (!id || !sessions.has(id)) {
       id = randomBytes(32).toString("hex");
@@ -332,6 +365,15 @@ export function createLocalServer({
     // workspace is the owner's. On a public host only /owner-signin restores.
     if (store && !publicHost && !sessions.get(id).persistNs)
       restoreOwner(sessions.get(id));
+    // Demo visitors are evicted among themselves (never an owner session).
+    const demos = [...sessions.values()].filter((x) => x.demo);
+    if (demos.length > 40) {
+      const old = demos[0];
+      if (old.sid !== id) {
+        releaseVoice(old);
+        sessions.delete(old.sid);
+      }
+    }
     if (sessions.size > 50) {
       const oldest = sessions.keys().next().value;
       if (oldest !== id) {
@@ -477,6 +519,15 @@ export function createLocalServer({
         res.end(SIGNIN_PAGE);
         return;
       }
+      if (publicDemo && req.method === "GET" && reqUrl.pathname === "/demo") {
+        s = session(req, res, { create: true, secure: true, fresh: true });
+        s.demo = true;
+        replaceWithText(s, NORTHSTAR_DOCS);
+        rebuildIndex(s);
+        res.writeHead(302, { Location: "/" });
+        res.end();
+        return;
+      }
       if (req.method === "POST" && reqUrl.pathname === "/owner-signin") {
         const ip = req.socket.remoteAddress ?? "unknown";
         const rec = signinFails.get(ip) ?? { fails: 0, lockedUntil: 0 };
@@ -513,6 +564,26 @@ export function createLocalServer({
         res.writeHead(403);
         res.end(JSON.stringify({ error: "Owner access required." }));
         return;
+      }
+      if (s?.demo && !(req.method === "GET" && STATIC[req.url])) {
+        const route = `${req.method} ${new URL(req.url, origin).pathname}`;
+        const lib = /^GET \/api\/library\/[\w-]+(\/original)?$/.test(route);
+        if (!DEMO_ALLOWED.has(route) && !lib) {
+          res.writeHead(403);
+          res.end(
+            JSON.stringify({ error: "Not available in the public demo." }),
+          );
+          return;
+        }
+        if (!demoRateOk(req.socket.remoteAddress ?? "unknown")) {
+          res.writeHead(429);
+          res.end(
+            JSON.stringify({
+              error: "Too many questions; try again in a minute.",
+            }),
+          );
+          return;
+        }
       }
     } else {
       s = session(req, res);

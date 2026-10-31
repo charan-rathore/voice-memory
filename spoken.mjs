@@ -801,6 +801,24 @@ function valueVerdict(question, field, fieldClaims, resolved, intent) {
   return null;
 }
 
+const MOD_GENERIC = new Set(
+  "the a an our my your their this that which what final finally current latest new old original earlier previous revised agreed proposed approved signed total monthly weekly fixed engagement pilot project overall actual real exact first second last full whole same other client's client".split(
+    " ",
+  ),
+);
+function unknownModifier(question, bundle) {
+  const m =
+    /\b([a-z][a-z-]{3,})\s+(fee|retainer|budget|price|deadline|split|contract|agreement)\b/i.exec(
+      question,
+    );
+  if (!m || MOD_GENERIC.has(m[1].toLowerCase())) return null;
+  const corpus = bundle.sources.map((s) => s.text.toLowerCase()).join("\n");
+  const stem = m[1].toLowerCase().replace(/(ing|ed|s)$/, "");
+  return corpus.includes(stem)
+    ? null
+    : `${m[1].toLowerCase()} ${m[2].toLowerCase()}`;
+}
+
 export function spokenTurn(rawQuestion, bundle, prevField = null) {
   if (!bundle?.sources?.length) return null;
   // Speech notation -> document notation (numbers, ordinals, fillers).
@@ -851,6 +869,18 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   if (unknownNamedEntity(question, bundle))
     return {
       spoken: "I don't see that in these documents.",
+      verdict: "UNKNOWN",
+      field: null,
+      intent,
+      citations: [],
+    };
+  // A modifier on a field noun that the documents never use ("the private
+  // retainer", "the marketing budget") names something the records do not
+  // contain: abstain instead of answering with the engagement's own figure.
+  const unknownMod = unknownModifier(question, bundle);
+  if (unknownMod && intent !== "MUTATE")
+    return {
+      spoken: `I don't see a ${unknownMod} in these documents.`,
       verdict: "UNKNOWN",
       field: null,
       intent,

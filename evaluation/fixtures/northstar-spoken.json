@@ -1,28 +1,327 @@
 {
-  "corpus": "northstar",
-  "note": "Development set: spoken-style phrasings probed on 2026-10-31 before the 2.0 fixes. Used while fixing, so it is NOT held-out.",
-  "cases": [
-    {"id":"n01","q":"what fee did we finally agree on","cls":"open","has":["42,000","not approved"],"not":["is approved"],"docs":["03","04"]},
-    {"id":"n02","q":"um so is the forty two thousand dollar fee locked in","cls":"open","has":["42,000","not"],"not":["is approved"],"docs":["03"]},
-    {"id":"n03","q":"did they approve forty two thousand","cls":"negative","has":["42,000","not"],"not":["I don't see","is approved"],"docs":["03","07"]},
-    {"id":"n04","q":"was it forty eight thousand before","cls":"answer","has":["48,000"],"not":["I don't see"],"docs":["01"]},
-    {"id":"n05","q":"whats the deadline for the pilot","cls":"open","has":["15 November","22 November"],"not":[],"docs":["01","05","06"]},
-    {"id":"n06","q":"when are we going live","cls":"open","has":["15 November","22 November"],"not":["I don't see"],"docs":["01","05"]},
-    {"id":"n07","q":"did northstar agree to the 22 november date","cls":"negative","has":["not"],"not":["is approved"],"docs":["05","06"]},
-    {"id":"n08","q":"has the client signed anything","cls":"negative","has":["no signed"],"not":["I don't see"],"docs":["07"]},
-    {"id":"n09","q":"is there a signed contract","cls":"negative","has":["no signed"],"not":["I don't see"],"docs":["07"]},
-    {"id":"n10","q":"how many regions are we covering","cls":"answer","has":["two regions"],"not":[],"docs":["07"]},
-    {"id":"n11","q":"is the 50 50 split agreed","cls":"open","has":["40/60","50/50"],"not":["is approved"],"docs":["03","04"]},
-    {"id":"n12","q":"who needs to sign off","cls":"answer","has":["finance"],"not":["is the current proposal"],"docs":["03"]},
-    {"id":"n13","q":"when will finance sign off","cls":"abstain","has":["no timing"],"not":[],"docs":["03"]},
-    {"id":"n14","q":"what's the budget for marketing","cls":"abstain","has":[],"not":["42,000","48,000"],"docs":[]},
-    {"id":"n15","q":"did finance reject the revised fee","cls":"negative","has":["no record shows a rejection"],"not":[],"docs":["02"]},
-    {"id":"n16","q":"is production launch approved","cls":"negative","has":["not recorded"],"not":[],"docs":["07"]},
-    {"id":"n17","q":"what did the client ask for in their email","cls":"answer","has":["15 November"],"not":["I don't see"],"docs":["06"]},
-    {"id":"n18","q":"why did the fee go down","cls":"answer","has":["narrow"],"not":[],"docs":["02","03"]},
-    {"id":"n19","q":"can I tell the client the fee is final","cls":"open","has":["not"],"not":["is approved"],"docs":["03"]},
-    {"id":"n20","q":"what's still open","cls":"open","has":["payment","deadline"],"not":["I don't see"],"docs":["07"]},
-    {"id":"n21","q":"is data access on time","cls":"answer","has":["late"],"not":["arrives on time"],"docs":["05"]},
-    {"id":"n22","q":"is there a signed agreement for the revised terms","cls":"negative","has":["no signed"],"not":[],"docs":["07"]}
-  ]
+ "corpus": "northstar",
+ "note": "Development set: spoken-style phrasings probed on 2026-10-31 before the 2.0 fixes. Used while fixing, so it is NOT held-out.",
+ "cases": [
+  {
+   "id": "n01",
+   "q": "what fee did we finally agree on",
+   "cls": "open",
+   "has": [
+    "42,000",
+    "not approved"
+   ],
+   "not": [
+    "is approved"
+   ],
+   "docs": [
+    "03",
+    "04"
+   ]
+  },
+  {
+   "id": "n02",
+   "q": "um so is the forty two thousand dollar fee locked in",
+   "cls": "open",
+   "has": [
+    "42,000",
+    "not"
+   ],
+   "not": [
+    "is approved"
+   ],
+   "docs": [
+    "03"
+   ]
+  },
+  {
+   "id": "n03",
+   "q": "did they approve forty two thousand",
+   "cls": "negative",
+   "has": [
+    "42,000",
+    "not"
+   ],
+   "not": [
+    "I don't see",
+    "is approved"
+   ],
+   "docs": [
+    "03",
+    "07"
+   ]
+  },
+  {
+   "id": "n04",
+   "q": "was it forty eight thousand before",
+   "cls": "answer",
+   "has": [
+    "48,000"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "01"
+   ]
+  },
+  {
+   "id": "n05",
+   "q": "whats the deadline for the pilot",
+   "cls": "open",
+   "has": [
+    "15 November",
+    "22 November"
+   ],
+   "not": [],
+   "docs": [
+    "01",
+    "05",
+    "06"
+   ]
+  },
+  {
+   "id": "n06",
+   "q": "when are we going live",
+   "cls": "open",
+   "has": [
+    "15 November",
+    "22 November"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "01",
+    "05"
+   ]
+  },
+  {
+   "id": "n07",
+   "q": "did northstar agree to the 22 november date",
+   "cls": "negative",
+   "has": [
+    "not"
+   ],
+   "not": [
+    "is approved"
+   ],
+   "docs": [
+    "05",
+    "06"
+   ]
+  },
+  {
+   "id": "n08",
+   "q": "has the client signed anything",
+   "cls": "negative",
+   "has": [
+    "no signed"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "07"
+   ]
+  },
+  {
+   "id": "n09",
+   "q": "is there a signed contract",
+   "cls": "negative",
+   "has": [
+    "no signed"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "07"
+   ]
+  },
+  {
+   "id": "n10",
+   "q": "how many regions are we covering",
+   "cls": "answer",
+   "has": [
+    "two regions"
+   ],
+   "not": [],
+   "docs": [
+    "07"
+   ]
+  },
+  {
+   "id": "n11",
+   "q": "is the 50 50 split agreed",
+   "cls": "open",
+   "has": [
+    "40/60",
+    "50/50"
+   ],
+   "not": [
+    "is approved"
+   ],
+   "docs": [
+    "03",
+    "04"
+   ]
+  },
+  {
+   "id": "n12",
+   "q": "who needs to sign off",
+   "cls": "answer",
+   "has": [
+    "finance"
+   ],
+   "not": [
+    "is the current proposal"
+   ],
+   "docs": [
+    "03"
+   ]
+  },
+  {
+   "id": "n13",
+   "q": "when will finance sign off",
+   "cls": "abstain",
+   "has": [
+    "no timing"
+   ],
+   "not": [],
+   "docs": [
+    "03"
+   ]
+  },
+  {
+   "id": "n14",
+   "q": "what's the budget for marketing",
+   "cls": "abstain",
+   "has": [],
+   "not": [
+    "42,000",
+    "48,000"
+   ],
+   "docs": []
+  },
+  {
+   "id": "n15",
+   "q": "did finance reject the revised fee",
+   "cls": "negative",
+   "has": [
+    "no record shows a rejection"
+   ],
+   "not": [],
+   "docs": [
+    "02"
+   ]
+  },
+  {
+   "id": "n16",
+   "q": "is production launch approved",
+   "cls": "negative",
+   "has": [
+    "not recorded"
+   ],
+   "not": [],
+   "docs": [
+    "07"
+   ]
+  },
+  {
+   "id": "n17",
+   "q": "what did the client ask for in their email",
+   "cls": "answer",
+   "has": [
+    "15 November"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "06"
+   ]
+  },
+  {
+   "id": "n18",
+   "q": "why did the fee go down",
+   "cls": "answer",
+   "has": [
+    "narrow"
+   ],
+   "not": [],
+   "docs": [
+    "02",
+    "03"
+   ]
+  },
+  {
+   "id": "n19",
+   "q": "can I tell the client the fee is final",
+   "cls": "open",
+   "has": [
+    "not"
+   ],
+   "not": [
+    "is approved"
+   ],
+   "docs": [
+    "03"
+   ]
+  },
+  {
+   "id": "n20",
+   "q": "what's still open",
+   "cls": "open",
+   "has": [
+    "payment",
+    "deadline"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "07"
+   ]
+  },
+  {
+   "id": "n21",
+   "q": "is data access on time",
+   "cls": "answer",
+   "has": [
+    "late"
+   ],
+   "not": [
+    "arrives on time"
+   ],
+   "docs": [
+    "05"
+   ]
+  },
+  {
+   "id": "n22",
+   "q": "is there a signed agreement for the revised terms",
+   "cls": "negative",
+   "has": [
+    "no signed"
+   ],
+   "not": [],
+   "docs": [
+    "07"
+   ]
+  },
+  {
+   "id": "n23",
+   "q": "what is the private retainer",
+   "cls": "abstain",
+   "has": [
+    "don't see"
+   ],
+   "not": [
+    "42,000",
+    "48,000"
+   ],
+   "docs": [],
+   "added": "2026-10-31 after the public-demo test exposed a wrong-subject answer"
+  }
+ ]
 }
