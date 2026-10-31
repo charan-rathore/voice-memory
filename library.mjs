@@ -7,13 +7,38 @@
 // Storage is in-memory and session-scoped (deleted on session expiry, reset
 // or explicit removal). This is a demo-grade store: NOT appropriate for real
 // personal or medical records. See docs/ARCHITECTURE.md for the durable design.
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { ingestFile, locate, LIMITS } from "./ingest/index.mjs";
 import { buildTextDocument } from "./ingest/canonical.mjs";
 import { safeFilename } from "./ingest/detect.mjs";
 
 export const MAX_LIBRARY_DOCS = 10;
 export const MAX_SESSION_BYTES = 40 * 1024 * 1024;
+// Process-wide admission budget (audit P0): per-session caps alone allowed
+// 50 sessions x 40 MB = 2 GB of originals on a 512 MB host. Uploads are
+// refused once all live libraries together hold this much.
+export const MAX_GLOBAL_BYTES =
+  Number(process.env.VM_GLOBAL_DOC_MB || 96) * 1024 * 1024;
+const libraries = new Set(); // WeakRef<library array>
+export function globalBytes() {
+  let n = 0;
+  for (const ref of libraries) {
+    const lib = ref.deref();
+    if (!lib) {
+      libraries.delete(ref);
+      continue;
+    }
+    for (const e of lib) n += e.original?.length ?? 0;
+  }
+  return n;
+}
+// Content-addressed parse reuse: the same bytes are never parsed or OCR'd
+// twice (key = SHA-256 of the bytes + pipeline version). Each session still
+// has to upload the bytes itself, so reuse never grants access to anything.
+const PARSE_CACHE_MAX = 24;
+const parseCache = new Map();
+export const parseCacheStats = { hits: 0, misses: 0 };
+const PIPELINE = "vm-ingest/1";
 // Measured peak RSS while OCR'ing a scan: ~276 MB (worker + tesseract).
 // One parse at a time fits a 512 MB host; raise on bigger machines.
 const MAX_PARALLEL_PARSES = Math.max(
@@ -37,7 +62,13 @@ function freeSlot() {
   waiting.shift()?.();
 }
 
-export const libraryOf = (s) => (s.library ??= []);
+export const libraryOf = (s) => {
+  if (!s.library) {
+    s.library = [];
+    libraries.add(new WeakRef(s.library));
+  }
+  return s.library;
+};
 
 const TERMINAL = new Set(["ready", "needs_review", "failed"]);
 
@@ -134,6 +165,14 @@ export function addUpload(s, bytes, filename, rebuild) {
     err.status = 413;
     throw err;
   }
+  const global = globalBytes();
+  if (global + bytes.length > MAX_GLOBAL_BYTES) {
+    const err = Error(
+      "The server is holding as many documents as it safely can right now. Try again shortly, or remove a document.",
+    );
+    err.status = 503;
+    throw err;
+  }
   const entry = {
     id: randomUUID(),
     filename: name,
@@ -161,7 +200,33 @@ export function addUpload(s, bytes, filename, rebuild) {
     await slot();
     try {
       if (!lib.includes(entry)) return; // removed while queued
-      const r = await ingestFile(bytes, name, { onStage: set });
+      const key =
+        // The declared type is part of validation ("named .pdf but it's a
+        // PNG" must still be refused), so the extension is in the key.
+        PIPELINE +
+        ":" +
+        (/\.([a-z0-9]{1,8})$/i.exec(name)?.[1].toLowerCase() ?? "") +
+        ":" +
+        createHash("sha256").update(bytes).digest("hex");
+      let r;
+      const hit = parseCache.get(key);
+      if (hit) {
+        parseCacheStats.hits++;
+        parseCache.delete(key);
+        parseCache.set(key, hit);
+        set("validating");
+        set("parsing");
+        r = structuredClone(hit);
+        if (r.doc) r.doc.filename = name;
+      } else {
+        parseCacheStats.misses++;
+        r = await ingestFile(bytes, name, { onStage: set });
+        if (r.ok) {
+          parseCache.set(key, structuredClone(r));
+          while (parseCache.size > PARSE_CACHE_MAX)
+            parseCache.delete(parseCache.keys().next().value);
+        }
+      }
       if (!lib.includes(entry)) return; // removed while parsing
       if (!r.ok) {
         entry.error = { code: r.code, stage: r.stage, message: r.message };
