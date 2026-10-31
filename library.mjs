@@ -17,9 +17,41 @@ export const MAX_SESSION_BYTES = 40 * 1024 * 1024;
 // Process-wide admission budget (audit P0): per-session caps alone allowed
 // 50 sessions x 40 MB = 2 GB of originals on a 512 MB host. Uploads are
 // refused once all live libraries together hold this much.
+//
+// This bounds RETAINED LIBRARY CONTENT, not whole-process RSS: a ready
+// document holds both its original bytes (provenance/download) and its
+// parsed canonical document, so globalBytes() counts both. Embeddings, the
+// parse cache (byte-capped below), and transient parse/OCR memory are
+// bounded separately (dense RSS shed guard, single-parse concurrency,
+// parser limits in ingest/errors.mjs).
 export const MAX_GLOBAL_BYTES =
   Number(process.env.VM_GLOBAL_DOC_MB || 96) * 1024 * 1024;
 const libraries = new Set(); // WeakRef<library array>
+
+// Serialized-size estimator for retained JS structures. Counts every string
+// as its UTF-8 bytes plus a per-value overhead, so duplicated text inside
+// the canonical document (blocks, sections) is charged for, not just the
+// top-level text field. An estimate, not a heap measurement: object headers
+// and V8 internals are approximated by the constants.
+function deepBytes(v, depth = 0) {
+  if (v == null) return 4;
+  if (typeof v === "string") return 16 + Buffer.byteLength(v, "utf8");
+  if (typeof v === "number") return 8;
+  if (typeof v === "boolean") return 4;
+  if (depth > 24) return 64;
+  if (Array.isArray(v))
+    return 64 + v.reduce((n, x) => n + deepBytes(x, depth + 1), 0);
+  if (typeof v === "object") {
+    let n = 64;
+    for (const k of Object.keys(v))
+      n += 16 + Buffer.byteLength(k, "utf8") + deepBytes(v[k], depth + 1);
+    return n;
+  }
+  return 8;
+}
+function retainedBytes(e) {
+  return (e.original?.length ?? 0) + (e.doc ? deepBytes(e.doc) : 0);
+}
 export function globalBytes() {
   let n = 0;
   for (const ref of libraries) {
@@ -28,7 +60,7 @@ export function globalBytes() {
       libraries.delete(ref);
       continue;
     }
-    for (const e of lib) n += e.original?.length ?? 0;
+    for (const e of lib) n += retainedBytes(e);
   }
   return n;
 }
@@ -36,8 +68,25 @@ export function globalBytes() {
 // twice (key = SHA-256 of the bytes + pipeline version). Each session still
 // has to upload the bytes itself, so reuse never grants access to anything.
 const PARSE_CACHE_MAX = 24;
-const parseCache = new Map();
-export const parseCacheStats = { hits: 0, misses: 0 };
+// Byte bound as well as a count bound: cached parse results are dominated
+// by their canonical text, and 24 large texts would otherwise sit outside
+// every budget (audit: cache was counted nowhere).
+const PARSE_CACHE_MAX_BYTES =
+  Number(process.env.VM_PARSE_CACHE_MB || 24) * 1024 * 1024;
+const parseCache = new Map(); // key -> { value, size }
+export const parseCacheStats = { hits: 0, misses: 0, bytes: 0, evictions: 0 };
+function parseCacheTrim() {
+  while (
+    parseCache.size > 0 &&
+    (parseCache.size > PARSE_CACHE_MAX ||
+      parseCacheStats.bytes > PARSE_CACHE_MAX_BYTES)
+  ) {
+    const oldest = parseCache.keys().next().value;
+    parseCacheStats.bytes -= parseCache.get(oldest).size;
+    parseCache.delete(oldest);
+    parseCacheStats.evictions++;
+  }
+}
 const PIPELINE = "vm-ingest/1";
 // Measured peak RSS while OCR'ing a scan: ~276 MB (worker + tesseract).
 // One parse at a time fits a 512 MB host; raise on bigger machines.
@@ -165,8 +214,11 @@ export function addUpload(s, bytes, filename, rebuild) {
     err.status = 413;
     throw err;
   }
+  // Cheap pre-parse heuristic ONLY: compressed formats (DOCX/PDF) can
+  // expand far beyond 2x raw, so this admits optimistically and the REAL
+  // budget check runs post-parse with actual sizes (see below).
   const global = globalBytes();
-  if (global + bytes.length > MAX_GLOBAL_BYTES) {
+  if (global + 2 * bytes.length > MAX_GLOBAL_BYTES) {
     const err = Error(
       "The server is holding as many documents as it safely can right now. Try again shortly, or remove a document.",
     );
@@ -200,7 +252,7 @@ export function addUpload(s, bytes, filename, rebuild) {
     await slot();
     try {
       if (!lib.includes(entry)) return; // removed while queued
-      const key =
+      const cacheKey =
         // The declared type is part of validation ("named .pdf but it's a
         // PNG" must still be refused), so the extension is in the key.
         PIPELINE +
@@ -209,23 +261,20 @@ export function addUpload(s, bytes, filename, rebuild) {
         ":" +
         createHash("sha256").update(bytes).digest("hex");
       let r;
-      const hit = parseCache.get(key);
+      let cacheable = false;
+      const hit = parseCache.get(cacheKey);
       if (hit) {
         parseCacheStats.hits++;
-        parseCache.delete(key);
-        parseCache.set(key, hit);
+        parseCache.delete(cacheKey);
+        parseCache.set(cacheKey, hit); // LRU refresh; size/bytes unchanged
         set("validating");
         set("parsing");
-        r = structuredClone(hit);
+        r = structuredClone(hit.value);
         if (r.doc) r.doc.filename = name;
       } else {
         parseCacheStats.misses++;
         r = await ingestFile(bytes, name, { onStage: set });
-        if (r.ok) {
-          parseCache.set(key, structuredClone(r));
-          while (parseCache.size > PARSE_CACHE_MAX)
-            parseCache.delete(parseCache.keys().next().value);
-        }
+        cacheable = true;
       }
       if (!lib.includes(entry)) return; // removed while parsing
       if (!r.ok) {
@@ -233,6 +282,34 @@ export function addUpload(s, bytes, filename, rebuild) {
         entry.original = null; // nothing derived; do not keep unreadable bytes
         set("failed");
         return;
+      }
+      // The real budget check, with actual sizes: the pre-parse 2x estimate
+      // cannot see expansion of compressed formats, and concurrent uploads
+      // are admitted on estimates made before either parse finished.
+      // globalBytes() already counts this entry's original bytes.
+      if (globalBytes() + deepBytes(r.doc) > MAX_GLOBAL_BYTES) {
+        entry.error = {
+          code: "budget_exceeded",
+          stage: "indexing",
+          message:
+            "The server is holding as many documents as it safely can right now. Try again shortly, or remove a document.",
+        };
+        entry.original = null; // free the bytes; nothing is indexed
+        entry.doc = null;
+        set("failed");
+        return; // rejected results are NOT cached: fail closed before any commit
+      }
+      if (cacheable && r.ok) {
+        // Cache commit only after the document was accepted (miss path
+        // only; a hit is already cached). Size of the
+        // WHOLE cached result (document + review + metadata), including
+        // text duplicated inside the structure.
+        const size = deepBytes(r);
+        if (size <= PARSE_CACHE_MAX_BYTES) {
+          parseCache.set(cacheKey, { value: structuredClone(r), size });
+          parseCacheStats.bytes += size;
+          parseCacheTrim();
+        }
       }
       entry.doc = r.doc;
       entry.kind = r.doc.kind;
