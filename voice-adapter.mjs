@@ -11,6 +11,11 @@ import {
   draft,
   validateEvidence,
 } from "./dist/engine.mjs";
+import {
+  DENSE_MODEL_ID,
+  denseAvailableFor,
+  embedQueryReady,
+} from "./dense.mjs";
 import { spokenTurn, historyField } from "./spoken.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import { clinicalTurn, observationEvidence } from "./clinical/answer.mjs";
@@ -318,7 +323,11 @@ export function createVoiceAdapter({
                 embeddingModel: retrieval.embeddingModel,
               },
             )
-          : answer(last.content, grant.bundle);
+          : answer(last.content, grant.bundle, {
+              queryVector: await embedQueryReady(last.content),
+              model: DENSE_MODEL_ID,
+              available: denseAvailableFor(grant.bundle),
+            });
         if (
           !result ||
           typeof result.refused !== "boolean" ||
