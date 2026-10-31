@@ -989,15 +989,18 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   // instead of forcing one figure).
   if (field === "fee") {
     const dm =
-      /\b([a-z][a-z-]{3,})\s+(?:fees?|retainer|price|rate)\b/i.exec(
-        question,
-      ) ?? /\b(retainer)\b/i.exec(question);
+      /\b([a-z][a-z-]{3,})\s+(?:fees?|retainer|price|rate)\b/i.exec(question) ??
+      /\b(retainer)\b/i.exec(question);
     const desc = dm?.[1]?.toLowerCase();
     if (desc) {
       const hit = fieldClaims.filter((c) =>
         new RegExp(`\\b${desc}\\b`, "i").test(c.quote ?? ""),
       );
-      if (hit.length) fieldClaims = hit;
+      // Narrow only when the descriptor picks ONE value. A descriptor that
+      // spans figures the unfiltered graph resolves by supersession (the
+      // revised engagement fee) must not be flattened into a false conflict.
+      if (hit.length && new Set(hit.map((c) => c.value)).size === 1)
+        fieldClaims = hit;
     }
   }
   // Subject binding: "how much is the Dock E training change?" names a
