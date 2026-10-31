@@ -322,3 +322,73 @@ test("an expired grant never blocks rebinding the same capability", () => {
   a.bind(b(), u);
   assert.throws(() => a.bind(b(), u), /already in use/);
 });
+
+test("Bolna content parts and a trailing empty assistant still reach the engine", async () => {
+  const { NORTHSTAR_DOCS } = await import("./corpus-northstar.mjs");
+  const a = createVoiceAdapter();
+  const t = a.bind(importBundle(NORTHSTAR_DOCS));
+  const parts = await a.handle(
+    new Request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: { authorization: "Bearer " + t },
+      body: JSON.stringify({
+        model: "voice-memory-local",
+        stream: true,
+        stream_options: { include_usage: true },
+        stop: ["User:"],
+        messages: [
+          { role: "system", content: "Answer only from the documents." },
+          {
+            role: "user",
+            content: [{ type: "text", text: "What is the engagement fee?" }],
+          },
+          { role: "assistant", content: "" },
+        ],
+      }),
+    }),
+  );
+  assert.equal(parts.status, 200);
+  assert.match(parts.headers.get("content-type") ?? "", /text\/event-stream/);
+  assert.match(await parts.text(), /\$42,000/);
+});
+
+test("a non-streaming side request does not supersede the spoken turn", async () => {
+  const pending = [];
+  const adapter = createVoiceAdapter({
+    retrieval: {
+      actualMode: "keyword",
+      embeddingModel: null,
+      retrieve: async (_q, bundle) =>
+        new Promise((resolve) =>
+          pending.push(() =>
+            resolve({
+              actualMode: "keyword",
+              corpusId: bundle.scope,
+              corpusScope: "corpus",
+              evidence: "insufficient",
+              chunks: [],
+            }),
+          ),
+        ),
+    },
+  });
+  const token = adapter.bind(b());
+  const spoken = adapter.handle(request(token, "security review"));
+  await new Promise((r) => setImmediate(r));
+  const side = adapter.handle(
+    request(token, "Is this call complete? Reply as JSON.", {
+      stream: false,
+      response_format: { type: "json_object" },
+    }),
+  );
+  await new Promise((r) => setImmediate(r));
+  // The classifier must not enter the evidence engine or bump the turn.
+  assert.equal(pending.length, 1);
+  const sideRes = await side;
+  assert.equal(sideRes.status, 200);
+  const sideJson = await sideRes.json();
+  assert.equal(sideJson.object, "chat.completion");
+  assert.equal(typeof sideJson.choices?.[0]?.message?.content, "string");
+  pending[0]();
+  assert.equal((await spoken).status, 200);
+});

@@ -259,12 +259,12 @@ export function createVoiceAdapter({
           { status: admitted.status },
         );
       const grant = admitted.grant;
-      const sequence = ++grant.sequence;
-      // Voice lab: wall-clock receipt of this turn, for stage latency.
+      // Parse before taking a turn number. A rejected or side request must
+      // not mark the spoken question as superseded.
       const receivedAt = Date.now();
       const logTurn = (entry) => {
         grant.turnLog ??= [];
-        grant.turnLog.push({ seq: sequence, receivedAt, ...entry });
+        grant.turnLog.push({ seq: grant.sequence, receivedAt, ...entry });
         if (grant.turnLog.length > 50) grant.turnLog.shift();
       };
       let data;
@@ -291,41 +291,60 @@ export function createVoiceAdapter({
           { status: 401 },
         );
       }
-      const last = data.messages.at(-1);
-      if (
-        data.stream !== true ||
-        last?.role !== "user" ||
-        typeof last.content !== "string" ||
-        !last.content.trim() ||
-        last.content.length > 4000
-      )
+      const askedRaw = latestUser(data.messages);
+      if (!askedRaw) {
+        return Response.json(
+          {
+            error: "A request with a user message is required",
+          },
+          { status: 400 },
+        );
+      }
+      // Classifier / hangup checks (Bolna sets response_format json_object,
+      // often with stream false). They share this endpoint. Answering them
+      // from the evidence engine, or letting them take the turn number,
+      // drops the caller's real question and returns JSON to a stream.
+      const jsonMode = data.response_format?.type === "json_object";
+      if (jsonMode) {
+        return completionJson('{"hangup":"no"}');
+      }
+      // Bolna's spoken turn is always stream:true. A non-streaming request is
+      // not a question: rejecting it before a turn number is taken means it
+      // cannot supersede the utterance that is already in flight.
+      if (data.stream !== true) {
         return Response.json(
           {
             error: "A streaming request with a final user message is required",
           },
           { status: 400 },
         );
+      }
+      const transcript = askedRaw;
+      const asked = normalizeSpoken(transcript) || transcript;
+      const streaming = true;
+      const sequence = ++grant.sequence;
+      grant.busy = (grant.busy ?? 0) + 1;
+      const releaseBusy = () => {
+        grant.busy = Math.max(0, (grant.busy ?? 1) - 1);
+      };
       if (req.signal.aborted) {
-        logTurn({ transcript: last.content, outcome: "aborted" });
+        releaseBusy();
+        logTurn({ transcript, outcome: "aborted" });
         return new Response(null, { status: 499 });
       }
-      // Speech notation -> document notation ("forty two thousand" ->
-      // "$42,000"). Notation only: no fact, field or value is added.
-      const asked = normalizeSpoken(last.content) || last.content;
       let spoken, turn;
       if (
         /^\s*(turn (that|this|the brief) into (an? )?email|draft (an? )?email)\s*[.!]?\s*$/i.test(
-          last.content,
+          transcript,
         )
       ) {
         // The draft comes from THIS call's previous question (its own message
         // history), never from whatever another caller on the same bearer
         // asked last.
-        const prevQ = [...data.messages.slice(0, -1)]
+        const prev = [...data.messages.slice(0, -1)]
           .reverse()
-          .find(
-            (m) => m?.role === "user" && typeof m.content === "string",
-          )?.content;
+          .find((m) => m?.role === "user" && messageText(m.content).trim());
+        const prevQ = prev ? messageText(prev.content) : undefined;
         let prior = null;
         try {
           prior = prevQ
@@ -383,16 +402,20 @@ export function createVoiceAdapter({
         for (const evidence of result.evidence)
           validateEvidence(evidence, grant.bundle);
         if (req.signal.aborted) {
-          logTurn({ transcript: last.content, outcome: "aborted" });
+          releaseBusy();
+          logTurn({ transcript, outcome: "aborted" });
           return new Response(null, { status: 499 });
         }
-        if (grants.get(token) !== grant || grant.expires <= now())
+        if (grants.get(token) !== grant || grant.expires <= now()) {
+          releaseBusy();
           return Response.json(
             { error: "Invalid or expired session capability" },
             { status: 401 },
           );
-        if (sequence !== grant.sequence) {
-          logTurn({ transcript: last.content, outcome: "superseded" });
+        }
+        if (streaming && sequence !== grant.sequence) {
+          releaseBusy();
+          logTurn({ transcript, outcome: "superseded" });
           return Response.json({ error: "Superseded turn" }, { status: 409 });
         }
         grant.last = result;
@@ -484,12 +507,13 @@ export function createVoiceAdapter({
               ? "I could not find supporting evidence in these documents."
               : `I found ${grant.last.evidence.length} relevant source passages. This local build shows excerpts rather than a synthesized answer. Review the sources on screen, including any conditions or differing decision statements.`);
       }
-      const encoder = new TextEncoder(),
-        id = "local-contract-" + randomBytes(8).toString("hex");
+      releaseBusy();
+      const id = "local-contract-" + randomBytes(8).toString("hex");
+      const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
           logTurn({
-            transcript: last.content,
+            transcript,
             normalized: asked ?? null,
             firstByteAt: Date.now(),
             spoken,
@@ -498,7 +522,7 @@ export function createVoiceAdapter({
           });
           try {
             onTurn?.(token, {
-              question: asked ?? last.content,
+              question: asked,
               lead: turn?.spokenTurn ?? null,
               result: turn?.result ?? null,
               scope: grant.bundle?.scope ?? null,
@@ -560,6 +584,53 @@ export function createVoiceAdapter({
       return g.turn ?? null;
     },
   };
+}
+
+function messageText(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (typeof part === "string") return part;
+      if (part && typeof part.text === "string") return part.text;
+      return "";
+    })
+    .join("");
+}
+
+// Bolna's OpenAI client sometimes ends the history with an empty assistant
+// stub, and it may send user text as content parts. The question is the
+// latest non-empty user message, not strictly messages.at(-1).
+function latestUser(messages) {
+  let i = messages.length - 1;
+  while (i >= 0) {
+    const m = messages[i];
+    const t = messageText(m?.content).trim();
+    if (!t && (m?.role === "assistant" || m?.role === "tool")) {
+      i -= 1;
+      continue;
+    }
+    break;
+  }
+  const m = messages[i];
+  if (!m || m.role !== "user") return null;
+  const text = messageText(m.content).trim();
+  if (!text || text.length > 4000) return null;
+  return text;
+}
+
+function completionJson(content) {
+  return Response.json({
+    id: "local-contract-" + randomBytes(8).toString("hex"),
+    object: "chat.completion",
+    choices: [
+      {
+        index: 0,
+        message: { role: "assistant", content },
+        finish_reason: "stop",
+      },
+    ],
+  });
 }
 
 async function boundedBody(req, timeoutMs) {
