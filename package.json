@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test test.mjs spoken-normalize.test.mjs voicelab-score.test.mjs retrieval-core.test.mjs memorable-json.test.mjs",
+    "test": "node --test test.mjs spoken-normalize.test.mjs voicelab-score.test.mjs retrieval-core.test.mjs memorable-json.test.mjs dense-guard.test.mjs",
     "start": "node server.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test:boundaries": "node --test server.test.mjs voice-adapter.test.mjs synthesis.test.mjs provider.test.mjs retrieval-bridge.test.mjs fictional-sample.test.mjs cache.test.mjs motion.test.mjs",

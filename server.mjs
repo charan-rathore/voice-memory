@@ -11,6 +11,7 @@ import { createVoiceAdapter } from "./voice-adapter.mjs";
 import {
   DENSE_MODEL_ID,
   denseAvailableFor,
+  denseStatus,
   embedQueryReady,
   pauseDenseForIngest,
   resumeDenseAfterIngest,
@@ -393,6 +394,12 @@ export function createLocalServer({
         JSON.stringify({
           ok: true,
           cache: { entries: answerCache.size, ...answerCache.stats },
+          // Memory only: no documents, questions or identities.
+          memory: denseStatus().memory,
+          dense: {
+            ready: denseStatus().ready,
+            disabled: denseStatus().disabled,
+          },
         }),
       );
       return;
