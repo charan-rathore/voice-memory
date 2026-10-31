@@ -1,0 +1,520 @@
+{
+  "sha": "7a5fa1b",
+  "date": "2026-10-31T07:56:20.610Z",
+  "retriever": "hybrid RRF: BM25 + Xenova/bge-small-en-v1.5 (local, q8)",
+  "documents": 15,
+  "chunks": 16,
+  "msPerQuery": 7,
+  "all": {
+    "n": 30,
+    "recall1": 0.767,
+    "recall3": 0.867,
+    "recall5": 0.867,
+    "mrr": 0.811
+  },
+  "literal": {
+    "n": 23,
+    "recall1": 0.913,
+    "recall3": 1,
+    "recall5": 1,
+    "mrr": 0.957
+  },
+  "paraphrase": {
+    "n": 7,
+    "recall1": 0.286,
+    "recall3": 0.429,
+    "recall5": 0.429,
+    "mrr": 0.333
+  },
+  "hardneg": {
+    "n": 4,
+    "recall1": 0.75,
+    "recall3": 1,
+    "recall5": 1,
+    "mrr": 0.875
+  },
+  "abstain": {
+    "n": 10,
+    "accuracy": 0.1
+  },
+  "rows": [
+    {
+      "q": "What fee did the first proposal quote?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "01_Northstar_Proposal_v1.md",
+        "03_Commercial_Revision.md",
+        "02_Client_Kickoff_Notes.md"
+      ]
+    },
+    {
+      "q": "What is the revised fee?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "03_Commercial_Revision.md",
+        "04_Steering_Committee_Notes.md",
+        "02_Client_Kickoff_Notes.md"
+      ]
+    },
+    {
+      "q": "Who has to sign off the revised terms?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "03_Commercial_Revision.md",
+        "04_Steering_Committee_Notes.md"
+      ]
+    },
+    {
+      "q": "What payment structure did the steering committee discuss?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "04_Steering_Committee_Notes.md"
+      ]
+    },
+    {
+      "q": "Is there a signed commercial agreement for the revised terms?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "07_Internal_Action_Log.md",
+        "03_Commercial_Revision.md",
+        "04_Steering_Committee_Notes.md"
+      ]
+    },
+    {
+      "q": "Which regions are in the first phase?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "02_Client_Kickoff_Notes.md",
+        "07_Internal_Action_Log.md"
+      ]
+    },
+    {
+      "q": "What deadline does the client want to keep?",
+      "paraphrase": false,
+      "r1": false,
+      "r3": true,
+      "r5": true,
+      "rr": 0.5,
+      "top": [
+        "02_Client_Kickoff_Notes.md",
+        "06_Client_Email_Extract.md",
+        "03_Commercial_Revision.md"
+      ]
+    },
+    {
+      "q": "Is 22 November a client-approved deadline?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "05_Project_Delivery_Update.md",
+        "06_Client_Email_Extract.md",
+        "07_Internal_Action_Log.md"
+      ]
+    },
+    {
+      "q": "Is data access from Northstar late?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "05_Project_Delivery_Update.md"
+      ]
+    },
+    {
+      "q": "How often is progress reported?",
+      "paraphrase": false,
+      "r1": false,
+      "r3": true,
+      "r5": true,
+      "rr": 0.5,
+      "top": [
+        "01_Northstar_Proposal_v1.md",
+        "02_Client_Kickoff_Notes.md"
+      ]
+    },
+    {
+      "q": "Who will confirm the leveller delivery date?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "digital.pdf"
+      ]
+    },
+    {
+      "q": "How many open safety items did the east warehouse record?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "digital.pdf"
+      ]
+    },
+    {
+      "q": "What is the maintenance budget?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "digital.pdf"
+      ]
+    },
+    {
+      "q": "What was the TSH result?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "lab-table.pdf"
+      ]
+    },
+    {
+      "q": "What is the reference range for creatinine?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "lab-table.pdf"
+      ]
+    },
+    {
+      "q": "What unit price did the vendor propose?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "minutes.docx"
+      ]
+    },
+    {
+      "q": "Is the cold-chain pallet price approved?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "minutes.docx"
+      ]
+    },
+    {
+      "q": "When was the renewal fee proposed?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "memo.md"
+      ]
+    },
+    {
+      "q": "What happened to water sampling frequency?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "chrome-columns.pdf"
+      ]
+    },
+    {
+      "q": "Has the solar array funding been approved?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "chrome-columns.pdf"
+      ]
+    },
+    {
+      "q": "What were the Day 70 blood pressure readings?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "chrome-multipage-table.pdf",
+        "chrome-multipage-table.pdf"
+      ]
+    },
+    {
+      "q": "What did generator C do?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "repeated-headings.pdf"
+      ]
+    },
+    {
+      "q": "When did the pilot launch move to?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "notes.txt"
+      ]
+    },
+    {
+      "q": "How much did the original pitch cost the client?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "top": []
+    },
+    {
+      "q": "Has the money side been signed off by the client's accountants?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": true,
+      "r5": true,
+      "rr": 0.3333333333333333,
+      "top": [
+        "04_Steering_Committee_Notes.md",
+        "03_Commercial_Revision.md",
+        "02_Client_Kickoff_Notes.md"
+      ]
+    },
+    {
+      "q": "Which part of the country was dropped from the pilot?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "top": []
+    },
+    {
+      "q": "When will the analytics pilot be ready according to our team?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "top": [
+        "01_Northstar_Proposal_v1.md"
+      ]
+    },
+    {
+      "q": "Is the loading dock usable?",
+      "paraphrase": true,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "digital.pdf"
+      ]
+    },
+    {
+      "q": "What is my thyroid hormone level?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "top": [
+        "digital.pdf"
+      ]
+    },
+    {
+      "q": "Who is handling procurement talks with the supplier?",
+      "paraphrase": true,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "minutes.docx"
+      ]
+    }
+  ],
+  "hardnegRows": [
+    {
+      "q": "What payment schedule did the commercial revision memo record?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "03_Commercial_Revision.md",
+        "07_Internal_Action_Log.md",
+        "04_Steering_Committee_Notes.md"
+      ]
+    },
+    {
+      "q": "What fee did the steering committee dispute?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "04_Steering_Committee_Notes.md"
+      ]
+    },
+    {
+      "q": "Which pilot date is only our own internal goal, not agreed with the client?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": true,
+      "r5": true,
+      "rr": 0.5,
+      "top": [
+        "07_Internal_Action_Log.md",
+        "05_Project_Delivery_Update.md",
+        "02_Client_Kickoff_Notes.md"
+      ]
+    },
+    {
+      "q": "What approval status did the site visit report give the maintenance budget?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "top": [
+        "digital.pdf"
+      ]
+    }
+  ],
+  "abstainRows": [
+    {
+      "q": "What penalty applies if the pilot misses the 15 November deadline?",
+      "why": "no penalty clause anywhere in the corpus; deadline chunks are near-misses",
+      "abstained": false,
+      "served": [
+        "06_Client_Email_Extract.md",
+        "07_Internal_Action_Log.md",
+        "01_Northstar_Proposal_v1.md"
+      ]
+    },
+    {
+      "q": "What is R. Kapoor's direct phone number?",
+      "why": "person present in the email extract, but no phone number anywhere",
+      "abstained": false,
+      "served": [
+        "06_Client_Email_Extract.md"
+      ]
+    },
+    {
+      "q": "Which vendor is supplying the analytics hardware?",
+      "why": "no vendor or hardware procurement in the Northstar corpus",
+      "abstained": false,
+      "served": [
+        "01_Northstar_Proposal_v1.md"
+      ]
+    },
+    {
+      "q": "What severance terms were agreed for the delivery team?",
+      "why": "wholly absent topic",
+      "abstained": false,
+      "served": [
+        "05_Project_Delivery_Update.md",
+        "01_Northstar_Proposal_v1.md",
+        "03_Commercial_Revision.md"
+      ]
+    },
+    {
+      "q": "What discount did Meridian offer for early payment?",
+      "why": "fees discussed, no discount ever mentioned",
+      "abstained": true,
+      "served": []
+    },
+    {
+      "q": "What was the patient's platelet count?",
+      "why": "lab report lists Hemoglobin/HbA1c/Creatinine/Urea/TSH/Ferritin; no platelet",
+      "abstained": false,
+      "served": [
+        "lab-table.pdf"
+      ]
+    },
+    {
+      "q": "What did generator D record during the test?",
+      "why": "generators A, B, C only; generator D absent",
+      "abstained": false,
+      "served": [
+        "repeated-headings.pdf",
+        "digital.pdf",
+        "lab-table.pdf"
+      ]
+    },
+    {
+      "q": "When was the cold-chain pallet price approved?",
+      "why": "status Approved exists, but no approval date is recorded",
+      "abstained": false,
+      "served": [
+        "minutes.docx"
+      ]
+    },
+    {
+      "q": "How much funding did the solar array request ask for?",
+      "why": "funding request exists (not approved) but no amount is stated",
+      "abstained": false,
+      "served": [
+        "chrome-columns.pdf"
+      ]
+    },
+    {
+      "q": "What is the replacement weather mast's serial number?",
+      "why": "mast replacement recorded; serial number absent",
+      "abstained": false,
+      "served": [
+        "chrome-columns.pdf"
+      ]
+    }
+  ]
+}
