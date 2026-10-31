@@ -13,6 +13,7 @@ import {
 } from "./dist/engine.mjs";
 import { spokenTurn, historyField } from "./spoken.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
+import { clinicalTurn, observationEvidence } from "./clinical/answer.mjs";
 export function createVoiceAdapter({
   ttlMs = 120000,
   now = () => Date.now(),
@@ -345,7 +346,31 @@ export function createVoiceAdapter({
         // from the claim graph (per-grant inheritance for follow-ups), and
         // fills guarded templates. Engine output above stays the authority
         // for evidence; this layer only chooses what is spoken.
-        let rendered = spokenTurn(
+        // Lab results across reports (bundle.clinical, set by the server for
+        // uploaded lab tables) answer first; absent for Northstar.
+        const clinical = grant.bundle.clinical?.length
+          ? clinicalTurn(last.content, grant.bundle.clinical)
+          : null;
+        let rendered = clinical
+          ? {
+              spoken: clinical.spoken,
+              verdict: clinical.verdict,
+              field: null,
+              intent: clinical.intent,
+              citations: clinical.used
+                .map((o) => observationEvidence(o, grant.bundle))
+                .filter(Boolean)
+                .map((c) => ({
+                  title: c.title,
+                  docDate: null,
+                  quote: c.quote,
+                  firstLine: c.firstLine,
+                  lastLine: c.lastLine,
+                  hash: c.hash,
+                })),
+            }
+          : null;
+        rendered ??= spokenTurn(
           last.content,
           grant.bundle,
           historyField(grant.bundle, data.messages.slice(0, -1)) ??
@@ -356,7 +381,7 @@ export function createVoiceAdapter({
         // table row from the engine's already-validated evidence, or keep
         // the abstention. Deliberate abstentions (unknown entity/amount)
         // carry no "no_field" reason and are never overridden.
-        if (!rendered || rendered.reason === "no_field") {
+        if (!clinical && (!rendered || rendered.reason === "no_field")) {
           const quoted = extractiveSpoken(
             last.content,
             result,

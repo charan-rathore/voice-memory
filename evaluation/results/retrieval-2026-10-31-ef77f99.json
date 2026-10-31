@@ -1,0 +1,396 @@
+{
+  "sha": "ef77f99",
+  "dirtyWorkingTree": true,
+  "date": "2026-10-31T05:21:38.430Z",
+  "questionsVersion": 1,
+  "retriever": "bm25-keyword (IntelliRAG retrieve-core)",
+  "documents": 15,
+  "chunks": 16,
+  "msPerQuery": 1.8,
+  "rows": [
+    {
+      "q": "What fee did the first proposal quote?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 0.3333333333333333,
+      "top": [
+        "01_Northstar_Proposal_v1.md",
+        "03_Commercial_Revision.md",
+        "02_Client_Kickoff_Notes.md"
+      ]
+    },
+    {
+      "q": "What is the revised fee?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 0.3333333333333333,
+      "top": [
+        "03_Commercial_Revision.md",
+        "02_Client_Kickoff_Notes.md",
+        "04_Steering_Committee_Notes.md"
+      ]
+    },
+    {
+      "q": "Who has to sign off the revised terms?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "03_Commercial_Revision.md"
+      ]
+    },
+    {
+      "q": "What payment structure did the steering committee discuss?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "04_Steering_Committee_Notes.md"
+      ]
+    },
+    {
+      "q": "Is there a signed commercial agreement for the revised terms?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "07_Internal_Action_Log.md"
+      ]
+    },
+    {
+      "q": "Which regions are in the first phase?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "02_Client_Kickoff_Notes.md",
+        "07_Internal_Action_Log.md"
+      ]
+    },
+    {
+      "q": "What deadline does the client want to keep?",
+      "paraphrase": false,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "p3": 0,
+      "top": [
+        "02_Client_Kickoff_Notes.md"
+      ]
+    },
+    {
+      "q": "Is 22 November a client-approved deadline?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "05_Project_Delivery_Update.md"
+      ]
+    },
+    {
+      "q": "Is data access from Northstar late?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "05_Project_Delivery_Update.md"
+      ]
+    },
+    {
+      "q": "How often is progress reported?",
+      "paraphrase": false,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "p3": 0,
+      "top": [
+        "01_Northstar_Proposal_v1.md"
+      ]
+    },
+    {
+      "q": "Who will confirm the leveller delivery date?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "digital.pdf"
+      ]
+    },
+    {
+      "q": "How many open safety items did the east warehouse record?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "digital.pdf"
+      ]
+    },
+    {
+      "q": "What is the maintenance budget?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "digital.pdf"
+      ]
+    },
+    {
+      "q": "What was the TSH result?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "lab-table.pdf"
+      ]
+    },
+    {
+      "q": "What is the reference range for creatinine?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "lab-table.pdf"
+      ]
+    },
+    {
+      "q": "What unit price did the vendor propose?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "minutes.docx"
+      ]
+    },
+    {
+      "q": "Is the cold-chain pallet price approved?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "minutes.docx"
+      ]
+    },
+    {
+      "q": "When was the renewal fee proposed?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "memo.md"
+      ]
+    },
+    {
+      "q": "What happened to water sampling frequency?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "chrome-columns.pdf"
+      ]
+    },
+    {
+      "q": "Has the solar array funding been approved?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "chrome-columns.pdf"
+      ]
+    },
+    {
+      "q": "What were the Day 70 blood pressure readings?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 0.5,
+      "top": [
+        "chrome-multipage-table.pdf",
+        "chrome-multipage-table.pdf"
+      ]
+    },
+    {
+      "q": "What did generator C do?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "repeated-headings.pdf"
+      ]
+    },
+    {
+      "q": "When did the pilot launch move to?",
+      "paraphrase": false,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "notes.txt"
+      ]
+    },
+    {
+      "q": "How much did the original pitch cost the client?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "p3": 0,
+      "top": []
+    },
+    {
+      "q": "Has the money side been signed off by the client's accountants?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "p3": 0,
+      "top": [
+        "04_Steering_Committee_Notes.md"
+      ]
+    },
+    {
+      "q": "Which part of the country was dropped from the pilot?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "p3": 0,
+      "top": []
+    },
+    {
+      "q": "When will the analytics pilot be ready according to our team?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "p3": 0,
+      "top": [
+        "01_Northstar_Proposal_v1.md"
+      ]
+    },
+    {
+      "q": "Is the loading dock usable?",
+      "paraphrase": true,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "digital.pdf"
+      ]
+    },
+    {
+      "q": "What is my thyroid hormone level?",
+      "paraphrase": true,
+      "r1": false,
+      "r3": false,
+      "r5": false,
+      "rr": 0,
+      "p3": 0,
+      "top": []
+    },
+    {
+      "q": "Who is handling procurement talks with the supplier?",
+      "paraphrase": true,
+      "r1": true,
+      "r3": true,
+      "r5": true,
+      "rr": 1,
+      "p3": 1,
+      "top": [
+        "minutes.docx"
+      ]
+    }
+  ],
+  "all": {
+    "n": 30,
+    "recall1": 0.767,
+    "recall3": 0.767,
+    "recall5": 0.767,
+    "mrr": 0.767,
+    "precision3": 0.706
+  },
+  "literal": {
+    "n": 23,
+    "recall1": 0.913,
+    "recall3": 0.913,
+    "recall5": 0.913,
+    "mrr": 0.913,
+    "precision3": 0.833
+  },
+  "paraphrase": {
+    "n": 7,
+    "recall1": 0.286,
+    "recall3": 0.286,
+    "recall5": 0.286,
+    "mrr": 0.286,
+    "precision3": 0.286
+  }
+}

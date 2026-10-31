@@ -1,0 +1,40 @@
+{
+  "_note": "Retrieval benchmark questions, written from the corpus text before any run. 'need' = exact substrings; a question is recalled at k when every needed substring appears in some top-k chunk. Paraphrased questions (p:true) deliberately avoid the document's own words, to show where keyword search fails.",
+  "version": 1,
+  "corpus": {
+    "northstar": "corpus-md/*.md",
+    "ingested": ["digital.pdf", "lab-table.pdf", "minutes.docx", "memo.md", "chrome-columns.pdf", "chrome-multipage-table.pdf", "repeated-headings.pdf", "notes.txt"]
+  },
+  "questions": [
+    { "q": "What fee did the first proposal quote?", "need": ["fixed engagement fee of $48,000"] },
+    { "q": "What is the revised fee?", "need": ["the revised fee is $42,000"] },
+    { "q": "Who has to sign off the revised terms?", "need": ["subject to client finance sign-off"] },
+    { "q": "What payment structure did the steering committee discuss?", "need": ["50% upfront and 50% after acceptance"] },
+    { "q": "Is there a signed commercial agreement for the revised terms?", "need": ["No signed commercial agreement exists for the revised terms"] },
+    { "q": "Which regions are in the first phase?", "need": ["two regions (North and South)"] },
+    { "q": "What deadline does the client want to keep?", "need": ["retain the original 15 November deadline"] },
+    { "q": "Is 22 November a client-approved deadline?", "need": ["internal delivery target, not a client-approved deadline"] },
+    { "q": "Is data access from Northstar late?", "need": ["one week late"] },
+    { "q": "How often is progress reported?", "need": ["Weekly reporting is confirmed"] },
+    { "q": "Who will confirm the leveller delivery date?", "need": ["Anika Rao will confirm the leveller delivery date"] },
+    { "q": "How many open safety items did the east warehouse record?", "need": ["14 open safety items"] },
+    { "q": "What is the maintenance budget?", "need": ["maintenance budget of $18,400"] },
+    { "q": "What was the TSH result?", "need": ["| TSH | <0.05 | mIU/L |"] },
+    { "q": "What is the reference range for creatinine?", "need": ["| Creatinine | 1.2 | mg/dL | 0.7-1.3 |"] },
+    { "q": "What unit price did the vendor propose?", "need": ["unit price of $4.20 per item"] },
+    { "q": "Is the cold-chain pallet price approved?", "need": ["| Cold-chain pallet | $6.85 | Approved |"] },
+    { "q": "When was the renewal fee proposed?", "need": ["proposed on 2 October 2026"] },
+    { "q": "What happened to water sampling frequency?", "need": ["Water sampling moved from weekly to fortnightly"] },
+    { "q": "Has the solar array funding been approved?", "need": ["funding request has not been approved"] },
+    { "q": "What were the Day 70 blood pressure readings?", "need": ["| Day 70 | 118 | 83 | mmHg |"] },
+    { "q": "What did generator C do?", "need": ["generator C failed to start"] },
+    { "q": "When did the pilot launch move to?", "need": ["moved to 18 November 2026"] },
+    { "q": "How much did the original pitch cost the client?", "need": ["fixed engagement fee of $48,000"], "p": true },
+    { "q": "Has the money side been signed off by the client's accountants?", "need": ["Finance approval for any revised fee or payment schedule remains pending"], "p": true },
+    { "q": "Which part of the country was dropped from the pilot?", "need": ["narrow the pilot from three regions to two regions"], "p": true },
+    { "q": "When will the analytics pilot be ready according to our team?", "need": ["Pilot readiness is targeted for 22 November 2026"], "p": true },
+    { "q": "Is the loading dock usable?", "need": ["Loading bay 3 remains closed"], "p": true },
+    { "q": "What is my thyroid hormone level?", "need": ["| TSH | <0.05 | mIU/L |"], "p": true },
+    { "q": "Who is handling procurement talks with the supplier?", "need": ["Attendees: procurement, finance and the vendor account team"], "p": true }
+  ]
+}

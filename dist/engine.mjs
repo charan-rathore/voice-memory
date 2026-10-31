@@ -12132,6 +12132,29 @@ function importBundle(docs) {
   });
   return { scope, sources, rows, anchors, unanchored };
 }
+function retrieveChunks(query, bundle, topK = 3) {
+  const r = retrieveFromRows({
+    query,
+    queryVector: null,
+    mode: "keyword",
+    topK,
+    embeddingModel: null,
+    rows: bundle.rows,
+    storage: {
+      backend: "ephemeral",
+      durable: false,
+      denseAvailable: false,
+      warning: null
+    },
+    corpusScope: { kind: "corpus", corpusId: bundle.scope }
+  });
+  return r.chunks.map((c) => ({
+    title: c.title,
+    text: c.text,
+    rank: c.rank,
+    score: c.score
+  }));
+}
 function validateEvidence(c, bundle) {
   const source = bundle.sources.find((s) => s.id === c.sourceId);
   if (!source || source.hash !== c.hash || hash(source.text) !== c.hash || !Number.isInteger(c.start) || !Number.isInteger(c.end) || c.start < 0 || c.end <= c.start || c.end > source.text.length || source.text.slice(c.start, c.end) !== c.quote)
@@ -12657,5 +12680,6 @@ export {
   importBundle,
   questionFields,
   resolveClaims,
+  retrieveChunks,
   validateEvidence
 };

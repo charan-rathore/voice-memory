@@ -373,6 +373,12 @@ const LEAD_VERDICT = {
   "NO-RECORD": ["refused", "absent", "Not recorded in these documents"],
   "REJECTED-EXPLICIT": ["unresolved", "conflict", "Recorded as rejected"],
   QUOTED: ["positive", "supported", "Quoted from your documents"],
+  // Lab results across reports (clinical prototype).
+  COMPARED: ["positive", "supported", "Compared across reports"],
+  LATEST: ["positive", "supported", "From the latest report"],
+  SINGLE: ["positive", "supported", "Only one result on record"],
+  NOT_COMPARABLE: ["unresolved", "conflict", "Not comparable as printed"],
+  AMBIGUOUS_PATIENT: ["unresolved", "conflict", "More than one patient"],
 };
 const VERDICT = {
   positive: ["supported", "Supported by the documents"],
@@ -665,10 +671,18 @@ $("ask").onsubmit = async (e) => {
     draftAllowed = r.supported === true && !r.refused;
     history.unshift({ question, verdict: label });
     renderHistory();
+    // Lab-result answers come from typed observations, not the keyword stage,
+    // so their status follows the shown answer; everything else keeps the
+    // engine's verdict (it also gates drafting).
+    const clinicalLead =
+      /^(COMPARED|LATEST|SINGLE|NOT_COMPARABLE|AMBIGUOUS_PATIENT)$/.test(
+        lead?.verdict ?? "",
+      );
+    const statusState = clinicalLead ? state : engineState;
     status(
-      r.unresolved
+      statusState === "unresolved"
         ? "Relevant passages need review. The question is unresolved; drafting is disabled."
-        : r.refused
+        : statusState === "refused" && !(clinicalLead && cites?.length)
           ? "No supporting evidence found. Try naming the thing you're looking for."
           : "Evidence ready. Open an original passage to inspect it.",
     );
