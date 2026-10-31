@@ -1,12 +1,9 @@
 # Voice Memory landing page
 
-Static site: `index.html` + `vercel.json`. No build step.
+Static site: `index.html`, `site.css`, `site.js`, self-hosted fonts. No build step,
+no third-party requests (CSP is `'self'` only).
 
-Deploy (pick one):
-- Drag this folder onto https://vercel.com/new
-- Or, in this folder: `npx vercel --prod`
-- Or commit it to the repo as `site/` and import the repo in Vercel with Root Directory = `site`
-
-Before sharing:
-- Replace the "Shipping next" items as they land.
-- When the uncut call is recorded, add a link to it in the "Where it stands" section.
+Deployed on Vercel from this repo with Root Directory = `site`; every push to
+`main` redeploys. Every answer shown in the hero replay is the current build's
+real output on the fictional Northstar documents, and the quoted document lines
+are verbatim from `corpus-md/`. Keep it that way when copy changes.
