@@ -4,12 +4,12 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test test.mjs spoken-normalize.test.mjs voicelab-score.test.mjs retrieval-core.test.mjs",
+    "test": "node --test test.mjs spoken-normalize.test.mjs voicelab-score.test.mjs retrieval-core.test.mjs memorable-json.test.mjs",
     "start": "node server.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test:boundaries": "node --test server.test.mjs voice-adapter.test.mjs synthesis.test.mjs provider.test.mjs retrieval-bridge.test.mjs fictional-sample.test.mjs cache.test.mjs motion.test.mjs",
     "test:browser": "node browser-check.mjs && node notes-check.mjs",
-    "format:check": "prettier --check *.mjs *.ts *.json public/* memory/* evaluation/vault/*",
+    "format:check": "prettier --check *.mjs *.ts *.json public/* memory/* evaluation/vault/* vendor-tests/*",
     "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:vault && npm run test:browser && npm run test:graph",
     "test:evaluation": "node --test evaluation/*.test.mjs",
     "test:ingest": "node --test --test-concurrency=1 ingest/*.test.mjs",
@@ -35,7 +35,7 @@
     "fflate": "0.8.3",
     "pdfjs-dist": "4.10.38",
     "tesseract.js": "5.1.1",
-    "zod": "3.25.76"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
