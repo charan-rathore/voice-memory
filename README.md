@@ -45,6 +45,19 @@ The deployment boots with a pinned bundle of 7 fictional "Northstar" documents
 Documents typed in the UI are a separate on-screen session and readiness names
 each state explicitly. All documents are fictional.
 
+## Your own documents (branch `vm2-ingestion`, not yet deployed)
+
+The workspace accepts PDF (text layer or scanned), Word (.docx), PNG/JPEG of
+printed text, and text/Markdown. Files are validated by signature, parsed in a
+time- and memory-limited worker, and only become answerable once parsing and
+indexing succeed. Answers cite the exact passage; for PDFs and images the
+source opens on the original page with the cited line highlighted.
+
+Measured on 22 synthetic fixtures (131/131 gold checks, `npm run bench:ingest`).
+That is not evidence of accuracy on real-world scans or lab layouts. Files are
+held in session memory only; do not upload real medical or personal records.
+Details, limits and decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Voice capability lifecycle
 
 - One fixed bearer credential, injected by environment, minted once. No endpoint

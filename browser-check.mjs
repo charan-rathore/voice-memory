@@ -5,7 +5,7 @@ let browser;
 try {
   browser = await chromium.launch({
     headless: true,
-    executablePath: "/usr/bin/google-chrome",
+    executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome",
     args: ["--no-sandbox"],
   });
   const page = await browser.newPage({
@@ -25,7 +25,8 @@ try {
       "Relevant passages need review. The question is unresolved; drafting is disabled.",
     )
     .waitFor();
-  await page.locator("summary").first().click();
+  // Open the first cited passage (scoped: the page has other disclosures).
+  await page.locator("#evidence summary").first().click();
   await page.screenshot({
     path: "/downloads/bolna-local-desktop.png",
     fullPage: true,

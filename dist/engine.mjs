@@ -12063,14 +12063,25 @@ function extractiveAnswer(question, chunks) {
 
 // engine.ts
 var hash = (s) => createHash("sha256").update(s).digest("hex");
+var MAX_DOC_CHARS = 25e4;
+function anchorChunk(src, chunk, from) {
+  const lines = chunk.split("\n");
+  for (let k = 0; k < Math.min(lines.length, 8); k++) {
+    const core = lines.slice(k).join("\n").trim();
+    if (core.length < 20 && k > 0) break;
+    const at = src.indexOf(core, from);
+    if (at >= 0) return { start: at, end: at + core.length };
+  }
+  return null;
+}
 function importBundle(docs) {
   if (!Array.isArray(docs) || !docs.length || docs.length > 10)
     throw Error("Add between 1 and 10 text documents.");
   const scope = "voice-" + randomUUID();
   const sources = docs.map((d) => {
-    if (typeof d.title !== "string" || typeof d.text !== "string" || d.text.length < 40 || d.text.length > 6e4 || d.title.length > 160)
+    if (typeof d.title !== "string" || typeof d.text !== "string" || d.text.length < 40 || d.text.length > MAX_DOC_CHARS || d.title.length > 160)
       throw Error(
-        "Each document needs a title and 40-60,000 characters of text."
+        "Each document needs a title and 40-250,000 characters of text."
       );
     const text = d.text.replace(/\r\n?/g, "\n");
     const memory = parseText({ text, label: d.title });
@@ -12083,14 +12094,25 @@ function importBundle(docs) {
       memory: memory.value
     };
   });
-  const rows = sources.flatMap(
-    (s) => chunkDocument(s.text).map((c) => ({
+  const anchors = /* @__PURE__ */ new Map();
+  let unanchored = 0;
+  const rows = sources.flatMap((s) => {
+    let cursor = 0;
+    return chunkDocument(s.text).map((c) => {
+      const id = randomUUID();
+      const a = anchorChunk(s.text, c.text, cursor);
+      if (a) {
+        anchors.set(id, a);
+        cursor = a.start + 1;
+      } else unanchored++;
+      return { c, id };
+    }).map(({ c, id }) => ({
       title: s.title,
       slug: s.id,
       indexedAt: null,
       corpusId: scope,
       chunk: {
-        id: randomUUID(),
+        id,
         document_id: s.id,
         ordinal: c.ordinal,
         text: c.text,
@@ -12106,9 +12128,9 @@ function importBundle(docs) {
         chunk_kind: "prose",
         corpus_id: scope
       }
-    }))
-  );
-  return { scope, sources, rows };
+    }));
+  });
+  return { scope, sources, rows, anchors, unanchored };
 }
 function validateEvidence(c, bundle) {
   const source = bundle.sources.find((s) => s.id === c.sourceId);
@@ -12438,6 +12460,18 @@ function answer(question, bundle) {
       /\b(revenue|budget|turnover|profit|margin|sales|cost|price|amount)\b/i
     );
     let quantOk = hasQuantity;
+    const countQ = /\bhow many\s+((?:[a-z-]+\s+){0,3}?[a-z-]+?)(?:\s+(?:did|do|does|are|is|were|was|has|have|had|will|can|could|should|would|in|on|for|at|of)\b|[?.!]|$)/i.exec(
+      question
+    );
+    if (quantitative && !hasQuantity && countQ && !metricQ) {
+      const head = countQ[1].trim().split(/\s+/).pop().toLowerCase();
+      const stem2 = head.replace(/(es|s)$/, "");
+      if (stem2.length >= 3)
+        quantOk = new RegExp(
+          `\\b(?!(?:19|20)\\d{2}\\b)\\d{1,4}(?:\\.\\d+)?\\s+(?:[a-z-]+\\s+){0,2}${stem2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\w*\\b`,
+          "i"
+        ).test(exText);
+    }
     if (quantitative && hasQuantity && metricQ) {
       const asked = metricQ[1].toLowerCase();
       quantOk = false;
@@ -12522,28 +12556,37 @@ function answerFromRetrieval(question, bundle, found, expected, start = performa
     if (chunk.corpusId !== bundle.scope || expected.actualMode !== "keyword" && chunk.embeddingModel !== expected.embeddingModel)
       throw Error("Retrieval corpus/model contract mismatch.");
   }
+  const cited = /* @__PURE__ */ new Set();
   const evidence = found.chunks.flatMap((chunk) => {
     const source = bundle.sources.find((s) => s.id === chunk.documentId);
     if (!source) return [];
-    const offset = source.text.indexOf(chunk.text);
-    if (offset < 0 || source.text.indexOf(chunk.text, offset + 1) !== -1)
-      return [];
+    const anchor = bundle.anchors?.get(chunk.chunkId);
+    let offset;
+    let end;
+    if (anchor) {
+      offset = anchor.start;
+      end = anchor.end;
+    } else {
+      offset = source.text.indexOf(chunk.text);
+      if (offset < 0 || source.text.indexOf(chunk.text, offset + 1) !== -1)
+        return [];
+      end = offset + chunk.text.length;
+    }
     const c = {
       sourceId: source.id,
       title: source.title,
       hash: source.hash,
       start: offset,
-      end: offset + chunk.text.length,
+      end,
       firstLine: source.text.slice(0, offset).split("\n").length,
-      lastLine: source.text.slice(0, offset + chunk.text.length).split("\n").length,
-      quote: chunk.text
+      lastLine: source.text.slice(0, end).split("\n").length,
+      quote: source.text.slice(offset, end)
     };
     validateEvidence(c, bundle);
+    cited.add(chunk.chunkId);
     return [c];
   });
-  const chunks = found.chunks.filter(
-    (c) => evidence.some((e) => e.sourceId === c.documentId && e.quote === c.text)
-  );
+  const chunks = found.chunks.filter((c) => cited.has(c.chunkId));
   const refused = found.evidence !== "positive" || !chunks.length;
   const review = contextReview(bundle, validateEvidence);
   return {
@@ -12606,6 +12649,7 @@ function draft(result, bundle) {
   };
 }
 export {
+  MAX_DOC_CHARS,
   answer,
   answerFromRetrieval,
   draft,

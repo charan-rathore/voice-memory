@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Voice Memory</title>
+    <meta
+      name="description"
+      content="Ask your documents out loud. Every answer points to the line it came from, and says so when it isn't there."
+    />
+    <meta property="og:title" content="Voice Memory" />
+    <meta
+      property="og:description"
+      content="Ask your documents what they actually say. Proposed isn't approved, and every answer has a line."
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="site.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav-wrap">
+      <nav class="nav" aria-label="Main">
+        <a class="brand" href="#top">Voice Memory</a>
+        <ul>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#features">What it catches</a></li>
+          <li><a href="#status">Where it stands</a></li>
+          <li><a href="https://github.com/charan-rathore/voice-memory">Code</a></li>
+        </ul>
+        <a class="nav-cta" href="#demo">Watch it answer</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <h1>Ask your documents what they actually&nbsp;say.</h1>
+          <p class="lede">
+            Talk to your contracts, meeting notes and reports. Every answer points to the line it came from, and tells
+            you when something was only proposed, still pending, or never written down.
+          </p>
+          <div class="ctas">
+            <a class="btn btn-mark" href="#demo" id="play">Watch it answer</a>
+            <a class="btn btn-line" href="https://github.com/charan-rathore/voice-memory">Read the code</a>
+          </div>
+          <p class="fine">A voice agent on Bolna. No language model writes the answers.</p>
+        </div>
+
+        <figure class="window hero-window" id="demo" aria-label="A replay of three questions about a fictional deal">
+          <div class="win-bar">
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="win-title">Northstar pilot, 7 fictional documents</span>
+          </div>
+          <div class="win-body">
+            <div class="ask-line">
+              <span class="ask-label">You asked</span>
+              <p class="ask-q" id="q"></p>
+            </div>
+            <div class="ans" id="ans" aria-live="polite">
+              <p class="verdict" id="verdict"></p>
+              <p class="ans-text" id="a"></p>
+            </div>
+            <div class="paper" aria-hidden="true">
+              <p class="paper-name" id="paper-name"></p>
+              <div class="paper-lines" id="paper"></div>
+            </div>
+          </div>
+          <div class="pill" id="pill" aria-hidden="true">
+            <span class="bars"><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="pill-text" id="pill-text">Listening</span>
+          </div>
+        </figure>
+      </section>
+
+      <section class="split" id="how" aria-labelledby="split-title">
+        <h2 id="split-title" class="h2 center">Seven files in. One straight answer out.</h2>
+        <p class="sub">
+          The proposal says one number, the revision another, the steering notes discuss a third option. Voice Memory
+          keeps track of which is which.
+        </p>
+        <div class="split-row" data-reveal>
+          <div class="window small">
+            <div class="win-bar">
+              <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="win-title">What's in the folder</span>
+            </div>
+            <ul class="files">
+              <li style="--i: 0"><b>01 Proposal</b><span>fixed fee of $48,000</span></li>
+              <li style="--i: 1"><b>02 Kickoff notes</b><span>scope narrowed to two regions</span></li>
+              <li style="--i: 2"><b>03 Revision</b><span>revised fee is $42,000, 40/60 split</span></li>
+              <li style="--i: 3"><b>04 Steering notes</b><span>50/50 split discussed</span></li>
+              <li style="--i: 4"><b>05 Delivery update</b><span>dashboard on track</span></li>
+              <li style="--i: 5"><b>06 Client email</b><span>finance still to confirm</span></li>
+              <li style="--i: 6"><b>07 Action log</b><span>no signed agreement for the revised terms</span></li>
+            </ul>
+          </div>
+          <span class="arrow" aria-hidden="true"></span>
+          <div class="window small">
+            <div class="win-bar">
+              <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="win-title">What Voice Memory keeps track of</span>
+            </div>
+            <dl class="ledger">
+              <div style="--i: 0">
+                <dt>Fee</dt>
+                <dd><s>$48,000</s> superseded, then <mark>$42,000</mark> proposed</dd>
+              </div>
+              <div style="--i: 1">
+                <dt>Payment split</dt>
+                <dd>40/60 proposed, 50/50 discussed, still open</dd>
+              </div>
+              <div style="--i: 2">
+                <dt>Finance sign-off</dt>
+                <dd>Not recorded anywhere</dd>
+              </div>
+              <div style="--i: 3">
+                <dt>So, is $42,000 agreed?</dt>
+                <dd><mark>No. Proposed, not approved.</mark></dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </section>
+
+      <section class="features" id="features" aria-label="What it catches">
+        <article class="feat" data-reveal>
+          <h2 class="h3">Proposed isn't approved</h2>
+          <p class="sub">The newest number isn't automatically the agreed one. Each value keeps its status and its source.</p>
+          <div class="card">
+            <p class="card-title">Fee and terms, as the record has them</p>
+            <ul class="chips">
+              <li style="--i: 0"><s>$48,000</s><em class="bad">superseded</em></li>
+              <li style="--i: 1">$42,000<em>proposed</em></li>
+              <li style="--i: 2">40/60 split<em>proposed</em></li>
+              <li style="--i: 3">50/50 split<em>discussed</em></li>
+              <li style="--i: 4">Finance sign-off<em class="dim">not recorded</em></li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="feat offset" data-reveal>
+          <h2 class="h3">Bring the real files</h2>
+          <p class="sub">PDFs, Word files, scans and photos of printed pages. Each one says what happened to it.</p>
+          <div class="card">
+            <p class="card-title">Your documents</p>
+            <ul class="uploads" id="uploads">
+              <li data-steps="Checking the file|Reading pages|Ready, 1 page, 1 table">
+                <span class="tab">pdf</span><b>lab-report.pdf</b><span class="stage">Waiting</span>
+              </li>
+              <li data-steps="Checking the file|Reading text from the image|Read by OCR at 96% confidence">
+                <span class="tab">jpg</span><b>clinic-note.jpg</b><span class="stage">Waiting</span>
+              </li>
+              <li data-steps="Checking the file|Reading the document|Ready, 1 table">
+                <span class="tab">docx</span><b>vendor-minutes.docx</b><span class="stage">Waiting</span>
+              </li>
+              <li class="fails" data-steps="Checking the file|Named .pdf, but it's a PNG image">
+                <span class="tab">pdf</span><b>scan.pdf</b><span class="stage">Waiting</span>
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="feat" data-reveal>
+          <h2 class="h3">One answer, two places</h2>
+          <p class="sub">What the call says out loud is the same sentence the screen shows, with the same sources.</p>
+          <div class="card tree">
+            <div class="node"><span class="bars mini"><i></i><i></i><i></i><i></i></span>Was it finalized?</div>
+            <svg class="branches" viewBox="0 0 300 90" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M150 0 C150 45 50 40 50 90" />
+              <path d="M150 0 L150 90" />
+              <path d="M150 0 C150 45 250 40 250 90" />
+            </svg>
+            <div class="leaves">
+              <div class="leaf"><span class="ico call" aria-hidden="true"></span>Spoken in the call</div>
+              <div class="leaf"><span class="ico screen" aria-hidden="true"></span>Shown on screen</div>
+              <div class="leaf"><span class="ico line" aria-hidden="true"></span>Cited to a line</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="feat offset" data-reveal>
+          <h2 class="h3">It says when it isn't there</h2>
+          <p class="sub">A name the files never mention, or a number nobody wrote down, gets a plain "not in these documents".</p>
+          <div class="card convo">
+            <p class="bubble me" style="--i: 0">What did Zephyrine approve?</p>
+            <p class="bubble it" style="--i: 1">I don't see that in these documents.</p>
+            <p class="bubble me" style="--i: 2">Was it $55,000?</p>
+            <p class="bubble it" style="--i: 3">I don't see $55,000 in these documents.</p>
+          </div>
+        </article>
+
+        <article class="feat wide" data-reveal>
+          <h2 class="h3">The line, on the page</h2>
+          <p class="sub">Open any citation and the original page appears with the cited line marked, so you can check it yourself.</p>
+          <div class="card page-card">
+            <div class="mini-page" aria-hidden="true">
+              <p class="mp-title">Synthetic Laboratory Report</p>
+              <p class="mp-meta">Patient: Test Person A (synthetic), reported 04 Sep 2026</p>
+              <table>
+                <tr><th>Test</th><th>Result</th><th>Unit</th><th>Range</th><th>Flag</th></tr>
+                <tr><td>Hemoglobin</td><td>12.1</td><td>g/dL</td><td>13.0–17.0</td><td>L</td></tr>
+                <tr><td>Creatinine</td><td>1.2</td><td>mg/dL</td><td>0.7–1.3</td><td></td></tr>
+                <tr><td>Urea</td><td>12</td><td>mg/dL</td><td>7–20</td><td></td></tr>
+                <tr class="hit"><td>TSH</td><td>&lt;0.05</td><td>mIU/L</td><td>0.40–4.00</td><td>L</td></tr>
+                <tr><td>Ferritin</td><td>0.5</td><td>ng/mL</td><td>30–400</td><td>L</td></tr>
+              </table>
+            </div>
+            <div class="said">
+              <p class="said-label">Spoken</p>
+              <p class="said-text">“TSH: result less than 0.05, unit mIU/L, reference range 0.40-4.00, flag L.”</p>
+              <p class="said-note">Read from the row itself, with the less-than sign said out loud, so 0.05 never turns into something else.</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="status" id="status" aria-labelledby="status-title">
+        <h2 id="status-title" class="h2 center">Where it stands</h2>
+        <p class="sub">A buildathon prototype on fictional documents, described without rounding up.</p>
+        <div class="cols" data-reveal>
+          <div style="--i: 0">
+            <h3>Works now</h3>
+            <ul>
+              <li>Questions by voice or text over the documents in a session</li>
+              <li>Proposed, superseded and still open, tracked per value</li>
+              <li>Short spoken answers built from the record</li>
+              <li>PDF, Word, image and text uploads, with the cited line on the original page</li>
+            </ul>
+          </div>
+          <div style="--i: 1">
+            <h3>Next</h3>
+            <ul>
+              <li>An uncut recording of a live call</li>
+              <li>A test set of real, messy documents</li>
+              <li>Durable, encrypted storage</li>
+            </ul>
+          </div>
+          <div style="--i: 2">
+            <h3>Not claimed</h3>
+            <ul>
+              <li>Accuracy on documents we haven't tested</li>
+              <li>That a rule can't misread a sentence</li>
+              <li>Fitness for real medical or personal records</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing">
+        <h2>Ask out loud. Check the line.</h2>
+        <div class="ctas center">
+          <a class="btn btn-mark" href="#demo">Watch it answer again</a>
+          <a class="btn btn-line" href="https://github.com/charan-rathore/voice-memory">Read the code</a>
+        </div>
+      </section>
+
+      <!--owner-signin-->
+    </main>
+
+    <footer class="foot">
+      <p>Voice Memory, built for the Bolna Symphony Buildathon by Charan Rathore. All documents shown are fictional.</p>
+      <p><a href="https://voice-memory.onrender.com/owner-signin#signin">Owner sign-in</a></p>
+    </footer>
+
+    <script src="site.js" defer></script>
+  </body>
+</html>
