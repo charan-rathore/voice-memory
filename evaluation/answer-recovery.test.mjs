@@ -34,3 +34,12 @@ test("paraphrase bridge recovers the dropped-region record (country -> regions, 
   assert.equal(r.supported, true, r.answer);
   assert.match(r.answer, /narrow the pilot from three regions to two regions/);
 });
+
+test("authority-scoped when-question surfaces the team's own deadline record", () => {
+  const r = answer(
+    "When will the analytics pilot be ready according to our team?",
+    mdBundle,
+  );
+  assert.equal(r.supported, true, r.answer);
+  assert.match(r.answer, /22 November/, r.answer);
+});

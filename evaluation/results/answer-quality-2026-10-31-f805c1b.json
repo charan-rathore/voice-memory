@@ -1,0 +1,302 @@
+{
+  "sha": "f805c1b",
+  "date": "2026-10-31T08:48:44.703Z",
+  "summary": {
+    "all": {
+      "n": 30,
+      "ok": 26,
+      "overRefusal": 0,
+      "recovered": 3,
+      "retrievalMiss": 1,
+      "falsePositive": 0
+    },
+    "literal": {
+      "n": 23,
+      "ok": 23,
+      "overRefusal": 0,
+      "recovered": 0,
+      "retrievalMiss": 0,
+      "falsePositive": 0
+    },
+    "paraphrase": {
+      "n": 7,
+      "ok": 3,
+      "overRefusal": 0,
+      "recovered": 3,
+      "retrievalMiss": 1,
+      "falsePositive": 0
+    }
+  },
+  "rows": [
+    {
+      "q": "What fee did the first proposal quote?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "ambiguous",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "01_Northstar_Proposal_v1.md"
+    },
+    {
+      "q": "What is the revised fee?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "ambiguous",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "03_Commercial_Revision.md"
+    },
+    {
+      "q": "Who has to sign off the revised terms?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "ambiguous",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "03_Commercial_Revision.md"
+    },
+    {
+      "q": "What payment structure did the steering committee discuss?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "04_Steering_Committee_Notes.md"
+    },
+    {
+      "q": "Is there a signed commercial agreement for the revised terms?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "07_Internal_Action_Log.md"
+    },
+    {
+      "q": "Which regions are in the first phase?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "ambiguous",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "02_Client_Kickoff_Notes.md"
+    },
+    {
+      "q": "What deadline does the client want to keep?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "02_Client_Kickoff_Notes.md"
+    },
+    {
+      "q": "Is 22 November a client-approved deadline?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "05_Project_Delivery_Update.md"
+    },
+    {
+      "q": "Is data access from Northstar late?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "05_Project_Delivery_Update.md"
+    },
+    {
+      "q": "How often is progress reported?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "01_Northstar_Proposal_v1.md"
+    },
+    {
+      "q": "Who will confirm the leveller delivery date?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "digital.pdf"
+    },
+    {
+      "q": "How many open safety items did the east warehouse record?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "digital.pdf"
+    },
+    {
+      "q": "What is the maintenance budget?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "digital.pdf"
+    },
+    {
+      "q": "What was the TSH result?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "lab-table.pdf"
+    },
+    {
+      "q": "What is the reference range for creatinine?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "lab-table.pdf"
+    },
+    {
+      "q": "What unit price did the vendor propose?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "minutes.docx"
+    },
+    {
+      "q": "Is the cold-chain pallet price approved?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "minutes.docx"
+    },
+    {
+      "q": "When was the renewal fee proposed?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "memo.md"
+    },
+    {
+      "q": "What happened to water sampling frequency?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "chrome-columns.pdf"
+    },
+    {
+      "q": "Has the solar array funding been approved?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "chrome-columns.pdf"
+    },
+    {
+      "q": "What were the Day 70 blood pressure readings?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "chrome-multipage-table.pdf"
+    },
+    {
+      "q": "What did generator C do?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "repeated-headings.pdf"
+    },
+    {
+      "q": "When did the pilot launch move to?",
+      "paraphrase": false,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "notes.txt"
+    },
+    {
+      "q": "How much did the original pitch cost the client?",
+      "paraphrase": true,
+      "r3": false,
+      "evidenceStatus": "insufficient",
+      "needInAnswer": false,
+      "cause": "RETRIEVAL-MISS",
+      "top": null
+    },
+    {
+      "q": "Has the money side been signed off by the client's accountants?",
+      "paraphrase": true,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "04_Steering_Committee_Notes.md"
+    },
+    {
+      "q": "Which part of the country was dropped from the pilot?",
+      "paraphrase": true,
+      "r3": false,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "RECOVERED",
+      "top": null
+    },
+    {
+      "q": "When will the analytics pilot be ready according to our team?",
+      "paraphrase": true,
+      "r3": false,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "RECOVERED",
+      "top": "01_Northstar_Proposal_v1.md"
+    },
+    {
+      "q": "Is the loading dock usable?",
+      "paraphrase": true,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "digital.pdf"
+    },
+    {
+      "q": "What is my thyroid hormone level?",
+      "paraphrase": true,
+      "r3": false,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "RECOVERED",
+      "top": "digital.pdf"
+    },
+    {
+      "q": "Who is handling procurement talks with the supplier?",
+      "paraphrase": true,
+      "r3": true,
+      "evidenceStatus": "positive",
+      "needInAnswer": true,
+      "cause": "OK",
+      "top": "minutes.docx"
+    }
+  ]
+}
