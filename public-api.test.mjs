@@ -120,3 +120,57 @@ test("voice minting fails closed without Bolna configuration", async () => {
   const t = await fetch(base + "/api/public/voice/turns?ticket=forged");
   assert.equal(t.status, 403);
 });
+
+test("VM_PUBLIC_VOICE=off disables visitor call minting and hides voice status", async () => {
+  const saved = {
+    BOLNA_API_KEY: process.env.BOLNA_API_KEY,
+    BOLNA_AGENT_ID: process.env.BOLNA_AGENT_ID,
+    VM_PUBLIC_VOICE: process.env.VM_PUBLIC_VOICE,
+  };
+  const restore = () => {
+    for (const [k, v] of Object.entries(saved))
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+  };
+  const spawn = async () => {
+    const s = createLocalServer({ port: 0 });
+    await new Promise((r) => s.listen(0, "127.0.0.1", r));
+    return { s, b: `http://127.0.0.1:${s.address().port}` };
+  };
+  try {
+    // Flag off + Bolna credentials present: minting must still refuse,
+    // status must not advertise voice, typed endpoints unaffected.
+    process.env.BOLNA_API_KEY = "test-dummy";
+    process.env.BOLNA_AGENT_ID = "test-dummy";
+    process.env.VM_PUBLIC_VOICE = "off";
+    const off = await spawn();
+    await off.s.loadPublicCases();
+    const mint = await fetch(off.b + "/api/public/voice/session", {
+      method: "POST",
+    });
+    assert.equal(mint.status, 503);
+    assert.match((await mint.json()).error, /disabled/i);
+    const st = await (await fetch(off.b + "/api/public/status")).json();
+    assert.deepEqual(st.voice, { configured: false, ready: false });
+    assert.equal((await fetch(off.b + "/api/public/cases")).status, 200);
+    const typed = await fetch(off.b + "/api/public/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        case: "health",
+        question: "What is SYN-0001's ferritin result?",
+      }),
+    });
+    assert.equal(typed.status, 200);
+    await new Promise((r) => off.s.close(r));
+
+    // Control: same credentials, flag unset -> voice reported configured.
+    delete process.env.VM_PUBLIC_VOICE;
+    const on = await spawn();
+    const stOn = await (await fetch(on.b + "/api/public/status")).json();
+    assert.equal(stOn.voice.configured, true);
+    await new Promise((r) => on.s.close(r));
+  } finally {
+    restore();
+  }
+});
