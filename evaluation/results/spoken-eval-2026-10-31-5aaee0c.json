@@ -1,0 +1,469 @@
+{
+ "sha": "5aaee0c",
+ "date": "2026-10-31T09:02:06.150Z",
+ "note": "Engine-only timing (no ASR/TTS/network). Keyword retrieval path, as the voice adapter uses.",
+ "results": [
+  {
+   "set": "northstar-dev",
+   "heldOut": false,
+   "n": 22,
+   "answerCorrect": 11,
+   "retrievalRecall": {
+    "hit": 13,
+    "n": 21
+   },
+   "p50ms": 5.2,
+   "p95ms": 114,
+   "rows": [
+    {
+     "id": "n01",
+     "q": "what fee did we finally agree on",
+     "cls": "open",
+     "spoken": "$42,000 is the latest proposal, and it is not approved.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 115.9
+    },
+    {
+     "id": "n02",
+     "q": "um so is the forty two thousand dollar fee locked in",
+     "cls": "open",
+     "spoken": "$42,000 is the latest proposal, and it is not approved.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 9.4
+    },
+    {
+     "id": "n03",
+     "q": "did they approve forty two thousand",
+     "cls": "negative",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"42,000\"",
+      "missing \"not\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": false,
+     "ms": 114
+    },
+    {
+     "id": "n04",
+     "q": "was it forty eight thousand before",
+     "cls": "answer",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"48,000\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": false,
+     "ms": 3.8
+    },
+    {
+     "id": "n05",
+     "q": "whats the deadline for the pilot",
+     "cls": "open",
+     "spoken": "That is still open: 15 November 2026 versus 22 November 2026 are both on record.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 9.1
+    },
+    {
+     "id": "n06",
+     "q": "when are we going live",
+     "cls": "open",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"15 November\"",
+      "missing \"22 November\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": false,
+     "ms": 3.3
+    },
+    {
+     "id": "n07",
+     "q": "did northstar agree to the 22 november date",
+     "cls": "negative",
+     "spoken": "No. Per the project delivery update from October 2: the 22 November date is an internal delivery target, not a client-approved deadline.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 6.3
+    },
+    {
+     "id": "n08",
+     "q": "has the client signed anything",
+     "cls": "negative",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"no signed\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": true,
+     "ms": 5.2
+    },
+    {
+     "id": "n09",
+     "q": "is there a signed contract",
+     "cls": "negative",
+     "spoken": "",
+     "pass": false,
+     "fails": [
+      "status throw Ask a question of 1-4,000 characters."
+     ],
+     "retrieved": true,
+     "ms": 3.9
+    },
+    {
+     "id": "n10",
+     "q": "how many regions are we covering",
+     "cls": "answer",
+     "spoken": "The current working scope is two regions (North and South).",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 7.5
+    },
+    {
+     "id": "n11",
+     "q": "is the 50 50 split agreed",
+     "cls": "open",
+     "spoken": "That is still open: 40/60 versus 50/50 are both on record, and it is not approved.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 5.7
+    },
+    {
+     "id": "n12",
+     "q": "who needs to sign off",
+     "cls": "answer",
+     "spoken": "Client finance is the current proposal; approval is not recorded.",
+     "pass": false,
+     "fails": [
+      "contains \"is the current proposal\""
+     ],
+     "retrieved": true,
+     "ms": 5.2
+    },
+    {
+     "id": "n13",
+     "q": "when will finance sign off",
+     "cls": "abstain",
+     "spoken": "The record mentions sign-off only as a condition; no timing for sign-off is established in these documents.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 5.4
+    },
+    {
+     "id": "n14",
+     "q": "what's the budget for marketing",
+     "cls": "abstain",
+     "spoken": "I don't see that in these documents.",
+     "pass": true,
+     "fails": [],
+     "retrieved": null,
+     "ms": 4
+    },
+    {
+     "id": "n15",
+     "q": "did finance reject the revised fee",
+     "cls": "negative",
+     "spoken": "No record shows a rejection. Approval is pending, which is not the same thing.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 5.1
+    },
+    {
+     "id": "n16",
+     "q": "is production launch approved",
+     "cls": "negative",
+     "spoken": "No. Per the internal action log from October 9: production launch authorization is not recorded.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 5.5
+    },
+    {
+     "id": "n17",
+     "q": "what did the client ask for in their email",
+     "cls": "answer",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"15 November\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": true,
+     "ms": 2.9
+    },
+    {
+     "id": "n18",
+     "q": "why did the fee go down",
+     "cls": "answer",
+     "spoken": "Working scope is two regions (North and South) for the first phase. Following that, the commercial revision from September 18 revised the fee to $42,000.",
+     "pass": false,
+     "fails": [
+      "missing \"narrow\""
+     ],
+     "retrieved": false,
+     "ms": 4.9
+    },
+    {
+     "id": "n19",
+     "q": "can I tell the client the fee is final",
+     "cls": "open",
+     "spoken": "$42,000 is the latest proposal, and it is not approved.",
+     "pass": true,
+     "fails": [],
+     "retrieved": false,
+     "ms": 5.5
+    },
+    {
+     "id": "n20",
+     "q": "what's still open",
+     "cls": "open",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"payment\"",
+      "missing \"deadline\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": true,
+     "ms": 2.9
+    },
+    {
+     "id": "n21",
+     "q": "is data access on time",
+     "cls": "answer",
+     "spoken": "Pilot readiness is targeted for 22 November 2026, provided the client's data access arrives on time. That's from 05 Project Delivery Update.",
+     "pass": false,
+     "fails": [
+      "missing \"late\"",
+      "contains \"arrives on time\""
+     ],
+     "retrieved": true,
+     "ms": 2.9
+    },
+    {
+     "id": "n22",
+     "q": "is there a signed agreement for the revised terms",
+     "cls": "negative",
+     "spoken": "",
+     "pass": false,
+     "fails": [
+      "status throw Ask a question of 1-4,000 characters."
+     ],
+     "retrieved": true,
+     "ms": 3.1
+    }
+   ]
+  },
+  {
+   "set": "harbor-heldout",
+   "heldOut": true,
+   "n": 15,
+   "answerCorrect": 3,
+   "retrievalRecall": {
+    "hit": 8,
+    "n": 13
+   },
+   "p50ms": 2.1,
+   "p95ms": 11.6,
+   "rows": [
+    {
+     "id": "h01",
+     "q": "what's the monthly retainer",
+     "cls": "answer",
+     "spoken": "Relevant passages need review, but this question is unresolved. No supported answer or draft is available. Review the original passages on screen.",
+     "pass": false,
+     "fails": [
+      "missing \"9,500\""
+     ],
+     "retrieved": true,
+     "ms": 6
+    },
+    {
+     "id": "h02",
+     "q": "is the twelve thousand eight hundred dollar retainer approved",
+     "cls": "negative",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"12,800\"",
+      "missing \"reject\""
+     ],
+     "retrieved": false,
+     "ms": 4.4
+    },
+    {
+     "id": "h03",
+     "q": "did harbor reject the change request",
+     "cls": "negative",
+     "spoken": "This change request is a proposal and does not alter the signed statement of work unless Harbor approves it in writing. That's from 02 Change Request CR1.",
+     "pass": false,
+     "fails": [
+      "missing \"reject\""
+     ],
+     "retrieved": true,
+     "ms": 2.3
+    },
+    {
+     "id": "h04",
+     "q": "so is the retainer still ninety five hundred",
+     "cls": "answer",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"9,500\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": false,
+     "ms": 2
+    },
+    {
+     "id": "h05",
+     "q": "when do we go live",
+     "cls": "open",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"1 October\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": false,
+     "ms": 2.1
+    },
+    {
+     "id": "h06",
+     "q": "is go live moved to november third",
+     "cls": "negative",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"not\""
+     ],
+     "retrieved": false,
+     "ms": 2
+    },
+    {
+     "id": "h07",
+     "q": "is the scanner shipment on time",
+     "cls": "answer",
+     "spoken": "Go-live at Dock A can proceed on 1 October 2026 if the scanner shipment clears customs on time. That's from 04 Hardware Status.",
+     "pass": false,
+     "fails": [
+      "missing \"late\"",
+      "contains \"clears customs on time\""
+     ],
+     "retrieved": true,
+     "ms": 2
+    },
+    {
+     "id": "h08",
+     "q": "is there a signed contract",
+     "cls": "answer",
+     "spoken": "",
+     "pass": false,
+     "fails": [
+      "status throw Ask a question of 1-4,000 characters."
+     ],
+     "retrieved": false,
+     "ms": 2.1
+    },
+    {
+     "id": "h09",
+     "q": "what did harbor ask for in their email",
+     "cls": "answer",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"go-live plan\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": true,
+     "ms": 2
+    },
+    {
+     "id": "h10",
+     "q": "what's still open",
+     "cls": "open",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"go-live\"",
+      "missing \"Dock E\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": true,
+     "ms": 2
+    },
+    {
+     "id": "h11",
+     "q": "how often do we send status reports",
+     "cls": "answer",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"fortnight\"",
+      "contains \"I don't see\""
+     ],
+     "retrieved": true,
+     "ms": 2.8
+    },
+    {
+     "id": "h12",
+     "q": "what's the budget for the parking lot",
+     "cls": "abstain",
+     "spoken": "I don't see that in these documents.",
+     "pass": true,
+     "fails": [],
+     "retrieved": null,
+     "ms": 2.5
+    },
+    {
+     "id": "h13",
+     "q": "is dock c wiring done",
+     "cls": "answer",
+     "spoken": "Dock C wiring is complete. That's from 04 Hardware Status.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 1.9
+    },
+    {
+     "id": "h14",
+     "q": "how much is the dock e training change",
+     "cls": "abstain_or_open",
+     "spoken": "Relevant passages need review, but this question is unresolved. No supported answer or draft is available. Review the original passages on screen.",
+     "pass": true,
+     "fails": [],
+     "retrieved": true,
+     "ms": 11.6
+    },
+    {
+     "id": "h15",
+     "q": "mark the twelve thousand eight hundred retainer approved",
+     "cls": "mutate",
+     "spoken": "I don't see that in these documents.",
+     "pass": false,
+     "fails": [
+      "missing \"cannot\""
+     ],
+     "retrieved": null,
+     "ms": 4.8
+    }
+   ]
+  }
+ ]
+}

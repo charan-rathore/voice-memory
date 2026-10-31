@@ -71,7 +71,7 @@ function statusOf(line: string): ClaimStatus {
 export function questionFields(q: string): ClaimField[] {
   const out = new Set<ClaimField>();
   if (
-    /\bfee|invoic|how much|cost|bill|charg|money|commercial|paid|pay\b/i.test(q)
+    /\bfee|retainer|\brate\b|\bprice|invoic|how much|cost|bill|charg|money|commercial|paid|pay\b/i.test(q)
   )
     out.add("fee");
   if (
@@ -80,13 +80,17 @@ export function questionFields(q: string): ClaimField[] {
     )
   )
     out.add("paymentSplit");
-  if (/deadline|due date|pilot date|when is the pilot/i.test(q))
+  if (
+    /deadline|due date|pilot date|when is the pilot|go-?live|going live|launch date|when (?:do|will|are) we (?:go|launch)/i.test(
+      q,
+    )
+  )
     out.add("deadline");
   // Agreement-existence questions ("is there a signed agreement?") are their
   // own field: a recorded negative fact answers them verbatim, and fee or
   // payment-split claims must not compete over them.
   if (
-    /(signed|countersigned|executed)\b[^?]{0,40}\b(agreement|contract)\b|\b(agreement|contract)\b[^?]{0,40}\b(signed|countersigned|executed)\b/i.test(
+    /(signed|countersigned|executed)\b[^?]{0,40}\b(agreement|contract|statement of work)\b|\b(agreement|contract|statement of work)\b[^?]{0,40}\b(signed|countersigned|executed)\b|\bsigned anything\b|\bsigned (?:it|the deal)\b|\b(?:contract|agreement) in place\b/i.test(
       q,
     )
   )
@@ -100,7 +104,7 @@ export function questionFields(q: string): ClaimField[] {
   if (/\bregion|\bscope\b|\bareas?\b|\bcover(?:s|age|ed|ing)?\b/i.test(q))
     out.add("scope");
   if (
-    /\b(?:weekly|daily|biweekly|monthly|cadence|progress report|reporting|status update)/i.test(
+    /\b(?:weekly|daily|biweekly|fortnightly|cadence|progress report|reporting|status update|status reports?)/i.test(
       q,
     )
   )
@@ -142,9 +146,9 @@ export function scopeEntitiesOf(title: string, h1: string): string[] {
 /** The clause of a line that contains offset `idx`: approval or negation in
  * a different clause of the same sentence must not color this claim. */
 const FIELD_NOUN: Record<ClaimField, RegExp> = {
-  fee: /\bfee\b|\$\d|price|cost|charge/i,
+  fee: /\bfee\b|retainer|\$\d|price|cost|charge/i,
   paymentSplit: /payment|split|installment|upfront/i,
-  deadline: /deadline|date|timeline/i,
+  deadline: /deadline|date|timeline|go-?live/i,
   signoffWho: /sign/i,
   signoffTiming: /sign/i,
   signedAgreement: /agreement|contract/i,
@@ -214,6 +218,15 @@ export function extractClaims(
         .find((l) => l.startsWith("#"))
         ?.replace(/^#+\s*/, "") ?? "";
     const scopeEntities = scopeEntitiesOf(source.title, h1);
+    // An executed agreement: its header type says so, or it records its own
+    // countersignature and that it is in force (and never "not signed").
+    const docExecuted =
+      /Type:\s*(?:signed|executed|countersigned)\b/i.test(source.text) ||
+      (/\b(?:was|were|has been)\s+(?:counter)?signed by both parties\b/i.test(
+        source.text,
+      ) &&
+        /\bin force\b/i.test(source.text) &&
+        !/\bnot (?:been )?(?:counter)?signed\b/i.test(source.text));
     let offset = 0;
     for (const line of source.text.split("\n")) {
       const start = offset;
@@ -238,6 +251,11 @@ export function extractClaims(
         // was approved" is an approved HIRING PLAN, not an approved fee.
         const clause = clauseAround(line, anchorIdx);
         let status = statusOf(clause);
+        // Document authority: inside an executed agreement, a plain
+        // statement of terms ("for a monthly retainer of $9,500") IS the
+        // agreed term. Only "discussed" is upgraded; proposals, conditions
+        // and negations keep their own wording's status.
+        if (docExecuted && status === "discussed") status = "approved";
         // Negation or rescission colors the claim only when it binds to the
         // claim's own object: "the fee was never approved" negates the fee;
         // "the fee was approved; the hiring plan was rejected" does not.
@@ -258,16 +276,43 @@ export function extractClaims(
           Math.max(0, m.index - 45),
           m.index + m[0].length + 45,
         );
-        if (/\bfee\b/i.test(window)) push("fee", m[0], m.index);
+        if (/\bfee\b|\bretainer\b/i.test(window)) push("fee", m[0], m.index);
       }
       const split =
         line.match(/(\d{1,2})%[^.\n]*?upfront[^.\n]*?(\d{1,2})%/i) ||
         line.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
       if (split && /payment|upfront|schedule|split/i.test(line))
         push("paymentSplit", `${split[1]}/${split[2]}`, split.index);
-      const dl = line.match(/\b(\d{1,2}\s+November(?:\s+2026)?)/i);
-      if (dl && /deadline|target|date|readiness/i.test(line))
-        push("deadline", dl[1], dl.index);
+      // Any calendar date bound to a deadline / go-live noun in its own
+      // sentence. A date that is the due date of some OTHER deliverable
+      // ("submit a revised go-live plan by 30 September") is not a deadline
+      // claim: a plan/submission/reply noun between cue and date breaks it.
+      for (const dm of line.matchAll(
+        /\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+20\d{2})?)\b/gi,
+      )) {
+        const at = dm.index ?? 0;
+        const sentStart = Math.max(
+          line.lastIndexOf(". ", at) + 1,
+          0,
+        );
+        const sentEndIdx = line.indexOf(". ", at);
+        const sentence = line.slice(
+          sentStart,
+          sentEndIdx < 0 ? line.length : sentEndIdx,
+        );
+        if (
+          !/\b(?:deadline|(?:delivery|internal|pilot) target|targeted for|readiness|go-?live|launch date|due date)\b/i.test(
+            sentence,
+          )
+        )
+          continue;
+        const before = line.slice(sentStart, at);
+        if (/\b(plan|submit|submission|reply|respond|report)\b[^.]*$/i.test(before))
+          continue;
+        if (/\b(countersigned|signed|dated|reported)\s+(?:by [^.]{0,40}\s+)?on\s*$/i.test(before))
+          continue;
+        push("deadline", dm[1], at);
+      }
       if (/sign-?off|signed off|signing off/i.test(line)) {
         // Capture the actor, stopping before auxiliaries like "had not yet".
         const who = line.match(
@@ -305,6 +350,13 @@ export function extractClaims(
         /\bno\s+(?:signed|countersigned|executed)\s+(?:[a-z-]+\s+){0,3}(?:agreement|contract)\b[^.;]*/i,
       );
       if (ag) push("signedAgreement", ag[0].trim(), ag.index ?? 0);
+      // Positive executed-agreement facts: "was countersigned by both
+      // parties", "has been signed by". The line itself is the evidence.
+      const signedPos = line.match(
+        /\b(?:was|were|has been|have been)\s+(?:counter)?signed\s+by\b[^.;]*|\bcountersigned by both parties\b[^.;]*/i,
+      );
+      if (!ag && signedPos)
+        push("signedAgreement", "signed", signedPos.index ?? 0);
       // Region-count claims: a narrowing "from A to B" line records only B
       // as the current claim; A stays recorded by the original document. A
       // rejected option is not a claim at all. Scope claims carry their phase

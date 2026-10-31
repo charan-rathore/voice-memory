@@ -24,9 +24,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/zod/v3/helpers/util.cjs
+// ../voice-memory/node_modules/zod/v3/helpers/util.cjs
 var require_util = __commonJS({
-  "node_modules/zod/v3/helpers/util.cjs"(exports) {
+  "../voice-memory/node_modules/zod/v3/helpers/util.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getParsedType = exports.ZodParsedType = exports.objectUtil = exports.util = void 0;
@@ -166,9 +166,9 @@ var require_util = __commonJS({
   }
 });
 
-// node_modules/zod/v3/ZodError.cjs
+// ../voice-memory/node_modules/zod/v3/ZodError.cjs
 var require_ZodError = __commonJS({
-  "node_modules/zod/v3/ZodError.cjs"(exports) {
+  "../voice-memory/node_modules/zod/v3/ZodError.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ZodError = exports.quotelessJson = exports.ZodIssueCode = void 0;
@@ -294,9 +294,9 @@ var require_ZodError = __commonJS({
   }
 });
 
-// node_modules/zod/v3/locales/en.cjs
+// ../voice-memory/node_modules/zod/v3/locales/en.cjs
 var require_en = __commonJS({
-  "node_modules/zod/v3/locales/en.cjs"(exports) {
+  "../voice-memory/node_modules/zod/v3/locales/en.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var ZodError_js_1 = require_ZodError();
@@ -405,9 +405,9 @@ var require_en = __commonJS({
   }
 });
 
-// node_modules/zod/v3/errors.cjs
+// ../voice-memory/node_modules/zod/v3/errors.cjs
 var require_errors = __commonJS({
-  "node_modules/zod/v3/errors.cjs"(exports) {
+  "../voice-memory/node_modules/zod/v3/errors.cjs"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -428,9 +428,9 @@ var require_errors = __commonJS({
   }
 });
 
-// node_modules/zod/v3/helpers/parseUtil.cjs
+// ../voice-memory/node_modules/zod/v3/helpers/parseUtil.cjs
 var require_parseUtil = __commonJS({
-  "node_modules/zod/v3/helpers/parseUtil.cjs"(exports) {
+  "../voice-memory/node_modules/zod/v3/helpers/parseUtil.cjs"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -559,17 +559,17 @@ var require_parseUtil = __commonJS({
   }
 });
 
-// node_modules/zod/v3/helpers/typeAliases.cjs
+// ../voice-memory/node_modules/zod/v3/helpers/typeAliases.cjs
 var require_typeAliases = __commonJS({
-  "node_modules/zod/v3/helpers/typeAliases.cjs"(exports) {
+  "../voice-memory/node_modules/zod/v3/helpers/typeAliases.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
   }
 });
 
-// node_modules/zod/v3/helpers/errorUtil.cjs
+// ../voice-memory/node_modules/zod/v3/helpers/errorUtil.cjs
 var require_errorUtil = __commonJS({
-  "node_modules/zod/v3/helpers/errorUtil.cjs"(exports) {
+  "../voice-memory/node_modules/zod/v3/helpers/errorUtil.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.errorUtil = void 0;
@@ -581,9 +581,9 @@ var require_errorUtil = __commonJS({
   }
 });
 
-// node_modules/zod/v3/types.cjs
+// ../voice-memory/node_modules/zod/v3/types.cjs
 var require_types = __commonJS({
-  "node_modules/zod/v3/types.cjs"(exports) {
+  "../voice-memory/node_modules/zod/v3/types.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.discriminatedUnion = exports.date = exports.boolean = exports.bigint = exports.array = exports.any = exports.coerce = exports.ZodFirstPartyTypeKind = exports.late = exports.ZodSchema = exports.Schema = exports.ZodReadonly = exports.ZodPipeline = exports.ZodBranded = exports.BRAND = exports.ZodNaN = exports.ZodCatch = exports.ZodDefault = exports.ZodNullable = exports.ZodOptional = exports.ZodTransformer = exports.ZodEffects = exports.ZodPromise = exports.ZodNativeEnum = exports.ZodEnum = exports.ZodLiteral = exports.ZodLazy = exports.ZodFunction = exports.ZodSet = exports.ZodMap = exports.ZodRecord = exports.ZodTuple = exports.ZodIntersection = exports.ZodDiscriminatedUnion = exports.ZodUnion = exports.ZodObject = exports.ZodArray = exports.ZodVoid = exports.ZodNever = exports.ZodUnknown = exports.ZodAny = exports.ZodNull = exports.ZodUndefined = exports.ZodSymbol = exports.ZodDate = exports.ZodBoolean = exports.ZodBigInt = exports.ZodNumber = exports.ZodString = exports.ZodType = void 0;
@@ -4123,9 +4123,9 @@ var require_types = __commonJS({
   }
 });
 
-// node_modules/zod/v3/external.cjs
+// ../voice-memory/node_modules/zod/v3/external.cjs
 var require_external = __commonJS({
-  "node_modules/zod/v3/external.cjs"(exports) {
+  "../voice-memory/node_modules/zod/v3/external.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -4153,9 +4153,9 @@ var require_external = __commonJS({
   }
 });
 
-// node_modules/zod/index.cjs
+// ../voice-memory/node_modules/zod/index.cjs
 var require_zod = __commonJS({
-  "node_modules/zod/index.cjs"(exports) {
+  "../voice-memory/node_modules/zod/index.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -4282,7 +4282,16 @@ var DICTIONARY = [
   ["money", ["fee", "payment"]],
   ["paid", ["payment", "upfront"]],
   ["deadline", ["date", "target"]],
-  ["kickoff", ["kick-off"]]
+  ["kickoff", ["kick-off"]],
+  // Paraphrase bridges measured missing on the benchmark corpus (2026-10-31
+  // answer-quality bench): each maps a natural phrasing to the vocabulary the
+  // record actually uses. Recall-widening only; the evidence gate decides.
+  ["pitch", ["proposal"]],
+  ["cost", ["fee", "price"]],
+  ["dropped", ["narrow", "narrower", "removed"]],
+  ["country", ["region", "regions"]],
+  ["ready", ["readiness"]],
+  ["thyroid", ["tsh"]]
 ];
 var MAX_ADDED = 40;
 function protectedToken(tok) {
@@ -4327,7 +4336,7 @@ function expandQuery(question) {
 
 // claim-check.ts
 function statusOf(line) {
-  if (/pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) approved|no decision (was )?taken|not [^.;]{0,20}(approved|signed|countersign|confirmed)/i.test(
+  if (/pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) approved|no decision (was )?taken|not [^.;]{0,20}(approved|signed|countersign|confirmed)|no\s+(signed|countersigned|executed)\s/i.test(
     line
   ))
     return "unresolved";
@@ -4342,15 +4351,21 @@ function statusOf(line) {
 }
 function questionFields(q) {
   const out = /* @__PURE__ */ new Set();
-  if (/\bfee|invoic|how much|cost|bill|charg|money|commercial|paid|pay\b/i.test(q))
+  if (/\bfee|retainer|\brate\b|\bprice|invoic|how much|cost|bill|charg|money|commercial|paid|pay\b/i.test(q))
     out.add("fee");
   if (/payment|split|upfront|installment|bill|commercial|money|paid|pay\b/i.test(
     q
   ))
     out.add("paymentSplit");
-  if (/deadline|due date|pilot date|when is the pilot/i.test(q))
+  if (/deadline|due date|pilot date|when is the pilot|go-?live|going live|launch date|when (?:do|will|are) we (?:go|launch)/i.test(
+    q
+  ))
     out.add("deadline");
-  if (/sign-?off|signoff|signed off|signing off/i.test(q)) {
+  if (/(signed|countersigned|executed)\b[^?]{0,40}\b(agreement|contract|statement of work)\b|\b(agreement|contract|statement of work)\b[^?]{0,40}\b(signed|countersigned|executed)\b|\bsigned anything\b|\bsigned (?:it|the deal)\b|\b(?:contract|agreement) in place\b/i.test(
+    q
+  ))
+    out.add("signedAgreement");
+  if (/sign[- ]?off|signed off|signing off/i.test(q)) {
     if (/\bwhen|timing|expected|date\b/i.test(q)) out.add("signoffTiming");
     else out.add("signoffWho");
   }
@@ -4358,7 +4373,7 @@ function questionFields(q) {
     out.add("launchApproval");
   if (/\bregion|\bscope\b|\bareas?\b|\bcover(?:s|age|ed|ing)?\b/i.test(q))
     out.add("scope");
-  if (/\b(?:weekly|daily|biweekly|monthly|cadence|progress report|reporting|status update)/i.test(
+  if (/\b(?:weekly|daily|biweekly|fortnightly|cadence|progress report|reporting|status update|status reports?)/i.test(
     q
   ))
     out.add("reporting");
@@ -4388,11 +4403,12 @@ function scopeEntitiesOf(title, h1) {
   return [...out];
 }
 var FIELD_NOUN = {
-  fee: /\bfee\b|\$\d|price|cost|charge/i,
+  fee: /\bfee\b|retainer|\$\d|price|cost|charge/i,
   paymentSplit: /payment|split|installment|upfront/i,
-  deadline: /deadline|date|timeline/i,
+  deadline: /deadline|date|timeline|go-?live/i,
   signoffWho: /sign/i,
   signoffTiming: /sign/i,
+  signedAgreement: /agreement|contract/i,
   launchApproval: /launch/i,
   scope: /region|scope/i,
   reporting: /report|digest|cadence/i
@@ -4432,6 +4448,9 @@ function extractClaims(bundle, fields) {
     const docDate = dateMatch ? dateMatch[1] : "";
     const h1 = source.text.split("\n").find((l) => l.startsWith("#"))?.replace(/^#+\s*/, "") ?? "";
     const scopeEntities = scopeEntitiesOf(source.title, h1);
+    const docExecuted = /Type:\s*(?:signed|executed|countersigned)\b/i.test(source.text) || /\b(?:was|were|has been)\s+(?:counter)?signed by both parties\b/i.test(
+      source.text
+    ) && /\bin force\b/i.test(source.text) && !/\bnot (?:been )?(?:counter)?signed\b/i.test(source.text);
     let offset = 0;
     for (const line of source.text.split("\n")) {
       const start = offset;
@@ -4453,6 +4472,7 @@ function extractClaims(bundle, fields) {
         if (!fields.includes(field)) return;
         const clause = clauseAround(line, anchorIdx);
         let status = statusOf(clause);
+        if (docExecuted && status === "discussed") status = "approved";
         if (negationBinds(field, value, line)) status = "unresolved";
         const supersedes = /revis|supersed|replaces|narrow/i.test(clause) && status !== "unresolved" && !/\bvs\b|open decision|disput/i.test(clause);
         claims.push({ field, value, status, supersedes, ...base });
@@ -4462,14 +4482,35 @@ function extractClaims(bundle, fields) {
           Math.max(0, m.index - 45),
           m.index + m[0].length + 45
         );
-        if (/\bfee\b/i.test(window)) push("fee", m[0], m.index);
+        if (/\bfee\b|\bretainer\b/i.test(window)) push("fee", m[0], m.index);
       }
       const split = line.match(/(\d{1,2})%[^.\n]*?upfront[^.\n]*?(\d{1,2})%/i) || line.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
       if (split && /payment|upfront|schedule|split/i.test(line))
         push("paymentSplit", `${split[1]}/${split[2]}`, split.index);
-      const dl = line.match(/\b(\d{1,2}\s+November(?:\s+2026)?)/i);
-      if (dl && /deadline|target|date|readiness/i.test(line))
-        push("deadline", dl[1], dl.index);
+      for (const dm of line.matchAll(
+        /\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+20\d{2})?)\b/gi
+      )) {
+        const at = dm.index ?? 0;
+        const sentStart = Math.max(
+          line.lastIndexOf(". ", at) + 1,
+          0
+        );
+        const sentEndIdx = line.indexOf(". ", at);
+        const sentence = line.slice(
+          sentStart,
+          sentEndIdx < 0 ? line.length : sentEndIdx
+        );
+        if (!/\b(?:deadline|(?:delivery|internal|pilot) target|targeted for|readiness|go-?live|launch date|due date)\b/i.test(
+          sentence
+        ))
+          continue;
+        const before = line.slice(sentStart, at);
+        if (/\b(plan|submit|submission|reply|respond|report)\b[^.]*$/i.test(before))
+          continue;
+        if (/\b(countersigned|signed|dated|reported)\s+(?:by [^.]{0,40}\s+)?on\s*$/i.test(before))
+          continue;
+        push("deadline", dm[1], at);
+      }
       if (/sign-?off|signed off|signing off/i.test(line)) {
         const who = line.match(
           /([A-Za-z]+(?: [A-Za-z]+){0,3}?)\s+(?:(?:had|has|have|not|yet|already|formally|been)\s+)*sign(?:ed)?[- ]?off/i
@@ -4490,6 +4531,15 @@ function extractClaims(bundle, fields) {
         );
         if (tm) push("signoffTiming", "stated", tm.index);
       }
+      const ag = line.match(
+        /\bno\s+(?:signed|countersigned|executed)\s+(?:[a-z-]+\s+){0,3}(?:agreement|contract)\b[^.;]*/i
+      );
+      if (ag) push("signedAgreement", ag[0].trim(), ag.index ?? 0);
+      const signedPos = line.match(
+        /\b(?:was|were|has been|have been)\s+(?:counter)?signed\s+by\b[^.;]*|\bcountersigned by both parties\b[^.;]*/i
+      );
+      if (!ag && signedPos)
+        push("signedAgreement", "signed", signedPos.index ?? 0);
       if (/regions?\b/i.test(line)) {
         const scopePhase = /expansion|national\b|\b20\d{2}\b|phase\s*(2|two|ii)\b/i.test(line) ? "expansion" : /\bpilot\b|first phase|phase\s*(1|one)\b/i.test(line) ? "pilot" : null;
         const lineYear = line.match(/\b(20\d{2})\b/)?.[1];
@@ -12161,25 +12211,29 @@ function validateEvidence(c, bundle) {
     throw Error("Source evidence does not match its original.");
   return true;
 }
-function answer(question, bundle) {
+function answer(question, bundle, dense) {
   if (typeof question !== "string" || !question.trim() || question.length > 4e3)
     throw Error("Ask a question of 1-4,000 characters.");
   const start = performance.now();
-  const retrieve = (query) => retrieveFromRows({
-    query,
-    queryVector: null,
-    mode: "keyword",
-    topK: 3,
-    embeddingModel: null,
-    rows: bundle.rows,
-    storage: {
-      backend: "ephemeral",
-      durable: false,
-      denseAvailable: false,
-      warning: null
-    },
-    corpusScope: { kind: "corpus", corpusId: bundle.scope }
-  });
+  const primaryDense = dense && dense.queryVector && dense.available ? dense : null;
+  const retrieve = (query) => {
+    const useDense = primaryDense && query === question;
+    return retrieveFromRows({
+      query,
+      queryVector: useDense ? primaryDense.queryVector : null,
+      mode: useDense ? "hybrid" : "keyword",
+      topK: 3,
+      embeddingModel: useDense ? primaryDense.model : null,
+      rows: bundle.rows,
+      storage: {
+        backend: "ephemeral",
+        durable: false,
+        denseAvailable: !!primaryDense,
+        warning: null
+      },
+      corpusScope: { kind: "corpus", corpusId: bundle.scope }
+    });
+  };
   const fields = questionFields(question);
   let found = retrieve(question);
   let expansionUsed = null;
@@ -12190,6 +12244,50 @@ function answer(question, bundle) {
       if (widened.evidence === "positive") {
         found = widened;
         expansionUsed = expansion;
+      }
+    }
+  }
+  if (!expansionUsed && found.evidence === "positive") {
+    const mf = /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
+      question
+    );
+    if (mf) {
+      const foundText = found.chunks.map((c) => c.text).join("\n").toLowerCase();
+      if (!foundText.includes(mf[1].toLowerCase())) {
+        const expansion = expandQuery(question);
+        const bridges = expansion.applied.flatMap((t) => t.to.toLowerCase().split(/\s+/)).filter((t) => t.length > 2);
+        if (bridges.length) {
+          const widened = retrieve(expansion.expanded);
+          const wText = widened.chunks.map((c) => c.text).join("\n").toLowerCase();
+          if (widened.evidence === "positive" && bridges.some((b) => wText.includes(b))) {
+            found = widened;
+            expansionUsed = expansion;
+          }
+        }
+      }
+    }
+  }
+  if (!expansionUsed && found.evidence === "positive" && /\b(?:our|my)\s+team\b|\bour\s+internal\b|\binternally\b/i.test(question) && /\bwhen\b|\bdeadline\b|\bdue\b|\bready\b|\bexpected\b/i.test(question)) {
+    const widenedQuery = `${question} team internal delivery update target`;
+    const widened = retrieve(widenedQuery);
+    if (widened.evidence === "positive") {
+      const seen = new Set(found.chunks.map((c) => `${c.title}|${c.text}`));
+      const extra = widened.chunks.filter(
+        (c) => !seen.has(`${c.title}|${c.text}`)
+      );
+      if (extra.length) {
+        found = { ...found, chunks: [...found.chunks, ...extra] };
+        expansionUsed = {
+          original: question,
+          expanded: widenedQuery,
+          applied: [
+            {
+              from: "authority scope",
+              to: "team internal delivery update target",
+              kind: "dictionary"
+            }
+          ]
+        };
       }
     }
   }
@@ -12239,7 +12337,10 @@ function answer(question, bundle) {
     question,
     bundle,
     found,
-    { actualMode: "keyword", embeddingModel: null },
+    {
+      actualMode: found.actualMode,
+      embeddingModel: found.actualMode === "keyword" ? null : dense?.model ?? null
+    },
     start
   );
   let claimsVerdict = false;
@@ -12273,6 +12374,30 @@ function answer(question, bundle) {
         if (toks.size === 0) return true;
         return qEnts.some((e) => toks.has(e));
       });
+    }
+    const FIELD_TOKEN = new Set(
+      "fee fees invoice invoiced invoicing cost costs bill billed billing charg charge charged charging money commercial commercials paid pay payment payments split upfront installment installments deadline due pilot signoff launch approve approved approval authorize authorized authorization region regions scope area areas cover covers covered weekly daily biweekly monthly cadence progress report reporting status update current record records ask asked asking funding funded finance financed financing amount amounts price prices value values discount discounts structure terms revised final agree agreed proposal propose proposed quote quoted sign signing signed off timing expected date change changed discuss discussed decided decide decision".split(
+        " "
+      )
+    );
+    const FILLER_Q = new Set(
+      "anyone anybody someone somebody everyone everybody anything something nothing them they their theirs there here himself herself itself myself ourselves yourself finally currently now yet still already just really actually ever never always often much many more most less least very only even also back again once twice about into over under with without from this that these those what which when where whom whose while does doing done have having had been being were will would shall should may might must".split(
+        " "
+      )
+    );
+    const qSubjects = (question.toLowerCase().match(/\b[a-z][a-z-]{3,}\b/g) ?? []).filter(
+      (t) => !GENERIC_Q.has(t) && !FIELD_TOKEN.has(t) && !FILLER_Q.has(t)
+    );
+    if (qSubjects.length && claims.length) {
+      const anchored = claims.some((c) => {
+        const hay = `${c.quote} ${c.title} ${(c.scopeEntities ?? []).join(" ")}`.toLowerCase();
+        return qSubjects.some((s) => hay.includes(s));
+      });
+      if (!anchored) claims = [];
+    }
+    if (/^\s*when\b/i.test(question) && claims.length) {
+      const TEMPORAL = /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b|\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}|\b\d{4}-\d{2}-\d{2}\b|\b(?:within|no later than|by|every|per|each)\b[^.\n]{0,30}?\b\d+\s*(?:days?|weeks?|months?|hours?|years?)\b|\b\d+\s*(?:business )?(?:days?|weeks?|months?|hours?|years?)\b|\b(?:daily|weekly|biweekly|monthly|quarterly|annually|yearly)\b/i;
+      if (!claims.some((c) => TEMPORAL.test(c.quote))) claims = [];
     }
     const { active, superseded, approved } = resolveClaims(claims);
     const claimInfo = (c) => `${c.value} (${c.title}${c.docDate ? ", " + c.docDate : ""}; status: ${c.status})`;
@@ -12311,6 +12436,20 @@ function answer(question, bundle) {
       result.reviewEvidence = conditions;
       result.evidenceStatus = "insufficient";
       result.answer = "The record mentions sign-off only as a condition; no timing for sign-off is established in these documents." + (conditions.length ? " Related condition: " + conditions.map((c) => `"${c.quote}" (${c.title})`).join("; ") : "");
+      result.spoken = result.answer;
+    } else if (fields.includes("signedAgreement") && claims.some((c) => c.field === "signedAgreement")) {
+      claimsVerdict = true;
+      const recorded = claims.filter((c) => c.field === "signedAgreement");
+      result.refused = false;
+      result.supported = true;
+      result.unresolved = false;
+      result.partial = false;
+      result.partialNotice = null;
+      result.evidenceStatus = "positive";
+      result.evidence = recorded;
+      result.answer = "The record states: " + recorded.map(
+        (c) => `"${c.quote}" (${c.title}${c.docDate ? ", " + c.docDate : ""})`
+      ).join("; ") + ". No signed agreement is on record for the revised terms; these documents do not establish that one was later executed.";
       result.spoken = result.answer;
     } else {
       const GENERIC_TOK = /* @__PURE__ */ new Set([
@@ -12526,7 +12665,31 @@ function answer(question, bundle) {
     );
     const qEnts = (question.match(/\b[A-Z][a-zA-Z]+\b/g) ?? []).map((w) => w.toLowerCase()).filter((w) => w.length > 2 && !QSTOP.has(w));
     const entMiss = qEnts.some((e) => !exText.includes(e));
-    if (idMiss || quantitative && !quantOk || entMiss) {
+    const contactQ = /\b(phone|mobile|contact number|e-?mail address)\b/i.test(
+      question
+    );
+    const phoneCand = exText.match(/\+?\d[\d\s().-]{6,}\d/g) ?? [];
+    const contactMiss = contactQ && !phoneCand.some(
+      (m) => !/^\d{4}-\d{2}-\d{2}$/.test(m.trim()) && m.replace(/\D/g, "").length >= 7
+    ) && !/[\w.+-]+@[\w-]+\.[\w.]+/.test(exText);
+    const serialMiss = /\b(serial|part|registration|reference) (number|no|code)\b/i.test(
+      question
+    ) && !/\b(?=[a-z0-9-]*\d)(?=[a-z0-9-]*[a-z])[a-z0-9-]{4,}\b/i.test(exText);
+    const whenMiss = /^\s*when\b/i.test(question) && !/\b\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b|\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}|\b\d{4}-\d{2}-\d{2}\b|\b\d+\s*(?:business )?(?:days?|weeks?|months?|hours?|years?)\b|\b(?:daily|weekly|biweekly|monthly|quarterly|annually|yearly)\b/i.test(
+      exText
+    );
+    const metricField = /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
+      question
+    );
+    const bridgedHits = (expansionUsed?.applied ?? []).some(
+      (t) => t.to.toLowerCase().split(/\s+/).some((tok) => tok.length > 2 && exText.includes(tok))
+    );
+    const metricMiss = metricField != null && !exText.includes(metricField[1].toLowerCase()) && !bridgedHits;
+    const askedFieldWord = /\b(penalty|penalties|severance|liquidated damages|fine|fines)\b/i;
+    const fieldWordMiss = askedFieldWord.test(question) && !askedFieldWord.test(exText);
+    const vendorClass = /\b(vendor|supplier|contractor|manufacturer)\b/i;
+    const vendorMiss = /\bwhich (vendor|supplier|contractor|manufacturer)\b/i.test(question) && !vendorClass.test(exText);
+    if (idMiss || quantitative && !quantOk || entMiss || contactMiss || serialMiss || whenMiss || metricMiss || fieldWordMiss || vendorMiss) {
       result.reviewEvidence = result.evidence;
       result.evidence = [];
       result.refused = true;
@@ -12684,5 +12847,6 @@ export {
   questionFields,
   resolveClaims,
   retrieveChunks,
+  retrieveFromRows,
   validateEvidence
 };

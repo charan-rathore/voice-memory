@@ -58,6 +58,13 @@ function units(quote) {
   return out;
 }
 
+export function mainClause(text) {
+  return text.replace(
+    /[,;]?\s*\b(?:provided(?: that)?|if|unless|as long as|assuming|subject to|on condition that|only when)\b[^.;]*/gi,
+    "",
+  );
+}
+
 const cellsOf = (row) =>
   row
     .replace(/^\||\|$/g, "")
@@ -129,7 +136,10 @@ export function extractiveSpoken(
   let best = null;
   for (const ev of result.evidence) {
     for (const u of units(ev.quote)) {
-      const ut = new Set(terms(u.text));
+      // Only the main clause asserts: "readiness is targeted for 22 November,
+      // provided data access arrives on time" says nothing about whether data
+      // access IS on time. Words inside a conditional clause do not count.
+      const ut = new Set(terms(mainClause(u.text)));
       let score = 0;
       for (const t of q) if (ut.has(t)) score++;
       // A table row is "about" its first cell: naming it is the strong signal.

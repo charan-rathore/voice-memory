@@ -10,6 +10,19 @@ import {
   resolveClaims,
   questionFields,
 } from "./dist/engine.mjs";
+import {
+  OPEN_ITEMS_RE,
+  openItems,
+  documentLookup,
+  documentedReason,
+  rejectionLookup,
+  unboundSubject,
+  subjectSentence,
+  docLabelOf,
+  cite,
+  sentencesOf,
+} from "./spoken-routes.mjs";
+import { normalizeSpoken } from "./spoken-normalize.mjs";
 
 const FIELD_CANONICAL = {
   fee: "What is the fee?",
@@ -20,6 +33,7 @@ const FIELD_CANONICAL = {
   launchApproval: "Is the launch approved?",
   scope: "What is the scope?",
   reporting: "What reporting was agreed?",
+  signedAgreement: "Is there a signed agreement?",
 };
 
 const INTENTS = [
@@ -219,7 +233,7 @@ const SUPPLEMENT_PATTERNS = [
   },
   {
     field: "reporting",
-    cue: /\breporting\b/i,
+    cue: /\breport(?:ing|s)?\b/i,
     re: /\b(weekly|fortnightly|monthly|biweekly|daily)\b/gi,
   },
 ];
@@ -453,6 +467,12 @@ function render({
   if (intent === "MUTATE")
     return `I cannot change the records by voice. ${value ? `${cap(value)} stays` : "It stays"} a proposal until a signed approval is added to the documents.`;
 
+  if (field === "signedAgreement") {
+    if (verdict === "CONFIRMED" && current)
+      return `Yes. ${cap(docLabel(current))} says: ${trimQuote(current.quote.replace(/^\s*\d+\.\s*/, ""), 120)}`;
+  }
+  if (field === "signoffWho" && current && verdict !== "CONFIRMED")
+    return `The terms need ${current.value} sign-off, and that sign-off is not recorded yet.`;
   if (field === "scope" && current)
     return `The current working scope is ${value}.`;
   if (field === "reporting" && current) {
@@ -674,9 +694,99 @@ function unknownNamedEntity(question, bundle) {
   return null;
 }
 
-export function spokenTurn(question, bundle, prevField = null) {
+const pack = (c) => ({
+  title: c.title,
+  docDate: c.docDate,
+  quote: c.quote,
+  firstLine: c.firstLine,
+  lastLine: c.lastLine,
+  hash: c.hash,
+  sourceId: c.sourceId,
+  start: c.start,
+  end: c.end,
+  status: c.status,
+});
+
+// Canonical value key for "did they approve $42,000?" style questions.
+function askedValueKey(question, field) {
+  if (field === "fee") {
+    const a = question.match(/[$€£₹]\s?[\d,]+|\b\d{1,3}(?:,\d{3})+\b/);
+    return a ? a[0].replace(/[^\d]/g, "") : null;
+  }
+  if (field === "deadline") {
+    const d = question.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b/i);
+    return d ? `${Number(d[1])} ${d[2].toLowerCase()}` : null;
+  }
+  if (field === "paymentSplit") {
+    const p = question.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\b/);
+    return p ? `${p[1]}/${p[2]}` : null;
+  }
+  return null;
+}
+function valueKeyOf(c, field) {
+  if (field === "fee") return String(c.value).replace(/[^\d]/g, "");
+  if (field === "deadline") {
+    const d = String(c.value).match(/(\d{1,2})\s+([A-Za-z]+)/);
+    return d ? `${Number(d[1])} ${d[2].toLowerCase()}` : null;
+  }
+  return String(c.value).replace(/\s/g, "");
+}
+
+// A question about ONE specific value ("is the $12,800 retainer approved?",
+// "is go-live moved to 3 November?") is answered about that value: its own
+// explicit rejection, its own approval, or "proposed, not approved" next to
+// the approved value. Never "yes" because some OTHER value was approved.
+function valueVerdict(question, field, fieldClaims, resolved, intent) {
+  if (!["FINALIZED", "LATEST", "REJECTED", "OTHER", "HISTORY"].includes(intent)) return null;
+  const key = askedValueKey(question, field);
+  if (!key) return null;
+  const mine = fieldClaims.filter((c) => valueKeyOf(c, field) === key);
+  if (!mine.length) return null;
+  const approved = resolved.approved.get(field) ?? [];
+  const approvedOther = approved.filter((c) => valueKeyOf(c, field) !== key);
+  const rejection = mine.find((c) => /\brejected|turned down|declined\b/i.test(c.quote));
+  const shown = (c) => String(c.value).replace(/(\S)\(/, "$1 (");
+  if (rejection) {
+    const tail = approvedOther.length
+      ? ` The ${field === "fee" ? "figure" : "date"} in force remains ${shown(approvedOther[0])}.`
+      : "";
+    return {
+      verdict: "REJECTED-EXPLICIT",
+      spoken: `No. Per ${docLabel(rejection)}: ${trimQuote(rejection.quote.replace(/^\s*\d+\.\s*/, ""), 100)}${tail}`,
+      citations: [rejection, ...approvedOther.slice(0, 1)],
+    };
+  }
+  if (mine.some((c) => c.status === "approved")) return null; // normal CONFIRMED path
+  if (approvedOther.length) {
+    const p = mine[0];
+    return {
+      verdict: "PROPOSED",
+      spoken: `No. ${shown(p)} was ${p.status === "requested" ? "requested" : "proposed"}, not approved; the approved ${field === "deadline" ? "date" : "figure"} is ${shown(approvedOther[0])}, per ${docLabel(approvedOther[0])}.`,
+      citations: [p, approvedOther[0]],
+    };
+  }
+  return null;
+}
+
+export function spokenTurn(rawQuestion, bundle, prevField = null) {
   if (!bundle?.sources?.length) return null;
+  // Speech notation -> document notation (numbers, ordinals, fillers).
+  const question = normalizeSpoken(rawQuestion);
   const intent = routeIntent(question);
+  // Question shapes the field graph cannot answer, each from verbatim,
+  // span-validated sentences (spoken-routes.mjs).
+  if (intent !== "MUTATE" && OPEN_ITEMS_RE.test(question)) {
+    const open = openItems(bundle);
+    if (open) return open;
+  }
+  if (intent !== "MUTATE") {
+    const doc = documentLookup(question, bundle);
+    if (doc) return doc;
+  }
+  if (intent === "REJECTED") {
+    const rj = rejectionLookup(question, bundle);
+    if (rj) return rj;
+  }
   const claims = mergedClaims(bundle, ALL_FIELDS);
   if (unknownNamedEntity(question, bundle))
     return {
@@ -741,7 +851,31 @@ export function spokenTurn(question, bundle, prevField = null) {
     };
   }
   const fieldClaims = claims.filter((c) => c.field === field);
+  // Subject binding: "how much is the Dock E training change?" names a
+  // subject no fee claim mentions; the fee figures must not answer it.
+  // Only when the question names neither the field itself nor a value: a
+  // question that says "fee" or "$48,000" IS about the field.
+  const namesField =
+    /\b(fee|retainer|price|rate|deadline|go-live|date|split|payment|schedule)\b|[$€£₹]\s?\d|\b\d{1,3}(?:,\d{3})+\b|\b\d{1,2}\s+[A-Z][a-z]+\b|\b\d{1,2}\/\d{1,2}\b/i.test(
+      question,
+    );
+  if (
+    !namesField &&
+    ["fee", "deadline", "paymentSplit"].includes(field) &&
+    intent !== "MUTATE"
+  ) {
+    const unbound = unboundSubject(question, fieldClaims, bundle);
+    if (unbound) {
+      const sub = subjectSentence(unbound, bundle);
+      if (sub) return sub;
+    }
+  }
   const resolved = resolveClaims(fieldClaims);
+  if (intent !== "MUTATE") {
+    const vv = valueVerdict(question, field, fieldClaims, resolved, intent);
+    if (vv && guard(vv.spoken, vv.citations, vv.verdict === "REJECTED-EXPLICIT" ? "REJECTED-EXPLICIT" : "NO-RECORD"))
+      return { spoken: vv.spoken, verdict: vv.verdict, field, intent, citations: vv.citations.map(pack) };
+  }
   const verdict = verdictFor(field, resolved, claims, question, intent, bundle);
   const actives = resolved.active.get(field) ?? [];
   const current =
@@ -762,11 +896,24 @@ export function spokenTurn(question, bundle, prevField = null) {
   }
   // Engine stays in the loop: the canonical field question must not refuse,
   // or we abstain rather than speak from claims alone.
-  const engineResult = answer(FIELD_CANONICAL[field], bundle);
+  // A field with no canonical question used to throw here ("is there a
+  // signed contract" crashed the live call); fall back to the question.
+  const engineResult = answer(FIELD_CANONICAL[field] ?? question, bundle);
   // Engine refused the canonical field question and the claim graph has no
   // structured answer either: defer to the caller's existing engine-answer
   // path, which carries the engine's own honest wording.
   if (engineResult.refused && (verdict === "UNKNOWN" || !current)) return null;
+  if (intent === "WHY") {
+    const why = documentedReason(current, bundle);
+    const spokenWhy = why?.spoken ?? "The records show the change, but they don't state a reason for it.";
+    return {
+      spoken: spokenWhy,
+      verdict: why ? "QUOTED" : "UNKNOWN",
+      field,
+      intent,
+      citations: (why?.citations ?? []).map(pack),
+    };
+  }
   let spoken = render({
     intent,
     verdict,
@@ -789,18 +936,6 @@ export function spokenTurn(question, bundle, prevField = null) {
     verdict,
     field,
     intent,
-    citations: citations.map((c) => ({
-      title: c.title,
-      docDate: c.docDate,
-      quote: c.quote,
-      firstLine: c.firstLine,
-      lastLine: c.lastLine,
-      hash: c.hash,
-      // Exact source span (additive): lets the screen open the same passage.
-      sourceId: c.sourceId,
-      start: c.start,
-      end: c.end,
-      status: c.status,
-    })),
+    citations: citations.map(pack),
   };
 }
