@@ -3,154 +3,289 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     <title>Voice Memory</title>
+    <link
+      rel="preload"
+      href="/fonts/plex-sans-400.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/newsreader.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <header>
-      <a href="/" class="brand"
-        >Voice Memory<span>IntelliRAG + memoRABLE</span></a
-      ><span class="pill"
-        >Keyword retrieval · verbatim excerpts · no paid inference</span
-      >
+    <a class="skip" href="#question">Skip to the question</a>
+    <header class="bar">
+      <a href="/" class="wordmark">Voice Memory</a>
+      <p id="corpus-line" class="corpus-line">No documents yet</p>
     </header>
-    <main>
-      <section class="intro">
-        <p class="eyebrow">PICK UP WHERE YOU LEFT OFF</p>
-        <h1>Your next conversation.<br />With the context intact.</h1>
-        <p>
-          Bring your project documents. Find what was said, inspect the
-          evidence, and turn it into a follow-up draft.
-        </p>
-      </section>
-      <ol class="steps">
-        <li>01 &nbsp; Add documents</li>
-        <li>02 &nbsp; Ask & inspect</li>
-        <li>03 &nbsp; Review draft</li>
-      </ol>
-      <section class="workspace">
-        <aside>
-          <h2>Your sources</h2>
-          <p class="muted">
-            Text or Markdown, up to 10 files. Processed on this server and kept
-            in this session's memory for one hour of inactivity.
-          </p>
-          <label class="upload"
-            >Choose documents<input
+
+    <div class="desk" id="desk">
+      <aside class="rail" aria-labelledby="docs-heading">
+        <div class="rail-head">
+          <h2 id="docs-heading">Documents</h2>
+          <button
+            id="docs-toggle"
+            class="rail-toggle"
+            type="button"
+            aria-expanded="true"
+            aria-controls="rail-body"
+          >
+            Hide
+          </button>
+        </div>
+        <div id="rail-body" class="rail-body">
+          <label class="drop" id="drop">
+            <input
               id="files"
               type="file"
               multiple
-              accept=".txt,.md,text/plain,text/markdown" /></label
-          ><button id="sample" class="secondary">
-            Try a clearly fictional project
+              accept=".pdf,.docx,.png,.jpg,.jpeg,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,text/plain,text/markdown"
+            />
+            <span class="drop-title">Add documents</span>
+            <span class="drop-hint"
+              >Drop files here or choose them. PDF, Word, PNG, JPEG, text or
+              Markdown, up to 15 MB each.</span
+            >
+          </label>
+          <ul id="sources" class="doc-list" aria-live="polite"></ul>
+          <div class="examples">
+            <p class="examples-label">No documents handy?</p>
+            <button id="northstar" type="button" class="link">
+              Load the full Northstar pilot demo (7 fictional files)
+            </button>
+            <button id="sample" type="button" class="link">
+              Try a clearly fictional project
+            </button>
+          </div>
+          <button id="reset" type="button" class="quiet">
+            Clear this session
           </button>
-          <button id="northstar" class="secondary">
-            Load the full Northstar pilot demo (7 fictional files)
-          </button>
-          <ul id="sources"></ul>
-          <button id="reset" class="quiet">Clear this session</button>
-        </aside>
-        <article>
-          <div class="section-label">THE QUESTION</div>
-          <h2>What do you need to remember?</h2>
-          <form id="ask">
-            <label for="question">Ask across your documents</label
-            ><textarea
+          <p class="privacy">
+            Files stay in this session's memory on the server and are deleted
+            when you clear the session or after an hour of inactivity. Don't
+            upload real medical or personal records to this demo.
+          </p>
+        </div>
+      </aside>
+
+      <main class="column" id="column">
+        <form id="ask" class="ask" autocomplete="off">
+          <label for="question" class="ask-label"
+            >Ask across your documents</label
+          >
+          <div class="ask-row">
+            <textarea
               id="question"
-              rows="3"
-              placeholder="What is still pending for the pilot launch?"
+              rows="2"
               maxlength="4000"
               required
+              placeholder="What did we actually agree on the fee?"
             ></textarea>
-            <div class="actions">
-              <button id="query" type="submit">
-                Find the evidence <span>↗</span>
-              </button>
-            </div>
-          </form>
-          <p class="note">
-            Current build uses IntelliRAG's keyword retrieval and verbatim
-            excerpts. It does not generate a synthesized answer.
-          </p>
-          <section id="live-call" hidden>
-            <div class="section-label">LIVE VOICE CALL</div>
-            <p id="call-note" class="note"></p>
-            <div class="actions">
-              <button id="call-start" type="button">Start live call</button>
-              <button id="call-end" type="button" class="secondary" hidden>
-                End call
-              </button>
-            </div>
-            <p
-              id="call-status"
-              class="note"
-              role="status"
-              aria-live="polite"
-            ></p>
-            <div class="actions">
-              <button id="readiness-check" type="button" class="secondary">
-                Check demo readiness
-              </button>
-            </div>
-            <p
-              id="readiness-status"
-              class="note"
-              role="status"
-              aria-live="polite"
-            ></p>
-            <div
-              id="voice-turn"
-              class="note"
-              role="status"
-              aria-live="polite"
-              hidden
-            ></div>
-            <div id="voice-turn-evidence"></div>
-          </section>
-          <p id="status" role="status" aria-live="polite">
-            Add your documents, or try the fictional example.
-          </p>
-          <section id="output" hidden>
-            <div class="result-head">
-              <h2>What the sources say</h2>
-              <span id="timing"></span>
-            </div>
-            <p id="mode" class="muted"></p>
-            <div id="answer"></div>
-            <p id="record-status" class="record-status" hidden></p>
-            <div id="transform" class="transform" hidden></div>
-            <svg id="connectors" aria-hidden="true"></svg>
-            <div id="trace-panel" hidden>
-              <div id="trace" class="trace"></div>
-            </div>
-            <h3>Inspect the originals</h3>
-            <div id="evidence"></div>
-            <button id="draft">Turn this into a draft</button>
-            <p class="note">
-              Quotes prove where text came from, not that a proposed decision
-              was approved. Review context before acting.
-            </p>
-          </section>
-          <section id="draft-panel" hidden>
-            <h2>Your follow-up draft</h2>
-            <p class="note">
-              Not sent. No recipient or email account is connected.
-            </p>
-            <label for="subject">Subject</label><input id="subject" /><label
-              for="body"
-              >Body</label
-            ><textarea id="body" rows="12"></textarea
-            ><button id="download" class="secondary">
-              Download draft as text
+            <button id="query" type="submit" class="primary">
+              Find the evidence
             </button>
-          </section>
-        </article>
-      </section>
-      <footer>
-        Original text stays alongside memory blocks. When evidence is missing,
-        we say so.
-      </footer>
-    </main>
+          </div>
+          <p class="ask-hint">
+            Answers quote the exact passage they rely on, or say the documents
+            don't establish it.
+          </p>
+        </form>
+
+        <p id="status" class="status" role="status" aria-live="polite">
+          Add your documents, or try the fictional example.
+        </p>
+
+        <section id="empty" class="empty">
+          <h1>Ask your documents what they actually say.</h1>
+          <p>
+            Add a contract, meeting notes or a lab report. Ask in your own
+            words. Every answer points to the line it came from, and tells you
+            when something was only proposed, still pending, or never written
+            down.
+          </p>
+        </section>
+
+        <section
+          id="output"
+          class="answer"
+          hidden
+          aria-labelledby="answer-heading"
+        >
+          <h2 id="answer-heading" class="sr-only">What the sources say</h2>
+          <p id="verdict" class="verdict"></p>
+          <div id="answer" class="answer-text"></div>
+          <details id="full-record" class="more full-record" hidden>
+            <summary>Full record text</summary>
+            <div id="full-answer" class="full-answer"></div>
+          </details>
+          <p id="record-status" class="record-status" hidden></p>
+          <h3 class="cites-heading">Inspect the originals</h3>
+          <ol id="evidence" class="cites"></ol>
+          <div class="answer-actions">
+            <button id="draft" type="button">Turn this into a draft</button>
+            <span id="timing" class="timing"></span>
+          </div>
+          <details id="trace-panel" class="more" hidden>
+            <summary>How this answer was found</summary>
+            <p id="mode" class="more-note"></p>
+            <div id="transform" class="transform" hidden></div>
+            <div id="trace" class="trace"></div>
+          </details>
+          <div id="signals-slot"></div>
+          <p class="fineprint">
+            A quote proves where text came from, not that a proposal was
+            approved.
+          </p>
+        </section>
+
+        <section
+          id="draft-panel"
+          class="draft"
+          hidden
+          aria-labelledby="draft-heading"
+        >
+          <h2 id="draft-heading">Your follow-up draft</h2>
+          <p class="fineprint">
+            Not sent. No recipient or email account is connected.
+          </p>
+          <label for="subject">Subject</label>
+          <input id="subject" />
+          <label for="body">Body</label>
+          <textarea id="body" rows="12"></textarea>
+          <button id="download" type="button">Download draft as text</button>
+        </section>
+
+        <section
+          id="history"
+          class="history"
+          hidden
+          aria-labelledby="history-heading"
+        >
+          <h2 id="history-heading">Earlier in this session</h2>
+          <ol id="history-list"></ol>
+        </section>
+      </main>
+
+      <aside id="viewer" class="viewer" hidden aria-labelledby="viewer-title">
+        <div class="viewer-head">
+          <div>
+            <h2 id="viewer-title" class="viewer-title"></h2>
+            <p id="viewer-meta" class="viewer-meta"></p>
+          </div>
+          <button
+            id="viewer-close"
+            type="button"
+            class="icon-btn"
+            aria-label="Close the source"
+          >
+            ×
+          </button>
+        </div>
+        <div class="viewer-tools">
+          <div class="seg" role="group" aria-label="Show">
+            <button type="button" id="show-original" aria-pressed="true">
+              Original
+            </button>
+            <button type="button" id="show-text" aria-pressed="false">
+              Extracted text
+            </button>
+          </div>
+          <div class="pager" id="pager" hidden>
+            <button
+              type="button"
+              id="page-prev"
+              class="icon-btn"
+              aria-label="Previous page"
+            >
+              ‹
+            </button>
+            <span id="page-label"></span>
+            <button
+              type="button"
+              id="page-next"
+              class="icon-btn"
+              aria-label="Next page"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+        <p id="viewer-note" class="viewer-note" hidden></p>
+        <div
+          id="sheet"
+          class="sheet"
+          tabindex="0"
+          aria-label="Source document"
+        ></div>
+      </aside>
+    </div>
+
+    <section
+      id="live-call"
+      class="talk"
+      hidden
+      aria-label="Voice call"
+      data-state="idle"
+    >
+      <div class="talk-drawer" id="talk-drawer">
+        <p id="call-note" class="talk-note"></p>
+        <div
+          id="voice-turn"
+          class="voice-turn"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></div>
+        <div id="voice-turn-evidence" class="voice-evidence"></div>
+        <div class="readiness">
+          <button id="readiness-check" type="button" class="link">
+            Check demo readiness
+          </button>
+          <p id="readiness-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+      <div class="talk-pill">
+        <span class="talk-dot" aria-hidden="true"></span>
+        <p
+          id="call-status"
+          class="talk-status"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <button id="call-start" type="button" class="talk-start">
+          Talk to your documents
+        </button>
+        <button id="call-end" type="button" class="talk-end" hidden>
+          End call
+        </button>
+        <button
+          id="talk-more"
+          type="button"
+          class="icon-btn talk-more"
+          aria-expanded="false"
+          aria-controls="talk-drawer"
+          aria-label="Call details"
+        >
+          ⌃
+        </button>
+      </div>
+    </section>
+
+    <div id="dropveil" class="dropveil" hidden>
+      <p>Drop to add to this session</p>
+    </div>
+
     <script type="module" src="/app.js"></script>
+    <script type="module" src="/workspace.js"></script>
   </body>
 </html>
