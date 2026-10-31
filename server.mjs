@@ -8,6 +8,14 @@ import {
   validateEvidence,
 } from "./dist/engine.mjs";
 import { createVoiceAdapter } from "./voice-adapter.mjs";
+import {
+  DENSE_MODEL_ID,
+  denseAvailableFor,
+  embedQueryReady,
+  pauseDenseForIngest,
+  resumeDenseAfterIngest,
+  warmDense,
+} from "./dense.mjs";
 import { spokenTurn } from "./spoken.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import {
@@ -209,6 +217,9 @@ export function createLocalServer({
     if (demoBundleName !== "northstar")
       throw Error("Unknown VM_DEMO_BUNDLE: " + demoBundleName);
     demoBundle = importBundle(NORTHSTAR_DOCS);
+    // Dense vectors for the pinned demo corpus: background warmup; queries
+    // before completion simply rank by keyword (fail-closed).
+    warmDense(demoBundle.rows);
     try {
       voice.bind(demoBundle, fixedCap);
     } catch (e) {
@@ -639,7 +650,21 @@ export function createLocalServer({
           String(req.headers["x-file-name"] ?? "untitled"),
         ).slice(0, 400);
         const bytes = await rawBody(req, LIMITS.maxFileBytes);
+        // Memory guard: OCR must never share the 512MB budget with the
+        // resident embedding model; dense pauses until this upload settles.
+        await pauseDenseForIngest();
         const entry = addUpload(s, bytes, filename, rebuildIndex);
+        const up0 = Date.now();
+        const iv = setInterval(() => {
+          const settled = ["ready", "needs_review", "failed"].includes(
+            entry.status,
+          );
+          if (settled || Date.now() - up0 > 120000) {
+            clearInterval(iv);
+            resumeDenseAfterIngest(s.bundle?.rows ?? null);
+          }
+        }, 500);
+        iv.unref?.();
         res.writeHead(202);
         out = { document: publicEntry(entry) };
       } else if (libPost) {
@@ -673,6 +698,11 @@ export function createLocalServer({
         );
         bundle.locateEvidence = locatorFor(s.sourceToEntry);
         setSessionBundle(s, bundle);
+        // Phase 3 hybrid: fill chunk embeddings in the background so later
+        // queries can re-rank densely. Fail-closed: until the model warms,
+        // and on any failure, rows stay vectorless and retrieval stays
+        // keyword-only.
+        warmDense(bundle.rows);
         out = {
           sources: s.bundle.sources.map(({ id, title, hash, memory }) => ({
             id,
@@ -680,10 +710,16 @@ export function createLocalServer({
             hash,
             blocks: memory.blocks.length,
           })),
+          dense: denseAvailableFor(s.bundle),
         };
       } else if (req.url === "/api/query") {
         if (!s.bundle) throw Error("Add documents first.");
-        s.result = answer(data.question, s.bundle);
+        const queryVector = await embedQueryReady(data.question);
+        s.result = answer(data.question, s.bundle, {
+          queryVector,
+          model: DENSE_MODEL_ID,
+          available: denseAvailableFor(s.bundle),
+        });
         out = decorateResult(s.result, s);
         // Typed follow-ups ("so finance rejected it?") inherit the previous
         // question's field, exactly as the voice grant does.
