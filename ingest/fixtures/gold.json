@@ -1,0 +1,359 @@
+{
+  "_note": "Hand-written from the content constants in build.mjs BEFORE any parser ran. Never regenerate from parser output. 'contains' = exact substrings of canonical text; 'order' = substrings that must appear in this order; 'page' = substring -> 1-based page of the element containing it; 'rows' = exact table rows (cells) that must exist as one row; 'absent' = substrings that must NOT be in indexed text.",
+  "version": 3,
+  "cases": {
+    "digital.pdf": {
+      "status": "ready",
+      "contains": [
+        "Harbor Logistics Site Visit Report",
+        "Visit date: 12 August 2026. Prepared by the regional operations team.",
+        "The east warehouse recorded 14 open safety items during the inspection.",
+        "Loading bay 3 remains closed until the dock leveller is replaced.",
+        "Facilities lead Anika Rao will confirm the leveller delivery date by 29 August 2026.",
+        "The revised maintenance budget of $18,400 is proposed and not yet approved."
+      ],
+      "order": [
+        "Harbor Logistics",
+        "Visit date",
+        "east warehouse",
+        "Loading bay 3",
+        "Follow-up actions",
+        "Anika Rao",
+        "$18,400"
+      ],
+      "page": {
+        "14 open safety items": 1,
+        "$18,400": 2,
+        "Anika Rao": 2
+      },
+      "headings": [
+        "Harbor Logistics Site Visit Report",
+        "Follow-up actions"
+      ]
+    },
+    "two-column.pdf": {
+      "status": "ready",
+      "contains": [
+        "Left column first paragraph: the river crossing survey began on Monday.",
+        "Left column second paragraph: soil samples were sent to the lab.",
+        "Right column first paragraph: the bridge design review is pending.",
+        "Right column second paragraph: the contractor shortlist has three names."
+      ],
+      "order": [
+        "Quarterly Field Notes",
+        "Left column first",
+        "Left column second",
+        "Right column first",
+        "Right column second"
+      ]
+    },
+    "lab-table.pdf": {
+      "status": "ready",
+      "contains": [
+        "Patient: Test Person A (synthetic), ID SYN-0001",
+        "Report status: FINAL",
+        "Values flagged L or H are outside the laboratory's reference range."
+      ],
+      "rows": [
+        [
+          "Test",
+          "Result",
+          "Unit",
+          "Reference range",
+          "Flag"
+        ],
+        [
+          "Hemoglobin",
+          "12.1",
+          "g/dL",
+          "13.0-17.0",
+          "L"
+        ],
+        [
+          "HbA1c",
+          "6.4",
+          "%",
+          "4.0-5.6",
+          "H"
+        ],
+        [
+          "Creatinine",
+          "1.2",
+          "mg/dL",
+          "0.7-1.3",
+          ""
+        ],
+        [
+          "Urea",
+          "12",
+          "mg/dL",
+          "7-20",
+          ""
+        ],
+        [
+          "TSH",
+          "<0.05",
+          "mIU/L",
+          "0.40-4.00",
+          "L"
+        ],
+        [
+          "Ferritin",
+          "0.5",
+          "ng/mL",
+          "30-400",
+          "L"
+        ]
+      ]
+    },
+    "repeated-headings.pdf": {
+      "status": "ready",
+      "contains": [
+        "Page one observation: generator A tested at 230 volts.",
+        "Page two observation: generator B tested at 215 volts.",
+        "Page three observation: generator C failed to start."
+      ],
+      "page": {
+        "generator A": 1,
+        "generator B": 2,
+        "generator C": 3
+      },
+      "absent": [
+        "Confidential - internal use only"
+      ],
+      "furnitureAtLeast": 3
+    },
+    "rotated.pdf": {
+      "status": "ready",
+      "contains": [
+        "Rotated page heading",
+        "This page is stored with a 90 degree rotation flag."
+      ],
+      "order": [
+        "Rotated page heading",
+        "90 degree rotation"
+      ]
+    },
+    "scanned.pdf": {
+      "status": "ready_or_review",
+      "textSource": "ocr",
+      "contains": [
+        "Clinic Visit Summary (synthetic)",
+        "Blood pressure: 128/82 mmHg",
+        "Follow-up appointment on 14 November 2026",
+        "Bring the previous lipid panel report"
+      ],
+      "page": {
+        "128/82": 1
+      }
+    },
+    "printed.png": {
+      "status": "ready_or_review",
+      "contains": [
+        "Clinic Visit Summary (synthetic)",
+        "Blood pressure: 128/82 mmHg",
+        "Follow-up appointment on 14 November 2026",
+        "Bring the previous lipid panel report"
+      ]
+    },
+    "printed.jpg": {
+      "status": "ready_or_review",
+      "contains": [
+        "Clinic Visit Summary (synthetic)",
+        "Blood pressure: 128/82 mmHg",
+        "Follow-up appointment on 14 November 2026",
+        "Bring the previous lipid panel report"
+      ]
+    },
+    "minutes.docx": {
+      "status": "ready",
+      "contains": [
+        "Attendees: procurement, finance and the vendor account team.",
+        "The vendor proposed a unit price of $4.20 per item for the 2027 contract.",
+        "Finance approval for the standard pallet price is still pending."
+      ],
+      "headings": [
+        "Vendor Review Minutes",
+        "Pricing table"
+      ],
+      "rows": [
+        [
+          "Item",
+          "Unit price",
+          "Status"
+        ],
+        [
+          "Standard pallet",
+          "$4.20",
+          "Proposed"
+        ],
+        [
+          "Cold-chain pallet",
+          "$6.85",
+          "Approved"
+        ]
+      ]
+    },
+    "notes.txt": {
+      "status": "ready",
+      "exactText": "Weekly call notes (fictional)\n\nThe pilot launch moved to 18 November 2026.\nNo budget change was discussed.\n"
+    },
+    "memo.md": {
+      "status": "ready",
+      "headings": [
+        "Renewal memo",
+        "Context",
+        "Open questions"
+      ],
+      "contains": [
+        "The renewal fee of $9,600 was proposed on 2 October 2026."
+      ]
+    },
+    "chrome-lab.pdf": {
+      "status": "ready",
+      "contains": [
+        "Synthetic Chemistry Panel",
+        "Patient: Test Person B (synthetic), ID SYN-0002",
+        "Amended 06 September 2026: potassium result corrected from 41 to 4.1 (transcription error)."
+      ],
+      "rows": [
+        [
+          "Analyte",
+          "Result",
+          "Units",
+          "Reference interval",
+          "Flag"
+        ],
+        [
+          "Glucose (fasting)",
+          "104",
+          "mg/dL",
+          "70-99",
+          "H"
+        ],
+        [
+          "Total cholesterol",
+          "5.2",
+          "mmol/L",
+          "<5.0",
+          "H"
+        ],
+        [
+          "Potassium",
+          "4.1",
+          "mmol/L",
+          "3.5-5.1",
+          ""
+        ],
+        [
+          "Vitamin B12",
+          "<150",
+          "pg/mL",
+          "200-900",
+          "L"
+        ],
+        [
+          "eGFR",
+          ">90",
+          "mL/min/1.73m2",
+          "",
+          ""
+        ]
+      ]
+    },
+    "chrome-columns.pdf": {
+      "status": "ready",
+      "contains": [
+        "Delta paragraph. The solar array upgrade is proposed for November, but the funding request has not been approved and the current batteries will be kept in service until then."
+      ],
+      "order": [
+        "Field Station Newsletter",
+        "Alpha paragraph",
+        "Bravo paragraph",
+        "Charlie paragraph",
+        "Delta paragraph"
+      ]
+    },
+    "chrome-multipage-table.pdf": {
+      "status": "ready",
+      "rows": [
+        [
+          "Day",
+          "Systolic",
+          "Diastolic",
+          "Unit"
+        ],
+        [
+          "Day 1",
+          "118",
+          "76",
+          "mmHg"
+        ],
+        [
+          "Day 35",
+          "126",
+          "77",
+          "mmHg"
+        ],
+        [
+          "Day 70",
+          "118",
+          "83",
+          "mmHg"
+        ]
+      ],
+      "page": {
+        "Day 1 ": 1,
+        "Day 35 ": 2,
+        "Day 70 ": 3
+      },
+      "_correction": "v1 guessed 'Day 70' on page 2 (a pagination guess, not fixture content). Corrected to page 3 after independent verification with poppler pdftotext -f N -l N (not pdf.js) and qpdf --show-npages = 3."
+    },
+    "encrypted.pdf": {
+      "status": "failed",
+      "code": "encrypted"
+    },
+    "corrupted.pdf": {
+      "status": "failed",
+      "code": "corrupted"
+    },
+    "fake.pdf": {
+      "status": "failed",
+      "code": "signature_mismatch"
+    },
+    "binary.txt": {
+      "status": "failed",
+      "code": "binary_text"
+    },
+    "empty.txt": {
+      "status": "failed",
+      "code": "empty"
+    },
+    "bomb.docx": {
+      "status": "failed",
+      "code": "decompression_limit"
+    },
+    "degraded.png": {
+      "status": "ready_or_review",
+      "safety": true,
+      "_note": "Skewed, blurred, noisy, low-res copy of printed.png. Accuracy is not required; SAFETY is: if any expected line is not read exactly, the document must not be 'ready'.",
+      "contains": [
+        "Clinic Visit Summary (synthetic)",
+        "Blood pressure: 128/82 mmHg",
+        "Follow-up appointment on 14 November 2026",
+        "Bring the previous lipid panel report"
+      ]
+    },
+    "skewed.png": {
+      "status": "ready_or_review",
+      "safety": true,
+      "_note": "Mild: third resolution, 2 degree skew, light blur and noise. Same SAFETY rule as degraded.png.",
+      "contains": [
+        "Clinic Visit Summary (synthetic)",
+        "Blood pressure: 128/82 mmHg",
+        "Follow-up appointment on 14 November 2026",
+        "Bring the previous lipid panel report"
+      ]
+    }
+  }
+}
