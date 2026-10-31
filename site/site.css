@@ -144,6 +144,11 @@ button { font: inherit; color: inherit; }
 .v-no { color: #a3301f; background: rgba(194, 65, 47, 0.11); }
 .v-ask { color: #3b4ea8; background: rgba(59, 78, 168, 0.1); }
 
+/* ---------------------------------------------------------------- film */
+.film { max-width: 1180px; margin: 0 auto; padding: 0 32px 20px; scroll-margin-top: 80px; }
+.film video { width: 100%; display: block; border-radius: 22px; background: #07080d; box-shadow: 0 50px 90px -60px rgba(22, 28, 45, 0.7); aspect-ratio: 16 / 9; }
+@media (max-width: 620px) { .film { padding: 0 16px 10px; } .film video { border-radius: 14px; } }
+
 /* ---------------------------------------------------------------- problem */
 .problem { max-width: 1180px; margin: 0 auto; padding: 60px 32px 40px; }
 .problem .h2 { margin: 0 auto; text-align: center; }
