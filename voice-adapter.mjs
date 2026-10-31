@@ -20,6 +20,12 @@ import { spokenTurn, historyField } from "./spoken.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import { clinicalTurn, observationEvidence } from "./clinical/answer.mjs";
+import { aliasesFor } from "./clinical/explain.mjs";
+import {
+  voiceQuestions,
+  isFragment,
+  FRAGMENT_REPLY,
+} from "./spoken-repair.mjs";
 export function createVoiceAdapter({
   ttlMs = 120000,
   now = () => Date.now(),
@@ -320,7 +326,30 @@ export function createVoiceAdapter({
         );
       }
       const transcript = askedRaw;
-      const asked = normalizeSpoken(transcript) || transcript;
+      // Repair recogniser damage (patient ids, misheard test names) and, for
+      // a fragment or a follow-up that lost its subject, join this caller's
+      // own previous utterances. Lab questions take the first candidate the
+      // clinical layer can answer.
+      const reports = grant.bundle?.clinical ?? [];
+      const candidates = voiceQuestions(data.messages, {
+        reports,
+        ids: [
+          ...new Set(reports.map((r) => r.meta?.patient?.id).filter(Boolean)),
+        ],
+        aliasesFor,
+        text: messageText,
+      }).map((q) => normalizeSpoken(q) || q);
+      let asked = candidates[0] || normalizeSpoken(transcript) || transcript;
+      if (reports.length) {
+        const hit = candidates.find((q) => {
+          try {
+            return clinicalTurn(q, reports);
+          } catch {
+            return false;
+          }
+        });
+        if (hit) asked = hit;
+      }
       const streaming = true;
       const sequence = ++grant.sequence;
       grant.busy = (grant.busy ?? 0) + 1;
@@ -507,6 +536,14 @@ export function createVoiceAdapter({
               ? "I could not find supporting evidence in these documents."
               : `I found ${grant.last.evidence.length} relevant source passages. This local build shows excerpts rather than a synthesized answer. Review the sources on screen, including any conditions or differing decision statements.`);
       }
+      // A cut-off fragment gets a helpful prompt, not a flat abstention.
+      if (
+        /^I (don't|do not) see that in these documents\.?$/i.test(
+          spoken ?? "",
+        ) &&
+        isFragment(transcript)
+      )
+        spoken = FRAGMENT_REPLY;
       releaseBusy();
       const id = "local-contract-" + randomBytes(8).toString("hex");
       const encoder = new TextEncoder();
