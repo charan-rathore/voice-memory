@@ -100,10 +100,14 @@ export function createPublicApi({
     86400000,
   );
   const voiceGapMs = num(process.env.VM_PUBLIC_CALL_GAP_MS, 45000);
-  // VM_PUBLIC_VOICE=off: visitor call minting is disabled (typed demo and
-  // the owner call path are unaffected) and status stops advertising voice,
-  // so the landing hides its call buttons. Any other value keeps calls on.
-  const publicVoiceOn = process.env.VM_PUBLIC_VOICE !== "off";
+  // Visitor call minting is deny-by-default: only VM_PUBLIC_VOICE=on
+  // (exact, lowercase) enables it. Unset, empty, or any other value keeps
+  // minting closed, so a redeploy that loses the env var cannot silently
+  // reopen anonymous shared-credit calls. The typed demo and the owner
+  // call path are unaffected either way, and status advertises voice only
+  // while calls are enabled, so the landing shows its call buttons only
+  // then.
+  const publicVoiceOn = process.env.VM_PUBLIC_VOICE === "on";
   let lastMint = 0;
 
   const send = (res, status, obj, extra = {}) => {

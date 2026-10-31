@@ -121,7 +121,7 @@ test("voice minting fails closed without Bolna configuration", async () => {
   assert.equal(t.status, 403);
 });
 
-test("VM_PUBLIC_VOICE=off disables visitor call minting and hides voice status", async () => {
+test("VM_PUBLIC_VOICE is deny-by-default: unset, off and unknown values deny and hide voice", async () => {
   const saved = {
     BOLNA_API_KEY: process.env.BOLNA_API_KEY,
     BOLNA_AGENT_ID: process.env.BOLNA_AGENT_ID,
@@ -138,38 +138,172 @@ test("VM_PUBLIC_VOICE=off disables visitor call minting and hides voice status",
     return { s, b: `http://127.0.0.1:${s.address().port}` };
   };
   try {
-    // Flag off + Bolna credentials present: minting must still refuse,
-    // status must not advertise voice, typed endpoints unaffected.
     process.env.BOLNA_API_KEY = "test-dummy";
     process.env.BOLNA_AGENT_ID = "test-dummy";
-    process.env.VM_PUBLIC_VOICE = "off";
-    const off = await spawn();
-    await off.s.loadPublicCases();
-    const mint = await fetch(off.b + "/api/public/voice/session", {
-      method: "POST",
-    });
-    assert.equal(mint.status, 503);
-    assert.match((await mint.json()).error, /disabled/i);
-    const st = await (await fetch(off.b + "/api/public/status")).json();
-    assert.deepEqual(st.voice, { configured: false, ready: false });
-    assert.equal((await fetch(off.b + "/api/public/cases")).status, 200);
-    const typed = await fetch(off.b + "/api/public/ask", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        case: "health",
-        question: "What is SYN-0001's ferritin result?",
-      }),
-    });
-    assert.equal(typed.status, 200);
-    await new Promise((r) => off.s.close(r));
+    // Every value except exact lowercase "on" must keep minting closed.
+    // The 503 is thrown before any mint call, so dummy creds never reach
+    // the network on these variants.
+    for (const variant of ["__unset__", "off", "OFF", "yes", "1", ""]) {
+      if (variant === "__unset__") delete process.env.VM_PUBLIC_VOICE;
+      else process.env.VM_PUBLIC_VOICE = variant;
+      const srv = await spawn();
+      await srv.s.loadPublicCases();
+      const mint = await fetch(srv.b + "/api/public/voice/session", {
+        method: "POST",
+      });
+      assert.equal(mint.status, 503, `variant ${variant}`);
+      assert.match((await mint.json()).error, /disabled/i);
+      const st = await (await fetch(srv.b + "/api/public/status")).json();
+      assert.deepEqual(
+        st.voice,
+        { configured: false, ready: false },
+        `variant ${variant}`,
+      );
+      // Typed demo stays open under every variant.
+      assert.equal(
+        (await fetch(srv.b + "/api/public/cases")).status,
+        200,
+        `variant ${variant}`,
+      );
+      const typed = await fetch(srv.b + "/api/public/ask", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          case: "health",
+          question: "What is SYN-0001's ferritin result?",
+        }),
+      });
+      assert.equal(typed.status, 200, `variant ${variant}`);
+      await new Promise((r) => srv.s.close(r));
+    }
 
-    // Control: same credentials, flag unset -> voice reported configured.
-    delete process.env.VM_PUBLIC_VOICE;
+    // Explicit opt-in: status advertises voice again (no mint exercised
+    // here - mint-through with a mock is covered in the factory test).
+    process.env.VM_PUBLIC_VOICE = "on";
     const on = await spawn();
     const stOn = await (await fetch(on.b + "/api/public/status")).json();
     assert.equal(stOn.voice.configured, true);
     await new Promise((r) => on.s.close(r));
+  } finally {
+    restore();
+  }
+});
+
+test("VM_PUBLIC_VOICE=on mints through the factory (mock mint, no network)", async () => {
+  const saved = {
+    BOLNA_API_KEY: process.env.BOLNA_API_KEY,
+    BOLNA_AGENT_ID: process.env.BOLNA_AGENT_ID,
+    VM_PUBLIC_VOICE: process.env.VM_PUBLIC_VOICE,
+  };
+  const restore = () => {
+    for (const [k, v] of Object.entries(saved))
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+  };
+  const { createPublicApi } = await import("./public-api.mjs");
+  const { createServer } = await import("node:http");
+  try {
+    process.env.BOLNA_API_KEY = "test-dummy";
+    process.env.BOLNA_AGENT_ID = "test-dummy";
+    process.env.VM_PUBLIC_VOICE = "on";
+    let mints = 0;
+    const api = createPublicApi({
+      cases: {},
+      resolve: async () => {
+        throw new Error("not exercised");
+      },
+      mintVoice: async (userData) => {
+        mints += 1;
+        return { fake_session: true, user_data: userData ?? null };
+      },
+      voiceTurns: () => [],
+      voiceState: () => ({ configured: true, ready: true }),
+    });
+    const srv = createServer((req, res) => api(req, res));
+    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+    const b = `http://127.0.0.1:${srv.address().port}`;
+    const mint = await fetch(b + "/api/public/voice/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ user_data: { page: "landing" } }),
+    });
+    assert.equal(mint.status, 200);
+    const body = await mint.json();
+    assert.equal(body.fake_session, true);
+    assert.deepEqual(body.user_data, { page: "landing" });
+    assert.equal(mints, 1);
+    const st = await (await fetch(b + "/api/public/status")).json();
+    assert.deepEqual(st.voice, { configured: true, ready: true });
+    await new Promise((r) => srv.close(r));
+  } finally {
+    restore();
+  }
+});
+
+test("anonymous POSTs to owner voice routes are denied on the public host", async () => {
+  const saved = {
+    VM_PUBLIC_HOST: process.env.VM_PUBLIC_HOST,
+    VM_PUBLIC_ORIGIN: process.env.VM_PUBLIC_ORIGIN,
+    VM_OWNER_KEY: process.env.VM_OWNER_KEY,
+    BOLNA_API_KEY: process.env.BOLNA_API_KEY,
+    BOLNA_AGENT_ID: process.env.BOLNA_AGENT_ID,
+  };
+  const restore = () => {
+    for (const [k, v] of Object.entries(saved))
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+  };
+  const { request } = await import("node:http");
+  try {
+    process.env.VM_PUBLIC_HOST = "public.example";
+    process.env.VM_PUBLIC_ORIGIN = "https://public.example";
+    process.env.VM_OWNER_KEY = "test-owner-key";
+    process.env.BOLNA_API_KEY = "test-dummy";
+    process.env.BOLNA_AGENT_ID = "test-dummy";
+    const s = createLocalServer({ port: 0 });
+    await new Promise((r) => s.listen(0, "127.0.0.1", r));
+    const port = s.address().port;
+    // undici overrides the Host header, so drive the raw client.
+    const post = (path) =>
+      new Promise((resolve, reject) => {
+        const req = request(
+          {
+            host: "127.0.0.1",
+            port,
+            path,
+            method: "POST",
+            headers: {
+              host: "public.example",
+              "content-type": "application/json",
+            },
+          },
+          (res) => {
+            const chunks = [];
+            res.on("data", (c) => chunks.push(c));
+            res.on("end", () =>
+              resolve({
+                status: res.statusCode,
+                body: Buffer.concat(chunks).toString(),
+              }),
+            );
+          },
+        );
+        req.on("error", reject);
+        req.end("{}");
+      });
+    try {
+      for (const path of [
+        "/api/bolna-session",
+        "/api/voice/start",
+        "/api/voice/turn",
+      ]) {
+        const r = await post(path);
+        assert.equal(r.status, 403, path);
+        assert.match(r.body, /Owner access required/, path);
+      }
+    } finally {
+      await new Promise((r) => s.close(r));
+    }
   } finally {
     restore();
   }
