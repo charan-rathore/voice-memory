@@ -348,6 +348,18 @@
     }
     callbar.classList.add("busy");
     $("#call-label").textContent = "Connecting…";
+    // Ask for the microphone first: a Bolna session is single-use and expires
+    // in about two minutes, so it is minted only once the mic is granted.
+    callState("Allow the microphone to start the call…");
+    try {
+      const pre = await navigator.mediaDevices.getUserMedia({ audio: true });
+      pre.getTracks().forEach((tr) => tr.stop());
+    } catch {
+      callbar.classList.remove("busy");
+      $("#call-label").textContent = "Call Voice Memory";
+      callState("Microphone blocked. Allow it in the address bar, then call again.");
+      return;
+    }
     callState("Getting a call line…");
     const call = new window.BolnaWebCall({
       getSession: async () => {
