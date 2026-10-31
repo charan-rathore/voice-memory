@@ -22,6 +22,7 @@ import { spokenTurn } from "./spoken.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import {
   clinicalTurn,
+  clinicalOverview,
   clinicalReportsFor,
   observationEvidence,
 } from "./clinical/answer.mjs";
@@ -120,7 +121,9 @@ function leadFor(question, result, bundle, prevField) {
     // Lab results across reports first (synthetic-data research prototype):
     // typed observations, comparability checks, no clinical judgement.
     if (bundle.clinical?.length) {
-      const c = clinicalTurn(question, bundle.clinical);
+      const c =
+        clinicalTurn(question, bundle.clinical) ??
+        clinicalOverview(question, bundle.clinical);
       if (c)
         return {
           text: c.spoken,

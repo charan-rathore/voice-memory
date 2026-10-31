@@ -19,7 +19,11 @@ import {
 import { spokenTurn, historyField } from "./spoken.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
-import { clinicalTurn, observationEvidence } from "./clinical/answer.mjs";
+import {
+  clinicalTurn,
+  clinicalOverview,
+  observationEvidence,
+} from "./clinical/answer.mjs";
 import { aliasesFor } from "./clinical/explain.mjs";
 import {
   voiceQuestions,
@@ -456,7 +460,11 @@ export function createVoiceAdapter({
         // Lab results across reports (bundle.clinical, set by the server for
         // uploaded lab tables) answer first; absent for Northstar.
         const clinical = grant.bundle.clinical?.length
-          ? clinicalTurn(asked, grant.bundle.clinical)
+          ? (clinicalTurn(asked, grant.bundle.clinical) ??
+            candidates
+              .map((q) => clinicalOverview(q, grant.bundle.clinical))
+              .find(Boolean) ??
+            null)
           : null;
         let rendered = clinical
           ? {

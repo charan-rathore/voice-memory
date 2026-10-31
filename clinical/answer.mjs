@@ -173,3 +173,98 @@ export function clinicalReportsFor(bundle, entries, extract) {
     })
     .filter(Boolean);
 }
+
+const OVERVIEW_RE =
+  /\b(results?|reports?|tests?|labs?|blood|levels?|values?|numbers?|gone up|go up|went up|changed?|since|mean|means|meaning|explain|summary|summari[sz]e|overview|how am i|everything)\b/i;
+
+/**
+ * A question about a patient's results as a whole ("what does SYN-0001's
+ * result mean, has it gone up since September?"): one short summary built
+ * from the same per-test comparisons, corrections first. Null when the
+ * question names a test (clinicalTurn answers it) or is not about labs.
+ */
+export function clinicalOverview(question, reports) {
+  if (!reports?.length || !OVERVIEW_RE.test(question)) return null;
+  const ids = [
+    ...new Set(reports.map((r) => r.meta.patient?.id).filter(Boolean)),
+  ];
+  const upper = question.toUpperCase();
+  let pid = ids.find((id) => upper.includes(id));
+  if (!pid) {
+    const multi = ids.filter(
+      (id) => reports.filter((r) => r.meta.patient?.id === id).length > 1,
+    );
+    if (!/\b(my|mine|patient|syn)\b/i.test(question) && !multi.length)
+      return null;
+    if (multi.length !== 1) return null;
+    pid = multi[0];
+  }
+  const own = reports.filter((r) => r.meta.patient?.id === pid);
+  const tests = [];
+  for (const r of own)
+    for (const o of r.observations)
+      if (!tests.some((t) => t.key === o.key)) tests.push(o);
+  const corrected = [],
+    up = [],
+    down = [],
+    same = [],
+    notComparable = [];
+  const used = [];
+  for (const o of tests) {
+    const t = clinicalTurn(
+      `Did ${o.test} change since the last report for ${pid}?`,
+      reports,
+    );
+    if (!t) continue;
+    if (/corrected from/i.test(t.spoken)) {
+      const m = /corrected from ([^ ]+) to ([^ ,.]+)/i.exec(t.spoken);
+      corrected.push(
+        m
+          ? `${o.test} was corrected from ${m[1]} to ${m[2]}`
+          : `${o.test} was corrected`,
+      );
+      used.push(...(t.used ?? []));
+    }
+    if (t.verdict === "NOT_COMPARABLE") {
+      notComparable.push(o.test);
+      used.push(...(t.used ?? []));
+    } else if (t.verdict === "COMPARED") {
+      const d =
+        t.direction ??
+        (/higher/i.test(t.spoken)
+          ? "higher"
+          : /lower/i.test(t.spoken)
+            ? "lower"
+            : "same");
+      (d === "higher" ? up : d === "lower" ? down : same).push(o.test);
+    }
+  }
+  if (!corrected.length && !up.length && !down.length && !notComparable.length)
+    return null;
+  const list = (a) =>
+    a.length > 1 ? a.slice(0, -1).join(", ") + " and " + a.at(-1) : a[0];
+  const parts = [`For ${pid}, comparing the latest report with the one before`];
+  if (corrected.length)
+    parts.push(
+      `one correction matters first: ${list(corrected)}, and I use the corrected value`,
+    );
+  if (up.length) parts.push(`${list(up)} went up`);
+  if (down.length) parts.push(`${list(down)} went down`);
+  if (same.length) parts.push(`${list(same)} stayed about the same`);
+  if (notComparable.length)
+    parts.push(
+      `${list(notComparable)} can't be compared because the units changed`,
+    );
+  return {
+    spoken:
+      parts[0] +
+      ": " +
+      parts.slice(1).join("; ") +
+      ". Ask about any one test for the numbers.",
+    verdict: "OVERVIEW",
+    field: null,
+    intent: "COMPARE",
+    lang: "en",
+    used: [...new Set(used)],
+  };
+}

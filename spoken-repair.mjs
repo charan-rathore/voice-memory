@@ -99,7 +99,7 @@ export function repairPatientIds(text, ids = []) {
     ),
     (m, digits) => toId(spoken(digits)) ?? m,
   );
-  out = out.replace(/\b0{2,3}([1-9])\b/g, (m, d) => toId(d) ?? m);
+  out = out.replace(/(?<!SYN-)\b0{2,3}([1-9])\b/g, (m, d) => toId(d) ?? m);
   return out.replace(/\s{2,}/g, " ").trim();
 }
 
