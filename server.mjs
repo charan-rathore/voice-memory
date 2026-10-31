@@ -26,6 +26,7 @@ import {
 import { extractReport } from "./clinical/observations.mjs";
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "./corpus-northstar.mjs";
+import { createRssWatchdog } from "./rss-watchdog.mjs";
 import {
   addUpload,
   replaceWithText,
@@ -170,6 +171,7 @@ export function createLocalServer({
     hardExpiresAtMs: voiceHardExpiresAtMs(),
   }),
   port = Number(process.env.PORT || 4317),
+  watchdog = createRssWatchdog(),
 } = {}) {
   // Deployment configuration (all optional; unset = local-only behavior):
   // VM_PUBLIC_HOST / VM_PUBLIC_ORIGIN: the one public hostname/origin the UI
@@ -347,6 +349,29 @@ export function createLocalServer({
     return JSON.parse(text);
   }
   const server = http.createServer(async (req, res) => {
+    watchdog.beginRequest();
+    res.once("close", () => watchdog.endRequest());
+    // Memory admission control: expensive routes are refused with 503 +
+    // Retry-After BEFORE the process nears the host's hard RSS kill line,
+    // so pressure never silently kills a request we chose to accept.
+    // Thresholds are measured (see rss-watchdog.mjs), not picked round.
+    const EXPENSIVE = new Set([
+      "/api/upload",
+      "/api/import",
+      "/api/query",
+      "/api/voice/start",
+      "/v1/chat/completions",
+    ]);
+    if (req.method === "POST" && EXPENSIVE.has(req.url) && !watchdog.admit()) {
+      res.writeHead(503, { "Retry-After": "5" });
+      res.end(
+        JSON.stringify({
+          error:
+            "Server is under memory pressure; expensive requests are paused. Retry in a few seconds.",
+        }),
+      );
+      return;
+    }
     const disconnected = new AbortController();
     const abort = () => {
       if (!res.writableEnded) disconnected.abort();
