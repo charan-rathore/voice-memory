@@ -75,12 +75,32 @@ wrong or missing credentials.
 
 ## How it works
 
-```
-upload ─► validate ─► parse (worker) ─► vm.document/1 ─► index ─► retrieve ─► evidence gate ─► answer
-          signature    pdf.js, OCR,      elements with     chunks     keyword     exact source    screen: lead + citations
-          size limits  docx xml          exact spans,      anchored   (BM25)      span check      voice:  same sentence
-                                         pages, boxes      to spans               claim graph,
-                                                                                  lab observations
+```mermaid
+flowchart TB
+    UI["Workspace UI (owner sign-in, browser)"]
+    BA["Bolna voice agent (phone / web call)"]
+    LP["Landing page: Vercel, static site/"]
+    subgraph R["App: one Node process on Render"]
+        ING["Ingest worker: signature and size checks, pdf.js / DOCX xml / OCR"]
+        DOC["Canonical document: elements with exact spans, pages and boxes"]
+        LIB["Session library: in memory, this session only, nothing persists"]
+        ENG["Evidence engine: keyword BM25 over chunks anchored to spans; exact-span evidence gate; no language model writes answers"]
+        CLM["Claim graph: fee / split / scope / sign-off"]
+        CLN["Clinical prototype: typed lab observations; unit, patient and amendment rules"]
+        VA["Voice adapter: fixed bearer, TTL grant, hard expiry, fail closed"]
+        ING --> DOC --> LIB
+        LIB --> ENG
+        LIB --> CLN
+        CLN --> ENG
+        CLM --- ENG
+    end
+    UI -->|upload| ING
+    UI -->|question| ENG
+    ENG -->|screen: lead and citations that open the original page| UI
+    BA -->|SSE contract| VA
+    VA --> ENG
+    VA -->|voice: the same sentence| BA
+    LP -.->|links to the app| UI
 ```
 
 | Path | Role |
