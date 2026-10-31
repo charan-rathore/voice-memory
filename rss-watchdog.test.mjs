@@ -90,10 +90,13 @@ test("reads the real host memory limit from cgroup v2", async () => {
   const v2 = join(dir, "memory.max");
   writeFileSync(v2, "536870912\n");
   const { readHostMemoryLimit } = await import("./rss-watchdog.mjs");
-  assert.deepEqual(readHostMemoryLimit({ v2Path: v2, v1Path: join(dir, "none") }), {
-    bytes: 536870912,
-    source: "cgroup-v2",
-  });
+  assert.deepEqual(
+    readHostMemoryLimit({ v2Path: v2, v1Path: join(dir, "none") }),
+    {
+      bytes: 536870912,
+      source: "cgroup-v2",
+    },
+  );
 });
 
 test("falls back to cgroup v1 and treats its unlimited sentinel as no limit", async () => {
@@ -116,7 +119,10 @@ test("falls back to cgroup v1 and treats its unlimited sentinel as no limit", as
     source: null,
   });
   assert.deepEqual(
-    readHostMemoryLimit({ v2Path: join(dir, "none"), v1Path: join(dir, "none2") }),
+    readHostMemoryLimit({
+      v2Path: join(dir, "none"),
+      v1Path: join(dir, "none2"),
+    }),
     { bytes: null, source: null },
   );
 });
@@ -128,6 +134,12 @@ test("watchdog state reports the host limit once read", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cgroup-"));
   const v2 = join(dir, "memory.max");
   writeFileSync(v2, "536870912\n");
-  const w = createRssWatchdog({ rss: () => 10, limitPaths: { v2Path: v2, v1Path: join(dir, "none") } });
-  assert.deepEqual(w.state().hostLimit, { bytes: 536870912, source: "cgroup-v2" });
+  const w = createRssWatchdog({
+    rss: () => 10,
+    limitPaths: { v2Path: v2, v1Path: join(dir, "none") },
+  });
+  assert.deepEqual(w.state().hostLimit, {
+    bytes: 536870912,
+    source: "cgroup-v2",
+  });
 });

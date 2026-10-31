@@ -1,5 +1,5 @@
 // vendor/web/src/lib/rag/text.ts
-var TOKEN_PATTERN = /[\p{L}\p{N}]+/gu;
+var TOKEN_PATTERN = /[\p{L}\p{N}][\p{L}\p{N}\p{M}]*/gu;
 var QUERY_STOPWORDS = /* @__PURE__ */ new Set([
   "the",
   "and",
@@ -828,34 +828,41 @@ var BM25Index = class {
   b = 0.75;
   ids = [];
   texts = [];
-  docs = [];
+  tfs = [];
   lengths = [];
   avgLen = 0;
   df = /* @__PURE__ */ new Map();
+  postings = /* @__PURE__ */ new Map();
   constructor(chunks) {
     for (const chunk of chunks) {
       const tokens = contentTokens(chunk.text);
       if (!tokens.length) continue;
+      const i = this.ids.length;
       this.ids.push(chunk.id);
       this.texts.push(chunk.text);
-      this.docs.push(tokens);
       this.lengths.push(tokens.length);
-    }
-    const n = this.docs.length;
-    if (!n) return;
-    this.avgLen = this.lengths.reduce((a, b) => a + b, 0) / n;
-    for (const tokens of this.docs) {
-      for (const term of new Set(tokens)) {
+      const tf = /* @__PURE__ */ new Map();
+      for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1);
+      this.tfs.push(tf);
+      for (const term of tf.keys()) {
         this.df.set(term, (this.df.get(term) ?? 0) + 1);
+        let list = this.postings.get(term);
+        if (!list) this.postings.set(term, list = []);
+        list.push(i);
       }
     }
+    const n = this.ids.length;
+    if (!n) return;
+    this.avgLen = this.lengths.reduce((a, b) => a + b, 0) / n;
   }
   search(query, topK) {
     const q = contentTokens(query);
-    if (!q.length || !this.docs.length) return [];
+    if (!q.length || !this.ids.length) return [];
+    const candidates = /* @__PURE__ */ new Set();
+    for (const term of q) for (const i of this.postings.get(term) ?? []) candidates.add(i);
     const scored = [];
-    for (let i = 0; i < this.docs.length; i += 1) {
-      const score = this.score(q, this.docs[i], this.lengths[i]);
+    for (const i of [...candidates].sort((a, b) => a - b)) {
+      const score = this.score(q, this.tfs[i], this.lengths[i]);
       if (score > 0) scored.push({ i, score });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -865,11 +872,9 @@ var BM25Index = class {
       score
     }));
   }
-  score(query, doc, len) {
-    const tf = /* @__PURE__ */ new Map();
-    for (const t of doc) tf.set(t, (tf.get(t) ?? 0) + 1);
+  score(query, tf, len) {
     let score = 0;
-    const n = this.docs.length;
+    const n = this.ids.length;
     for (const term of query) {
       const df = this.df.get(term);
       if (!df) continue;
@@ -926,6 +931,34 @@ function overlapTerms(query, text, limit = 5) {
 }
 
 // vendor/web/src/lib/rag/retrieve-core.ts
+var INDEX_CACHE = /* @__PURE__ */ new WeakMap();
+var indexStats = { builds: 0, hits: 0 };
+function fingerprint(rows) {
+  let h = 2166136261;
+  for (const r of rows) {
+    const s = r.chunk.id + (r.chunk.content_hash ?? "") + r.title;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+  }
+  return h >>> 0;
+}
+function indexFor(all, scoped, scopeKey) {
+  let byScope = INDEX_CACHE.get(all);
+  if (!byScope) INDEX_CACHE.set(all, byScope = /* @__PURE__ */ new Map());
+  const fp = fingerprint(scoped);
+  const hit = byScope.get(scopeKey);
+  if (hit && hit.fp === fp) {
+    indexStats.hits++;
+    return hit.index;
+  }
+  indexStats.builds++;
+  const index = new BM25Index(scoped.map((r) => ({ id: r.chunk.id, text: `${r.title}
+${r.chunk.text}` })));
+  byScope.set(scopeKey, { fp, index });
+  return index;
+}
 function toRetrieved(chunkId, meta, score, rank, retriever) {
   const row = meta.get(chunkId);
   if (!row) return null;
@@ -1026,8 +1059,7 @@ ${r.chunk.text}`);
   const denseMs = performance.now() - denseStart;
   const kwStart = performance.now();
   if (opts.mode !== "dense" || !dense.length) {
-    const index = new BM25Index(scopedRows.map((r) => ({ id: r.chunk.id, text: `${r.title}
-${r.chunk.text}` })));
+    const index = indexFor(opts.rows, scopedRows, scope.kind === "all" ? "*" : scope.corpusId);
     const lexicalQuery = terms.join(" ") || bm25Query;
     const hits = index.search(lexicalQuery, retrieveN);
     for (const s of hits) keywordScores.set(s.id, s.score);

@@ -1,0 +1,1143 @@
+{
+  "summary": {
+    "sha": "f40f993",
+    "dirtyWorkingTree": false,
+    "goldVersion": 3,
+    "date": "2026-10-31T06:20:34.507Z",
+    "node": "v22.23.4",
+    "files": 22,
+    "checks": 131,
+    "passed": 131
+  },
+  "results": [
+    {
+      "file": "binary.txt",
+      "ms": 0,
+      "ok": false,
+      "status": "failed",
+      "code": "binary_text",
+      "parser": null,
+      "stats": null,
+      "warnings": [],
+      "checks": [
+        {
+          "check": "fails",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "code",
+          "pass": true,
+          "detail": "got binary_text"
+        },
+        {
+          "check": "actionable message",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "bomb.docx",
+      "ms": 492,
+      "ok": false,
+      "status": "failed",
+      "code": "decompression_limit",
+      "parser": null,
+      "stats": null,
+      "warnings": [],
+      "checks": [
+        {
+          "check": "fails",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "code",
+          "pass": true,
+          "detail": "got decompression_limit"
+        },
+        {
+          "check": "actionable message",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "chrome-columns.pdf",
+      "ms": 177,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "pdf.js@4.10.38 + vm-layout/1",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 747,
+        "words": 117,
+        "elements": 5,
+        "tables": 0,
+        "pages": 1,
+        "pagesWithText": 1,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Delta paragraph. The solar array upgrade\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "reading order",
+          "pass": true,
+          "detail": "2,28,209,392,573"
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "chrome-lab.pdf",
+      "ms": 165,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "pdf.js@4.10.38 + vm-layout/1",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 536,
+        "words": 110,
+        "elements": 5,
+        "tables": 1,
+        "pages": 1,
+        "pagesWithText": 1,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Synthetic Chemistry Panel\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Patient: Test Person B (synthetic), ID S\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Amended 06 September 2026: potassium res\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Analyte",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Glucose (fasting)",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Total cholesterol",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Potassium",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Vitamin B12",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row eGFR",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "chrome-multipage-table.pdf",
+      "ms": 177,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "pdf.js@4.10.38 + vm-layout/1",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 2253,
+        "words": 760,
+        "elements": 4,
+        "tables": 3,
+        "pages": 3,
+        "pagesWithText": 3,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "\"Day 1 \" on page 1",
+          "pass": true,
+          "detail": "page 1"
+        },
+        {
+          "check": "\"Day 35 \" on page 2",
+          "pass": true,
+          "detail": "page 2"
+        },
+        {
+          "check": "\"Day 70 \" on page 3",
+          "pass": true,
+          "detail": "page 3"
+        },
+        {
+          "check": "row Day",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Day 1",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Day 35",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Day 70",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "corrupted.pdf",
+      "ms": 132,
+      "ok": false,
+      "status": "failed",
+      "code": "corrupted",
+      "parser": null,
+      "stats": null,
+      "warnings": [],
+      "checks": [
+        {
+          "check": "fails",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "code",
+          "pass": true,
+          "detail": "got corrupted"
+        },
+        {
+          "check": "actionable message",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "degraded.png",
+      "ms": 1423,
+      "ok": false,
+      "status": "failed",
+      "code": "unreadable_scan",
+      "parser": null,
+      "stats": null,
+      "warnings": [],
+      "checks": [
+        {
+          "check": "no silent misread (rejected as unreadable)",
+          "pass": true,
+          "detail": "unreadable_scan"
+        }
+      ]
+    },
+    {
+      "file": "digital.pdf",
+      "ms": 156,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "pdf.js@4.10.38 + vm-layout/1",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 432,
+        "words": 68,
+        "elements": 7,
+        "tables": 0,
+        "pages": 2,
+        "pagesWithText": 2,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Harbor Logistics Site Visit Report\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Visit date: 12 August 2026. Prepared by \"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"The east warehouse recorded 14 open safe\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Loading bay 3 remains closed until the d\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Facilities lead Anika Rao will confirm t\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"The revised maintenance budget of $18,40\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "reading order",
+          "pass": true,
+          "detail": "2,38,113,182,252,287,391"
+        },
+        {
+          "check": "\"14 open safety items\" on page 1",
+          "pass": true,
+          "detail": "page 1"
+        },
+        {
+          "check": "\"$18,400\" on page 2",
+          "pass": true,
+          "detail": "page 2"
+        },
+        {
+          "check": "\"Anika Rao\" on page 2",
+          "pass": true,
+          "detail": "page 2"
+        },
+        {
+          "check": "heading \"Harbor Logistics Site Visit Report\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "heading \"Follow-up actions\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "empty.txt",
+      "ms": 0,
+      "ok": false,
+      "status": "failed",
+      "code": "empty",
+      "parser": null,
+      "stats": null,
+      "warnings": [],
+      "checks": [
+        {
+          "check": "fails",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "code",
+          "pass": true,
+          "detail": "got empty"
+        },
+        {
+          "check": "actionable message",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "encrypted.pdf",
+      "ms": 178,
+      "ok": false,
+      "status": "failed",
+      "code": "encrypted",
+      "parser": null,
+      "stats": null,
+      "warnings": [],
+      "checks": [
+        {
+          "check": "fails",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "code",
+          "pass": true,
+          "detail": "got encrypted"
+        },
+        {
+          "check": "actionable message",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "fake.pdf",
+      "ms": 0,
+      "ok": false,
+      "status": "failed",
+      "code": "signature_mismatch",
+      "parser": null,
+      "stats": null,
+      "warnings": [],
+      "checks": [
+        {
+          "check": "fails",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "code",
+          "pass": true,
+          "detail": "got signature_mismatch"
+        },
+        {
+          "check": "actionable message",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "lab-table.pdf",
+      "ms": 153,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "pdf.js@4.10.38 + vm-layout/1",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 541,
+        "words": 120,
+        "elements": 4,
+        "tables": 1,
+        "pages": 1,
+        "pagesWithText": 1,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Patient: Test Person A (synthetic), ID S\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Report status: FINAL\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Values flagged L or H are outside the la\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Test",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Hemoglobin",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row HbA1c",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Creatinine",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Urea",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row TSH",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Ferritin",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "memo.md",
+      "ms": 88,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "vm-text/1",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 131,
+        "words": 23,
+        "elements": 5,
+        "tables": 0,
+        "pages": null,
+        "pagesWithText": null,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"The renewal fee of $9,600 was proposed o\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "heading \"Renewal memo\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "heading \"Context\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "heading \"Open questions\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "minutes.docx",
+      "ms": 115,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "vm-docx/1 (fflate + xmldom)",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 377,
+        "words": 70,
+        "elements": 6,
+        "tables": 1,
+        "pages": null,
+        "pagesWithText": null,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Attendees: procurement, finance and the \"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"The vendor proposed a unit price of $4.2\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Finance approval for the standard pallet\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "heading \"Vendor Review Minutes\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "heading \"Pricing table\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Item",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Standard pallet",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "row Cold-chain pallet",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "notes.txt",
+      "ms": 91,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "vm-text/1",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 107,
+        "words": 17,
+        "elements": 2,
+        "tables": 0,
+        "pages": null,
+        "pagesWithText": null,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "text is the original",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "printed.jpg",
+      "ms": 600,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "vm-image/1",
+        "ocr": "tesseract.js@5 eng 4.0.0_best_int",
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 142,
+        "words": 20,
+        "elements": 3,
+        "tables": 0,
+        "pages": 1,
+        "pagesWithText": 1,
+        "ocrPages": 1,
+        "meanOcrConfidence": 96,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Clinic Visit Summary (synthetic)\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Blood pressure: 128/82 mmHg\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Follow-up appointment on 14 November 202\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Bring the previous lipid panel report\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "printed.png",
+      "ms": 578,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "vm-image/1",
+        "ocr": "tesseract.js@5 eng 4.0.0_best_int",
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 142,
+        "words": 20,
+        "elements": 3,
+        "tables": 0,
+        "pages": 1,
+        "pagesWithText": 1,
+        "ocrPages": 1,
+        "meanOcrConfidence": 96,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Clinic Visit Summary (synthetic)\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Blood pressure: 128/82 mmHg\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Follow-up appointment on 14 November 202\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Bring the previous lipid panel report\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "repeated-headings.pdf",
+      "ms": 150,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "pdf.js@4.10.38 + vm-layout/1",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 164,
+        "words": 26,
+        "elements": 3,
+        "tables": 0,
+        "pages": 3,
+        "pagesWithText": 3,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 6
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Page one observation: generator A tested\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Page two observation: generator B tested\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Page three observation: generator C fail\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "\"generator A\" on page 1",
+          "pass": true,
+          "detail": "page 1"
+        },
+        {
+          "check": "\"generator B\" on page 2",
+          "pass": true,
+          "detail": "page 2"
+        },
+        {
+          "check": "\"generator C\" on page 3",
+          "pass": true,
+          "detail": "page 3"
+        },
+        {
+          "check": "not indexed \"Confidential - internal use on\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "page furniture detected",
+          "pass": true,
+          "detail": "6"
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "rotated.pdf",
+      "ms": 144,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "pdf.js@4.10.38 + vm-layout/1",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 73,
+        "words": 13,
+        "elements": 2,
+        "tables": 0,
+        "pages": 1,
+        "pagesWithText": 1,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Rotated page heading\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"This page is stored with a 90 degree rot\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "reading order",
+          "pass": true,
+          "detail": "0,49"
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "scanned.pdf",
+      "ms": 690,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "pdf.js@4.10.38 + vm-layout/1",
+        "ocr": "tesseract.js@5 eng 4.0.0_best_int",
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 142,
+        "words": 20,
+        "elements": 3,
+        "tables": 0,
+        "pages": 1,
+        "pagesWithText": 1,
+        "ocrPages": 1,
+        "meanOcrConfidence": 96,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Clinic Visit Summary (synthetic)\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Blood pressure: 128/82 mmHg\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Follow-up appointment on 14 November 202\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Bring the previous lipid panel report\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "\"128/82\" on page 1",
+          "pass": true,
+          "detail": "page 1"
+        },
+        {
+          "check": "text source ocr",
+          "pass": true,
+          "detail": "ocr"
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "file": "skewed.png",
+      "ms": 454,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "vm-image/1",
+        "ocr": "tesseract.js@5 eng 4.0.0_best_int",
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 142,
+        "words": 20,
+        "elements": 3,
+        "tables": 0,
+        "pages": 1,
+        "pagesWithText": 1,
+        "ocrPages": 1,
+        "meanOcrConfidence": 94,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "no silent misread (misread => needs_review)",
+          "pass": true,
+          "detail": "0 line(s) misread, status ready"
+        }
+      ]
+    },
+    {
+      "file": "two-column.pdf",
+      "ms": 145,
+      "ok": true,
+      "status": "ready",
+      "code": null,
+      "parser": {
+        "name": "pdf.js@4.10.38 + vm-layout/1",
+        "ocr": null,
+        "pipeline": "vm-ingest/1"
+      },
+      "stats": {
+        "characters": 304,
+        "words": 46,
+        "elements": 5,
+        "tables": 0,
+        "pages": 1,
+        "pagesWithText": 1,
+        "ocrPages": 0,
+        "meanOcrConfidence": null,
+        "furnitureExcluded": 0
+      },
+      "warnings": [],
+      "checks": [
+        {
+          "check": "status",
+          "pass": true,
+          "detail": "ready"
+        },
+        {
+          "check": "contains \"Left column first paragraph: the river c\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Left column second paragraph: soil sampl\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Right column first paragraph: the bridge\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "contains \"Right column second paragraph: the contr\"",
+          "pass": true,
+          "detail": ""
+        },
+        {
+          "check": "reading order",
+          "pass": true,
+          "detail": "2,25,98,164,232"
+        },
+        {
+          "check": "element spans exact",
+          "pass": true,
+          "detail": ""
+        }
+      ]
+    }
+  ]
+}

@@ -17,6 +17,7 @@ import {
   embedQueryReady,
 } from "./dense.mjs";
 import { spokenTurn, historyField } from "./spoken.mjs";
+import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import { clinicalTurn, observationEvidence } from "./clinical/answer.mjs";
 export function createVoiceAdapter({
@@ -26,6 +27,9 @@ export function createVoiceAdapter({
   bodyTimeoutMs = 5000,
   hardTtlMs = null,
   hardExpiresAtMs = null,
+  // Called after each answered turn with (token, {question, lead, result,
+  // scope}). The server routes it into the owning session's episodic memory.
+  onTurn = null,
 } = {}) {
   if (
     !Number.isSafeInteger(ttlMs) ||
@@ -256,6 +260,13 @@ export function createVoiceAdapter({
         );
       const grant = admitted.grant;
       const sequence = ++grant.sequence;
+      // Voice lab: wall-clock receipt of this turn, for stage latency.
+      const receivedAt = Date.now();
+      const logTurn = (entry) => {
+        grant.turnLog ??= [];
+        grant.turnLog.push({ seq: sequence, receivedAt, ...entry });
+        if (grant.turnLog.length > 50) grant.turnLog.shift();
+      };
       let data;
       try {
         const raw = await boundedBody(req, bodyTimeoutMs);
@@ -294,18 +305,48 @@ export function createVoiceAdapter({
           },
           { status: 400 },
         );
-      if (req.signal.aborted) return new Response(null, { status: 499 });
+      if (req.signal.aborted) {
+        logTurn({ transcript: last.content, outcome: "aborted" });
+        return new Response(null, { status: 499 });
+      }
+      // Speech notation -> document notation ("forty two thousand" ->
+      // "$42,000"). Notation only: no fact, field or value is added.
+      const asked = normalizeSpoken(last.content) || last.content;
       let spoken, turn;
       if (
         /^\s*(turn (that|this|the brief) into (an? )?email|draft (an? )?email)\s*[.!]?\s*$/i.test(
           last.content,
         )
       ) {
-        if (!grant.last || grant.last.refused || grant.last.unresolved)
+        // The draft comes from THIS call's previous question (its own message
+        // history), never from whatever another caller on the same bearer
+        // asked last.
+        const prevQ = [...data.messages.slice(0, -1)]
+          .reverse()
+          .find(
+            (m) => m?.role === "user" && typeof m.content === "string",
+          )?.content;
+        let prior = null;
+        try {
+          prior = prevQ
+            ? answer(normalizeSpoken(prevQ) || prevQ, grant.bundle)
+            : null;
+        } catch {
+          prior = null;
+        }
+        // A minted per-call token is one call, so its own last turn is fine;
+        // the fixed operator bearer is shared and never falls back.
+        if (!prevQ && !credentials.has(token)) prior = grant.last ?? null;
+        if (
+          !prior ||
+          prior.refused ||
+          prior.unresolved ||
+          !prior.evidence?.length
+        )
           spoken =
             "Ask a question with supporting evidence first. I have not created or sent an email.";
         else {
-          const reviewDraft = draft(grant.last, grant.bundle);
+          const reviewDraft = draft(prior, grant.bundle);
           turn = { draft: reviewDraft };
           spoken =
             "A review draft is ready on screen. Check decisions, conditions and open items before using it. Nothing has been sent.";
@@ -313,9 +354,9 @@ export function createVoiceAdapter({
       } else {
         let result = retrieval
           ? answerFromRetrieval(
-              last.content,
+              asked,
               grant.bundle,
-              await retrieval.retrieve(last.content, grant.bundle, {
+              await retrieval.retrieve(asked, grant.bundle, {
                 signal: req.signal,
               }),
               {
@@ -323,8 +364,8 @@ export function createVoiceAdapter({
                 embeddingModel: retrieval.embeddingModel,
               },
             )
-          : answer(last.content, grant.bundle, {
-              queryVector: await embedQueryReady(last.content),
+          : answer(asked, grant.bundle, {
+              queryVector: await embedQueryReady(asked),
               model: DENSE_MODEL_ID,
               available: denseAvailableFor(grant.bundle),
             });
@@ -341,14 +382,19 @@ export function createVoiceAdapter({
           result = { refused: true, evidence: [] };
         for (const evidence of result.evidence)
           validateEvidence(evidence, grant.bundle);
-        if (req.signal.aborted) return new Response(null, { status: 499 });
+        if (req.signal.aborted) {
+          logTurn({ transcript: last.content, outcome: "aborted" });
+          return new Response(null, { status: 499 });
+        }
         if (grants.get(token) !== grant || grant.expires <= now())
           return Response.json(
             { error: "Invalid or expired session capability" },
             { status: 401 },
           );
-        if (sequence !== grant.sequence)
+        if (sequence !== grant.sequence) {
+          logTurn({ transcript: last.content, outcome: "superseded" });
           return Response.json({ error: "Superseded turn" }, { status: 409 });
+        }
         grant.last = result;
         turn = { result };
         // Deterministic spoken renderer: routes intent, resolves the field
@@ -358,7 +404,7 @@ export function createVoiceAdapter({
         // Lab results across reports (bundle.clinical, set by the server for
         // uploaded lab tables) answer first; absent for Northstar.
         const clinical = grant.bundle.clinical?.length
-          ? clinicalTurn(last.content, grant.bundle.clinical)
+          ? clinicalTurn(asked, grant.bundle.clinical)
           : null;
         let rendered = clinical
           ? {
@@ -380,11 +426,13 @@ export function createVoiceAdapter({
             }
           : null;
         rendered ??= spokenTurn(
-          last.content,
+          asked,
           grant.bundle,
+          // Context from this request's own history only: a fixed bearer is
+          // shared by every caller, so grant-level state would leak between
+          // concurrent calls.
           historyField(grant.bundle, data.messages.slice(0, -1)) ??
-            grant.lastField ??
-            null,
+            (credentials.has(token) ? null : (grant.lastField ?? null)),
         );
         // Outside the claim graph's fields: speak one verbatim sentence or
         // table row from the engine's already-validated evidence, or keep
@@ -392,7 +440,7 @@ export function createVoiceAdapter({
         // carry no "no_field" reason and are never overridden.
         if (!clinical && (!rendered || rendered.reason === "no_field")) {
           const quoted = extractiveSpoken(
-            last.content,
+            asked,
             result,
             grant.bundle,
             grant.bundle.locateEvidence,
@@ -440,6 +488,24 @@ export function createVoiceAdapter({
         id = "local-contract-" + randomBytes(8).toString("hex");
       const stream = new ReadableStream({
         start(controller) {
+          logTurn({
+            transcript: last.content,
+            normalized: asked ?? null,
+            firstByteAt: Date.now(),
+            spoken,
+            verdict: turn?.spokenTurn?.verdict ?? null,
+            outcome: "answered",
+          });
+          try {
+            onTurn?.(token, {
+              question: asked ?? last.content,
+              lead: turn?.spokenTurn ?? null,
+              result: turn?.result ?? null,
+              scope: grant.bundle?.scope ?? null,
+            });
+          } catch {
+            /* memory is best-effort; never break the call */
+          }
           for (const content of spoken.match(/.{1,64}(?:\s|$)|.{1,64}/g) ||
             []) {
             controller.enqueue(
@@ -477,6 +543,16 @@ export function createVoiceAdapter({
           "Cache-Control": "no-store",
         },
       });
+    },
+    // Voice lab: this grant's recent turns (transcript as received, receipt and
+    // first-byte wall-clock times, interruptions). Owner diagnostics only.
+    turnLog(token) {
+      const g = grants.get(token);
+      if (!g || g.expires <= now()) return [];
+      return [...(g.turnLog ?? [])];
+    },
+    setOnTurn(fn) {
+      onTurn = typeof fn === "function" ? fn : null;
     },
     lastTurn(token) {
       const g = grants.get(token);

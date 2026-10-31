@@ -62,7 +62,7 @@ test("lab comparison: screen lead and voice say the same thing, citing the rows"
     assert.equal(r.lead.verdict, "COMPARED");
     assert.match(
       r.lead.text,
-      /^Ferritin for Test Person A went from 0\.5 ng\/mL on 3 September 2026 to 50 ng\/mL on 12 October 2026: the later result is higher\. The 12 October 2026 result was amended from 5 to 50; this uses the amended value\./,
+      /^Your Ferritin went from 0\.5 ng\/mL on 3 September 2026 to 50 ng\/mL on 12 October 2026\. That's higher than before\. It's now inside the lab's range\. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value\./,
     );
     assert.ok(
       r.lead.citations.length >= 3,

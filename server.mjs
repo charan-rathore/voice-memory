@@ -11,6 +11,8 @@ import { createVoiceAdapter } from "./voice-adapter.mjs";
 import {
   DENSE_MODEL_ID,
   denseAvailableFor,
+  denseCacheSuffix,
+  denseStatus,
   embedQueryReady,
   pauseDenseForIngest,
   resumeDenseAfterIngest,
@@ -24,6 +26,12 @@ import {
   observationEvidence,
 } from "./clinical/answer.mjs";
 import { extractReport } from "./clinical/observations.mjs";
+import { detectLang } from "./clinical/explain.mjs";
+import { normalizeSpoken } from "./spoken-normalize.mjs";
+import { createMemory, recordTurn, liveEpisodes } from "./memory/memory.mjs";
+import { buildGraph } from "./memory/graph.mjs";
+import { createStore, snapshotOf, restoreInto } from "./memory/store.mjs";
+import { createAnswerCache } from "./cache.mjs";
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "./corpus-northstar.mjs";
 import { createRssWatchdog } from "./rss-watchdog.mjs";
@@ -46,6 +54,11 @@ const STATIC = {
   "/app.js": ["./public/app.js", "text/javascript"],
   "/workspace.js": ["./public/workspace.js", "text/javascript"],
   "/viewer.js": ["./public/viewer.js", "text/javascript"],
+  "/notes.js": ["./public/notes.js", "text/javascript"],
+  "/motion.js": ["./public/motion.js", "text/javascript"],
+  "/voicelab.js": ["./public/voicelab.js", "text/javascript"],
+  "/graph.js": ["./public/graph.js", "text/javascript"],
+  "/voicelab-score.mjs": ["./public/voicelab-score.mjs", "text/javascript"],
   "/style.css": ["./public/style.css", "text/css"],
   "/vendor/pdf.min.mjs": [
     "./node_modules/pdfjs-dist/build/pdf.min.mjs",
@@ -171,7 +184,15 @@ export function createLocalServer({
     hardExpiresAtMs: voiceHardExpiresAtMs(),
   }),
   port = Number(process.env.PORT || 4317),
-  watchdog = createRssWatchdog(),
+  // The dense shed-guard (dense.mjs) is the primary memory protection: on a
+  // host with a readable cgroup limit it bounds RSS by shedding dense and
+  // refusing reloads (measured 221 MiB stable across upload cycles at a 512
+  // MiB limit). The RSS watchdog is an opt-in restart backstop only; its
+  // admission control caused false 503s in measured runs, so it is off
+  // unless explicitly enabled with VM_RSS_WATCHDOG=on.
+  watchdog = createRssWatchdog({
+    disabled: process.env.VM_RSS_WATCHDOG !== "on",
+  }),
 } = {}) {
   // Deployment configuration (all optional; unset = local-only behavior):
   // VM_PUBLIC_HOST / VM_PUBLIC_ORIGIN: the one public hostname/origin the UI
@@ -179,6 +200,42 @@ export function createLocalServer({
   // creates a UI session; without it the public host serves nothing.
   // VM_VOICE_CAPABILITY: fixed bearer capability for the Bolna endpoint.
   const publicHost = process.env.VM_PUBLIC_HOST || null;
+  // Encrypted at-rest persistence of the OWNER's workspace (memory/store.mjs).
+  // Off unless VM_DATA_DIR is set; VM_DATA_DIR without VM_STORE_KEY throws.
+  const store = createStore({
+    dir: process.env.VM_DATA_DIR || null,
+    keyHex: process.env.VM_STORE_KEY || null,
+  });
+  const persistTimers = new WeakMap();
+  const schedulePersist = (s) => {
+    if (!store || !s?.persistNs) return;
+    clearTimeout(persistTimers.get(s));
+    persistTimers.set(
+      s,
+      setTimeout(() => {
+        try {
+          const snap = snapshotOf(s);
+          // An empty workspace leaves nothing on disk.
+          if (!snap.library.length && !(snap.memory?.episodes ?? []).length)
+            store.remove(s.persistNs);
+          else store.save(s.persistNs, snap);
+        } catch (e) {
+          // Never log content: the error class only.
+          console.error("persist failed:", e?.code ?? e?.name ?? "error");
+        }
+      }, 250),
+    );
+  };
+  const restoreOwner = (s) => {
+    if (!store || s.persistNs) return;
+    s.persistNs = "owner";
+    try {
+      if (restoreInto(s, store.load("owner")) && s.library.length)
+        rebuildIndex(s);
+    } catch (e) {
+      console.error("restore failed:", e?.code ?? e?.name ?? "error");
+    }
+  };
   const publicOrigin = process.env.VM_PUBLIC_ORIGIN || null;
   const ownerKey = process.env.VM_OWNER_KEY || null;
   const fixedCap = process.env.VM_VOICE_CAPABILITY || null;
@@ -238,6 +295,37 @@ export function createLocalServer({
     }
   }
   const signinFails = new Map();
+  // Public synthetic demo (VM_PUBLIC_DEMO=1, off by default): /demo on the
+  // public host opens an isolated session preloaded with the fictional
+  // Northstar documents. Demo sessions can ask, map, cite and draft; they
+  // cannot upload, import, reset, start a (paid) voice call, or reach any
+  // owner session. They are evicted among themselves only, and rate-limited.
+  const publicDemo = process.env.VM_PUBLIC_DEMO === "1";
+  const DEMO_ALLOWED = new Set([
+    "GET /api/session",
+    "GET /api/library",
+    "GET /api/graph",
+    "GET /api/memory",
+    "GET /api/demo-corpus",
+    "POST /api/query",
+    "POST /api/draft",
+    "POST /api/memory/forget",
+  ]);
+  const demoHits = new Map(); // ip -> { n, windowStart }
+  const demoRateOk = (ip) => {
+    const now = Date.now();
+    const r = demoHits.get(ip) ?? { n: 0, windowStart: now };
+    if (now - r.windowStart > 60000)
+      Object.assign(r, { n: 0, windowStart: now });
+    r.n++;
+    demoHits.set(ip, r);
+    if (demoHits.size > 5000) demoHits.delete(demoHits.keys().next().value);
+    return r.n <= 40;
+  };
+  // Process-wide answer cache (keys are scoped per index build; see cache.mjs).
+  const answerCache = createAnswerCache({
+    max: Number(process.env.VM_CACHE_MAX || 1000),
+  });
   const SIGNIN_PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Owner sign-in</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;max-width:22rem;margin:4rem auto"><h1>Voice Memory</h1><form method="post" action="/owner-signin" enctype="application/x-www-form-urlencoded"><label>Owner key <input type="password" name="key" required autocomplete="current-password" style="width:100%"></label><p><button type="submit">Sign in</button></p></form></body></html>`;
   // Bolna web-call session minting: credentials live in env (vault at deploy
   // time), never in client code, logs or artifacts.
@@ -249,24 +337,53 @@ export function createLocalServer({
     return timingSafeEqual(ha, hb);
   };
   const sessions = new Map();
+  // Voice turns land in the episodic memory of the session that owns the
+  // token, and only while that session still holds the same documents.
+  voice.setOnTurn?.((token, t) => {
+    for (const ss of sessions.values())
+      if (ss.voiceToken === token && ss.bundle?.scope === t.scope) {
+        recordTurn(ss.memory, { ...t, channel: "voice" });
+        schedulePersist(ss);
+      }
+  });
   const origin = `http://127.0.0.1:${port}`;
-  function session(req, res, { create = true, secure = false } = {}) {
-    let id = (req.headers.cookie || "")
-      .split("; ")
-      .find((c) => c.startsWith("vm="))
-      ?.slice(3);
+  function session(
+    req,
+    res,
+    { create = true, secure = false, fresh = false } = {},
+  ) {
+    let id = fresh
+      ? null
+      : (req.headers.cookie || "")
+          .split("; ")
+          .find((c) => c.startsWith("vm="))
+          ?.slice(3);
     if ((!id || !sessions.has(id)) && !create) return null;
     if (!id || !sessions.has(id)) {
       id = randomBytes(32).toString("hex");
       sessions.set(id, {
         sid: id,
         at: Date.now(),
+        memory: createMemory(),
         csrf: randomBytes(32).toString("hex"),
       });
       res.setHeader(
         "Set-Cookie",
         `vm=${id}; HttpOnly; SameSite=Strict; Path=/${secure ? "; Secure" : ""}`,
       );
+    }
+    // Local single-user app (no public host configured): this machine's
+    // workspace is the owner's. On a public host only /owner-signin restores.
+    if (store && !publicHost && !sessions.get(id).persistNs)
+      restoreOwner(sessions.get(id));
+    // Demo visitors are evicted among themselves (never an owner session).
+    const demos = [...sessions.values()].filter((x) => x.demo);
+    if (demos.length > 40) {
+      const old = demos[0];
+      if (old.sid !== id) {
+        releaseVoice(old);
+        sessions.delete(old.sid);
+      }
     }
     if (sessions.size > 50) {
       const oldest = sessions.keys().next().value;
@@ -327,6 +444,7 @@ export function createLocalServer({
       bundle.clinical = clinicalReportsFor(bundle, docs, extractReport);
     }
     setSessionBundle(s, bundle);
+    schedulePersist(s);
   };
   async function body(req) {
     const chunks = [];
@@ -389,6 +507,23 @@ export function createLocalServer({
     // browser session. All other routes stay local-host + cookie + CSRF.
     // The listener still binds 127.0.0.1; public exposure is a separate,
     // unauthorized deployment decision.
+    // Load-balancer health check: no session, no data, constant cost.
+    if (req.method === "GET" && req.url === "/healthz") {
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({
+          ok: true,
+          cache: { entries: answerCache.size, ...answerCache.stats },
+          // Memory only: no documents, questions or identities.
+          memory: denseStatus().memory,
+          dense: {
+            ready: denseStatus().ready,
+            disabled: denseStatus().disabled,
+          },
+        }),
+      );
+      return;
+    }
     const isBolnaRoute =
       req.url === "/v1/chat/completions" || req.url === "/v1/models";
     // Compare against the actual bound address (supports port 0 in tests).
@@ -418,6 +553,15 @@ export function createLocalServer({
         res.end(SIGNIN_PAGE);
         return;
       }
+      if (publicDemo && req.method === "GET" && reqUrl.pathname === "/demo") {
+        s = session(req, res, { create: true, secure: true, fresh: true });
+        s.demo = true;
+        replaceWithText(s, NORTHSTAR_DOCS);
+        rebuildIndex(s);
+        res.writeHead(302, { Location: "/" });
+        res.end();
+        return;
+      }
       if (req.method === "POST" && reqUrl.pathname === "/owner-signin") {
         const ip = req.socket.remoteAddress ?? "unknown";
         const rec = signinFails.get(ip) ?? { fails: 0, lockedUntil: 0 };
@@ -436,6 +580,7 @@ export function createLocalServer({
         }
         signinFails.delete(ip);
         s = session(req, res, { create: true, secure: true });
+        restoreOwner(s);
         res.writeHead(302, { Location: "/" });
         res.end();
         return;
@@ -453,6 +598,26 @@ export function createLocalServer({
         res.writeHead(403);
         res.end(JSON.stringify({ error: "Owner access required." }));
         return;
+      }
+      if (s?.demo && !(req.method === "GET" && STATIC[req.url])) {
+        const route = `${req.method} ${new URL(req.url, origin).pathname}`;
+        const lib = /^GET \/api\/library\/[\w-]+(\/original)?$/.test(route);
+        if (!DEMO_ALLOWED.has(route) && !lib) {
+          res.writeHead(403);
+          res.end(
+            JSON.stringify({ error: "Not available in the public demo." }),
+          );
+          return;
+        }
+        if (!demoRateOk(req.socket.remoteAddress ?? "unknown")) {
+          res.writeHead(429);
+          res.end(
+            JSON.stringify({
+              error: "Too many questions; try again in a minute.",
+            }),
+          );
+          return;
+        }
       }
     } else {
       s = session(req, res);
@@ -583,6 +748,54 @@ export function createLocalServer({
       if (req.method === "GET" && req.url === "/api/voice/last") {
         const token = s.voiceToken ?? (demoBundle ? fixedCap : null);
         res.end(JSON.stringify({ turn: token ? voice.lastTurn(token) : null }));
+        return;
+      }
+      // Memory and knowledge graph (owner session, read-only GETs). The graph
+      // is rebuilt from evidence + episodes on each request: it cannot drift
+      // from the documents, and it grows with every answered question.
+      if (req.method === "GET" && req.url.startsWith("/api/graph")) {
+        const focus =
+          new URL(req.url, origin).searchParams.get("focus") || "overview";
+        if (!/^[\w:./%-]{1,200}$/.test(focus)) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: "Bad focus" }));
+          return;
+        }
+        const g = buildGraph(s.bundle, s.memory, focus);
+        // Map evidence spans and documents to library ids so a click opens
+        // the original in the viewer (same as a citation).
+        const docId = (sid) => s.sourceToEntry?.get(sid)?.id ?? null;
+        for (const n of g.nodes) {
+          if (n.kind === "document") n.documentId = docId(n.id.slice(4));
+          if (n.evidence) n.evidence.documentId = docId(n.evidence.sourceId);
+        }
+        for (const e of g.edges)
+          if (e.evidence) e.evidence.documentId = docId(e.evidence.sourceId);
+        res.end(JSON.stringify(g));
+        return;
+      }
+      if (req.method === "GET" && req.url === "/api/memory") {
+        res.end(
+          JSON.stringify({
+            working: s.memory.working,
+            episodes: liveEpisodes(s.memory, s.bundle).slice(-50),
+            total: s.memory.episodes.length,
+          }),
+        );
+        return;
+      }
+      // Voice lab feed: the transcript Bolna actually delivered for each
+      // turn plus server receipt / first-byte wall-clock times and the
+      // server's current time (for browser clock alignment). Same owner
+      // session gate as /api/voice/last; read-only.
+      if (req.method === "GET" && req.url === "/api/voice/turns") {
+        const token = s.voiceToken ?? (demoBundle ? fixedCap : null);
+        res.end(
+          JSON.stringify({
+            serverNow: Date.now(),
+            turns: token ? voice.turnLog(token) : [],
+          }),
+        );
         return;
       }
       // Session document library (read-only GETs, cookie-scoped like
@@ -742,23 +955,72 @@ export function createLocalServer({
         };
       } else if (req.url === "/api/query") {
         if (!s.bundle) throw Error("Add documents first.");
-        const queryVector = await embedQueryReady(data.question);
-        s.result = answer(data.question, s.bundle, {
-          queryVector,
-          model: DENSE_MODEL_ID,
-          available: denseAvailableFor(s.bundle),
+        if (typeof data?.question !== "string")
+          throw Error("Ask a question of 1-4,000 characters.");
+        // Voice notes arrive as speech text ("forty two thousand"); the same
+        // notation-only normalization the voice endpoint applies.
+        if (data.question.length <= 4000)
+          data.question = normalizeSpoken(data.question) || data.question;
+        // Context for follow-ups: an explicit note context from the client
+        // (parallel voice notes carry the field they were asked after), else
+        // the session's last field.
+        // `context: null` = explicitly none (a standalone note); a field name
+        // = answer as a follow-up to that field; absent = session's last field.
+        const ctx =
+          data.context === null
+            ? ""
+            : typeof data.context === "string" &&
+                /^[A-Za-z]{1,40}$/.test(data.context)
+              ? data.context
+              : (s.lastField ?? "");
+        const bundle = s.bundle;
+        // Retrieval mode is part of the key: a keyword or partial-warm
+        // answer cached while the embedder was cold or warming must not
+        // outlive that state (see denseCacheSuffix in dense.mjs).
+        const key = answerCache.key(
+          bundle.scope + denseCacheSuffix(bundle),
+          data.question,
+          ctx,
+          detectLang(data.question),
+        );
+        const { json, cache } = await answerCache.resolve(key, async () => {
+          const queryVector = await embedQueryReady(data.question);
+          const raw = answer(data.question, bundle, {
+            queryVector,
+            model: DENSE_MODEL_ID,
+            available: denseAvailableFor(bundle),
+          });
+          const shown = decorateResult(raw, s);
+          // Typed follow-ups ("so finance rejected it?") inherit the previous
+          // question's field, exactly as the voice grant does.
+          shown.lead = leadFor(data.question, raw, bundle, ctx || null);
+          if (shown.lead)
+            shown.lead.citations = decorateResult(
+              { evidence: shown.lead.citations, question: data.question },
+              s,
+            ).evidence;
+          return { raw, shown };
         });
-        out = decorateResult(s.result, s);
-        // Typed follow-ups ("so finance rejected it?") inherit the previous
-        // question's field, exactly as the voice grant does.
-        out.lead = leadFor(data.question, s.result, s.bundle, s.lastField);
-        if (out.lead) {
-          s.lastField = out.lead.field ?? s.lastField ?? null;
-          out.lead.citations = decorateResult(
-            { evidence: out.lead.citations, question: data.question },
-            s,
-          ).evidence;
-        }
+        if (s.bundle !== bundle)
+          throw Error("Documents changed while answering; ask again.");
+        const cached = JSON.parse(json);
+        s.result = cached.raw;
+        out = cached.shown;
+        if (out.lead) s.lastField = out.lead.field ?? s.lastField ?? null;
+        out.cache = cache;
+        // Episodic memory: interaction only, exact spans, never authority.
+        out.episode = recordTurn(s.memory, {
+          question: data.question,
+          lead: out.lead,
+          result: out,
+          channel: data.channel === "note" ? "note" : "typed",
+          scope: bundle.scope,
+        }).id;
+        schedulePersist(s);
+      } else if (req.url === "/api/memory/forget") {
+        s.memory = createMemory();
+        schedulePersist(s);
+        out = { ok: true };
       } else if (req.url === "/api/draft") {
         if (!s.bundle || !s.result) throw Error("Ask a question first.");
         out = draft(s.result, s.bundle);
@@ -899,6 +1161,11 @@ export function createLocalServer({
         s.lastField = null;
         libraryOf(s).length = 0;
         s.sourceToEntry = new Map();
+        s.memory = createMemory();
+        if (store && s.persistNs) {
+          clearTimeout(persistTimers.get(s));
+          store.remove(s.persistNs);
+        }
         out = { reset: true };
       } else {
         res.writeHead(404);

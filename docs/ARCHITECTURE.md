@@ -96,11 +96,27 @@ on the line, not the whole chunk.
 - **Screen:** shows the same sentence as the lead, with the claim/evidence
   citations; the engine's full record text sits under "Full record text".
 
-### ADR-4: Hybrid retrieval is not added on this branch
-Keyword retrieval with claim-aware logic stays. IntelliRAG's own experiment did
-not beat BM25 on its dataset, and there is no retrieval gold set for Voice
-Memory yet. Dense or hybrid retrieval ships only when a benchmark on Voice
-Memory questions shows it recovers required evidence that BM25 misses.
+### ADR-4: Hybrid retrieval ships behind a memory guard
+Hybrid retrieval (local bge-small, fused with BM25) was merged in PR #3. On the
+30-question benchmark it adds one paraphrase question of 7 and two literal
+questions of 23 at recall@3. It also took production from about 60 MB to peaks
+of about 498 MB of Render's 512 MB. Since 2.0, the model loads only with about
+360 MB of headroom under the container limit, and it is dropped back to
+keyword retrieval above 90% of the limit (`dense.mjs`, `/healthz`). The voice
+path answers from the claim graph and spoken routes first, so its correctness
+does not depend on the dense stage.
+
+### ADR-5: Generalise the spoken layer at the root, measure on unseen corpora
+Spoken questions failed for notation and vocabulary reasons, not retrieval:
+number words, dropped "-ed", "go live", "retainer" instead of "fee", dates in
+months other than November, and authority carried by the document type.
+Fixes went into a notation-only normaliser (`spoken-normalize.mjs`) and a
+generic claim vocabulary (`claim-check.ts`). New question shapes are answered
+only from verbatim, span-validated sentences (`spoken-routes.mjs`): open
+items, named-document asks, explicit rejections, documented reasons, an
+explicit "no price agreed" for a named subject, and pending-versus-rejected.
+Each corpus counted as held out only until its failures were seen
+(`evaluation/spoken-eval.mjs` records which was which).
 
 ## 4. Format support (measured on synthetic fixtures)
 
@@ -204,7 +220,83 @@ names the kickoff notes and was left unchanged. Dense/hybrid candidates were not
 run: this environment cannot download embedding models. The harness accepts any
 `retrieve(question, k)` for a fair comparison on the same questions.
 
-## 9. Known gaps (ranked)
+## 9. Spoken answers: development and held-out results
+
+Run through the real SSE voice endpoint (`npm run eval:spoken`). Retrieval
+recall (did the engine's evidence include a gold document) is reported
+separately from answer correctness: an abstention can be correct with no
+retrieval, and some routes answer from claim spans the engine did not rank.
+
+| Corpus | Role | Before 2.0 | First contact | Now |
+| --- | --- | --- | --- | --- |
+| Northstar (23 phrasings) | development | 11/22 | n/a | 23/23 |
+| Harbor (15) | held out at `584254d`, then used for fixes | 3/15 | 3/15 | 15/15 |
+| Lumen (14) | held out at `e6227d3`, never run during development | n/a | **12/14** | 14/14 |
+
+Lumen's 12/14 is the honest generalisation number. Its two failures were a
+split written as "30% on signature and 70% on launch", and "how much do the SMS
+reminders cost" answered with the contract fee (a wrong-subject positive).
+Both were fixed at the root afterwards. The same author wrote all three
+corpora, so none of them is independently blind.
+
+## 10. Memory layers and the knowledge graph (`memory/`)
+
+| Layer | Holds | Can it change a record? |
+| --- | --- | --- |
+| evidence | original documents, exact text | immutable |
+| semantic | claims (value, status, span), lab observations; recomputed per index | derived only |
+| episodic | answered turns with exact cited spans (content-hash keyed) | no |
+| working | the current call's or session's context | no |
+| temporal | "as of / before <date>" views using only records dated on or before it | no |
+
+The graph (`memory/graph.mjs`) is rebuilt from semantic and episodic memory on
+every request, so it cannot drift from the evidence. Levels: overview → topic
+→ value → exact sentences → original page. An episode citing text that no
+longer exists drops out. `evaluation/longitudinal.test.mjs` covers:
+- as-of answers;
+- import-order invariance;
+- duplicate imports;
+- deleting sources;
+- graph growth;
+- conversation never promoting a status.
+
+## 11. Voice: vault, lab, isolation
+
+- **Vault** (`npm run test:vault`) replays Bolna-shaped calls against the real
+  server over HTTP:
+  - recogniser spelling variants;
+  - barge-in with a truncated assistant turn;
+  - overlapping turns;
+  - 20 concurrent calls checked against their solo answers;
+  - wrong and expired bearers;
+  - lab turns in English, Hindi and Hinglish.
+
+  Golden recordings flag every wording change. It simulates Bolna only: no
+  audio, recogniser or TTS.
+- **Voice lab** ("Measure this call") measures a real call. Speech end comes
+  from local VAD, receipt and first byte from clock-aligned server timestamps,
+  and agent audio onset from the SDK volume level. What the recogniser
+  delivered is scored against a read script: WER, plus number, month and
+  negation errors. No real call has been made with it.
+- **Isolation:** the shared fixed bearer takes context only from the request's
+  own message history. Before this fix, caller B's follow-up was answered with
+  caller A's field.
+
+## 12. Persistence, demo, operations
+
+- `VM_DATA_DIR` + `VM_STORE_KEY` enable AES-256-GCM at-rest storage of the
+  owner's workspace (library and episodic memory). It refuses to start without
+  a key. Restore happens only after owner sign-in or in local single-user
+  mode. Render free's disk is ephemeral.
+- `VM_PUBLIC_DEMO=1` (off) enables an isolated synthetic demo at `/demo`:
+  ask/map/cite/draft only, rate-limited, never touching owner data.
+- **Answer cache** with coalescing: 7.8× throughput and p95 291 → 32 ms in the
+  local load test (`evaluation/load-test.mjs`, 50 concurrent clients).
+- **Cost** (`evaluation/cost-ledger.mjs`): about 4.9 ms of engine CPU per
+  answer, measured on this machine. Voice cost is a published-price lower
+  bound only.
+
+## 13. Known gaps (ranked)
 
 1. No real-document gold set; the synthetic benchmark cannot detect
    real-world table failures.
@@ -214,6 +306,6 @@ run: this environment cannot download embedding models. The harness accepts any
 4. Voice answers outside claim fields quote one sentence; multi-document
    synthesis is not attempted.
 5. Clinical model has no LOINC/UCUM coding and no validated unit conversions.
-6. Storage is in-memory per session.
-7. The claim renderer can answer a "what" question with "No." (fictional sample:
-   "What is pending for the pilot launch security review?").
+6. Durable storage needs a persistent disk or database (the code is ready,
+   behind `VM_DATA_DIR`). Render free's disk is ephemeral.
+7. No real-microphone call has been made or measured.

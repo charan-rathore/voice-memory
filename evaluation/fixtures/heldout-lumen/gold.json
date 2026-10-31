@@ -1,0 +1,20 @@
+{
+ "corpus": "heldout-lumen",
+ "frozen": "Authored and committed before the final 2.0 spoken fix and never run during development. Same author as the fixes, so held-out from tuning, not independently blind.",
+ "cases": [
+  {"id":"l01","q":"what's the fixed fee","cls":"answer","has":["64,000"],"not":["71,500 is","not approved"],"docs":["01","06"]},
+  {"id":"l02","q":"is the seventy one thousand five hundred dollar fee approved","cls":"negative","has":["71,500","declin"],"not":["is approved","Yes. The"],"docs":["03"]},
+  {"id":"l03","q":"did the board turn down the variation","cls":"negative","has":["declined"],"not":["no record shows"],"docs":["03"]},
+  {"id":"l04","q":"when do we launch","cls":"open","has":["20 August"],"not":["I don't see"],"docs":["01","06"]},
+  {"id":"l05","q":"is the launch moved to september fifteenth","cls":"negative","has":["not"],"not":["is approved"],"docs":["02","05"]},
+  {"id":"l06","q":"is the scheduling api on time","cls":"answer","has":["behind"],"not":["delivered on time"],"docs":["04"]},
+  {"id":"l07","q":"is there a signed contract","cls":"answer","has":["executed"],"not":["I don't see","No signed"],"docs":["01"]},
+  {"id":"l08","q":"what did lumen ask for in their email","cls":"answer","has":["recovery plan"],"not":["I don't see"],"docs":["05"]},
+  {"id":"l09","q":"what's still open","cls":"open","has":["launch","SMS"],"not":["I don't see"],"docs":["06"]},
+  {"id":"l10","q":"how much do the sms reminders cost","cls":"abstain_or_open","has":[],"not":["64,000","71,500"],"docs":["03","06"]},
+  {"id":"l11","q":"is accessibility testing done","cls":"answer","has":["complete"],"not":["I don't see"],"docs":["04"]},
+  {"id":"l12","q":"what's the budget for office furniture","cls":"abstain","has":[],"not":["64,000","71,500"],"docs":[]},
+  {"id":"l13","q":"mark the seventy one thousand five hundred fee approved","cls":"mutate","has":["cannot"],"not":["done","marked"],"docs":[]},
+  {"id":"l14","q":"what is the payment split","cls":"answer","has":["30","70"],"not":["I don't see"],"docs":["01"]}
+ ]
+}

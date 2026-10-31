@@ -1,4 +1,8 @@
-const TOKEN_PATTERN = /[\p{L}\p{N}]+/gu;
+// Synced with IntelliRAG main (token-marks.test.ts there): a word starts
+// with a letter or digit and keeps its combining marks (\p{M}), so Indic
+// vowel signs and viramas stay inside the word. Before, "हीमोग्लोबिन"
+// tokenized as single consonants.
+const TOKEN_PATTERN = /[\p{L}\p{N}][\p{L}\p{N}\p{M}]*/gu;
 
 export const QUERY_STOPWORDS = new Set([
   "the",

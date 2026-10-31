@@ -1261,3 +1261,303 @@ mark.hl,
     transition-duration: 1ms !important;
   }
 }
+
+/* ---------------------------------------------------------- voice notes */
+.vnotes {
+  margin: 4px 0 8px;
+}
+.vnotes-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 8px 16px 8px 12px;
+}
+.rec-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red);
+  transition: transform 0.2s;
+}
+.rec[data-recording="true"] .rec-dot {
+  animation: rec-breathe 1.6s ease-in-out infinite;
+}
+@keyframes rec-breathe {
+  50% {
+    transform: scale(1.45);
+    opacity: 0.7;
+  }
+}
+.note-lang {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--r);
+  background: var(--sheet);
+  color: var(--ink);
+}
+.note-interim {
+  margin: 0;
+  color: var(--ink-3);
+  font-style: italic;
+  font-family: var(--read);
+  min-width: 0;
+  flex: 1;
+}
+.notes {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.note {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 12px 14px;
+  will-change: transform, opacity;
+}
+.note-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.note-n {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  border: 1px solid var(--rule-2);
+  border-radius: 999px;
+  padding: 0 7px;
+}
+.note-q {
+  margin: 0;
+  flex: 1;
+  font-family: var(--read);
+  font-size: 17px;
+}
+.note-tick {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--live);
+  transform: scale(0);
+  position: relative;
+}
+.note-tick::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 3px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--sheet);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .note-tick {
+    transform: none;
+  }
+  .rec[data-recording="true"] .rec-dot {
+    animation: none;
+  }
+}
+.note-state {
+  margin: 6px 0 0 34px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.note[data-state="thinking"] .note-state::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  animation: rec-breathe 1.2s ease-in-out infinite;
+}
+.note[data-state="speaking"] {
+  border-color: var(--live);
+}
+.note[data-state="failed"] .note-state {
+  color: var(--red);
+}
+.note-a {
+  margin-left: 34px;
+}
+.note-text {
+  margin: 6px 0 4px;
+  font-family: var(--read);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* Voice lab: lives inside the call drawer, same quiet type as .more. */
+.voicelab-help,
+.voicelab-status {
+  font-size: 0.8125rem;
+  color: var(--ink-2, inherit);
+  margin: 0.5rem 0;
+}
+.voicelab-check {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.875rem;
+}
+.voicelab-script {
+  margin: 0.5rem 0 0.5rem 1.25rem;
+  padding: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Knowledge map: same paper, ink and highlighter as the rest of the page. */
+.map-crumbs {
+  font: 500 0.8125rem/1.4 var(--ui);
+  color: var(--ink-3);
+  margin: 0.5rem 0;
+}
+.map-crumbs [aria-current] {
+  color: var(--ink);
+}
+.map-sep {
+  color: var(--ink-3);
+}
+.map-stage {
+  position: relative;
+  height: clamp(320px, 52vh, 520px);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--sheet);
+  overflow: hidden;
+}
+.map-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  font-family: var(--ui);
+}
+.me-line {
+  fill: none;
+  stroke: var(--rule-2);
+}
+.me-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+.me-hit:focus-visible {
+  outline: none;
+  stroke: var(--focus);
+  stroke-opacity: 0.25;
+}
+.me-label {
+  font-size: 9px;
+  fill: var(--ink-3);
+  text-anchor: middle;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.me:hover .me-label,
+.me:focus-within .me-label {
+  opacity: 1;
+}
+.me:hover .me-line {
+  stroke: var(--ink-2);
+}
+.me-supersedes .me-line,
+.me-competes-with .me-line {
+  stroke-dasharray: 4 3;
+  stroke: var(--ink-3);
+}
+.mn {
+  cursor: pointer;
+}
+.mn rect {
+  fill: var(--sheet);
+  stroke: var(--rule-2);
+}
+.mn text {
+  font-size: 12px;
+  fill: var(--ink);
+}
+.mn .mn-use {
+  font-size: 10px;
+  fill: var(--ink-3);
+}
+.mn:hover rect,
+.mn:focus-visible rect {
+  stroke: var(--ink-2);
+}
+.mn:focus-visible {
+  outline: none;
+}
+.mn:focus-visible rect {
+  stroke: var(--focus);
+  stroke-width: 2;
+}
+.mn-topic rect {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+.mn-topic text {
+  fill: var(--sheet);
+  font-weight: 500;
+}
+.mn-value text {
+  font-family: var(--read);
+  font-size: 14px;
+}
+.mn-value.st-approved rect,
+.mn-value.st-proposed rect,
+.mn-value.st-requested rect,
+.mn-value.st-internal-target rect {
+  fill: var(--mark-soft);
+}
+.mn-value.st-superseded text {
+  text-decoration: line-through;
+  fill: var(--ink-3);
+}
+.mn-value.st-open rect,
+.mn-value.st-unresolved rect {
+  stroke-dasharray: 4 3;
+}
+.mn-evidence text {
+  font-family: var(--read);
+  font-style: italic;
+  font-size: 12px;
+}
+.mn-question rect {
+  fill: transparent;
+  stroke: transparent;
+}
+.mn-question text {
+  font-family: var(--read);
+  font-style: italic;
+  fill: var(--ink-2);
+}
+.is-focus rect {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.map-caption {
+  font: 0.875rem/1.5 var(--read);
+  color: var(--ink-2);
+  margin: 0.5rem 0 0;
+}

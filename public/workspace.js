@@ -617,6 +617,7 @@ $("ask").onsubmit = async (e) => {
   $("draft-panel").hidden = true;
   try {
     const r = await api("query", { question });
+    globalThis.dispatchEvent?.(new Event("vm:answered"));
     // "Partial" in the engine means two different things: a claim whose
     // status is proposed/pending (answer is a "Record status"), or merely
     // that SOME document in the session mentions an open item. Only the
