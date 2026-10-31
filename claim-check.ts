@@ -81,7 +81,7 @@ export function questionFields(q: string): ClaimField[] {
     out.add("paymentSplit");
   if (/deadline|due date|pilot date|when is the pilot/i.test(q))
     out.add("deadline");
-  if (/sign-?off|signoff|signed off|signing off/i.test(q)) {
+  if (/sign[- ]?off|signed off|signing off/i.test(q)) {
     if (/\bwhen|timing|expected|date\b/i.test(q)) out.add("signoffTiming");
     else out.add("signoffWho");
   }
