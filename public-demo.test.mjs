@@ -72,6 +72,10 @@ test("visitor GET / gets the app and a demo session, not the sign-in wall", asyn
   assert.equal(r.status, 200);
   assert.ok(cookie.startsWith("vm="), "session cookie set");
   assert.ok(!r.body.includes("owner-signin"), "no wall served");
+  const sess = JSON.parse(
+    (await req(4319, "GET", "/api/session", { cookie })).body,
+  );
+  assert.equal(sess.demo, true, "session flagged demo for the page");
   const lib = JSON.parse(
     (await req(4319, "GET", "/api/library", { cookie })).body,
   );
@@ -109,7 +113,12 @@ test("owner door remains at /owner-signin", async () => {
     body: "key=test-owner-key",
   });
   assert.equal(p.status, 302);
-  assert.ok(p.headers["set-cookie"]?.[0]?.includes("vm="), "owner cookie set");
+  const oc = (p.headers["set-cookie"]?.[0] ?? "").split(";")[0];
+  assert.ok(oc.includes("vm="), "owner cookie set");
+  const os = JSON.parse(
+    (await req(4319, "GET", "/api/session", { cookie: oc })).body,
+  );
+  assert.equal(os.demo, false, "owner session is not a demo session");
 });
 
 test("flag off keeps the wall", async () => {

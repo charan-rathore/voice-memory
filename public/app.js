@@ -1,8 +1,26 @@
 export const $ = (id) => document.getElementById(id);
 let csrf;
+// True when the server placed this browser in the open public demo
+// (VM_PUBLIC_DEMO): a fresh session over the fictional Northstar corpus.
+// Uploads, mutations and voice calls stay owner-only there (403), so the
+// page hides every control that would only fail for the visitor.
+export let demoMode = false;
 export const ready = fetch("/api/session")
   .then((r) => r.json())
-  .then((s) => (csrf = s.csrf));
+  .then((s) => {
+    csrf = s.csrf;
+    demoMode = s.demo === true;
+    if (demoMode) {
+      document.body.classList.add("public-demo");
+      const banner = document.createElement("p");
+      banner.className = "demo-banner";
+      banner.textContent =
+        "Public demo: you are looking at a fictional Northstar workspace. " +
+        "Ask questions and open the cited passages - uploading, editing " +
+        "and voice calls are off in this shared demo.";
+      $("column")?.prepend(banner);
+    }
+  });
 export function status(text, error = false) {
   $("status").textContent = text;
   $("status").classList.toggle("error", error);

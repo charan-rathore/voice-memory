@@ -1,7 +1,7 @@
 // Workspace: document library (real server-side stages), asking, answers
 // with verdicts, citations that open the source viewer, and the follow-up
 // draft. The live-call wiring lives in app.js.
-import { $, api, ready, status } from "./app.js";
+import { $, api, demoMode, ready, status } from "./app.js";
 import { openSource, closeSource } from "./viewer.js";
 
 let draftAllowed = false;
@@ -112,13 +112,17 @@ function renderLibrary() {
         view.onclick = () => openSource({ documentId: d.id });
         actions.append(view);
       }
-      if (d.status === "needs_review" && !d.included) {
+      if (!demoMode && d.status === "needs_review" && !d.included) {
         const inc = el("button", "link", "Use it anyway");
         inc.type = "button";
         inc.onclick = () => libraryAction(d.id, "include");
         actions.append(inc);
       }
-      if (["ready", "needs_review", "failed"].includes(d.status) && !d.local) {
+      if (
+        !demoMode &&
+        ["ready", "needs_review", "failed"].includes(d.status) &&
+        !d.local
+      ) {
         const rm = el("button", "link danger", "Remove");
         rm.type = "button";
         rm.setAttribute("aria-label", `Remove ${d.filename}`);

@@ -1809,3 +1809,26 @@ mark.hl,
     grid-template-columns: 1fr;
   }
 }
+
+/* Public demo (VM_PUBLIC_DEMO): visitors get a read-mostly fictional
+   workspace. Every control that would only fail with a 403 (uploads,
+   session reset, voice notes, the live call, owner readiness checks)
+   is hidden; the typed question box is the working path. */
+.public-demo #drop,
+.public-demo .examples,
+.public-demo #reset,
+.public-demo #voice-notes,
+.public-demo #live-call,
+.public-demo .readiness {
+  display: none !important;
+}
+.demo-banner {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid #d8cfc0;
+  border-radius: 10px;
+  background: #faf6ee;
+  color: #5c5344;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}

@@ -696,7 +696,7 @@ export function createLocalServer({
         return;
       }
       if (req.method === "GET" && req.url === "/api/session") {
-        res.end(JSON.stringify({ csrf: s.csrf }));
+        res.end(JSON.stringify({ csrf: s.csrf, demo: !!s.demo }));
         return;
       }
       if (req.method === "GET" && req.url === "/api/bolna-config") {
