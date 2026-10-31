@@ -100,6 +100,10 @@ export function createPublicApi({
     86400000,
   );
   const voiceGapMs = num(process.env.VM_PUBLIC_CALL_GAP_MS, 45000);
+  // VM_PUBLIC_VOICE=off: visitor call minting is disabled (typed demo and
+  // the owner call path are unaffected) and status stops advertising voice,
+  // so the landing hides its call buttons. Any other value keeps calls on.
+  const publicVoiceOn = process.env.VM_PUBLIC_VOICE !== "off";
   let lastMint = 0;
 
   const send = (res, status, obj, extra = {}) => {
@@ -147,7 +151,9 @@ export function createPublicApi({
           cases: Object.fromEntries(
             Object.keys(CASES).map((k) => [k, !!cases[k]?.bundle]),
           ),
-          voice: voiceState(),
+          voice: publicVoiceOn
+            ? voiceState()
+            : { configured: false, ready: false },
         });
         return true;
       }
@@ -265,6 +271,13 @@ export function createPublicApi({
         return true;
       }
       if (req.method === "POST" && path === "/voice/session") {
+        if (!publicVoiceOn)
+          return (
+            send(res, 503, {
+              error: "Voice calls are disabled on this server.",
+            }),
+            true
+          );
         const v = voiceState();
         if (!v.configured)
           return (
