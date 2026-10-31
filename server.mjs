@@ -371,6 +371,7 @@ export function createLocalServer({
       const old = demos[0];
       if (old.sid !== id) {
         releaseVoice(old);
+        if (old.library) old.library.length = 0; // frees the global budget
         sessions.delete(old.sid);
       }
     }
@@ -378,6 +379,8 @@ export function createLocalServer({
       const oldest = sessions.keys().next().value;
       if (oldest !== id) {
         releaseVoice(sessions.get(oldest));
+        const lib = sessions.get(oldest).library;
+        if (lib) lib.length = 0;
         sessions.delete(oldest);
       }
     }
