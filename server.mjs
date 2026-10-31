@@ -10,6 +10,12 @@ import {
 import { createVoiceAdapter } from "./voice-adapter.mjs";
 import { spokenTurn } from "./spoken.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
+import {
+  clinicalTurn,
+  clinicalReportsFor,
+  observationEvidence,
+} from "./clinical/answer.mjs";
+import { extractReport } from "./clinical/observations.mjs";
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "./corpus-northstar.mjs";
 import {
@@ -85,6 +91,26 @@ for (const f of readdirSync(
 // abstains or disagrees; the full engine text is always returned too.
 function leadFor(question, result, bundle, prevField) {
   try {
+    // Lab results across reports first (synthetic-data research prototype):
+    // typed observations, comparability checks, no clinical judgement.
+    if (bundle.clinical?.length) {
+      const c = clinicalTurn(question, bundle.clinical);
+      if (c)
+        return {
+          text: c.spoken,
+          verdict: c.verdict,
+          field: null,
+          citations: c.used
+            .map((o) => observationEvidence(o, bundle))
+            .filter((ev) => {
+              try {
+                return ev && validateEvidence(ev, bundle);
+              } catch {
+                return false;
+              }
+            }),
+        };
+    }
     let t = spokenTurn(question, bundle, prevField);
     if (!t || t.reason === "no_field")
       t = extractiveSpoken(question, result, bundle, bundle.locateEvidence);
@@ -283,7 +309,10 @@ export function createLocalServer({
     s.sourceToEntry = new Map(
       (bundle?.sources ?? []).map((src, i) => [src.id, docs[i]]),
     );
-    if (bundle) bundle.locateEvidence = locatorFor(s.sourceToEntry);
+    if (bundle) {
+      bundle.locateEvidence = locatorFor(s.sourceToEntry);
+      bundle.clinical = clinicalReportsFor(bundle, docs, extractReport);
+    }
     setSessionBundle(s, bundle);
   };
   async function body(req) {

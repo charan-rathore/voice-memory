@@ -125,6 +125,36 @@ export function importBundle(docs: Array<{ title: string; text: string }>) {
   });
   return { scope, sources, rows, anchors, unanchored };
 }
+// Benchmark hook (evaluation/retrieval-bench.mjs): the raw keyword ranking
+// the answer path starts from, before any claim logic or fallback. Additive;
+// the answer path does not use it.
+export function retrieveChunks(
+  query: string,
+  bundle: ReturnType<typeof importBundle>,
+  topK = 3,
+) {
+  const r = retrieveFromRows({
+    query,
+    queryVector: null,
+    mode: "keyword",
+    topK,
+    embeddingModel: null,
+    rows: bundle.rows,
+    storage: {
+      backend: "ephemeral",
+      durable: false,
+      denseAvailable: false,
+      warning: null,
+    },
+    corpusScope: { kind: "corpus", corpusId: bundle.scope },
+  });
+  return r.chunks.map((c) => ({
+    title: c.title,
+    text: c.text,
+    rank: c.rank,
+    score: c.score,
+  }));
+}
 export function validateEvidence(
   c: any,
   bundle: ReturnType<typeof importBundle>,
