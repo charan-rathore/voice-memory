@@ -1,4 +1,8 @@
-const TOKEN_PATTERN = /[\p{L}\p{N}]+/gu;
+// Letters, digits AND combining marks: Indic scripts write vowel signs and
+// the virama as combining marks (\p{M}), and ZWJ/ZWNJ sit inside words.
+// Without them "हीमोग्लोबिन" tokenized as single consonants and any Hindi
+// query matched any Hindi text sharing a consonant.
+const TOKEN_PATTERN = /[\p{L}\p{M}\p{N}\u200C\u200D]+/gu;
 
 export const QUERY_STOPWORDS = new Set([
   "the",

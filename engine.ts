@@ -10,7 +10,7 @@ import {
 
 // Re-exported for the spoken renderer layer (spoken.mjs): the claim graph is
 // the renderer's only source of facts. Additive; no behaviour change.
-export { extractClaims, questionFields, resolveClaims };
+export { extractClaims, questionFields, resolveClaims, retrieveIndexStats };
 
 export type QueryTransformInfo = {
   original: string;
@@ -25,6 +25,7 @@ export type RetrievalStagesInfo = {
 import { createHash, randomUUID } from "node:crypto";
 import { parseText } from "./vendor/memorable/src/import/text/parse-text";
 import {
+  retrieveIndexStats,
   retrieveFromRows,
   type SearchRow,
   type RetrieveResult,
