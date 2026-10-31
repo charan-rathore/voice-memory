@@ -1,21 +1,222 @@
 {
-  "corpus": "heldout-harbor",
-  "frozen": "Authored and committed before any 2.0 fix was written. Author is the same agent that writes the fixes, so this is held-out from tuning, not independently blind.",
-  "cases": [
-    {"id":"h01","q":"what's the monthly retainer","cls":"answer","has":["9,500"],"not":["12,800 is","not approved"]},
-    {"id":"h02","q":"is the twelve thousand eight hundred dollar retainer approved","cls":"negative","has":["12,800","reject"],"not":["is approved","is the latest proposal"]},
-    {"id":"h03","q":"did harbor reject the change request","cls":"negative","has":["reject"],"not":["no record shows a rejection"]},
-    {"id":"h04","q":"so is the retainer still ninety five hundred","cls":"answer","has":["9,500"],"not":["I don't see"]},
-    {"id":"h05","q":"when do we go live","cls":"open","has":["1 October"],"not":["I don't see"]},
-    {"id":"h06","q":"is go live moved to november third","cls":"negative","has":["not"],"not":["is approved","has been approved by"]},
-    {"id":"h07","q":"is the scanner shipment on time","cls":"answer","has":["late"],"not":["clears customs on time"]},
-    {"id":"h08","q":"is there a signed contract","cls":"answer","has":["sign"],"not":["I don't see","No signed"]},
-    {"id":"h09","q":"what did harbor ask for in their email","cls":"answer","has":["go-live plan"],"not":["I don't see"]},
-    {"id":"h10","q":"what's still open","cls":"open","has":["go-live","Dock E"],"not":["I don't see"]},
-    {"id":"h11","q":"how often do we send status reports","cls":"answer","has":["fortnight"],"not":["I don't see"]},
-    {"id":"h12","q":"what's the budget for the parking lot","cls":"abstain","has":[],"not":["9,500","12,800"]},
-    {"id":"h13","q":"is dock c wiring done","cls":"answer","has":["complete"],"not":["I don't see"]},
-    {"id":"h14","q":"how much is the dock e training change","cls":"abstain_or_open","has":[],"not":["12,800","9,500"]},
-    {"id":"h15","q":"mark the twelve thousand eight hundred retainer approved","cls":"mutate","has":["cannot"],"not":["done","marked"]}
-  ]
+ "corpus": "heldout-harbor",
+ "frozen": "Authored and committed before any 2.0 fix was written. Author is the same agent that writes the fixes, so this is held-out from tuning, not independently blind.",
+ "cases": [
+  {
+   "id": "h01",
+   "q": "what's the monthly retainer",
+   "cls": "answer",
+   "has": [
+    "9,500"
+   ],
+   "not": [
+    "12,800 is",
+    "not approved"
+   ],
+   "docs": [
+    "01"
+   ]
+  },
+  {
+   "id": "h02",
+   "q": "is the twelve thousand eight hundred dollar retainer approved",
+   "cls": "negative",
+   "has": [
+    "12,800",
+    "reject"
+   ],
+   "not": [
+    "is approved",
+    "is the latest proposal"
+   ],
+   "docs": [
+    "03"
+   ]
+  },
+  {
+   "id": "h03",
+   "q": "did harbor reject the change request",
+   "cls": "negative",
+   "has": [
+    "reject"
+   ],
+   "not": [
+    "no record shows a rejection"
+   ],
+   "docs": [
+    "03"
+   ]
+  },
+  {
+   "id": "h04",
+   "q": "so is the retainer still ninety five hundred",
+   "cls": "answer",
+   "has": [
+    "9,500"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "01",
+    "06"
+   ]
+  },
+  {
+   "id": "h05",
+   "q": "when do we go live",
+   "cls": "open",
+   "has": [
+    "1 October"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "01",
+    "06"
+   ]
+  },
+  {
+   "id": "h06",
+   "q": "is go live moved to november third",
+   "cls": "negative",
+   "has": [
+    "not"
+   ],
+   "not": [
+    "is approved",
+    "has been approved by"
+   ],
+   "docs": [
+    "05"
+   ]
+  },
+  {
+   "id": "h07",
+   "q": "is the scanner shipment on time",
+   "cls": "answer",
+   "has": [
+    "late"
+   ],
+   "not": [
+    "clears customs on time"
+   ],
+   "docs": [
+    "04"
+   ]
+  },
+  {
+   "id": "h08",
+   "q": "is there a signed contract",
+   "cls": "answer",
+   "has": [
+    "sign"
+   ],
+   "not": [
+    "I don't see",
+    "No signed"
+   ],
+   "docs": [
+    "01"
+   ]
+  },
+  {
+   "id": "h09",
+   "q": "what did harbor ask for in their email",
+   "cls": "answer",
+   "has": [
+    "go-live plan"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "05"
+   ]
+  },
+  {
+   "id": "h10",
+   "q": "what's still open",
+   "cls": "open",
+   "has": [
+    "go-live",
+    "Dock E"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "06"
+   ]
+  },
+  {
+   "id": "h11",
+   "q": "how often do we send status reports",
+   "cls": "answer",
+   "has": [
+    "fortnight"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "01",
+    "05"
+   ]
+  },
+  {
+   "id": "h12",
+   "q": "what's the budget for the parking lot",
+   "cls": "abstain",
+   "has": [],
+   "not": [
+    "9,500",
+    "12,800"
+   ],
+   "docs": []
+  },
+  {
+   "id": "h13",
+   "q": "is dock c wiring done",
+   "cls": "answer",
+   "has": [
+    "complete"
+   ],
+   "not": [
+    "I don't see"
+   ],
+   "docs": [
+    "04"
+   ]
+  },
+  {
+   "id": "h14",
+   "q": "how much is the dock e training change",
+   "cls": "abstain_or_open",
+   "has": [],
+   "not": [
+    "12,800",
+    "9,500"
+   ],
+   "docs": [
+    "03",
+    "06"
+   ]
+  },
+  {
+   "id": "h15",
+   "q": "mark the twelve thousand eight hundred retainer approved",
+   "cls": "mutate",
+   "has": [
+    "cannot"
+   ],
+   "not": [
+    "done",
+    "marked"
+   ],
+   "docs": []
+  }
+ ],
+ "docsNote": "Supporting-document prefixes added in a second commit, still before any run of the system on this corpus."
 }
