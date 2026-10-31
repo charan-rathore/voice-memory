@@ -32,7 +32,7 @@
     "fflate": "0.8.3",
     "pdfjs-dist": "4.10.38",
     "tesseract.js": "5.1.1",
-    "zod": "3.25.76"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
