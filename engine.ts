@@ -660,7 +660,14 @@ export function answer(
       .toLowerCase();
     const ids = question.match(/\b[A-Z]{2,}-\d+\b/g) ?? [];
     const idMiss = ids.some((id) => !exText.includes(id.toLowerCase()));
+    // "Was the budget approved?" asks about a status, not a quantity: the
+    // quantity gate applies only when no status verb is the thing asked.
+    const statusQ =
+      /^\s*(?:was|were|is|are|has|have|had|did|does|do)\b[^?]*\b(?:approv\w*|sign\w*|confirm\w*|finali[sz]\w*|reject\w*|agreed|accepted|cleared|released)\b/i.test(
+        question,
+      ) && !/\bhow (?:much|many)\b/i.test(question);
     const quantitative =
+      !statusQ &&
       /\brevenue|budget|turnover|profit|margin|sales|price|amount|how much|how many\b/i.test(
         question,
       );

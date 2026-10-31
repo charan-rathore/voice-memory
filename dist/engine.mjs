@@ -12473,7 +12473,10 @@ function answer(question, bundle) {
     const exText = result.evidence.map((e) => e.quote ?? "").join("\n").toLowerCase();
     const ids = question.match(/\b[A-Z]{2,}-\d+\b/g) ?? [];
     const idMiss = ids.some((id) => !exText.includes(id.toLowerCase()));
-    const quantitative = /\brevenue|budget|turnover|profit|margin|sales|price|amount|how much|how many\b/i.test(
+    const statusQ = /^\s*(?:was|were|is|are|has|have|had|did|does|do)\b[^?]*\b(?:approv\w*|sign\w*|confirm\w*|finali[sz]\w*|reject\w*|agreed|accepted|cleared|released)\b/i.test(
+      question
+    ) && !/\bhow (?:much|many)\b/i.test(question);
+    const quantitative = !statusQ && /\brevenue|budget|turnover|profit|margin|sales|price|amount|how much|how many\b/i.test(
       question
     );
     const hasQuantity = /[$€£₹]\s?\d|\d[\d,]*\s*%|\b(?!19\d{2}\b|20\d{2}\b)\d{5,}\b|\b\d{1,3}(?:,\d{3})+\b|\b\d+(?:\.\d+)?\s*(?:million|billion|thousand|lakh|crore)\b/i.test(

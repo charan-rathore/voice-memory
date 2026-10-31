@@ -159,7 +159,12 @@ function resolveField(q, claims, prevField) {
   if (direct.length) return direct[0];
   for (const c of claims) {
     if (!c.value) continue;
-    const prefix = c.value.toLowerCase().split(/\s+/).slice(0, 2).join(" ");
+    const parts = c.value.toLowerCase().split(/\s+/);
+    const prefix = parts.slice(0, 2).join(" ");
+    // A single common word ("Security") shared by question and value is not
+    // evidence the question is about that field: require two words or a
+    // number ("two depots", "$42,000").
+    if (parts.length < 2 && !/\d/.test(prefix)) continue;
     if (prefix.length >= 6 && q.toLowerCase().includes(prefix)) return c.field;
   }
   const amounts = q.match(/[$€£₹]\s?[\d,]+|\b\d{1,3}(?:,\d{3})+\b/g) || [];
@@ -319,12 +324,19 @@ function scopedNegative(field, claims, question, bundle = null) {
   const asksSigning = /\bsigned|agreement|countersign|executed\b/i.test(
     question,
   );
+  // The negative and the field's subject must share ONE sentence: "The
+  // launch is not approved. Security sign-off remains pending." holds no
+  // negative about sign-off.
+  const sentenceRelevant = (p) =>
+    NEGATIVE_RE.test(p) &&
+    ((cue && cue.test(p)) ||
+      (asksSigning && /signed|agreement|countersign/i.test(p)));
   const relevant = (quote) =>
-    NEGATIVE_RE.test(quote) &&
-    ((cue && cue.test(quote)) ||
-      (asksSigning && /signed|agreement|countersign/i.test(quote)));
+    String(quote ?? "")
+      .split(/(?<=[.!?])\s+/)
+      .some(sentenceRelevant);
   const inClaims =
-    claims.find((c) => c.field === field && NEGATIVE_RE.test(c.quote)) ??
+    claims.find((c) => c.field === field && relevant(c.quote)) ??
     claims.find((c) => relevant(c.quote));
   if (inClaims) return inClaims;
   // The shared extractor can skip amount-free negative statements; scan the
