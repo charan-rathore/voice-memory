@@ -70,37 +70,39 @@ wrong or missing credentials.
 - **Semantic search.** Retrieval is keyword-only; paraphrases mostly miss.
 - **Fitness for real health or personal data.** Storage is in-memory, with no
   encryption at rest, audit log or retention policy. No compliance is claimed.
+- **Cross-session isolation.** Storage is intended to be per sign-in, but session
+  isolation is not yet verified as a security boundary. Treat the hosted demo as
+  single-owner; the owner sign-in is a demo gate, not a multi-user guarantee.
 - **Clinical use.** The lab comparison is a research prototype on synthetic
   reports. It extracts and compares what is printed; it does not interpret.
 
 ## How it works
 
 ```mermaid
-flowchart TB
-    UI["Workspace UI (owner sign-in, browser)"]
-    BA["Bolna voice agent (phone / web call)"]
-    LP["Landing page: Vercel, static site/"]
-    subgraph R["App: one Node process on Render"]
-        ING["Ingest worker: signature and size checks, pdf.js / DOCX xml / OCR"]
-        DOC["Canonical document: elements with exact spans, pages and boxes"]
-        LIB["Session library: in memory, this session only, nothing persists"]
-        ENG["Evidence engine: keyword BM25 over chunks anchored to spans; exact-span evidence gate; no language model writes answers"]
-        CLM["Claim graph: fee / split / scope / sign-off"]
-        CLN["Clinical prototype: typed lab observations; unit, patient and amendment rules"]
-        VA["Voice adapter: fixed bearer, TTL grant, hard expiry, fail closed"]
-        ING --> DOC --> LIB
+flowchart LR
+    LP["Landing page (Vercel, static)"] -.-> UI
+    subgraph Clients
+        UI["Workspace UI (owner sign-in)"]
+        BA["Bolna voice agent"]
+    end
+    subgraph App["Render app: one Node process"]
+        ING["Ingest worker: pdf.js / DOCX / OCR"]
+        LIB["Session library: in memory, per sign-in"]
+        ENG["Evidence engine: BM25 + exact-span gate, no LLM"]
+        CLM["Claim graph: fee / split / sign-off"]
+        CLN["Clinical rules: units, patients, amendments"]
+        VA["Voice adapter: bearer, TTL, fail closed"]
+        ING --> LIB
         LIB --> ENG
-        LIB --> CLN
         CLN --> ENG
         CLM --- ENG
+        VA --> ENG
     end
     UI -->|upload| ING
     UI -->|question| ENG
-    ENG -->|screen: lead and citations that open the original page| UI
-    BA -->|SSE contract| VA
-    VA --> ENG
-    VA -->|voice: the same sentence| BA
-    LP -.->|links to the app| UI
+    ENG -->|answer + located citations| UI
+    BA -->|SSE| VA
+    VA -->|same sentence| BA
 ```
 
 | Path | Role |
