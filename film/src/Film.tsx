@@ -27,7 +27,8 @@ const C = {
   blue: "#8fa3ff",
   violet: "#b69cff",
 };
-const SERIF = "Newsreader, Georgia, serif";
+const SERIF = "Instrument, Newsreader, Georgia, serif";
+const DISPLAY = "Bricolage, Plex, system-ui, sans-serif";
 const SANS = "Plex, system-ui, sans-serif";
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
@@ -42,6 +43,9 @@ const Fonts: React.FC = () => (
   <style>{`
     @font-face { font-family: Newsreader; src: url(${staticFile("fonts/newsreader.woff2")}) format("woff2"); font-weight: 200 800; }
     @font-face { font-family: Newsreader; src: url(${staticFile("fonts/newsreader-italic.woff2")}) format("woff2"); font-weight: 200 800; font-style: italic; }
+    @font-face { font-family: Instrument; src: url(${staticFile("fonts/instrument.woff2")}) format("woff2"); font-weight: 400; }
+    @font-face { font-family: Instrument; src: url(${staticFile("fonts/instrument-italic.woff2")}) format("woff2"); font-weight: 400; font-style: italic; }
+    @font-face { font-family: Bricolage; src: url(${staticFile("fonts/bricolage.woff2")}) format("woff2"); font-weight: 200 800; }
     @font-face { font-family: Plex; src: url(${staticFile("fonts/plex-sans-400.woff2")}) format("woff2"); font-weight: 400; }
     @font-face { font-family: Plex; src: url(${staticFile("fonts/plex-sans-500.woff2")}) format("woff2"); font-weight: 500; }
     @font-face { font-family: Plex; src: url(${staticFile("fonts/plex-sans-600.woff2")}) format("woff2"); font-weight: 600; }
@@ -78,27 +82,62 @@ const Camera: React.FC<{ t: number; keys: Key[]; children: React.ReactNode; pers
   );
 };
 
-/** Words that rise and un-blur one after another. */
-const Rise: React.FC<{ t: number; at: number; text: string; size: number; color?: string; serif?: boolean; stagger?: number; weight?: number; italic?: boolean; style?: React.CSSProperties }> = ({ t, at, text, size, color = C.ink, serif = true, stagger = 0.06, weight = 400, italic, style }) => (
-  <div style={{ fontFamily: serif ? SERIF : SANS, fontSize: size, lineHeight: 1.02, letterSpacing: serif ? "-0.025em" : "-0.01em", color, fontWeight: weight, fontStyle: italic ? "italic" : undefined, ...style }}>
-    {text.split(" ").map((w, i) => {
-      const p = k(t, [at + i * stagger, at + i * stagger + 0.55], [0, 1], out);
+/** Kinetic headline: each word slides up out of a mask, its letters
+ * arriving with a tiny skew and stagger, then a gentle tracking settle. */
+const Rise: React.FC<{ t: number; at: number; text: string; size: number; color?: string; serif?: boolean; stagger?: number; weight?: number; italic?: boolean; style?: React.CSSProperties }> = ({ t, at, text, size, color = C.ink, serif = true, stagger = 0.07, weight = 400, italic, style }) => {
+  let ci = 0;
+  return (
+    <div style={{ fontFamily: serif ? SERIF : DISPLAY, fontSize: size, lineHeight: 1.06, color, fontWeight: weight, fontStyle: italic ? "italic" : undefined, letterSpacing: "normal", ...style }}>
+      {text.split(" ").map((w, i) => {
+        const w0 = at + i * stagger;
+        const settle = k(t, [w0 + 0.2, w0 + 1.1], [0.04, serif ? -0.012 : -0.02], out);
+        return (
+          <span key={i} style={{ display: "inline-block", overflow: "hidden", verticalAlign: "top", paddingBottom: "0.12em", marginRight: "0.22em", letterSpacing: `${settle}em` }}>
+            {[...w].map((ch, j) => {
+              const c0 = w0 + j * 0.018 + (ci++ % 3) * 0.004;
+              const p = k(t, [c0, c0 + 0.55], [0, 1], out);
+              return (
+                <span key={j} style={{ display: "inline-block", transform: `translateY(${(1 - p) * 105}%) skewY(${(1 - p) * 8}deg) rotate(${(1 - p) * 4}deg)`, opacity: Math.min(1, p * 2) }}>
+                  {ch}
+                </span>
+              );
+            })}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+/** Odometer: digits roll from one figure to another. */
+const Odometer: React.FC<{ t: number; at: number; from: string; to: string; size: number; color: string }> = ({ t, at, from, to, size, color }) => (
+  <span style={{ display: "inline-flex", fontFamily: SERIF, fontSize: size, color, lineHeight: 1, letterSpacing: "-0.02em" }}>
+    {[...to].map((ch, i) => {
+      const a = from[i] ?? ch;
+      if (!/\d/.test(ch) || !/\d/.test(a) || a === ch) return <span key={i}>{ch}</span>;
+      const steps = (Number(ch) - Number(a) + 10) % 10 || 10;
+      const p = k(t, [at + i * 0.06, at + 0.9 + i * 0.06], [0, 1], out);
+      const pos = p * steps;
       return (
-        <span key={i} style={{ display: "inline-block", opacity: p, transform: `translateY(${(1 - p) * 0.45}em)`, filter: `blur(${(1 - p) * 8}px)`, marginRight: "0.24em" }}>
-          {w}
+        <span key={i} style={{ display: "inline-block", height: "1em", overflow: "hidden", position: "relative" }}>
+          <span style={{ display: "flex", flexDirection: "column", transform: `translateY(${-pos}em)` }}>
+            {new Array(steps + 1).fill(0).map((_, j) => (
+              <span key={j} style={{ height: "1em", lineHeight: 1 }}>{(Number(a) + j) % 10}</span>
+            ))}
+          </span>
         </span>
       );
     })}
-  </div>
+  </span>
 );
 
 const Label: React.FC<{ children: React.ReactNode; color?: string; style?: React.CSSProperties }> = ({ children, color = C.ink2, style }) => (
-  <div style={{ fontFamily: SANS, fontSize: 18, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color, ...style }}>{children}</div>
+  <div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase", color, ...style }}>{children}</div>
 );
 const Tag: React.FC<{ text: string; color: string; t: number; at: number; style?: React.CSSProperties }> = ({ text, color, t, at, style }) => {
   const p = k(t, [at, at + 0.4], [0, 1], out);
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "8px 18px", borderRadius: 999, background: color + "22", color, border: `1.5px solid ${color}66`, fontFamily: SANS, fontWeight: 600, fontSize: 24, opacity: p, transform: `scale(${0.85 + 0.15 * p})`, ...style }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "8px 18px", borderRadius: 999, background: color + "22", color, border: `1.5px solid ${color}66`, fontFamily: DISPLAY, fontWeight: 600, fontSize: 24, letterSpacing: "0.01em", lineHeight: 1.2, whiteSpace: "nowrap", opacity: p, transform: `scale(${0.85 + 0.15 * p})`, ...style }}>
       <span style={{ width: 11, height: 11, borderRadius: 6, background: color }} />
       {text}
     </span>
@@ -183,8 +222,8 @@ const Hook: React.FC<{ t: number }> = ({ t }) => {
       </div>
       {/* 2 in 3 */}
       <div style={{ position: "absolute", left: 780, top: 170, opacity: big, transform: `translateY(${(1 - big) * 40}px)` }}>
-        <div style={{ fontFamily: SERIF, fontSize: 300, lineHeight: 0.9, letterSpacing: "-0.04em", color: C.ink }}>
-          2 <span style={{ fontStyle: "italic", fontSize: 150, color: C.ink2 }}>in</span> 3
+        <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 280, lineHeight: 0.9, letterSpacing: "-0.06em", color: C.ink }}>
+          2 <span style={{ fontFamily: SERIF, fontWeight: 400, fontStyle: "italic", fontSize: 150, color: C.ink2, letterSpacing: "0" }}>in</span> 3
         </div>
         <div style={{ display: "flex", gap: 30, marginTop: 30 }}>
           {dots.map((i) => {
@@ -438,11 +477,11 @@ const Deal: React.FC<{ t: number }> = ({ t }) => {
         <div style={{ position: "relative", fontFamily: SERIF, fontSize: 170, color: C.coral, letterSpacing: "-0.03em", opacity: k(t, [0, 0.4], [0, 1]) }}>
           $48,000
           <div style={{ position: "absolute", left: -8, right: -8, top: "54%", height: 10, background: C.red, borderRadius: 5, transform: `scaleX(${strike})`, transformOrigin: "left" }} />
-          <div style={{ fontFamily: SANS, fontSize: 24, color: C.ink2, marginTop: -6 }}>Proposal v1 · offer · superseded</div>
+          <div style={{ fontFamily: DISPLAY, fontSize: 24, letterSpacing: "0.02em", color: C.ink2, marginTop: 4 }}>Proposal v1 · offer · superseded</div>
         </div>
-        <div style={{ fontFamily: SERIF, fontSize: 170, color: C.ink, letterSpacing: "-0.03em", opacity: p42, transform: `translateX(${(1 - p42) * 60}px)` }}>
-          $42,000
-          <div style={{ display: "flex", gap: 14, marginTop: 4 }}>
+        <div style={{ opacity: p42, transform: `translateX(${(1 - p42) * 60}px)` }}>
+          <Odometer t={t} at={2.2} from="$48,000" to="$42,000" size={170} color={C.ink} />
+          <div style={{ display: "flex", gap: 14, marginTop: 14 }}>
             <Tag text="Proposed" color={C.mark} t={t} at={3.0} />
             <Tag text="Finance approval: not recorded" color={C.red} t={t} at={4.6} />
           </div>
