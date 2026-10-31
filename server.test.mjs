@@ -401,3 +401,33 @@ test("memory watchdog: in-flight requests are counted around the handler", async
     await new Promise((r) => local.close(r));
   }
 });
+
+test("readiness reports watchdog memory state", async () => {
+  const state = {
+    inFlight: 2,
+    rssBytes: 100 * 1024 * 1024,
+    admitHighWater: 460 * 1024 * 1024,
+    restartHighWater: 496 * 1024 * 1024,
+    overSince: null,
+  };
+  const watchdog = {
+    admit: () => true,
+    beginRequest: () => {},
+    endRequest: () => {},
+    state: () => state,
+  };
+  const port = 4321;
+  const local = createLocalServer({ watchdog, port });
+  const url = "http://127.0.0.1:" + port;
+  await new Promise((r) => local.listen(port, "127.0.0.1", r));
+  try {
+    const r = await fetch(url + "/api/session");
+    const cookie = r.headers.get("set-cookie").split(";")[0];
+    const rr = await fetch(url + "/api/readiness", { headers: { cookie } });
+    assert.equal(rr.status, 200);
+    const j = await rr.json();
+    assert.deepEqual(j.memory, state);
+  } finally {
+    await new Promise((r) => local.close(r));
+  }
+});
