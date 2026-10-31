@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#EFF0EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1221" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="Voice Memory">
+<meta property="og:description" content="A voice agent for deal documents that keeps proposals apart from approvals and shows the line it relied on.">
+<title>Voice Memory</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Voice Memory is a voice agent for deal documents. Ask out loud before a client call; it tells a proposal from an approval and shows the exact line it relied on.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: "the redline desk". The deal documents are the hero material: a highlighter marks the line an
+   answer stands on, red ink strikes what was replaced. One column of argument beside one desk of evidence. */
+:root{
+  --paper:#EFF0EC; --sheet:#FFFFFF; --ink:#151B2E; --ink-2:#454B60; --ink-3:#5F6477;
+  --rule:#D6D8CE; --rule-2:#E4E5DE; --red:#AE2F28; --hl:#F2D843; --on-hl:#151B2E; --press:#2A3250;
+  --shadow:0 1px 1px rgba(21,27,46,.05),0 14px 34px -20px rgba(21,27,46,.32);
+  --ease:cubic-bezier(.23,1,.32,1);
+  --f-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,-apple-system,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0E1221; --sheet:#161B2D; --ink:#ECEDE6; --ink-2:#BABDCA; --ink-3:#9DA1B4;
+  --rule:#2A3048; --rule-2:#20253A; --red:#F27A71; --hl:#E9CE3E; --on-hl:#151B2E; --press:#D6D9E2;
+  --shadow:0 1px 1px rgba(0,0,0,.25),0 18px 40px -22px rgba(0,0,0,.75); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0E1221; --sheet:#161B2D; --ink:#ECEDE6; --ink-2:#BABDCA; --ink-3:#9DA1B4;
+  --rule:#2A3048; --rule-2:#20253A; --red:#F27A71; --hl:#E9CE3E; --on-hl:#151B2E; --press:#D6D9E2;
+  --shadow:0 1px 1px rgba(0,0,0,.25),0 18px 40px -22px rgba(0,0,0,.75); color-scheme:dark}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.wrap{max-width:1160px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+a{color:inherit;text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:6px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;color:var(--ink)}
+p{margin:0;text-wrap:pretty}
+button{touch-action:manipulation}
+
+/* Highlighter: the page's one signature move */
+.mk{background-image:linear-gradient(transparent 10%,var(--hl) 10%,var(--hl) 90%,transparent 90%);background-repeat:no-repeat;background-size:0% 100%;border-radius:2px;padding:0 .08em;margin:0 -.08em;transition:background-size .8s var(--ease),color .3s var(--ease);-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.mk.on{background-size:100% 100%;color:var(--on-hl)}
+.strike{position:relative;white-space:nowrap}
+.strike::after{content:"";position:absolute;left:-2px;right:-2px;top:54%;height:2px;background:var(--red);transform:scaleX(0);transform-origin:left;transition:transform .6s var(--ease)}
+.strike.on::after{transform:scaleX(1)}
+@media (prefers-reduced-motion: reduce){.mk,.strike::after{transition:none}}
+
+.btn{display:inline-flex;align-items:center;gap:10px;min-height:48px;padding:0 22px;border-radius:999px;font:500 15.5px/1 var(--f-body);text-decoration:none;cursor:pointer;border:1px solid transparent;transition:background-color .15s var(--ease),transform .12s var(--ease)}
+.btn:active,.chip:active,.play:active{transform:scale(.97)}
+.btn-ink{background:var(--ink);color:var(--paper)}
+.btn-ink:hover{background:var(--press)}
+.btn-line{border-color:var(--rule);color:var(--ink)}
+.btn-line:hover{background:var(--sheet);border-color:var(--ink-3)}
+
+/* Header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-block:22px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font:700 18px/1 var(--f-display);letter-spacing:-.01em}
+.nav{display:flex;gap:2px;flex-wrap:wrap;margin-right:-10px}
+.nav a{padding:10px;border-radius:8px;text-decoration:none;color:var(--ink-2);font-size:15px;transition:color .15s var(--ease)}
+.nav a:hover{color:var(--ink)}
+
+/* Hero: off-centre split. Argument left, the product right. */
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.02fr);gap:64px;align-items:start;padding-block:64px 96px}
+.kicker{font-size:15px;color:var(--ink-2)}
+.kicker b{font-weight:600;color:var(--ink)}
+.hero h1{margin-top:18px;font-size:clamp(48px,6.4vw,90px);line-height:.94;letter-spacing:-.045em;font-weight:800;max-width:10.5ch}
+.lede{margin-top:26px;font-size:19.5px;line-height:1.5;color:var(--ink-2);max-width:31rem}
+.ctas{margin-top:34px;display:flex;gap:12px;flex-wrap:wrap}
+
+/* The call card: the product, in its working state */
+.call{background:var(--sheet);border:1px solid var(--rule);border-radius:22px;box-shadow:var(--shadow);overflow:hidden;margin-top:8px}
+.call-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 20px;border-bottom:1px solid var(--rule-2);flex-wrap:wrap}
+.call-head strong{font:600 14.5px/1.2 var(--f-body)}
+.call-head small{font:400 13px/1.2 var(--f-body);color:var(--ink-3);margin-left:8px}
+.state{display:inline-flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:12.5px;color:var(--ink-2)}
+.state i{width:8px;height:8px;border-radius:50%;background:var(--rule)}
+.call[data-state="listening"] .state i{background:var(--red);animation:pulse 1s ease-in-out infinite}
+.call[data-state="checking"] .state i{background:var(--hl)}
+.call[data-state="answering"] .state i{background:var(--ink)}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion: reduce){.call[data-state="listening"] .state i{animation:none}}
+.call-body{padding:20px 22px 18px;display:grid;gap:18px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{min-height:40px;padding:0 15px;border-radius:999px;border:1px solid var(--rule);background:transparent;color:var(--ink);font:500 14px/1 var(--f-body);cursor:pointer;transition:background-color .15s var(--ease),border-color .15s var(--ease),transform .12s var(--ease)}
+.chip:hover{border-color:var(--ink-3)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.who{font-size:13px;font-weight:500;color:var(--ink-3)}
+.q{margin-top:4px;font-size:17px;color:var(--ink-2)}
+.a{margin-top:4px;font:500 clamp(22px,2.2vw,26px)/1.32 var(--f-display);letter-spacing:-.012em;color:var(--ink);min-height:4em}
+.a .w{opacity:.2;transition:opacity .16s linear}
+.a .w.said{opacity:1}
+@media (prefers-reduced-motion: reduce){.a .w{transition:none}}
+.verdict{display:flex;gap:8px;flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;font-family:var(--f-mono);font-size:12.5px;padding:5px 10px;border-radius:7px;background:var(--paper);color:var(--ink-2);font-variant-numeric:tabular-nums}
+.tag.warn{background:transparent;box-shadow:inset 0 0 0 1px var(--red);color:var(--red)}
+.receipt{margin:0;border-top:1px solid var(--rule-2);padding:16px 22px 18px;background:var(--paper)}
+.receipt blockquote{margin:6px 0 0;font-size:16px;line-height:1.55;color:var(--ink)}
+.receipt figcaption{margin-top:8px;font-family:var(--f-mono);font-size:12px;color:var(--ink-3)}
+.call-foot{display:flex;align-items:center;gap:14px;padding:14px 16px 14px 20px;border-top:1px solid var(--rule-2);flex-wrap:wrap}
+.play{display:inline-flex;align-items:center;gap:10px;min-height:46px;padding:0 18px;border-radius:999px;border:0;background:var(--ink);color:var(--paper);font:500 15px/1 var(--f-body);cursor:pointer;transition:background-color .15s var(--ease),transform .12s var(--ease)}
+.play:hover{background:var(--press)}
+.meter{display:flex;align-items:center;gap:3px;height:22px}
+.meter span{width:3px;border-radius:2px;background:var(--rule);height:6px;transition:height .1s linear}
+.call[data-state="listening"] .meter span{background:var(--red)}
+.toggle{margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2);cursor:pointer;min-height:44px}
+.toggle input{width:18px;height:18px;accent-color:var(--ink);margin:0}
+.disclose{margin-top:14px;font-size:13.5px;color:var(--ink-3);max-width:34rem}
+
+/* Sections */
+.band{border-top:1px solid var(--rule)}
+.sec{padding-block:104px}
+.h2{font-size:clamp(36px,4.6vw,60px);line-height:.98;letter-spacing:-.04em;font-weight:700;max-width:16ch}
+.sub{margin-top:18px;font-size:18.5px;color:var(--ink-2);max-width:36rem}
+
+/* The desk: steps beside the record */
+.desk{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:64px;margin-top:64px;align-items:start}
+.step{min-height:46vh;padding:6px 0 40px 24px;border-left:2px solid var(--rule);display:grid;align-content:start;gap:12px;cursor:pointer;transition:border-color .3s var(--ease)}
+.step:last-child{min-height:auto;padding-bottom:6px}
+.step[data-active="true"]{border-color:var(--ink)}
+.step .n{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.step h3{font-size:clamp(25px,2.5vw,32px);line-height:1.1;letter-spacing:-.025em;font-weight:700}
+.step p{font-size:17px;color:var(--ink-2)}
+.step p b{font-weight:600;color:var(--ink)}
+.sheets{position:sticky;top:calc(24px + env(safe-area-inset-top,0px));display:grid;gap:8px}
+.doc{background:var(--sheet);border:1px solid var(--rule);border-radius:12px;transition:opacity .35s var(--ease)}
+.doc header{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:11px 16px;flex-wrap:wrap}
+.doc .t{font:600 14.5px/1.3 var(--f-body)}
+.doc .meta{font-family:var(--f-mono);font-size:12px;color:var(--ink-3)}
+.doc ol{margin:0;padding:0 16px 12px;list-style:none;display:grid;gap:5px}
+.doc li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;font-size:14.5px;line-height:1.5;color:var(--ink-2)}
+.doc li .ln{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);padding-top:2px;text-align:right;font-variant-numeric:tabular-nums}
+.doc li.lit{color:var(--ink)}
+.note{display:block;margin-top:2px;font-family:var(--f-mono);font-size:12px;color:var(--red)}
+.note[hidden]{display:none}
+.doc.folded ol{display:none}
+.doc.folded{opacity:.62}
+.doc.folded:hover{opacity:1}
+
+/* Distinctions: typographic, not cards */
+.rules{margin-top:56px;border-top:1px solid var(--rule)}
+.rule{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:48px;padding-block:34px;border-bottom:1px solid var(--rule);align-items:baseline}
+.rule .eq{font:700 clamp(32px,4.2vw,54px)/1 var(--f-display);letter-spacing:-.04em}
+.rule .eq .ne{color:var(--red);font-weight:500;padding-inline:.14em}
+.rule p{color:var(--ink-2);max-width:32rem}
+.rule q{color:var(--ink)}
+
+/* One traced turn */
+.trace-wrap{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:64px;align-items:start}
+.trace{margin:0;background:var(--sheet);border:1px solid var(--rule);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.trace-head{display:flex;justify-content:space-between;gap:12px;padding:12px 18px;border-bottom:1px solid var(--rule-2);font-family:var(--f-mono);font-size:12.5px;color:var(--ink-3);flex-wrap:wrap}
+.trace dl{margin:0;padding:8px 18px 14px;display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:22px;row-gap:0;font-family:var(--f-mono);font-size:13.5px;line-height:1.55;font-variant-numeric:tabular-nums}
+.trace dt{color:var(--ink-3);padding-block:8px;border-top:1px solid var(--rule-2)}
+.trace dd{margin:0;color:var(--ink);padding-block:8px;border-top:1px solid var(--rule-2);min-width:0;overflow-wrap:anywhere}
+.trace dt:first-of-type,.trace dd:first-of-type{border-top:0}
+.trace .s{color:var(--red)}
+.trace .soon{color:var(--ink-3)}
+.trace figcaption{padding:12px 18px;border-top:1px solid var(--rule-2);font-size:13.5px;color:var(--ink-3);background:var(--paper)}
+.points{display:grid;gap:22px;margin-top:32px}
+.points p{color:var(--ink-2)}
+.points b{color:var(--ink);font-weight:600}
+
+/* Where it stands */
+.stand{margin-top:56px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:48px}
+.stand h3{font:600 16.5px/1.3 var(--f-body);padding-bottom:12px;border-bottom:2px solid var(--ink)}
+.stand .wip h3{border-color:var(--hl)}
+.stand .no h3{border-color:var(--red)}
+.stand ul{margin:14px 0 0;padding:0;list-style:none;display:grid;gap:10px}
+.stand li{font-size:16px;color:var(--ink-2)}
+
+/* Close */
+.close{padding-block:120px 104px;display:grid;gap:30px;justify-items:start}
+.close h2{font-size:clamp(46px,7.2vw,108px);line-height:.92;letter-spacing:-.05em;font-weight:800;max-width:12ch}
+.note-person{font-size:16px;color:var(--ink-2);max-width:34rem}
+.foot{border-top:1px solid var(--rule);padding-block:26px 40px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--ink-3)}
+
+@media (max-width: 960px){
+  .hero{grid-template-columns:minmax(0,1fr);gap:40px;padding-block:28px 64px}
+  .desk,.trace-wrap{grid-template-columns:minmax(0,1fr);gap:28px}
+  .sheets{position:static;order:2}
+  .step{min-height:auto;padding-bottom:28px}
+  .rule{grid-template-columns:minmax(0,1fr);gap:12px}
+  .stand{grid-template-columns:minmax(0,1fr);gap:36px}
+  .sec{padding-block:76px}
+  .close{padding-block:88px 72px}
+}
+@media (max-width: 520px){
+  .trace dl{grid-template-columns:minmax(0,1fr)}
+  .trace dt{padding-bottom:0}
+  .trace dd{border-top:0;padding-top:2px}
+  .call-body,.receipt{padding-left:18px;padding-right:18px}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#top" aria-label="Voice Memory, back to top">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="2" y="7" width="2.6" height="8" rx="1.3" fill="currentColor"/><rect x="7" y="3.5" width="2.6" height="15" rx="1.3" fill="currentColor"/><rect x="12" y="8" width="2.6" height="6" rx="1.3" fill="currentColor"/><rect x="17" y="5" width="2.6" height="12" rx="1.3" fill="var(--red)"/></svg>
+      Voice Memory
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#desk">The record</a>
+      <a href="#trace">How it answers</a>
+      <a href="#stand">Status</a>
+      <a href="https://github.com/charan-rathore/voice-memory">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="hero-title">
+      <div>
+        <p class="kicker">A voice agent for <b>deal documents</b>, built on Bolna.</p>
+        <h1 id="hero-title">Know what’s <span class="mk" id="hero-mk">signed</span> before you say it.</h1>
+        <p class="lede">Ask out loud before a client call. Voice Memory answers in one sentence, keeps proposals apart from approvals, and puts the line it relied on in front of you.</p>
+        <div class="ctas">
+          <button class="btn btn-ink" type="button" id="cta-play">
+            <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 2v10l9-5z" fill="currentColor"/></svg>
+            Play the call
+          </button>
+          <a class="btn btn-line" href="#desk">Read the record</a>
+        </div>
+      </div>
+
+      <div>
+        <div class="call" id="call" data-state="idle" aria-label="Call replay">
+          <div class="call-head">
+            <span><strong>Northstar pilot</strong><small>7 documents</small></span>
+            <span class="state" aria-live="polite"><i aria-hidden="true"></i><span id="state-text">Ready</span></span>
+          </div>
+          <div class="call-body">
+            <div class="chips" role="group" aria-label="Pick a question">
+              <button class="chip" type="button" data-turn="0" aria-pressed="true">Was it finalized?</button>
+              <button class="chip" type="button" data-turn="1" aria-pressed="false">Wasn’t it $48,000?</button>
+              <button class="chip" type="button" data-turn="2" aria-pressed="false">Why did it change?</button>
+            </div>
+            <div>
+              <span class="who">You</span>
+              <p class="q" id="q">“Was Northstar’s $42,000 revision finalized?”</p>
+            </div>
+            <div>
+              <span class="who">Voice Memory</span>
+              <p class="a" id="a" aria-live="polite">Not as a final agreement. Forty-two thousand dollars is the latest proposed fee, and approval isn’t established in these records.</p>
+            </div>
+            <div class="verdict" id="verdict">
+              <span class="tag warn">Not finalized</span>
+              <span class="tag">$42,000 · proposed</span>
+              <span class="tag"><span class="strike on">$48,000</span>&nbsp;· superseded</span>
+            </div>
+          </div>
+          <figure class="receipt">
+            <span class="who">The line it relied on</span>
+            <blockquote id="rq">Following the narrower scope, <span class="mk on" id="rq-mk">the revised fee is $42,000</span>, with 40% payable upfront and 60% after acceptance.</blockquote>
+            <figcaption id="rc">Commercial revision memo · Sep 18 · §1 · status: proposed</figcaption>
+          </figure>
+          <div class="call-foot">
+            <button class="play" type="button" id="play" aria-describedby="disclose">
+              <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true" id="play-ico"><path d="M3 2v10l9-5z" fill="currentColor"/></svg>
+              <span id="play-label">Play this answer</span>
+            </button>
+            <span class="meter" aria-hidden="true" id="meter"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
+            <label class="toggle" for="voice-on"><input type="checkbox" id="voice-on" checked> Sound</label>
+          </div>
+        </div>
+        <p class="disclose" id="disclose">A replay, voiced by your browser, of the short answers the agent is being tuned to give. The deal is fictional. The live agent runs on Bolna.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<section class="band" id="desk" aria-labelledby="desk-title">
+  <div class="wrap sec">
+    <h2 class="h2" id="desk-title">Seven documents. Nothing signed.</h2>
+    <p class="sub">A $48,000 analytics pilot for Northstar Retail, cut to $42,000 when the scope shrank. Scroll the call and watch which lines settle each question.</p>
+
+    <div class="desk">
+      <div class="steps">
+        <article class="step" data-step="1" data-active="true">
+          <span class="n">01 · Was it finalized?</span>
+          <h3>“Was the $42,000 revision finalized?”</h3>
+          <p><b>Not as a final agreement.</b> The memo that introduced $42,000 calls it a proposal until client finance signs off. Two later records say that sign-off never came.</p>
+        </article>
+        <article class="step" data-step="2" data-active="false">
+          <span class="n">02 · The challenge</span>
+          <h3>“But wasn’t it $48,000?”</h3>
+          <p><b>It was, in the first proposal.</b> The September 18 revision replaced it. One proposal replacing another is still a proposal.</p>
+        </article>
+        <article class="step" data-step="3" data-active="false">
+          <span class="n">03 · The reason</span>
+          <h3>“Why did the fee change?”</h3>
+          <p><b>The scope shrank.</b> Northstar asked for two regions instead of three, and the memo cut the fee “following the narrower scope”.</p>
+        </article>
+        <article class="step" data-step="4" data-active="false">
+          <span class="n">04 · The trap</span>
+          <h3>“So the 40/60 split is settled?”</h3>
+          <p><b>It’s open.</b> The memo proposes 40/60, the steering notes discussed 50/50 without a vote, and the action log lists it as undecided.</p>
+        </article>
+      </div>
+
+      <div class="sheets" aria-label="The seven Northstar documents">
+        <article class="doc" data-docs="2">
+          <header><span class="t">Pilot proposal v1</span><span class="meta">Sep 4 · proposal</span></header>
+          <ol>
+            <li data-on="2"><span class="ln">3</span><span><span class="mk" data-on="2">The proposed engagement fee is <span class="strike" data-on="2">$48,000</span></span>, invoiced 50% on signing and 50% on pilot acceptance.<span class="note" data-on="2" hidden>replaced Sep 18 · never countersigned</span></span></li>
+            <li><span class="ln">4</span><span>This proposal is an offer, not an agreement; it takes effect only on countersignature.</span></li>
+          </ol>
+        </article>
+        <article class="doc" data-docs="3">
+          <header><span class="t">Client kickoff notes</span><span class="meta">Sep 11 · meeting</span></header>
+          <ol>
+            <li data-on="3"><span class="ln">1</span><span><span class="mk" data-on="3">Northstar asked to narrow the pilot from three regions to two regions</span> (North and South) for the first phase.<span class="note" data-on="3" hidden>the reason, on record</span></span></li>
+            <li><span class="ln">3</span><span>Finance approval for any revised fee or payment schedule remains pending after this meeting.</span></li>
+          </ol>
+        </article>
+        <article class="doc" data-docs="1 2 3 4">
+          <header><span class="t">Commercial revision memo</span><span class="meta">Sep 18 · revision</span></header>
+          <ol>
+            <li data-on="2 3 4"><span class="ln">1</span><span><span class="mk" data-on="3">Following the narrower scope</span>, <span class="mk" data-on="2">the revised fee is $42,000</span>, with <span class="mk" data-on="4">40% payable upfront and 60% after acceptance</span>.<span class="note" data-on="4" hidden>split proposed: 40/60</span></span></li>
+            <li data-on="1"><span class="ln">2</span><span>The revised terms are subject to client finance sign-off; <span class="mk" data-on="1">they are a proposal until that sign-off is recorded</span>.<span class="note" data-on="1" hidden>proposal, not approval</span></span></li>
+          </ol>
+        </article>
+        <article class="doc" data-docs="1 4">
+          <header><span class="t">Steering committee notes</span><span class="meta">Sep 25 · meeting</span></header>
+          <ol>
+            <li data-on="4"><span class="ln">2</span><span>The discussed payment structure was <span class="mk" data-on="4">50% upfront and 50% after acceptance; no vote was taken</span> on the payment schedule.<span class="note" data-on="4" hidden>discussed, not decided: 50/50</span></span></li>
+            <li data-on="1"><span class="ln">3</span><span>The committee noted that <span class="mk" data-on="1">client finance had not yet signed off</span> on any revised commercial terms.</span></li>
+          </ol>
+        </article>
+        <article class="doc" data-docs="">
+          <header><span class="t">Delivery update</span><span class="meta">Oct 2 · status</span></header>
+          <ol>
+            <li><span class="ln">2</span><span>The 22 November date is an internal delivery target, not a client-approved deadline.</span></li>
+          </ol>
+        </article>
+        <article class="doc" data-docs="">
+          <header><span class="t">Client email extract</span><span class="meta">Oct 6 · email</span></header>
+          <ol>
+            <li><span class="ln">3</span><span>The client asks Meridian to confirm the final commercial terms in writing before the next steering meeting.</span></li>
+          </ol>
+        </article>
+        <article class="doc" data-docs="1 4">
+          <header><span class="t">Internal action log</span><span class="meta">Oct 9 · log</span></header>
+          <ol>
+            <li data-on="4"><span class="ln">2</span><span><span class="mk" data-on="4">Open decision: final payment schedule</span> (40/60 in the revision memo vs 50/50 in steering notes); finance approval outstanding.</span></li>
+            <li data-on="1"><span class="ln">4</span><span><span class="mk" data-on="1">No signed commercial agreement exists for the revised terms.</span> Production launch authorization is not recorded.</span></li>
+          </ol>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="rules-title">
+  <div class="wrap sec">
+    <h2 class="h2" id="rules-title">Three mistakes it won’t make for you.</h2>
+    <div class="rules">
+      <div class="rule">
+        <div class="eq">Newest<span class="ne">≠</span>agreed</div>
+        <p>$42,000 is the latest figure in the record. The memo that introduced it says <q>they are a proposal until that sign-off is recorded</q>, so the answer leads with that.</p>
+      </div>
+      <div class="rule">
+        <div class="eq">Discussed<span class="ne">≠</span>decided</div>
+        <p>The memo proposes 40/60. The steering notes discussed 50/50 and say <q>no vote was taken</q>. Two splits on record means the split is still open.</p>
+      </div>
+      <div class="rule">
+        <div class="eq">Pending<span class="ne">≠</span>rejected</div>
+        <p>Ask whether finance turned the new fee down and you hear what the documents support: approval is pending, and no rejection is recorded.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="trace" aria-labelledby="trace-title">
+  <div class="wrap sec trace-wrap">
+    <div>
+      <h2 class="h2" id="trace-title">No model writes the answer.</h2>
+      <p class="sub">Bolna runs the call: it hears you and speaks back. Our endpoint stands in as the agent’s model, and every sentence it returns is built from claims that carry a document, a date and a status.</p>
+      <div class="points">
+        <p><b>Your documents only.</b> Retrieval runs over the bundle you imported, and every quote keeps its SHA-256 hash and character offsets.</p>
+        <p><b>Fast enough to disappear.</b> The engine answered each demo question in 2 to 49 ms in our local run. On a call, the wait you hear is speech, not lookup.</p>
+        <p><b>Drafts, never sends.</b> A follow-up email is a draft for you to review. Nothing here can send a message by itself.</p>
+      </div>
+    </div>
+    <figure class="trace">
+      <div class="trace-head"><span>One turn, traced</span><span>POST /v1/chat/completions</span></div>
+      <dl>
+        <dt>heard</dt><dd>“Was Northstar’s $42,000 revision finalized?”</dd>
+        <dt>scope</dt><dd>Northstar pilot · 7 documents · bearer ok</dd>
+        <dt>claims</dt><dd><span class="s">$48,000</span> superseded · proposal v1, Sep 4<br>$42,000 proposed · revision memo, Sep 18<br>$42,000 proposed · steering notes, Sep 25</dd>
+        <dt>approval</dt><dd>not established</dd>
+        <dt>engine</dt><dd>7 ms</dd>
+        <dt>says</dt><dd>“Not as a final agreement. Forty-two thousand dollars is the latest proposed fee…”</dd>
+      </dl>
+      <figcaption>Claims, status and timing are from a local run of the engine on these documents. The last line is the wording used in the replay; the current build says “$42,000 is the latest proposal, and it is not approved.”</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band" id="stand" aria-labelledby="stand-title">
+  <div class="wrap sec">
+    <h2 class="h2" id="stand-title">Where it stands.</h2>
+    <p class="sub">A buildathon prototype on a fictional deal, described without rounding up.</p>
+    <div class="stand">
+      <div>
+        <h3>Works now</h3>
+        <ul>
+          <li>Typed questions over documents you import</li>
+          <li>Short spoken answers built from the record</li>
+          <li>Proposed, superseded and open, per value</li>
+          <li>Source lines with hashes and offsets</li>
+          <li>A streaming endpoint Bolna accepts as its model</li>
+        </ul>
+      </div>
+      <div class="wip">
+        <h3>In review, then next</h3>
+        <ul>
+          <li>PDF, Word, image and text uploads, with the cited line highlighted on the original page</li>
+          <li>The same answer on screen and in the call</li>
+          <li>An uncut recording of a live Bolna call</li>
+        </ul>
+      </div>
+      <div class="no">
+        <h3>Not claimed</h3>
+        <ul>
+          <li>That it can’t be wrong: a rule can misread a conditional sentence</li>
+          <li>Accuracy on documents we haven’t seen</li>
+          <li>Production security: this is a single-instance demo</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <section class="close band" aria-labelledby="close-title">
+    <h2 id="close-title">Hear proposed and signed come apart.</h2>
+    <div class="ctas" style="margin-top:0">
+      <button class="btn btn-ink" type="button" id="cta-play-2">
+        <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 2v10l9-5z" fill="currentColor"/></svg>
+        Play the call
+      </button>
+      <a class="btn btn-line" href="https://github.com/charan-rathore/voice-memory">Read the source</a>
+    </div>
+    <p class="note-person">Built by Charan Rathore for the Bolna Symphony Buildathon. The engine, the tests and the seven sample documents are all in the repository.</p>
+  </section>
+  <footer class="foot">
+    <span>Voice Memory · 2026 · Sample documents are fictional.</span>
+    <a href="https://github.com/charan-rathore/voice-memory">github.com/charan-rathore/voice-memory</a>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var TURNS = [
+    { q: "Was Northstar’s $42,000 revision finalized?",
+      a: "Not as a final agreement. Forty-two thousand dollars is the latest proposed fee, and approval isn’t established in these records.",
+      tags: [["warn","Not finalized"],["","$42,000 · proposed"],["","<span class=\"strike on\">$48,000</span>&nbsp;· superseded"]],
+      rq: 'Following the narrower scope, <span class="mk" id="rq-mk">the revised fee is $42,000</span>, with 40% payable upfront and 60% after acceptance.',
+      rc: "Commercial revision memo · Sep 18 · §1 · status: proposed" },
+    { q: "But wasn’t it $48,000 in the earlier proposal?",
+      a: "Yes, the original proposal was forty-eight thousand dollars. The September 18 revision replaced it with a proposed forty-two thousand, which still isn’t approved.",
+      tags: [["","History"],["","<span class=\"strike on\">$48,000</span>&nbsp;· replaced Sep 18"],["warn","$42,000 · not approved"]],
+      rq: '<span class="mk" id="rq-mk">The proposed engagement fee is $48,000</span>, invoiced 50% on signing and 50% on pilot acceptance.',
+      rc: "Pilot proposal v1 · Sep 4 · §3 · status: superseded" },
+    { q: "Why did the fee change?",
+      a: "Northstar narrowed the pilot from three regions to two, and the September 18 revision memo cut the fee to match.",
+      tags: [["","Reason on record"],["","3 regions → 2"],["","$42,000 · proposed"]],
+      rq: '<span class="mk" id="rq-mk">Following the narrower scope</span>, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance.',
+      rc: "Commercial revision memo · Sep 18 · §1 · with kickoff notes, Sep 11 · §1" }
+  ];
+  var $ = function(id){ return document.getElementById(id); };
+  var call = $("call"), qEl = $("q"), aEl = $("a"), verdict = $("verdict"), rq = $("rq"), rc = $("rc");
+  var stateText = $("state-text"), playLabel = $("play-label"), voiceOn = $("voice-on");
+  var meterBars = Array.prototype.slice.call($("meter").children);
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var synth = ("speechSynthesis" in window) ? window.speechSynthesis : null;
+  var current = 0, running = false, timers = [], meterTimer = null, token = 0;
+
+  try { if (localStorage.getItem("vm-sound") === "off") voiceOn.checked = false; } catch(e){}
+  voiceOn.addEventListener("change", function(){ try { localStorage.setItem("vm-sound", voiceOn.checked ? "on" : "off"); } catch(e){} });
+  if (!synth) { voiceOn.checked = false; voiceOn.disabled = true; }
+
+  function later(fn, ms){ var t = setTimeout(fn, ms); timers.push(t); return t; }
+  function clearAll(){ timers.forEach(clearTimeout); timers = []; meter(false); if (synth) { try { synth.cancel(); } catch(e){} } }
+  function setState(s, label){ call.setAttribute("data-state", s); stateText.textContent = label; }
+  function setPressed(i){ document.querySelectorAll(".chip").forEach(function(c){ c.setAttribute("aria-pressed", String(+c.dataset.turn === i)); }); }
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+  function renderTurn(i, settled){
+    var t = TURNS[i];
+    qEl.textContent = "“" + t.q + "”";
+    verdict.innerHTML = t.tags.map(function(x){ return '<span class="tag ' + x[0] + '">' + x[1] + '</span>'; }).join("");
+    rq.innerHTML = t.rq; rc.textContent = t.rc;
+    if (settled) { aEl.textContent = t.a; var mk = $("rq-mk"); if (mk) mk.classList.add("on"); }
+    else aEl.innerHTML = t.a.split(" ").map(function(w){ return '<span class="w">' + esc(w) + '</span>'; }).join(" ");
+  }
+  function meter(on){
+    if (meterTimer) { clearInterval(meterTimer); meterTimer = null; }
+    meterBars.forEach(function(b){ b.style.height = "6px"; });
+    if (on && !reduce) meterTimer = setInterval(function(){ meterBars.forEach(function(b){ b.style.height = (5 + Math.round(Math.random() * 15)) + "px"; }); }, 110);
+  }
+  function reveal(n){ var ws = aEl.querySelectorAll(".w"); for (var k = 0; k < ws.length && k < n; k++) ws[k].classList.add("said"); }
+  function setPlaying(on){
+    running = on;
+    playLabel.textContent = on ? "Stop" : "Play this answer";
+    $("play-ico").innerHTML = on ? '<rect x="3" y="3" width="8" height="8" rx="1.5" fill="currentColor"/>' : '<path d="M3 2v10l9-5z" fill="currentColor"/>';
+  }
+  function stop(){ token++; clearAll(); setPlaying(false); setState("idle","Ready"); renderTurn(current, true); }
+
+  function playTurn(i, done){
+    var my = ++token; clearAll(); current = i; setPressed(i); renderTurn(i, false); setPlaying(true);
+    setState("listening","Listening"); meter(true);
+    later(function(){
+      if (my !== token) return;
+      meter(false); setState("checking","Checking 7 documents…");
+      later(function(){
+        if (my !== token) return;
+        setState("answering","Answering");
+        var mk = $("rq-mk"); if (mk) mk.classList.add("on");
+        var text = TURNS[i].a, words = text.split(" "), said = 0, boundary = false, finished = false;
+        var useVoice = !!(synth && voiceOn.checked);
+        function finish(){ if (finished || my !== token) return; finished = true; reveal(words.length); later(function(){ if (my !== token) return; if (done) done(); else { setPlaying(false); setState("idle","Done"); } }, 650); }
+        function step(){ if (my !== token || boundary || finished) return; said++; reveal(said); if (said < words.length) later(step, reduce ? 0 : 290); else if (!useVoice) later(finish, 200); }
+        if (useVoice) {
+          try {
+            var u = new SpeechSynthesisUtterance(text); u.rate = 1.02; u.lang = "en-US";
+            u.onboundary = function(e){ if (my !== token || (e.name && e.name !== "word")) return; boundary = true; reveal(text.slice(0, e.charIndex + 1).split(" ").length); };
+            u.onend = finish;
+            u.onerror = function(){ useVoice = false; boundary = false; step(); };
+            synth.speak(u);
+            later(function(){ if (!boundary) step(); }, 450);
+            later(finish, 900 + 430 * words.length);
+          } catch(e){ useVoice = false; step(); }
+        } else step();
+      }, reduce ? 150 : 650);
+    }, reduce ? 150 : 900);
+  }
+  function playAll(){ var i = 0; (function next(){ playTurn(i, function(){ i++; if (i < TURNS.length) later(next, 350); else { setPlaying(false); setState("idle","Call ended"); } }); })(); }
+
+  $("play").addEventListener("click", function(){ if (running) stop(); else playTurn(current); });
+  document.querySelectorAll(".chip").forEach(function(c){ c.addEventListener("click", function(){ playTurn(+c.dataset.turn); }); });
+  function ctaPlay(){ call.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" }); playAll(); }
+  $("cta-play").addEventListener("click", ctaPlay);
+  $("cta-play-2").addEventListener("click", ctaPlay);
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && running) stop(); });
+
+  var heroMk = $("hero-mk");
+  if (reduce) heroMk.classList.add("on"); else setTimeout(function(){ heroMk.classList.add("on"); }, 400);
+
+  var steps = Array.prototype.slice.call(document.querySelectorAll(".step"));
+  function applyStep(n){
+    var key = String(n);
+    steps.forEach(function(s){ s.setAttribute("data-active", String(s.dataset.step === key)); });
+    document.querySelectorAll(".sheets [data-on]").forEach(function(el){
+      var on = el.getAttribute("data-on").split(" ").indexOf(key) !== -1;
+      if (el.tagName === "LI") el.classList.toggle("lit", on);
+      else if (el.classList.contains("note")) el.hidden = !on;
+      else el.classList.toggle("on", on);
+    });
+    document.querySelectorAll(".sheets .doc").forEach(function(d){
+      d.classList.toggle("folded", (d.getAttribute("data-docs") || "").split(" ").indexOf(key) === -1);
+    });
+  }
+  applyStep(1);
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ if (en.isIntersecting) applyStep(+en.target.dataset.step); });
+    }, { rootMargin: "-38% 0px -50% 0px", threshold: 0 });
+    steps.forEach(function(s){ io.observe(s); });
+  }
+  steps.forEach(function(s){ s.addEventListener("click", function(){ applyStep(+s.dataset.step); }); });
+})();
+</script>
+</body>
+</html>
