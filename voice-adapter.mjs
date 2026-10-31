@@ -305,11 +305,35 @@ export function createVoiceAdapter({
           last.content,
         )
       ) {
-        if (!grant.last || grant.last.refused || grant.last.unresolved)
+        // The draft comes from THIS call's previous question (its own message
+        // history), never from whatever another caller on the same bearer
+        // asked last.
+        const prevQ = [...data.messages.slice(0, -1)]
+          .reverse()
+          .find(
+            (m) => m?.role === "user" && typeof m.content === "string",
+          )?.content;
+        let prior = null;
+        try {
+          prior = prevQ
+            ? answer(normalizeSpoken(prevQ) || prevQ, grant.bundle)
+            : null;
+        } catch {
+          prior = null;
+        }
+        // A minted per-call token is one call, so its own last turn is fine;
+        // the fixed operator bearer is shared and never falls back.
+        if (!prevQ && !credentials.has(token)) prior = grant.last ?? null;
+        if (
+          !prior ||
+          prior.refused ||
+          prior.unresolved ||
+          !prior.evidence?.length
+        )
           spoken =
             "Ask a question with supporting evidence first. I have not created or sent an email.";
         else {
-          const reviewDraft = draft(grant.last, grant.bundle);
+          const reviewDraft = draft(prior, grant.bundle);
           turn = { draft: reviewDraft };
           spoken =
             "A review draft is ready on screen. Check decisions, conditions and open items before using it. Nothing has been sent.";
@@ -386,9 +410,11 @@ export function createVoiceAdapter({
         rendered ??= spokenTurn(
           asked,
           grant.bundle,
+          // Context from this request's own history only: a fixed bearer is
+          // shared by every caller, so grant-level state would leak between
+          // concurrent calls.
           historyField(grant.bundle, data.messages.slice(0, -1)) ??
-            grant.lastField ??
-            null,
+            (credentials.has(token) ? null : (grant.lastField ?? null)),
         );
         // Outside the claim graph's fields: speak one verbatim sentence or
         // table row from the engine's already-validated evidence, or keep

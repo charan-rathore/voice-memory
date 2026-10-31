@@ -17,6 +17,7 @@ import {
   documentedReason,
   rejectionLookup,
   subjectNegative,
+  pendingFor,
   unboundSubject,
   subjectSentence,
   docLabelOf,
@@ -843,6 +844,21 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   const field =
     resolveField(question, claims, null) ??
     (prevField ? resolveField(question, claims, prevField) : null);
+  if (!field && intent === "MUTATE")
+    return {
+      spoken:
+        "I cannot change the records by voice. Approvals have to be added to the documents themselves.",
+      verdict: "UNKNOWN",
+      field: null,
+      intent,
+      citations: [],
+    };
+  if (!field && intent === "REJECTED") {
+    // No field, no rejection on record: say so, and quote the pending
+    // approval that names what the caller asked about, if one exists.
+    const pend = pendingFor(question, bundle);
+    if (pend) return pend;
+  }
   if (!field) {
     return {
       spoken: "I don't see that in these documents.",

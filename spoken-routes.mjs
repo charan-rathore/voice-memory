@@ -354,3 +354,34 @@ export function subjectNegative(question, bundle) {
     }
   return null;
 }
+
+// "So finance rejected it?" with no rejection on record anywhere: the honest
+// answer is "no record shows a rejection", plus the pending line that names
+// the caller's subject. Null when no such line exists.
+export function pendingFor(question, bundle) {
+  const toks = (question.toLowerCase().match(/[a-z][a-z-]{3,}/g) ?? []).filter(
+    (t) => !GENERIC.has(t) && !STOPQ.has(t),
+  );
+  if (!toks.length) return null;
+  let best = null;
+  for (const src of bundle.sources)
+    for (const s of sentencesOf(src)) {
+      if (
+        !/\b(pending|outstanding|not yet signed|has not yet|had not yet)\b/i.test(
+          s.text,
+        )
+      )
+        continue;
+      const low = s.text.toLowerCase();
+      const hits = toks.filter((t) => low.includes(t)).length;
+      if (hits && (!best || hits > best.hits)) best = { hits, src, s };
+    }
+  if (!best) return null;
+  return {
+    spoken: `No record shows a rejection. Approval is pending, which is not the same thing: ${best.s.text}`,
+    verdict: "PROPOSED",
+    intent: "REJECTED",
+    field: null,
+    citations: [cite(best.src, best.s)],
+  };
+}
