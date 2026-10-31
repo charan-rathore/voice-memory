@@ -600,14 +600,26 @@ export function createLocalServer({
       // gated by one (localhost tests never exercised this branch).
       s = isBolnaRoute ? null : session(req, res, { create: false });
       if (!isBolnaRoute && !s) {
-        if (req.method === "GET" && STATIC[req.url]) {
+        // Open synthetic demo (VM_PUBLIC_DEMO=1): visitors land directly in
+        // the fictional Northstar workspace - no owner sign-in wall. Only
+        // GETs bootstrap a session (the page loads before its API calls);
+        // the demo route guard and per-IP rate limit below still apply,
+        // imports/mutations stay owner-only, and no Bolna/voice route is in
+        // DEMO_ALLOWED, so visitors cannot spend shared call credits.
+        if (publicDemo && req.method === "GET") {
+          s = session(req, res, { create: true, secure: true, fresh: true });
+          s.demo = true;
+          replaceWithText(s, NORTHSTAR_DOCS);
+          rebuildIndex(s);
+        } else if (req.method === "GET" && STATIC[req.url]) {
           res.writeHead(302, { Location: "/owner-signin" });
           res.end();
           return;
+        } else {
+          res.writeHead(403);
+          res.end(JSON.stringify({ error: "Owner access required." }));
+          return;
         }
-        res.writeHead(403);
-        res.end(JSON.stringify({ error: "Owner access required." }));
-        return;
       }
       if (s?.demo && !(req.method === "GET" && STATIC[req.url])) {
         const route = `${req.method} ${new URL(req.url, origin).pathname}`;
