@@ -59,6 +59,15 @@ const DICTIONARY: Array<[string, string[]]> = [
   ["paid", ["payment", "upfront"]],
   ["deadline", ["date", "target"]],
   ["kickoff", ["kick-off"]],
+  // Paraphrase bridges measured missing on the benchmark corpus (2026-10-31
+  // answer-quality bench): each maps a natural phrasing to the vocabulary the
+  // record actually uses. Recall-widening only; the evidence gate decides.
+  ["pitch", ["proposal"]],
+  ["cost", ["fee", "price"]],
+  ["dropped", ["narrow", "narrower", "removed"]],
+  ["country", ["region", "regions"]],
+  ["ready", ["readiness"]],
+  ["thyroid", ["tsh"]],
 ];
 
 const MAX_ADDED = 40;
