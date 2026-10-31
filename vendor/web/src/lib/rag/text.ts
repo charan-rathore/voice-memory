@@ -1,8 +1,8 @@
-// Letters, digits AND combining marks: Indic scripts write vowel signs and
-// the virama as combining marks (\p{M}), and ZWJ/ZWNJ sit inside words.
-// Without them "हीमोग्लोबिन" tokenized as single consonants and any Hindi
-// query matched any Hindi text sharing a consonant.
-const TOKEN_PATTERN = /[\p{L}\p{M}\p{N}\u200C\u200D]+/gu;
+// Synced with IntelliRAG main (token-marks.test.ts there): a word starts
+// with a letter or digit and keeps its combining marks (\p{M}), so Indic
+// vowel signs and viramas stay inside the word. Before, "हीमोग्लोबिन"
+// tokenized as single consonants.
+const TOKEN_PATTERN = /[\p{L}\p{N}][\p{L}\p{N}\p{M}]*/gu;
 
 export const QUERY_STOPWORDS = new Set([
   "the",

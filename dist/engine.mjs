@@ -29681,7 +29681,7 @@ function buildSnapshotPayload(contentLines, notes, ctx) {
 }
 
 // vendor/web/src/lib/rag/text.ts
-var TOKEN_PATTERN = /[\p{L}\p{M}\p{N}\u200C\u200D]+/gu;
+var TOKEN_PATTERN = /[\p{L}\p{N}][\p{L}\p{N}\p{M}]*/gu;
 var QUERY_STOPWORDS = /* @__PURE__ */ new Set([
   "the",
   "and",
