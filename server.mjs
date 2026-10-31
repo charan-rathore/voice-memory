@@ -568,6 +568,9 @@ export function createLocalServer({
               bound &&
               hardOk &&
               (!fixedCap || bolnaConfigured),
+            // Memory pressure state, reported not hidden: the owner can see
+            // when admission control is close to refusing expensive work.
+            memory: watchdog.state(),
           }),
         );
         return;
