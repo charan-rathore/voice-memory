@@ -7,6 +7,8 @@
     "render": "remotion render src/index.tsx VoiceMemory out/voice-memory.mp4"
   },
   "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
     "@remotion/bundler": "^4.0.539",
     "@remotion/cli": "^4.0.539",
     "@remotion/media-utils": "^4.0.539",
