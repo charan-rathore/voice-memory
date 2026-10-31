@@ -23,10 +23,14 @@ export function createMemory() {
   return { episodes: [], working: { lastField: null, recent: [] }, seq: 0 };
 }
 
+// A cited span is identified by the source's CONTENT hash, not its per-index
+// random id: a restored or re-indexed workspace gets new ids, and the same
+// text must still be recognised (and a changed text must not be).
 const spanOf = (c) =>
   c && Number.isInteger(c.start) && Number.isInteger(c.end) && c.sourceId
     ? {
         sourceId: c.sourceId,
+        hash: c.hash ?? null,
         start: c.start,
         end: c.end,
         title: c.title,
@@ -76,17 +80,30 @@ export function recordTurn(
   return ep;
 }
 
-/** Episodes whose citations still match the current evidence exactly. */
+/**
+ * Episodes whose citations still match the current evidence exactly, with
+ * each cited span re-mapped to the current source id (matched by content
+ * hash, then by id). An episode citing text that no longer exists drops out.
+ */
 export function liveEpisodes(mem, bundle) {
   if (!bundle) return [];
   const byId = new Map(bundle.sources.map((s) => [s.id, s]));
-  return mem.episodes.filter(
-    (e) =>
-      e.scope === bundle.scope ||
-      e.cited.every(
-        (c) => byId.get(c.sourceId)?.text.slice(c.start, c.end) === c.quote,
-      ),
-  );
+  const byHash = new Map(bundle.sources.map((s) => [s.hash, s]));
+  const out = [];
+  for (const e of mem.episodes) {
+    const cited = [];
+    let ok = true;
+    for (const c of e.cited) {
+      const src = (c.hash && byHash.get(c.hash)) || byId.get(c.sourceId);
+      if (!src || src.text.slice(c.start, c.end) !== c.quote) {
+        ok = false;
+        break;
+      }
+      cited.push({ ...c, sourceId: src.id, hash: src.hash });
+    }
+    if (ok) out.push({ ...e, cited });
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ temporal

@@ -29,6 +29,7 @@ import { detectLang } from "./clinical/explain.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { createMemory, recordTurn, liveEpisodes } from "./memory/memory.mjs";
 import { buildGraph } from "./memory/graph.mjs";
+import { createStore, snapshotOf, restoreInto } from "./memory/store.mjs";
 import { createAnswerCache } from "./cache.mjs";
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "./corpus-northstar.mjs";
@@ -188,6 +189,42 @@ export function createLocalServer({
   // creates a UI session; without it the public host serves nothing.
   // VM_VOICE_CAPABILITY: fixed bearer capability for the Bolna endpoint.
   const publicHost = process.env.VM_PUBLIC_HOST || null;
+  // Encrypted at-rest persistence of the OWNER's workspace (memory/store.mjs).
+  // Off unless VM_DATA_DIR is set; VM_DATA_DIR without VM_STORE_KEY throws.
+  const store = createStore({
+    dir: process.env.VM_DATA_DIR || null,
+    keyHex: process.env.VM_STORE_KEY || null,
+  });
+  const persistTimers = new WeakMap();
+  const schedulePersist = (s) => {
+    if (!store || !s?.persistNs) return;
+    clearTimeout(persistTimers.get(s));
+    persistTimers.set(
+      s,
+      setTimeout(() => {
+        try {
+          const snap = snapshotOf(s);
+          // An empty workspace leaves nothing on disk.
+          if (!snap.library.length && !(snap.memory?.episodes ?? []).length)
+            store.remove(s.persistNs);
+          else store.save(s.persistNs, snap);
+        } catch (e) {
+          // Never log content: the error class only.
+          console.error("persist failed:", e?.code ?? e?.name ?? "error");
+        }
+      }, 250),
+    );
+  };
+  const restoreOwner = (s) => {
+    if (!store || s.persistNs) return;
+    s.persistNs = "owner";
+    try {
+      if (restoreInto(s, store.load("owner")) && s.library.length)
+        rebuildIndex(s);
+    } catch (e) {
+      console.error("restore failed:", e?.code ?? e?.name ?? "error");
+    }
+  };
   const publicOrigin = process.env.VM_PUBLIC_ORIGIN || null;
   const ownerKey = process.env.VM_OWNER_KEY || null;
   const fixedCap = process.env.VM_VOICE_CAPABILITY || null;
@@ -266,8 +303,10 @@ export function createLocalServer({
   // token, and only while that session still holds the same documents.
   voice.setOnTurn?.((token, t) => {
     for (const ss of sessions.values())
-      if (ss.voiceToken === token && ss.bundle?.scope === t.scope)
+      if (ss.voiceToken === token && ss.bundle?.scope === t.scope) {
         recordTurn(ss.memory, { ...t, channel: "voice" });
+        schedulePersist(ss);
+      }
   });
   const origin = `http://127.0.0.1:${port}`;
   function session(req, res, { create = true, secure = false } = {}) {
@@ -289,6 +328,10 @@ export function createLocalServer({
         `vm=${id}; HttpOnly; SameSite=Strict; Path=/${secure ? "; Secure" : ""}`,
       );
     }
+    // Local single-user app (no public host configured): this machine's
+    // workspace is the owner's. On a public host only /owner-signin restores.
+    if (store && !publicHost && !sessions.get(id).persistNs)
+      restoreOwner(sessions.get(id));
     if (sessions.size > 50) {
       const oldest = sessions.keys().next().value;
       if (oldest !== id) {
@@ -348,6 +391,7 @@ export function createLocalServer({
       bundle.clinical = clinicalReportsFor(bundle, docs, extractReport);
     }
     setSessionBundle(s, bundle);
+    schedulePersist(s);
   };
   async function body(req) {
     const chunks = [];
@@ -451,6 +495,7 @@ export function createLocalServer({
         }
         signinFails.delete(ip);
         s = session(req, res, { create: true, secure: true });
+        restoreOwner(s);
         res.writeHead(302, { Location: "/" });
         res.end();
         return;
@@ -862,8 +907,10 @@ export function createLocalServer({
           channel: data.channel === "note" ? "note" : "typed",
           scope: bundle.scope,
         }).id;
+        schedulePersist(s);
       } else if (req.url === "/api/memory/forget") {
         s.memory = createMemory();
+        schedulePersist(s);
         out = { ok: true };
       } else if (req.url === "/api/draft") {
         if (!s.bundle || !s.result) throw Error("Ask a question first.");
@@ -1005,6 +1052,11 @@ export function createLocalServer({
         s.lastField = null;
         libraryOf(s).length = 0;
         s.sourceToEntry = new Map();
+        s.memory = createMemory();
+        if (store && s.persistNs) {
+          clearTimeout(persistTimers.get(s));
+          store.remove(s.persistNs);
+        }
         out = { reset: true };
       } else {
         res.writeHead(404);
