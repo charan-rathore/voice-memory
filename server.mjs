@@ -58,7 +58,6 @@ const STATIC = {
   "/motion.js": ["./public/motion.js", "text/javascript"],
   "/voicelab.js": ["./public/voicelab.js", "text/javascript"],
   "/graph.js": ["./public/graph.js", "text/javascript"],
-  "/start.js": ["./public/start.js", "text/javascript"],
   "/voicelab-score.mjs": ["./public/voicelab-score.mjs", "text/javascript"],
   "/style.css": ["./public/style.css", "text/css"],
   "/vendor/pdf.min.mjs": [
