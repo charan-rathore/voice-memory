@@ -12,6 +12,7 @@ export type ClaimField =
   | "paymentSplit"
   | "deadline"
   | "signoffWho"
+  | "signedAgreement"
   | "signoffTiming"
   | "launchApproval"
   | "scope"
@@ -49,7 +50,7 @@ export type Claim = {
 
 function statusOf(line: string): ClaimStatus {
   if (
-    /pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) approved|no decision (was )?taken|not [^.;]{0,20}(approved|signed|countersign|confirmed)/i.test(
+    /pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) approved|no decision (was )?taken|not [^.;]{0,20}(approved|signed|countersign|confirmed)|no\s+(signed|countersigned|executed)\s/i.test(
       line,
     )
   )
@@ -81,6 +82,15 @@ export function questionFields(q: string): ClaimField[] {
     out.add("paymentSplit");
   if (/deadline|due date|pilot date|when is the pilot/i.test(q))
     out.add("deadline");
+  // Agreement-existence questions ("is there a signed agreement?") are their
+  // own field: a recorded negative fact answers them verbatim, and fee or
+  // payment-split claims must not compete over them.
+  if (
+    /(signed|countersigned|executed)\b[^?]{0,40}\b(agreement|contract)\b|\b(agreement|contract)\b[^?]{0,40}\b(signed|countersigned|executed)\b/i.test(
+      q,
+    )
+  )
+    out.add("signedAgreement");
   if (/sign[- ]?off|signed off|signing off/i.test(q)) {
     if (/\bwhen|timing|expected|date\b/i.test(q)) out.add("signoffTiming");
     else out.add("signoffWho");
@@ -137,6 +147,7 @@ const FIELD_NOUN: Record<ClaimField, RegExp> = {
   deadline: /deadline|date|timeline/i,
   signoffWho: /sign/i,
   signoffTiming: /sign/i,
+  signedAgreement: /agreement|contract/i,
   launchApproval: /launch/i,
   scope: /region|scope/i,
   reporting: /report|digest|cadence/i,
@@ -287,6 +298,13 @@ export function extractClaims(
         );
         if (tm) push("signoffTiming", "stated", tm.index);
       }
+      // Recorded agreement-existence facts: "No signed commercial agreement
+      // exists for the revised terms" is itself the answer to an
+      // agreement-existence question.
+      const ag = line.match(
+        /\bno\s+(?:signed|countersigned|executed)\s+(?:[a-z-]+\s+){0,3}(?:agreement|contract)\b[^.;]*/i,
+      );
+      if (ag) push("signedAgreement", ag[0].trim(), ag.index ?? 0);
       // Region-count claims: a narrowing "from A to B" line records only B
       // as the current claim; A stays recorded by the original document. A
       // rejected option is not a claim at all. Scope claims carry their phase
