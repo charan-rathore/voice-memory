@@ -1,0 +1,99 @@
+{
+  "_note": "Hand-written from REPORTS in build.mjs and LAB_ROWS in ingest/fixtures/build.mjs before clinical/ existed. Never regenerate from extractor output.",
+  "version": 1,
+  "reports": {
+    "a-2026-09.pdf": {
+      "patientId": "SYN-0001",
+      "collected": "2026-09-03",
+      "reported": "2026-09-04",
+      "status": "final",
+      "observations": [
+        { "test": "Hemoglobin", "comparator": null, "value": 12.1, "raw": "12.1", "unit": "g/dL", "range": "13.0-17.0", "flag": "L" },
+        { "test": "HbA1c", "comparator": null, "value": 6.4, "raw": "6.4", "unit": "%", "range": "4.0-5.6", "flag": "H" },
+        { "test": "Creatinine", "comparator": null, "value": 1.2, "raw": "1.2", "unit": "mg/dL", "range": "0.7-1.3", "flag": null },
+        { "test": "Urea", "comparator": null, "value": 12, "raw": "12", "unit": "mg/dL", "range": "7-20", "flag": null },
+        { "test": "TSH", "comparator": "<", "value": 0.05, "raw": "<0.05", "unit": "mIU/L", "range": "0.40-4.00", "flag": "L" },
+        { "test": "Ferritin", "comparator": null, "value": 0.5, "raw": "0.5", "unit": "ng/mL", "range": "30-400", "flag": "L" }
+      ]
+    },
+    "a-2026-10-prelim.pdf": {
+      "patientId": "SYN-0001",
+      "collected": "2026-10-12",
+      "reported": "2026-10-13",
+      "status": "preliminary",
+      "observations": [
+        { "test": "Creatinine", "comparator": null, "value": 106, "raw": "106", "unit": "µmol/L", "range": "62-115", "flag": null },
+        { "test": "TSH", "comparator": null, "value": 0.3, "raw": "0.30", "unit": "mIU/L", "range": "0.40-4.00", "flag": "L" },
+        { "test": "Ferritin", "comparator": null, "value": 5, "raw": "5", "unit": "ng/mL", "range": "30-400", "flag": "L" }
+      ]
+    },
+    "a-2026-10-amended.pdf": {
+      "patientId": "SYN-0001",
+      "collected": "2026-10-12",
+      "reported": "2026-10-15",
+      "status": "amended",
+      "observations": [
+        { "test": "Ferritin", "comparator": null, "value": 50, "raw": "50", "unit": "ng/mL", "range": "30-400", "flag": null }
+      ]
+    },
+    "c-2026-10.pdf": {
+      "patientId": "SYN-0003",
+      "collected": "2026-10-20",
+      "reported": "2026-10-21",
+      "status": "final",
+      "observations": [
+        { "test": "Hemoglobin", "comparator": null, "value": 15, "raw": "15.0", "unit": "g/dL", "range": "13.0-17.0", "flag": null }
+      ]
+    }
+  },
+  "comparisons": [
+    {
+      "_why": "Bound vs value: <0.05 then 0.30 is certainly higher.",
+      "files": ["a-2026-09.pdf", "a-2026-10-amended.pdf"],
+      "patientId": "SYN-0001",
+      "test": "TSH",
+      "outcome": "compared",
+      "direction": "higher"
+    },
+    {
+      "_why": "Unit changed mg/dL -> µmol/L; no validated conversion: must refuse.",
+      "files": ["a-2026-09.pdf", "a-2026-10-amended.pdf"],
+      "patientId": "SYN-0001",
+      "test": "Creatinine",
+      "outcome": "not_comparable",
+      "reason": "unit"
+    },
+    {
+      "_why": "Amended report supersedes the preliminary value 5 for the same collection: use 50.",
+      "files": ["a-2026-09.pdf", "a-2026-10-prelim.pdf", "a-2026-10-amended.pdf"],
+      "patientId": "SYN-0001",
+      "test": "Ferritin",
+      "outcome": "compared",
+      "direction": "higher",
+      "latestRaw": "50",
+      "supersededRaw": "5"
+    },
+    {
+      "_why": "1.2 vs 12 must never be confused: urea 12 -> 14 mg/dL is higher; creatinine is a different test.",
+      "files": ["a-2026-09.pdf", "a-2026-10-amended.pdf"],
+      "patientId": "SYN-0001",
+      "test": "Urea",
+      "outcome": "compared",
+      "direction": "higher"
+    },
+    {
+      "_why": "Two patients carry hemoglobin; without a patient the answer must ask, not mix.",
+      "files": ["a-2026-09.pdf", "a-2026-10-amended.pdf", "c-2026-10.pdf"],
+      "patientId": null,
+      "test": "Hemoglobin",
+      "outcome": "ambiguous_patient"
+    },
+    {
+      "_why": "Only one HbA1c-bearing patient C? No: C has no HbA1c; A has two. Same-day prelim+amended count as one collection.",
+      "files": ["a-2026-10-prelim.pdf", "a-2026-10-amended.pdf"],
+      "patientId": "SYN-0001",
+      "test": "HbA1c",
+      "outcome": "single"
+    }
+  ]
+}

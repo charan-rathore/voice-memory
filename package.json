@@ -10,11 +10,14 @@
     "test:boundaries": "node --test server.test.mjs voice-adapter.test.mjs synthesis.test.mjs provider.test.mjs retrieval-bridge.test.mjs",
     "test:browser": "node browser-check.mjs",
     "format:check": "prettier --check *.mjs *.ts *.json public/*",
-    "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run bench:ingest && npm run test:browser",
+    "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:browser",
     "test:evaluation": "node --test evaluation/*.test.mjs",
     "test:ingest": "node --test --test-concurrency=1 ingest/*.test.mjs",
     "bench:ingest": "node ingest/bench.mjs",
-    "fixtures:build": "node ingest/fixtures/build.mjs && python3 ingest/fixtures/degrade.py"
+    "fixtures:build": "node ingest/fixtures/build.mjs && python3 ingest/fixtures/degrade.py",
+    "test:clinical": "node --test --test-concurrency=1 clinical/*.test.mjs",
+    "bench:retrieval": "node evaluation/retrieval-bench.mjs",
+    "fixtures:clinical": "node clinical/fixtures/build.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "5.2.8",
