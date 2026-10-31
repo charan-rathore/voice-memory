@@ -16,6 +16,8 @@ import {
   observationEvidence,
 } from "./clinical/answer.mjs";
 import { extractReport } from "./clinical/observations.mjs";
+import { detectLang } from "./clinical/explain.mjs";
+import { createAnswerCache } from "./cache.mjs";
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "./corpus-northstar.mjs";
 import {
@@ -225,6 +227,10 @@ export function createLocalServer({
     }
   }
   const signinFails = new Map();
+  // Process-wide answer cache (keys are scoped per index build; see cache.mjs).
+  const answerCache = createAnswerCache({
+    max: Number(process.env.VM_CACHE_MAX || 1000),
+  });
   const SIGNIN_PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Owner sign-in</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;max-width:22rem;margin:4rem auto"><h1>Voice Memory</h1><form method="post" action="/owner-signin" enctype="application/x-www-form-urlencoded"><label>Owner key <input type="password" name="key" required autocomplete="current-password" style="width:100%"></label><p><button type="submit">Sign in</button></p></form></body></html>`;
   // Bolna web-call session minting: credentials live in env (vault at deploy
   // time), never in client code, logs or artifacts.
@@ -353,6 +359,17 @@ export function createLocalServer({
     // browser session. All other routes stay local-host + cookie + CSRF.
     // The listener still binds 127.0.0.1; public exposure is a separate,
     // unauthorized deployment decision.
+    // Load-balancer health check: no session, no data, constant cost.
+    if (req.method === "GET" && req.url === "/healthz") {
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({
+          ok: true,
+          cache: { entries: answerCache.size, ...answerCache.stats },
+        }),
+      );
+      return;
+    }
     const isBolnaRoute =
       req.url === "/v1/chat/completions" || req.url === "/v1/models";
     // Compare against the actual bound address (supports port 0 in tests).
@@ -683,18 +700,47 @@ export function createLocalServer({
         };
       } else if (req.url === "/api/query") {
         if (!s.bundle) throw Error("Add documents first.");
-        s.result = answer(data.question, s.bundle);
-        out = decorateResult(s.result, s);
-        // Typed follow-ups ("so finance rejected it?") inherit the previous
-        // question's field, exactly as the voice grant does.
-        out.lead = leadFor(data.question, s.result, s.bundle, s.lastField);
-        if (out.lead) {
-          s.lastField = out.lead.field ?? s.lastField ?? null;
-          out.lead.citations = decorateResult(
-            { evidence: out.lead.citations, question: data.question },
-            s,
-          ).evidence;
-        }
+        if (typeof data?.question !== "string")
+          throw Error("Ask a question of 1-4,000 characters.");
+        // Context for follow-ups: an explicit note context from the client
+        // (parallel voice notes carry the field they were asked after), else
+        // the session's last field.
+        // `context: null` = explicitly none (a standalone note); a field name
+        // = answer as a follow-up to that field; absent = session's last field.
+        const ctx =
+          data.context === null
+            ? ""
+            : typeof data.context === "string" &&
+                /^[A-Za-z]{1,40}$/.test(data.context)
+              ? data.context
+              : (s.lastField ?? "");
+        const bundle = s.bundle;
+        const key = answerCache.key(
+          bundle.scope,
+          data.question,
+          ctx,
+          detectLang(data.question),
+        );
+        const { json, cache } = await answerCache.resolve(key, () => {
+          const raw = answer(data.question, bundle);
+          const shown = decorateResult(raw, s);
+          // Typed follow-ups ("so finance rejected it?") inherit the previous
+          // question's field, exactly as the voice grant does.
+          shown.lead = leadFor(data.question, raw, bundle, ctx || null);
+          if (shown.lead)
+            shown.lead.citations = decorateResult(
+              { evidence: shown.lead.citations, question: data.question },
+              s,
+            ).evidence;
+          return { raw, shown };
+        });
+        if (s.bundle !== bundle)
+          throw Error("Documents changed while answering; ask again.");
+        const cached = JSON.parse(json);
+        s.result = cached.raw;
+        out = cached.shown;
+        if (out.lead) s.lastField = out.lead.field ?? s.lastField ?? null;
+        out.cache = cache;
       } else if (req.url === "/api/draft") {
         if (!s.bundle || !s.result) throw Error("Ask a question first.");
         out = draft(s.result, s.bundle);
