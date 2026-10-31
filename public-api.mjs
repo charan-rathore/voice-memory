@@ -80,6 +80,7 @@ export function clientAddress(req) {
  */
 export function createPublicApi({
   cases,
+  workspaces = null,
   resolve,
   mintVoice,
   voiceState,
@@ -118,7 +119,39 @@ export function createPublicApi({
     });
     res.end(JSON.stringify(obj));
   };
-  const caseOf = (id) => (Object.hasOwn(CASES, id) ? cases[id] : null);
+  const isWs = (id) => typeof id === "string" && /^w_[0-9a-f]{32}$/.test(id);
+  const caseOf = (id) =>
+    Object.hasOwn(CASES, id)
+      ? cases[id]
+      : isWs(id)
+        ? (workspaces?.get(id) ?? null)
+        : null;
+  const wsCreateLimit = limiter(num(process.env.VM_WS_PER_IP_HOUR, 6), 3600000);
+  const wsUploadLimit = limiter(
+    num(process.env.VM_WS_UPLOADS_PER_IP_HOUR, 20),
+    3600000,
+  );
+  const WS_FILE_BYTES = num(process.env.VM_WS_FILE_MB, 4) * 1048576;
+  async function readRaw(req, limit) {
+    const declared = Number(req.headers["content-length"]);
+    if (Number.isFinite(declared) && declared > limit)
+      throw Object.assign(
+        Error(`Files up to ${Math.round(limit / 1048576)} MB.`),
+        { status: 413 },
+      );
+    const chunks = [];
+    let n = 0;
+    for await (const c of req) {
+      n += c.length;
+      if (n > limit)
+        throw Object.assign(
+          Error(`Files up to ${Math.round(limit / 1048576)} MB.`),
+          { status: 413 },
+        );
+      chunks.push(c);
+    }
+    return Buffer.concat(chunks, n);
+  }
   const entryOf = (s, id) =>
     (s?.library ?? []).find((e) => e.id === id && e.doc) ?? null;
 
@@ -180,6 +213,50 @@ export function createPublicApi({
         });
         return true;
       }
+      if (req.method === "POST" && path === "/workspace") {
+        if (!workspaces) return (send(res, 404, { error: "Not found." }), true);
+        if (!wsCreateLimit(ip))
+          return (
+            send(res, 429, {
+              error: "Too many new workspaces. Try again later.",
+            }),
+            true
+          );
+        send(res, 200, workspaces.create());
+        return true;
+      }
+      const wsm = /^\/workspace\/(w_[0-9a-f]{32})(\/upload)?$/.exec(path);
+      if (wsm && workspaces) {
+        if (req.method === "GET" && !wsm[2]) {
+          const st = workspaces.status(wsm[1]);
+          if (!st)
+            return (
+              send(res, 404, {
+                error: "This workspace has expired. Start a new one.",
+              }),
+              true
+            );
+          send(res, 200, st);
+          return true;
+        }
+        if (req.method === "POST" && wsm[2]) {
+          if (!wsUploadLimit(ip))
+            return (
+              send(res, 429, { error: "Too many uploads. Try again later." }),
+              true
+            );
+          const name = decodeURIComponent(
+            String(req.headers["x-file-name"] ?? "upload"),
+          ).slice(0, 200);
+          const bytes = await readRaw(req, WS_FILE_BYTES);
+          if (!bytes.length)
+            return (send(res, 400, { error: "Empty file." }), true);
+          send(res, 202, {
+            document: await workspaces.upload(wsm[1], bytes, name),
+          });
+          return true;
+        }
+      }
       if (req.method === "POST" && path === "/ask") {
         if (!globalAsk("*") || !askLimit(ip)) {
           send(
@@ -233,7 +310,7 @@ export function createPublicApi({
           res.writeHead(200, {
             "Content-Type": e.doc.mime,
             "Content-Security-Policy": "default-src 'none'; sandbox",
-            "Cache-Control": "public, max-age=3600",
+            "Cache-Control": isWs(doc[1]) ? "no-store" : "public, max-age=3600",
           });
           res.end(e.original);
           return true;
@@ -242,7 +319,9 @@ export function createPublicApi({
           res,
           200,
           { document: documentView(e) },
-          { "Cache-Control": "public, max-age=600" },
+          {
+            "Cache-Control": isWs(doc[1]) ? "no-store" : "public, max-age=600",
+          },
         );
         return true;
       }
@@ -260,9 +339,15 @@ export function createPublicApi({
         const mem = s.publicMemory ?? (s.publicMemory = createMemory());
         const g =
           focus === "all"
-            ? s.bundle.clinical?.length
-              ? clinicalGraph(s.bundle)
-              : fullGraph(s.bundle, mem)
+            ? mergeGraphs(
+                s.bundle.clinical?.length ? clinicalGraph(s.bundle) : null,
+                // Text documents (notes, contracts) beside lab reports keep
+                // their own claims/evidence graph in the same view.
+                !s.bundle.clinical?.length ||
+                  s.bundle.sources.length > s.bundle.clinical.length
+                  ? fullGraph(s.bundle, mem)
+                  : null,
+              )
             : buildGraph(s.bundle, mem, focus);
         const docId = (sid) => s.sourceToEntry?.get(sid)?.id ?? null;
         for (const n of g.nodes) {
@@ -271,7 +356,9 @@ export function createPublicApi({
         }
         for (const e of g.edges)
           if (e.evidence) e.evidence.documentId = docId(e.evidence.sourceId);
-        send(res, 200, g, { "Cache-Control": "public, max-age=300" });
+        send(res, 200, g, {
+          "Cache-Control": isWs(graph[1]) ? "no-store" : "public, max-age=300",
+        });
         return true;
       }
       if (req.method === "POST" && path === "/voice/session") {
@@ -547,6 +634,21 @@ export function clinicalGraph(bundle) {
         prev = point;
       }
     }
+  }
+  return {
+    focus: "all",
+    nodes: [...nodes.values()],
+    edges: [...edges.values()],
+  };
+}
+
+function mergeGraphs(...gs) {
+  const nodes = new Map();
+  const edges = new Map();
+  for (const g of gs.filter(Boolean)) {
+    for (const n of g.nodes) nodes.set(n.id, { ...nodes.get(n.id), ...n });
+    for (const e of g.edges)
+      edges.set(e.id ?? `${e.from}->${e.to}:${e.kind}`, e);
   }
   return {
     focus: "all",

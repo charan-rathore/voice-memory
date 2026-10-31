@@ -41,6 +41,7 @@ export function createVoiceAdapter({
   // scope}). The server routes it into the owning session's episodic memory.
   onTurn = null,
 } = {}) {
+  let resolveBundle = null;
   if (
     !Number.isSafeInteger(ttlMs) ||
     ttlMs < 1 ||
@@ -301,6 +302,16 @@ export function createVoiceAdapter({
           { status: 401 },
         );
       }
+      // A visitor's own uploaded workspace, named by the session variable
+      // Bolna substitutes into the agent prompt (vm_ws=<id>). The bearer
+      // still authenticates; the id only selects among public workspaces.
+      let bundle = grant.bundle;
+      try {
+        const ws = resolveBundle?.(data.messages);
+        if (ws) bundle = ws;
+      } catch {
+        bundle = grant.bundle;
+      }
       const askedRaw = latestUser(data.messages);
       if (!askedRaw) {
         return Response.json(
@@ -334,7 +345,7 @@ export function createVoiceAdapter({
       // a fragment or a follow-up that lost its subject, join this caller's
       // own previous utterances. Lab questions take the first candidate the
       // clinical layer can answer.
-      const reports = grant.bundle?.clinical ?? [];
+      const reports = bundle?.clinical ?? [];
       const candidates = voiceQuestions(data.messages, {
         reports,
         ids: [
@@ -381,7 +392,7 @@ export function createVoiceAdapter({
         let prior = null;
         try {
           prior = prevQ
-            ? answer(normalizeSpoken(prevQ) || prevQ, grant.bundle)
+            ? answer(normalizeSpoken(prevQ) || prevQ, bundle)
             : null;
         } catch {
           prior = null;
@@ -398,7 +409,7 @@ export function createVoiceAdapter({
           spoken =
             "Ask a question with supporting evidence first. I have not created or sent an email.";
         else {
-          const reviewDraft = draft(prior, grant.bundle);
+          const reviewDraft = draft(prior, bundle);
           turn = { draft: reviewDraft };
           spoken =
             "A review draft is ready on screen. Check decisions, conditions and open items before using it. Nothing has been sent.";
@@ -407,8 +418,8 @@ export function createVoiceAdapter({
         let result = retrieval
           ? answerFromRetrieval(
               asked,
-              grant.bundle,
-              await retrieval.retrieve(asked, grant.bundle, {
+              bundle,
+              await retrieval.retrieve(asked, bundle, {
                 signal: req.signal,
               }),
               {
@@ -416,10 +427,10 @@ export function createVoiceAdapter({
                 embeddingModel: retrieval.embeddingModel,
               },
             )
-          : answer(asked, grant.bundle, {
+          : answer(asked, bundle, {
               queryVector: await embedQueryReady(asked),
               model: DENSE_MODEL_ID,
-              available: denseAvailableFor(grant.bundle),
+              available: denseAvailableFor(bundle),
             });
         if (
           !result ||
@@ -433,7 +444,7 @@ export function createVoiceAdapter({
           // still speaks when it has grounded citations.
           result = { refused: true, evidence: [] };
         for (const evidence of result.evidence)
-          validateEvidence(evidence, grant.bundle);
+          validateEvidence(evidence, bundle);
         if (req.signal.aborted) {
           releaseBusy();
           logTurn({ transcript, outcome: "aborted" });
@@ -459,10 +470,10 @@ export function createVoiceAdapter({
         // for evidence; this layer only chooses what is spoken.
         // Lab results across reports (bundle.clinical, set by the server for
         // uploaded lab tables) answer first; absent for Northstar.
-        const clinical = grant.bundle.clinical?.length
-          ? (clinicalTurn(asked, grant.bundle.clinical) ??
+        const clinical = bundle.clinical?.length
+          ? (clinicalTurn(asked, bundle.clinical) ??
             candidates
-              .map((q) => clinicalOverview(q, grant.bundle.clinical))
+              .map((q) => clinicalOverview(q, bundle.clinical))
               .find(Boolean) ??
             null)
           : null;
@@ -473,7 +484,7 @@ export function createVoiceAdapter({
               field: null,
               intent: clinical.intent,
               citations: clinical.used
-                .map((o) => observationEvidence(o, grant.bundle))
+                .map((o) => observationEvidence(o, bundle))
                 .filter(Boolean)
                 .map((c) => ({
                   title: c.title,
@@ -487,11 +498,11 @@ export function createVoiceAdapter({
           : null;
         rendered ??= spokenTurn(
           asked,
-          grant.bundle,
+          bundle,
           // Context from this request's own history only: a fixed bearer is
           // shared by every caller, so grant-level state would leak between
           // concurrent calls.
-          historyField(grant.bundle, data.messages.slice(0, -1)) ??
+          historyField(bundle, data.messages.slice(0, -1)) ??
             (credentials.has(token) ? null : (grant.lastField ?? null)),
         );
         // Outside the claim graph's fields: speak one verbatim sentence or
@@ -502,8 +513,8 @@ export function createVoiceAdapter({
           const quoted = extractiveSpoken(
             asked,
             result,
-            grant.bundle,
-            grant.bundle.locateEvidence,
+            bundle,
+            bundle.locateEvidence,
           );
           if (quoted)
             rendered = {
@@ -570,7 +581,7 @@ export function createVoiceAdapter({
               question: asked,
               lead: turn?.spokenTurn ?? null,
               result: turn?.result ?? null,
-              scope: grant.bundle?.scope ?? null,
+              scope: bundle?.scope ?? null,
             });
           } catch {
             /* memory is best-effort; never break the call */
@@ -619,6 +630,9 @@ export function createVoiceAdapter({
       const g = grants.get(token);
       if (!g || g.expires <= now()) return [];
       return [...(g.turnLog ?? [])];
+    },
+    setBundleResolver(fn) {
+      resolveBundle = typeof fn === "function" ? fn : null;
     },
     setOnTurn(fn) {
       onTurn = typeof fn === "function" ? fn : null;

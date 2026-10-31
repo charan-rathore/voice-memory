@@ -43,6 +43,31 @@ prototype, not a diagnostic or clinically validated product.
 | Meeting | "Did they agree on the payment split?" | Still open: 40/60 proposed vs 50/50 discussed, not approved |
 | Absence | "Is there a signed contract?" | No — the action log says no signed agreement exists |
 
+## Bring your own documents
+
+On the landing page, **Your documents** opens a private, short-lived workspace
+(`w_` + 128-bit id, kept only in that browser tab). Upload up to 5 files
+(PDF with or without a text layer, Word `.docx`, PNG/JPEG scans, text,
+Markdown; 4 MB each) and ask anything, typed or on a live call:
+
+- **Offline pipeline (per upload):** type check → parse in a memory- and
+  time-limited worker (pdf.js text layer, DOCX XML, Tesseract OCR for scans)
+  → a canonical document of page-anchored elements (headings, paragraphs,
+  table rows with bounding boxes) → sentence/row-level chunks → BM25 index
+  plus MiniLM sentence embeddings (guarded: keyword-only until warm) →
+  lab-table observations (patient, unit, status) and claim extraction
+  (proposed / approved / superseded / open).
+- **Online pipeline (per question):** speech-notation normalisation and
+  recogniser repair → hybrid retrieval (BM25 + dense rerank) → exact-span
+  evidence gate → claim / clinical verdicts → one short sentence plus located
+  citations; the same sentence is spoken on a call.
+- **Memory graph:** the workspace gets its own graph (`/graph` → Your
+  documents): lab values with corrections and comparability, and the claims
+  and sentences of text documents.
+- **Voice:** a call started from the Your documents tab passes the workspace
+  id to Bolna as a prompt variable (`vm_ws`), so the agent answers from your
+  files. Workspaces are deleted after 30 idle minutes; 12 at most at once.
+
 ## How it works
 
 ```mermaid

@@ -135,13 +135,25 @@
 
         <div class="desk" id="desk">
           <div class="desk-left">
-            <div class="cases" role="tablist" aria-label="Fictional case">
+            <div class="cases" role="tablist" aria-label="Documents to ask">
               <button role="tab" class="case-tab" data-case="health" aria-selected="true">
                 <b>Lab reports</b><span>SYN-0001 · 4 PDFs</span>
               </button>
               <button role="tab" class="case-tab" data-case="deal" aria-selected="false">
                 <b>Northstar deal</b><span>Contract + meetings · 7 files</span>
               </button>
+              <button role="tab" class="case-tab case-own" data-case="own" aria-selected="false">
+                <b>Your documents</b><span>Upload and ask</span>
+              </button>
+            </div>
+
+            <div class="upload" id="upload" hidden>
+              <label class="drop" id="drop">
+                <input id="files" type="file" multiple accept=".pdf,.docx,.png,.jpg,.jpeg,.txt,.md,application/pdf" />
+                <b>Drop PDFs, Word files, scans or notes</b>
+                <span>Up to 5 files, 4 MB each. Private to you, deleted after 30 idle minutes. Please don't upload real medical or personal records.</span>
+              </label>
+              <ul class="upl-list" id="upl-list"></ul>
             </div>
 
             <form class="askbar" id="askbar" autocomplete="off">

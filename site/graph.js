@@ -46,7 +46,20 @@
   let target = null; // camera tween target
   let nodes = [], edges = [], byId = new Map();
   let hover = null, selected = null, focusSet = null;
-  let caseId = new URLSearchParams(location.search).get("case") === "deal" ? "deal" : "health";
+  let wsId = null;
+  try {
+    wsId = sessionStorage.getItem("vm_ws");
+  } catch {}
+  const want = new URLSearchParams(location.search).get("case");
+  let caseId = want === "deal" ? "deal" : want === "own" && wsId ? wsId : "health";
+  if (wsId) {
+    const b = document.createElement("button");
+    b.setAttribute("role", "tab");
+    b.dataset.case = wsId;
+    b.textContent = "Your documents";
+    document.querySelector(".seg").appendChild(b);
+  }
+  const kindOf = () => (nodes.some((n) => n.kind === "patient") ? "health" : "deal");
   let t = 0;
   let storyTimer = null;
 
@@ -110,7 +123,7 @@
   }
 
   function legend() {
-    $("#lg-nodes").innerHTML = NODE_LEGEND[caseId]
+    $("#lg-nodes").innerHTML = NODE_LEGEND[kindOf()]
       .map(([k, col, label]) => `<li><span class="sw" style="${k === "document" ? `border:2px solid ${col};border-radius:4px` : k.startsWith("value") ? `background:${col};clip-path:polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0 50%)` : `background:${col};border-radius:50%`}"></span>${label}</li>`)
       .join("");
     const kinds = new Set(edges.map((e) => e.kind));
@@ -118,7 +131,7 @@
       .filter(([k]) => kinds.has(k))
       .map(([, s]) => `<li><span class="sw ln${s.dash ? " dash" : ""}" style="border-color:${s.color}"></span>${s.label}</li>`)
       .join("") + `<li><span class="sw ln" style="border-color:rgba(160,170,200,.35)"></span>records / measures / cites</li>`;
-    $("#lg-sub").textContent = caseId === "health" ? "Two synthetic patients, four reports and every lab value, with the edges the engine answers from." : "Seven fictional deal records: each value, its status, and the exact sentences behind it.";
+    $("#lg-sub").textContent = caseId === wsId ? "Your uploaded documents: every value and sentence the engine indexed, and how they connect." : kindOf() === "health" ? "Two synthetic patients, four reports and every lab value, with the edges the engine answers from." : "Seven fictional deal records: each value, its status, and the exact sentences behind it.";
     $("#lg-count").textContent = `${nodes.length} nodes · ${edges.length} edges · computed from the documents`;
   }
 
@@ -339,7 +352,7 @@
   $("#zout").onclick = () => zoomBy(1 / 1.3);
   $("#fit").onclick = () => { selected = null; focusSet = null; closePanel(); fit(); };
   $("#close").onclick = () => { selected = null; focusSet = null; closePanel(); };
-  document.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => { stopStory(); load(b.dataset.case); history.replaceState(null, "", `?case=${b.dataset.case}`); }));
+  document.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => { stopStory(); load(b.dataset.case); history.replaceState(null, "", `?case=${b.dataset.case === wsId ? "own" : b.dataset.case}`); }));
   $("#find").addEventListener("input", (e) => {
     const q = e.target.value.trim().toLowerCase();
     if (!q) { focusSet = null; return; }
@@ -357,7 +370,7 @@
   }
   function closePanel() { $("#panel").hidden = true; }
   function openPanel(n) {
-    const kind = { patient: "Patient", document: "Document", topic: caseId === "health" ? "Test" : "Topic", value: "Value", evidence: "Exact sentence" }[n.kind] ?? n.kind;
+    const kind = { patient: "Patient", document: "Document", topic: kindOf() === "health" ? "Test" : "Topic", value: "Value", evidence: "Exact sentence" }[n.kind] ?? n.kind;
     $("#p-kind").textContent = kind;
     $("#p-title").textContent = n.kind === "evidence" ? "Cited sentence" : labelOf(n);
     const links = edges
@@ -376,7 +389,7 @@
         .slice(0, 14)
         .map(({ e, o, dir }) => `<li><button data-node="${esc(o.id)}"><span>${esc(dir)} ${esc(labelOf(o) || "sentence")}</span><em>${esc(e.kind)}</em></button></li>`)
         .join("")}</ul>
-      ${ask ? `<a class="ask-link" href="./?case=${caseId}&q=${encodeURIComponent(ask)}#try">Ask about this →</a>` : ""}`;
+      ${ask ? `<a class="ask-link" href="./?case=${caseId === wsId ? "own" : caseId}&q=${encodeURIComponent(ask)}#try">Ask about this →</a>` : ""}`;
     $("#panel").hidden = false;
     $("#p-body").querySelectorAll("[data-node]").forEach((b) => (b.onclick = () => select(byId.get(b.dataset.node))));
   }
@@ -413,7 +426,7 @@
   function stopStory() { clearTimeout(storyTimer); storyTimer = null; $("#story-cap").textContent = ""; $("#story").textContent = "▶ How the answer was chosen"; }
   $("#story").onclick = () => {
     if (storyTimer) { stopStory(); fit(); return; }
-    const steps = STORIES[caseId].map(([f, cap]) => [nodes.find(f), cap]).filter(([n]) => n);
+    const steps = (STORIES[caseId] ?? []).map(([f, cap]) => [nodes.find(f), cap]).filter(([n]) => n);
     let i = 0;
     $("#story").textContent = "■ Stop";
     const next = () => {

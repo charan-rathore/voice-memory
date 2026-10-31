@@ -336,11 +336,14 @@ export function createLocalServer({
   // fixed credential), read back only by the caller holding the ticket.
   const publicTurns = [];
   voice.setOnTurn?.((token, t) => {
-    if (
-      token === fixedCap &&
-      voiceCase.bundle &&
-      t.scope === voiceCase.bundle.scope
-    ) {
+    const feedCase =
+      token === fixedCap
+        ? voiceCase.bundle && t.scope === voiceCase.bundle.scope
+          ? voiceCase
+          : [...workspaces.values()].find((w) => w.s.bundle?.scope === t.scope)
+              ?.s
+        : null;
+    if (feedCase) {
       const lead = t.lead
         ? {
             text: t.lead.spoken,
@@ -348,7 +351,7 @@ export function createLocalServer({
             field: t.lead.field ?? null,
             citations: decorateResult(
               { evidence: t.lead.citations ?? [], question: t.question },
-              voiceCase,
+              feedCase,
             ).evidence,
           }
         : null;
@@ -635,8 +638,122 @@ export function createLocalServer({
     e.status = 502;
     throw e;
   }
+  // Visitor workspaces: anyone can upload their own documents from the
+  // landing page into a private, short-lived workspace named by an
+  // unguessable id. Same ingest worker (PDF / DOCX / scans with OCR / text),
+  // same index (BM25 + guarded dense embeddings), same evidence gate and
+  // clinical layer as everything else. Memory-bounded: few files, few
+  // workspaces, idle ones evicted.
+  const WS_MAX = Number(process.env.VM_WS_MAX || 12);
+  const WS_FILES = Number(process.env.VM_WS_FILES || 5);
+  const WS_IDLE_MS = Number(process.env.VM_WS_IDLE_MIN || 30) * 60000;
+  const workspaces = new Map(); // id -> { s, at }
+  const dropWorkspace = (id) => {
+    const w = workspaces.get(id);
+    if (!w) return;
+    libraryOf(w.s).length = 0; // frees the global document budget
+    w.s.bundle = null;
+    workspaces.delete(id);
+  };
+  const sweepWorkspaces = () => {
+    for (const [id, w] of workspaces)
+      if (Date.now() - w.at > WS_IDLE_MS) dropWorkspace(id);
+    while (workspaces.size >= WS_MAX)
+      dropWorkspace(workspaces.keys().next().value);
+  };
+  const rebuildWorkspace = (ws) => {
+    const docsIn = indexable(ws);
+    for (const e of libraryOf(ws))
+      if (e.status === "needs_review") e.included = true;
+    if (!docsIn.length) {
+      ws.bundle = null;
+      return;
+    }
+    const docsNow = indexable(ws);
+    const bundle = importBundle(
+      docsNow.map((e) => ({ title: e.title, text: e.doc.text })),
+    );
+    ws.sourceToEntry = new Map(
+      bundle.sources.map((src, i) => [src.id, docsNow[i]]),
+    );
+    bundle.locateEvidence = locatorFor(ws.sourceToEntry);
+    bundle.clinical = clinicalReportsFor(bundle, docsNow, extractReport);
+    ws.bundle = bundle; // the library keeps every entry, indexed or not
+    warmDense(bundle.rows);
+  };
+  const workspaceApi = {
+    create() {
+      sweepWorkspaces();
+      const id = "w_" + randomBytes(16).toString("hex");
+      const ws = { sid: "ws:" + id, memory: createMemory(), internal: true };
+      workspaces.set(id, { s: ws, at: Date.now() });
+      return { id, maxFiles: WS_FILES, idleMinutes: WS_IDLE_MS / 60000 };
+    },
+    get(id) {
+      const w = workspaces.get(id);
+      if (!w) return null;
+      w.at = Date.now();
+      return w.s;
+    },
+    async upload(id, bytes, filename) {
+      const ws = this.get(id);
+      if (!ws) {
+        const e = Error("This workspace has expired. Start a new one.");
+        e.status = 404;
+        throw e;
+      }
+      if (
+        libraryOf(ws).filter((e) => e.status !== "failed").length >= WS_FILES
+      ) {
+        const e = Error(`Up to ${WS_FILES} files per workspace.`);
+        e.status = 409;
+        throw e;
+      }
+      await pauseDenseForIngest();
+      const entry = addUpload(ws, bytes, filename, (x) => rebuildWorkspace(x));
+      const t0 = Date.now();
+      const iv = setInterval(() => {
+        if (
+          ["ready", "needs_review", "failed"].includes(entry.status) ||
+          Date.now() - t0 > 120000
+        ) {
+          clearInterval(iv);
+          if (entry.status === "needs_review") rebuildWorkspace(ws);
+          resumeDenseAfterIngest(ws.bundle?.rows ?? null);
+        }
+      }, 400);
+      iv.unref?.();
+      return publicEntry(entry);
+    },
+    status(id) {
+      const ws = this.get(id);
+      if (!ws) return null;
+      return {
+        ready: !!ws.bundle,
+        documents: libraryOf(ws).map((e) => ({
+          ...publicEntry(e),
+          title: e.title,
+          pages: e.doc?.pages?.length ?? null,
+        })),
+      };
+    },
+  };
+  // Calls that carry a workspace id (Bolna substitutes {vm_ws} into the
+  // agent prompt) answer from that visitor's documents.
+  voice.setBundleResolver?.((messages) => {
+    for (const m of messages ?? []) {
+      const text =
+        typeof m?.content === "string"
+          ? m.content
+          : JSON.stringify(m?.content ?? "");
+      const id = /vm_ws=(w_[0-9a-f]{32})/.exec(text)?.[1];
+      if (id) return workspaces.get(id)?.s?.bundle ?? null;
+    }
+    return null;
+  });
   const publicApi = createPublicApi({
     cases: caseSessions,
+    workspaces: workspaceApi,
     resolve: async (cs, question, ctx) => {
       const q = normalizeSpoken(question) || question;
       const { json } = await resolveAnswer(cs, q, ctx);

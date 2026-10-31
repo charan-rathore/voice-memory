@@ -308,3 +308,55 @@ test("anonymous POSTs to owner voice routes are denied on the public host", asyn
     restore();
   }
 });
+
+test("visitors upload their own documents and ask them anything", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ws = await (
+    await fetch(base + "/api/public/workspace", { method: "POST" })
+  ).json();
+  assert.match(ws.id, /^w_[0-9a-f]{32}$/);
+  for (const [f, name] of [
+    ["./clinical/fixtures/files/a-2026-10-amended.pdf", "my-report.pdf"],
+    ["./corpus-md/07_Internal_Action_Log.md", "action-log.md"],
+  ]) {
+    const r = await fetch(`${base}/api/public/workspace/${ws.id}/upload`, {
+      method: "POST",
+      headers: {
+        "x-file-name": name,
+        "content-type": "application/octet-stream",
+      },
+      body: readFileSync(new URL(f, import.meta.url)),
+    });
+    assert.equal(r.status, 202);
+  }
+  let st;
+  for (let i = 0; i < 200; i++) {
+    st = await (await fetch(`${base}/api/public/workspace/${ws.id}`)).json();
+    if (
+      st.documents.length === 2 &&
+      st.documents.every((d) => d.status === "ready")
+    )
+      break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.ok(st.ready);
+  const a = await ask(ws.id, "What is the ferritin?");
+  assert.match(a.body.lead.text, /50 ng\/mL/);
+  const b = await ask(ws.id, "Is there a signed agreement?");
+  assert.match(b.body.lead.text, /no signed commercial agreement/i);
+  const g = await (await fetch(`${base}/api/public/graph/${ws.id}`)).json();
+  assert.ok(g.nodes.some((n) => n.kind === "patient"));
+  assert.ok(
+    g.nodes.some(
+      (n) =>
+        n.kind === "topic" &&
+        n.id.startsWith("topic:") &&
+        !n.id.startsWith("topic:lab"),
+    ),
+  );
+  // another visitor's guess cannot read it
+  assert.equal(
+    (await ask("w_" + "0".repeat(32), "What is the ferritin?")).status,
+    400,
+  );
+});

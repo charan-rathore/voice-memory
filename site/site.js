@@ -14,7 +14,9 @@
     case: "health",
     live: false,
     cases: Object.fromEntries((snap.cases ?? []).map((c) => [c.id, c])),
-    context: { health: "", deal: "" },
+    context: { health: "", deal: "", own: "" },
+    ws: null, // visitor workspace id
+    wsDocs: [],
     thread: [],
     current: null,
     docText: {},
@@ -104,8 +106,102 @@
       .replace(/^c-2026-10/, "SYN-0003 · Oct")
       .trim();
 
+  // ------------------------------------------------------------ your documents
+  const apiCase = (id) => (id === "own" ? state.ws : id);
+  const OWN = {
+    id: "own",
+    blurb: "Upload a lab report, contract, meeting notes or any document, then ask it anything, typed or on a call.",
+    suggestions: ["What does this document say about the deadline?", "Summarize what was decided", "What changed since the last report?"],
+  };
+  try {
+    state.ws = sessionStorage.getItem("vm_ws");
+  } catch {}
+  async function ensureWorkspace() {
+    if (state.ws) {
+      try {
+        await api(`/workspace/${state.ws}`);
+        return state.ws;
+      } catch {
+        state.ws = null;
+      }
+    }
+    const w = await api("/workspace", { method: "POST" });
+    state.ws = w.id;
+    try {
+      sessionStorage.setItem("vm_ws", w.id);
+    } catch {}
+    return w.id;
+  }
+  async function uploadFiles(list) {
+    const files = [...list].slice(0, 5);
+    if (!files.length) return;
+    if (!state.live) {
+      $("#upl-list").innerHTML = `<li><b>The live engine is still waking up. Try again in a few seconds.</b></li>`;
+      return;
+    }
+    let id;
+    try {
+      id = await ensureWorkspace();
+    } catch (e) {
+      $("#upl-list").innerHTML = `<li><b>${esc(e.message)}</b></li>`;
+      return;
+    }
+    for (const f of files) {
+      try {
+        if (f.size > 4 * 1048576) throw new Error(`${f.name} is over 4 MB.`);
+        await api(`/workspace/${id}/upload`, { method: "POST", headers: { "content-type": "application/octet-stream", "x-file-name": encodeURIComponent(f.name) }, body: f }, 60000);
+      } catch (e) {
+        state.wsDocs.push({ title: f.name, status: "failed", error: { message: e.message } });
+      }
+      refreshWorkspace();
+    }
+    pollWorkspace();
+  }
+  async function refreshWorkspace() {
+    if (!state.ws) return renderUploads();
+    try {
+      const st = await api(`/workspace/${state.ws}`);
+      const failed = state.wsDocs.filter((d) => d.status === "failed" && !st.documents.some((x) => x.title === d.title));
+      state.wsDocs = [...st.documents, ...failed];
+      state.cases.own = { ...OWN, ready: st.ready, documents: st.documents.filter((d) => d.status === "ready" || d.included) };
+    } catch {
+      state.ws = null;
+      try { sessionStorage.removeItem("vm_ws"); } catch {}
+    }
+    renderUploads();
+    if (state.case === "own") renderRail();
+  }
+  let pollTimer = null;
+  function pollWorkspace() {
+    clearTimeout(pollTimer);
+    refreshWorkspace().then(() => {
+      if (state.wsDocs.some((d) => !["ready", "needs_review", "failed"].includes(d.status))) pollTimer = setTimeout(pollWorkspace, 1200);
+    });
+  }
+  const STAGE = { uploaded: "Queued", validating: "Checking", parsing: "Reading", ocr: "Reading text (OCR)", indexing: "Indexing", ready: "Ready", needs_review: "Ready · low OCR confidence", failed: "Couldn't read" };
+  function renderUploads() {
+    $("#upl-list").innerHTML = state.wsDocs
+      .map((d) => {
+        const done = d.status === "ready" || d.status === "needs_review";
+        const cls = done ? "ok" : d.status === "failed" ? "bad" : "busy";
+        const extra = d.status === "failed" ? ` — ${esc(d.error?.message ?? "")}` : d.stats?.pages ? ` · ${d.stats.pages} p` : "";
+        return `<li><b title="${esc(d.title)}">${esc(d.title)}</b><span class="upl-st ${cls}">${esc(STAGE[d.status] ?? d.status)}</span><span class="dim" style="font-size:12px">${extra}</span></li>`;
+      })
+      .join("");
+  }
+  const drop = $("#drop");
+  $("#files").addEventListener("change", (e) => uploadFiles(e.target.files));
+  ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, () => drop.classList.remove("over")));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); uploadFiles(e.dataTransfer.files); });
+
   // ------------------------------------------------------------ asking
   function setCase(id, { quiet = false } = {}) {
+    $("#upload").hidden = id !== "own";
+    if (id === "own") {
+      state.cases.own ??= { ...OWN, documents: [] };
+      refreshWorkspace();
+    }
     state.case = id;
     $$(".case-tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.case === id)));
     const c = state.cases[id] ?? snap.cases?.find((x) => x.id === id);
@@ -132,10 +228,11 @@
     let source = "live";
     try {
       if (!state.live) throw Object.assign(new Error("not live"), { offline: true });
+      if (caseId === "own" && !state.cases.own?.ready) throw new Error("Upload a document first, then ask about it.");
       result = await api("/ask", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ case: caseId, question, context: state.context[caseId] || undefined }),
+        body: JSON.stringify({ case: apiCase(caseId), question, context: state.context[caseId] || undefined }),
       });
     } catch (e) {
       const saved = snap.answers?.[`${caseId}|${question}`];
@@ -161,8 +258,13 @@
   function renderAnswer(r, { via, source, question, caseId }) {
     state.current = r;
     const lead = r.lead;
-    const [cls, label] = verdictOf(lead?.verdict);
-    const text = lead?.text ?? "I don't see a supported answer to that in these documents.";
+    const [cls, label] = lead ? verdictOf(lead.verdict) : (r.evidence ?? []).length ? ["v-ask", "Cited passages"] : verdictOf(null);
+    const ev = r.evidence ?? [];
+    const text =
+      lead?.text ??
+      (ev.length
+        ? `From the document: “${prettyQuote(ev[0].quote).slice(0, 280)}”${ev.length > 1 ? ` (and ${ev.length - 1} more cited passage${ev.length > 2 ? "s" : ""})` : ""}`
+        : "I don't see a supported answer to that in these documents.");
     const words = text
       .split(/(\s+)/)
       .map((w, i) => (w.trim() ? `<span class="w" style="animation-delay:${reduced ? 0 : Math.min(i * 18, 1400)}ms">${esc(w)}</span>` : w))
@@ -237,7 +339,7 @@
     // Lab answers that rest on several reports (a correction, a refused
     // comparison) show every cited page, the selected one first.
     const pdfTitles = [...new Set(cites.filter((x) => /\.pdf$/i.test(x.title ?? "")).map((x) => x.title))];
-    if (/\.pdf$/i.test(c.title ?? "") && pdfTitles.length > 1) {
+    if (state.case === "health" && /\.pdf$/i.test(c.title ?? "") && pdfTitles.length > 1) {
       const order = [c.title, ...pdfTitles.filter((t) => t !== c.title)];
       $$("#doc-rail button").forEach((b) => b.classList.toggle("on", order.includes(b.dataset.doc)));
       $("#viewer-title").textContent = `${order.length} reports cited`;
@@ -277,7 +379,7 @@
     $$("#doc-rail button").forEach((b) => b.classList.toggle("on", b.dataset.doc === title));
     $("#viewer-title").textContent = shortTitle(title);
     const st = statusOfDoc(title);
-    if (/\.pdf$/i.test(title)) {
+    if (/\.pdf$/i.test(title) && state.case === "health") {
       const base = title.replace(/\.pdf$/i, "");
       $("#viewer-meta").textContent = `${title} · page 1${st ? " · " + st : ""}`;
       const boxes = cites
@@ -312,13 +414,14 @@
   }
 
   async function docText(title) {
-    if (state.docText[title]) return state.docText[title];
+    if (state.docText[title] && state.case !== "own") return state.docText[title];
     const saved = snap.docs?.[title];
     try {
       if (!state.live) throw 0;
-      const d = (state.cases.deal?.documents ?? []).find((x) => x.title === title);
+      const cid = state.case === "own" ? "own" : "deal";
+      const d = (state.cases[cid]?.documents ?? []).find((x) => x.title === title);
       if (!d) throw 0;
-      const { document } = await api(`/doc/deal/${d.id}`);
+      const { document } = await api(`/doc/${apiCase(cid)}/${d.id}`);
       state.docText[title] = document.text;
     } catch {
       if (saved) state.docText[title] = saved;
@@ -379,7 +482,7 @@
         const r = await fetch("/api/public/voice/session", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ user_data: { page: "landing" } }),
+          body: JSON.stringify({ user_data: { page: "landing", vm_ws: state.case === "own" && state.ws ? state.ws : "demo" } }),
         });
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.error || "Couldn't start a call right now.");
