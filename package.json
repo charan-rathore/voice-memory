@@ -9,8 +9,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test:boundaries": "node --test server.test.mjs voice-adapter.test.mjs synthesis.test.mjs provider.test.mjs retrieval-bridge.test.mjs fictional-sample.test.mjs cache.test.mjs motion.test.mjs",
     "test:browser": "node browser-check.mjs && node notes-check.mjs",
-    "format:check": "prettier --check *.mjs *.ts *.json public/*",
-    "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:vault && npm run test:browser",
+    "format:check": "prettier --check *.mjs *.ts *.json public/* memory/* evaluation/vault/*",
+    "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:vault && npm run test:browser && npm run test:graph",
     "test:evaluation": "node --test evaluation/*.test.mjs",
     "test:ingest": "node --test --test-concurrency=1 ingest/*.test.mjs",
     "bench:ingest": "node ingest/bench.mjs",
@@ -21,7 +21,8 @@
     "bench:hybrid": "node evaluation/retrieval-bench-hybrid.mjs",
     "bench:answer": "node evaluation/answer-quality-bench.mjs",
     "test:vault": "node evaluation/vault/run.mjs",
-    "eval:spoken": "node evaluation/spoken-eval.mjs"
+    "eval:spoken": "node evaluation/spoken-eval.mjs",
+    "test:graph": "node graph-check.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "5.2.8",

@@ -177,6 +177,32 @@
             <div id="transform" class="transform" hidden></div>
             <div id="trace" class="trace"></div>
           </details>
+          <details id="map" class="more map">
+            <summary>How this connects</summary>
+            <nav
+              id="map-crumbs"
+              class="map-crumbs"
+              aria-label="Map levels"
+            ></nav>
+            <div id="map-stage" class="map-stage">
+              <svg
+                id="map-svg"
+                class="map-svg"
+                role="group"
+                aria-label="Knowledge map of your documents"
+              ></svg>
+            </div>
+            <p
+              id="map-caption"
+              class="map-caption"
+              role="status"
+              aria-live="polite"
+            >
+              Click a topic, value, document or question to go one level deeper.
+              Click a line to see the sentence behind it.
+            </p>
+            <ul id="map-list" class="sr-only"></ul>
+          </details>
           <div id="signals-slot"></div>
           <p class="fineprint">
             A quote proves where text came from, not that a proposal was
@@ -346,5 +372,6 @@
     <script type="module" src="/workspace.js"></script>
     <script type="module" src="/notes.js"></script>
     <script type="module" src="/voicelab.js"></script>
+    <script type="module" src="/graph.js"></script>
   </body>
 </html>

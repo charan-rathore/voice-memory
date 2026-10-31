@@ -108,7 +108,8 @@ export async function addNote(text, { spoken = true } = {}) {
   const context = FOLLOW_UP.test(text) && lastField ? lastField : null;
   setState(n, "thinking", "Finding it in your documents…");
   try {
-    const r = await api("query", { question: text, context });
+    const r = await api("query", { question: text, context, channel: "note" });
+    globalThis.dispatchEvent?.(new Event("vm:answered"));
     n.answer = r;
     if (r.lead?.field) lastField = r.lead.field;
     const say =

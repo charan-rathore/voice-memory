@@ -53,6 +53,7 @@ const STATIC = {
   "/notes.js": ["./public/notes.js", "text/javascript"],
   "/motion.js": ["./public/motion.js", "text/javascript"],
   "/voicelab.js": ["./public/voicelab.js", "text/javascript"],
+  "/graph.js": ["./public/graph.js", "text/javascript"],
   "/voicelab-score.mjs": ["./public/voicelab-score.mjs", "text/javascript"],
   "/style.css": ["./public/style.css", "text/css"],
   "/vendor/pdf.min.mjs": [
@@ -600,7 +601,17 @@ export function createLocalServer({
           res.end(JSON.stringify({ error: "Bad focus" }));
           return;
         }
-        res.end(JSON.stringify(buildGraph(s.bundle, s.memory, focus)));
+        const g = buildGraph(s.bundle, s.memory, focus);
+        // Map evidence spans and documents to library ids so a click opens
+        // the original in the viewer (same as a citation).
+        const docId = (sid) => s.sourceToEntry?.get(sid)?.id ?? null;
+        for (const n of g.nodes) {
+          if (n.kind === "document") n.documentId = docId(n.id.slice(4));
+          if (n.evidence) n.evidence.documentId = docId(n.evidence.sourceId);
+        }
+        for (const e of g.edges)
+          if (e.evidence) e.evidence.documentId = docId(e.evidence.sourceId);
+        res.end(JSON.stringify(g));
         return;
       }
       if (req.method === "GET" && req.url === "/api/memory") {
