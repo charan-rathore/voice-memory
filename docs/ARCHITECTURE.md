@@ -166,7 +166,45 @@ Not done: encryption at rest, durable storage, audit log, per-tenant
 retention policy. In-memory session storage is a demo store and is not
 appropriate for real personal or medical records.
 
-## 7. Known gaps (ranked)
+## 7. Clinical prototype (`clinical/`, synthetic data only)
+
+Lab-table rows become typed observations shaped like FHIR R4 Observation
+(code, value + comparator, unit, reference range, interpretation, subject,
+effective/issued dates, status) without claiming FHIR conformance or
+LOINC/UCUM coding. Kept separate from the commercial claim graph.
+
+| Rule | Behaviour | Test |
+| --- | --- | --- |
+| Unit never inferred | Missing unit stays null; comparison refuses | `compare` missing_unit |
+| No unit conversion | mg/dL vs µmol/L refuses: no analyte/unit pair is validated | Creatinine gold case |
+| Same test only | Identical normalized names; no synonyms ("thyroid hormone" does not match "TSH") | retrieval paraphrase miss, by design |
+| Same patient only | Different IDs never combine; without one named, the answer asks which patient | Hemoglobin gold case |
+| Amended wins | Same collection date: amended/corrected over final over preliminary; the superseded value is cited | Ferritin gold case |
+| Bounds stay bounds | `<0.05` vs `0.30` is higher; `<0.05` vs `<0.10` is undetermined | `compare` tests |
+| Flag vs range | A printed H/L flag its own range contradicts is said out loud | flag conflict test |
+| No interpretation | Comparisons end with "a question for your clinician"; banned words test | every comparison |
+
+pdf.js NFKC-normalizes the micro sign (U+00B5) to Greek mu (U+03BC); units are
+folded back to the printed form and the raw string is kept (`unitRaw`).
+
+## 8. Retrieval baseline (`evaluation/retrieval-bench.mjs`)
+
+30 questions written before the run (23 literal, 7 deliberately paraphrased),
+run as two sessions of at most 10 documents. Keyword/BM25 stage only:
+
+| Set | Recall@3 | MRR | Precision@3 |
+| --- | --- | --- | --- |
+| Literal | 0.91 | 0.91 | 0.83 |
+| Paraphrase | 0.29 | 0.29 | 0.29 |
+
+The retriever's evidence gate often returns a single chunk, so Recall@1, @3 and
+@5 coincide. One literal "miss" is arguable: "How often is progress reported?"
+retrieves the proposal, which also mentions weekly reporting; the gold label
+names the kickoff notes and was left unchanged. Dense/hybrid candidates were not
+run: this environment cannot download embedding models. The harness accepts any
+`retrieve(question, k)` for a fair comparison on the same questions.
+
+## 9. Known gaps (ranked)
 
 1. No real-document gold set; the synthetic benchmark cannot detect
    real-world table failures.
@@ -175,5 +213,7 @@ appropriate for real personal or medical records.
 3. OCR is English-only; no Hindi/Devanagari model shipped.
 4. Voice answers outside claim fields quote one sentence; multi-document
    synthesis is not attempted.
-5. No clinical data model (FHIR Observation/LOINC/UCUM); lab rows are text.
+5. Clinical model has no LOINC/UCUM coding and no validated unit conversions.
 6. Storage is in-memory per session.
+7. The claim renderer can answer a "what" question with "No." (fictional sample:
+   "What is pending for the pilot launch security review?").
