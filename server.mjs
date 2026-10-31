@@ -47,6 +47,8 @@ const STATIC = {
   "/app.js": ["./public/app.js", "text/javascript"],
   "/workspace.js": ["./public/workspace.js", "text/javascript"],
   "/viewer.js": ["./public/viewer.js", "text/javascript"],
+  "/notes.js": ["./public/notes.js", "text/javascript"],
+  "/motion.js": ["./public/motion.js", "text/javascript"],
   "/style.css": ["./public/style.css", "text/css"],
   "/vendor/pdf.min.mjs": [
     "./node_modules/pdfjs-dist/build/pdf.min.mjs",
