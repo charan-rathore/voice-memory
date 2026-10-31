@@ -102,3 +102,16 @@ test("'sign off' requirement question returns the recorded condition", () => {
   assert.match(r.answer, /client finance/i);
   assert.match(r.answer, /not evidence that sign-off has occurred/i);
 });
+
+// FAILURE 7: a recorded negative fact is itself the answer to an
+// agreement-existence question - surface it verbatim with provenance instead
+// of refusing or burying it under fee/payment claims.
+test("a recorded negative fact answers the agreement-existence question", () => {
+  const r = answer(
+    "Is there a signed commercial agreement for the revised terms?",
+    importBundle(NORTHSTAR_DOCS),
+  );
+  assert.equal(r.supported, true, r.answer);
+  assert.match(r.answer, /No signed commercial agreement exists/i);
+  assert.match(r.answer, /do not establish that one was later executed/i);
+});
