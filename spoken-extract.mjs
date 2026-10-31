@@ -22,11 +22,15 @@ const terms = (s) =>
   (s.toLowerCase().match(/[a-z0-9][a-z0-9.\-/%<>]*/g) ?? [])
     .map((t) => t.replace(/[.\-/]+$/, ""))
     .filter((t) => t && !STOP.has(t))
-    .map((t) =>
-      t.length > 4
-        ? t.replace(/(ies|es|s)$/, (m) => (m === "ies" ? "y" : ""))
-        : t,
-    );
+    .map(stem);
+// Light, deterministic stemming so "approved" meets "approval" and "signing"
+// meets "signed". Numbers and short words are left alone.
+function stem(t) {
+  if (t.length <= 4 || /\d/.test(t)) return t;
+  t = t.replace(/(ies|es|s)$/, (m) => (m === "ies" ? "y" : ""));
+  if (t.length > 6) t = t.replace(/(ations?|ation|ing|ed|al)$/, "");
+  return t;
+}
 
 export const isQuestion = (q) =>
   /\?\s*$/.test(q) ||
