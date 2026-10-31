@@ -351,9 +351,20 @@
     // Ask for the microphone first: a Bolna session is single-use and expires
     // in about two minutes, so it is minted only once the mic is granted.
     callState("Allow the microphone to start the call…");
+    let audio;
     try {
       const pre = await navigator.mediaDevices.getUserMedia({ audio: true });
       pre.getTracks().forEach((tr) => tr.stop());
+      // Virtual loopback devices (BlackHole, Teams, Soundflower…) are often the
+      // system default on creators' Macs and send silence. Prefer a real mic.
+      const mics = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
+      const virtual = /blackhole|virtual|loopback|soundflower|teams|zoom|obs|aggregate|vb-audio|cable/i;
+      const real = mics.filter((d) => !virtual.test(d.label));
+      const pick = real.find((d) => d.deviceId === "default") ?? real.find((d) => /built-in|internal|microphone|mic/i.test(d.label)) ?? real[0];
+      if (pick) {
+        audio = { deviceId: { exact: pick.deviceId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+        state.mic = pick.label.replace(/^Default - /, "");
+      }
     } catch {
       callbar.classList.remove("busy");
       $("#call-label").textContent = "Call Voice Memory";
@@ -362,6 +373,7 @@
     }
     callState("Getting a call line…");
     const call = new window.BolnaWebCall({
+      ...(audio ? { audio } : {}),
       getSession: async () => {
         const r = await fetch("/api/public/voice/session", {
           method: "POST",
@@ -384,7 +396,7 @@
       callbar.classList.remove("busy");
       callbar.classList.add("live");
       $("#call-label").textContent = "Hang up";
-      callState(`<b>Live.</b> Ask: “${esc(state.cases[state.case]?.suggestions?.[0] ?? "What is SYN-0001's ferritin result?")}”`);
+      callState(`<b>Live${state.mic ? " · " + esc(state.mic) : ""}.</b> Ask: “${esc(state.cases[state.case]?.suggestions?.[0] ?? "What is SYN-0001's ferritin result?")}”`);
       pollTurns();
     });
     call.on("volume-level", (v) => {
