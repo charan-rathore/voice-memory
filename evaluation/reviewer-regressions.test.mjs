@@ -89,3 +89,16 @@ test("'signed off' phrasing engages the sign-off question guard", () => {
   );
   assert.doesNotMatch(r.answer, /Maya|A\. Fernandes/);
 });
+
+// FAILURE 6: spaced present-tense "sign off" must also engage the sign-off
+// guards - a REQUIREMENT question ("who has to") gets the scoped record
+// answer (named team + condition), never a refusal or a named approver.
+test("'sign off' requirement question returns the recorded condition", () => {
+  const r = answer(
+    "Who has to sign off the revised terms?",
+    importBundle(NORTHSTAR_DOCS),
+  );
+  assert.equal(r.supported, true, r.answer);
+  assert.match(r.answer, /client finance/i);
+  assert.match(r.answer, /not evidence that sign-off has occurred/i);
+});
