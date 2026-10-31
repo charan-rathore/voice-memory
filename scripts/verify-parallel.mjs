@@ -25,6 +25,12 @@ const LANES = [
   [["clinical", "test:clinical"]],
   [["vault", "test:vault"]],
   [["graph", "test:graph"]],
+  // Benches are in `npm run verify`, so full mode runs them for coverage
+  // parity; the --fast push gate excludes them (measurements, not gates).
+  [
+    ["bench:ingest", "bench:ingest"],
+    ["bench:retrieval", "bench:retrieval"],
+  ],
 ];
 const FAST = ["format", "typecheck", "unit", "boundaries", "evaluation"];
 const fast = process.argv.includes("--fast");

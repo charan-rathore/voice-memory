@@ -25,7 +25,7 @@
     "test:graph": "node graph-check.mjs",
     "verify:parallel": "node scripts/verify-parallel.mjs",
     "verify:fast": "node scripts/verify-parallel.mjs --fast",
-    "hooks:install": "git config core.hooksPath .githooks && echo 'pre-push hook installed (.githooks/pre-push)'"
+    "hooks:install": "node scripts/hooks-install.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "5.2.8",
