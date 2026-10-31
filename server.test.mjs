@@ -1,6 +1,6 @@
 import { test, after, before } from "node:test";
 import assert from "node:assert/strict";
-import { server } from "./server.mjs";
+import { server, createLocalServer } from "./server.mjs";
 const root = "http://127.0.0.1:4317";
 before(async () => new Promise((r) => server.listen(4317, "127.0.0.1", r)));
 after(async () => new Promise((r) => server.close(r)));
@@ -340,4 +340,64 @@ test("readiness tracks corpus, voice binding and lifecycle", async () => {
   assert.equal(r.corpusLoaded, false);
   assert.equal(r.voice.bound, false);
   assert.equal(r.ready, false);
+});
+
+test("memory watchdog: expensive routes get 503 + Retry-After when admission is refused", async () => {
+  const refusals = [];
+  const watchdog = {
+    admit: () => {
+      refusals.push(1);
+      return false;
+    },
+    beginRequest: () => {},
+    endRequest: () => {},
+    state: () => ({}),
+  };
+  const port = 4319;
+  const local = createLocalServer({ watchdog, port });
+  const url = "http://127.0.0.1:" + port;
+  await new Promise((r) => local.listen(port, "127.0.0.1", r));
+  try {
+    const r = await fetch(url + "/api/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: "anything" }),
+    });
+    assert.equal(r.status, 503);
+    assert.equal(r.headers.get("retry-after"), "5");
+    const j = await r.json();
+    assert.match(j.error, /memory pressure/);
+    assert.ok(refusals.length >= 1);
+  } finally {
+    await new Promise((r) => local.close(r));
+  }
+});
+
+test("memory watchdog: in-flight requests are counted around the handler", async () => {
+  let peak = 0;
+  let current = 0;
+  const watchdog = {
+    admit: () => true,
+    beginRequest: () => {
+      current += 1;
+      peak = Math.max(peak, current);
+    },
+    endRequest: () => {
+      current -= 1;
+    },
+    state: () => ({}),
+  };
+  const port = 4320;
+  const local = createLocalServer({ watchdog, port });
+  const url = "http://127.0.0.1:" + port;
+  await new Promise((r) => local.listen(port, "127.0.0.1", r));
+  try {
+    const r = await fetch(url + "/api/session");
+    assert.equal(r.status, 200);
+    await r.text();
+    assert.equal(peak, 1);
+    assert.equal(current, 0);
+  } finally {
+    await new Promise((r) => local.close(r));
+  }
 });
