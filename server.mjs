@@ -25,6 +25,7 @@ import {
 } from "./clinical/answer.mjs";
 import { extractReport } from "./clinical/observations.mjs";
 import { detectLang } from "./clinical/explain.mjs";
+import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { createAnswerCache } from "./cache.mjs";
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "./corpus-northstar.mjs";
@@ -735,6 +736,10 @@ export function createLocalServer({
         if (!s.bundle) throw Error("Add documents first.");
         if (typeof data?.question !== "string")
           throw Error("Ask a question of 1-4,000 characters.");
+        // Voice notes arrive as speech text ("forty two thousand"); the same
+        // notation-only normalization the voice endpoint applies.
+        if (data.question.length <= 4000)
+          data.question = normalizeSpoken(data.question) || data.question;
         // Context for follow-ups: an explicit note context from the client
         // (parallel voice notes carry the field they were asked after), else
         // the session's last field.

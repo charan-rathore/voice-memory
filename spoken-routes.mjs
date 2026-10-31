@@ -6,8 +6,18 @@
 import { validateEvidence } from "./dist/engine.mjs";
 
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June", "July", "August",
-  "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 /** Sentences of a source with exact offsets (numbered list markers kept out). */
@@ -66,7 +76,9 @@ export function docLabelOf(src) {
     .replace(/\s{2,}/g, " ")
     .trim()
     .toLowerCase();
-  const date = speakDate((src.text.match(/Date:\s*(\d{4}-\d{2}-\d{2})/) ?? [])[1]);
+  const date = speakDate(
+    (src.text.match(/Date:\s*(\d{4}-\d{2}-\d{2})/) ?? [])[1],
+  );
   return `the ${base || "document"}${date ? ` from ${date}` : ""}`;
 }
 
@@ -125,7 +137,8 @@ const DOC_KINDS = [
   [/\b(ops|operations) review\b/i, /operations review|ops review/i],
   [/\brevision memo\b/i, /revision/i],
 ];
-const ASK_Q = /\b(ask|asked|asking|want|wanted|requested|say|said|says|state|stated|mention|mentioned)\b|\brequest\b(?<!change request)/i;
+const ASK_Q =
+  /\b(ask|asked|asking|want|wanted|requested|say|said|says|state|stated|mention|mentioned)\b|\brequest\b(?<!change request)/i;
 const ASK_S = /\b(asks?|asked|requests?|requested|wants?|states?|stated)\b/i;
 
 export function documentLookup(question, bundle) {
@@ -164,14 +177,17 @@ export function documentLookup(question, bundle) {
 // causal lead-in ("Following the narrower scope, ..."), and the motivating
 // record is an earlier sentence sharing that cause's stem. No lead-in -> null
 // and the caller says the reason is not documented.
-const CAUSE_RE = /\b(?:following|because of|because|due to|owing to|given|after|since|as a result of)\s+([^,;]+)/i;
+const CAUSE_RE =
+  /\b(?:following|because of|because|due to|owing to|given|after|since|as a result of)\s+([^,;]+)/i;
 
 export function documentedReason(current, bundle) {
   if (!current?.quote) return null;
   const cm = CAUSE_RE.exec(current.quote);
   if (!cm) return null;
   const cause = cm[1].trim().replace(/[.]+$/, "");
-  const stems = (cause.toLowerCase().match(/[a-z]{5,}/g) ?? []).map((w) => w.slice(0, 5));
+  const stems = (cause.toLowerCase().match(/[a-z]{5,}/g) ?? []).map((w) =>
+    w.slice(0, 5),
+  );
   if (!stems.length) return null;
   const curDate = current.docDate || "9999";
   let best = null;
@@ -179,26 +195,44 @@ export function documentedReason(current, bundle) {
     const date = (src.text.match(/Date:\s*(\d{4}-\d{2}-\d{2})/) ?? [])[1] ?? "";
     if (src.id === current.sourceId || (date && date > curDate)) continue;
     for (const s of sentencesOf(src)) {
-      const toks = (s.text.toLowerCase().match(/[a-z]{5,}/g) ?? []).map((w) => w.slice(0, 5));
+      const toks = (s.text.toLowerCase().match(/[a-z]{5,}/g) ?? []).map((w) =>
+        w.slice(0, 5),
+      );
       const hit = stems.filter((st) => toks.includes(st)).length;
-      if (hit && (!best || hit > best.hit || (hit === best.hit && date < best.date)))
+      if (
+        hit &&
+        (!best || hit > best.hit || (hit === best.hit && date < best.date))
+      )
         best = { hit, src, s, date };
     }
   }
   const own = bundle.sources.find((s) => s.id === current.sourceId);
   const citations = [];
   if (own) {
-    const ownSent = sentencesOf(own).find((s) => s.start <= current.start + 5 && s.end >= current.start && current.quote.includes(s.text.slice(0, 20)));
+    const ownSent = sentencesOf(own).find(
+      (s) =>
+        s.start <= current.start + 5 &&
+        s.end >= current.start &&
+        current.quote.includes(s.text.slice(0, 20)),
+    );
     if (ownSent) citations.push(cite(own, ownSent));
   }
   if (!best) {
     return citations.length
-      ? { spoken: `${cap(own ? docLabelOf(own) : "the record")} ties the change to ${cause}.`, citations }
+      ? {
+          spoken: `${cap(own ? docLabelOf(own) : "the record")} ties the change to ${cause}.`,
+          citations,
+        }
       : null;
   }
   citations.push(cite(best.src, best.s));
   const spoken = `${cap(own ? docLabelOf(own) : "the record")} ties it to ${cause}. Earlier, ${docLabelOf(best.src)} recorded: ${best.s.text}`;
-  return words(spoken) <= 45 ? { spoken, citations } : { spoken: `${cap(own ? docLabelOf(own) : "the record")} ties the change to ${cause}.`, citations: citations.slice(0, 1) };
+  return words(spoken) <= 45
+    ? { spoken, citations }
+    : {
+        spoken: `${cap(own ? docLabelOf(own) : "the record")} ties the change to ${cause}.`,
+        citations: citations.slice(0, 1),
+      };
 }
 
 // ------------------------------------------------------------ subject binding
@@ -218,7 +252,9 @@ export function unboundSubject(question, fieldClaims, bundle) {
     (t) => !GENERIC.has(t),
   );
   const unbound = toks.filter(
-    (t) => new RegExp(`\\b${t}\\b`).test(corpus) && !new RegExp(`\\b${t}\\b`).test(quotes),
+    (t) =>
+      new RegExp(`\\b${t}\\b`).test(corpus) &&
+      !new RegExp(`\\b${t}\\b`).test(quotes),
   );
   return unbound.length ? unbound : null;
 }
@@ -230,7 +266,12 @@ export function subjectSentence(unbound, bundle) {
     for (const s of sentencesOf(src)) {
       const low = s.text.toLowerCase();
       if (!unbound.every((t) => new RegExp(`\\b${t}\\b`).test(low))) continue;
-      const neg = /\bno (?:amount|price|figure)\b|\bnothing agreed\b|\bnot agreed\b|\bno amount was agreed\b/i.test(s.text) ? 1 : 0;
+      const neg =
+        /\bno (?:amount|price|figure)\b|\bnothing agreed\b|\bnot agreed\b|\bno amount was agreed\b/i.test(
+          s.text,
+        )
+          ? 1
+          : 0;
       if (!best || neg > best.neg) best = { src, s, neg };
     }
   }
@@ -251,16 +292,23 @@ export function subjectSentence(unbound, bundle) {
 // names. No such sentence -> null (the field path says "no record shows a
 // rejection").
 const REJ_S = /\b(rejected|turned down|declined|refused)\b/i;
-const STOPQ = new Set("did does do was were is are the a an has have had they we our their it this that reject rejected rejection turn turned down decline declined refuse refused".split(" "));
+const STOPQ = new Set(
+  "did does do was were is are the a an has have had they we our their it this that reject rejected rejection turn turned down decline declined refuse refused".split(
+    " ",
+  ),
+);
 
 export function rejectionLookup(question, bundle) {
-  const qTok = (question.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []).filter((t) => !STOPQ.has(t));
+  const qTok = (
+    question.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []
+  ).filter((t) => !STOPQ.has(t));
   const named = DOC_KINDS.filter(([q]) => q.test(question)).map(([, t]) => t);
   const ids = new Set();
   for (const src of bundle.sources) {
     const head = src.text.split("\n")[0] + " " + src.title.replace(/_/g, " ");
     if (named.some((t) => t.test(head)))
-      for (const m of head.matchAll(/\b([A-Z]{2,}-?\d+)\b/g)) ids.add(m[1].replace("-", "").toLowerCase());
+      for (const m of head.matchAll(/\b([A-Z]{2,}-?\d+)\b/g))
+        ids.add(m[1].replace("-", "").toLowerCase());
   }
   let best = null;
   for (const src of bundle.sources)
@@ -268,7 +316,8 @@ export function rejectionLookup(question, bundle) {
       if (!REJ_S.test(s.text)) continue;
       const low = s.text.toLowerCase();
       let score = qTok.filter((t) => new RegExp(`\\b${t}\\b`).test(low)).length;
-      for (const m of s.text.matchAll(/\b([A-Z]{2,}-?\d+)\b/g)) if (ids.has(m[1].replace("-", "").toLowerCase())) score += 2;
+      for (const m of s.text.matchAll(/\b([A-Z]{2,}-?\d+)\b/g))
+        if (ids.has(m[1].replace("-", "").toLowerCase())) score += 2;
       if (score >= 2 && (!best || score > best.score)) best = { score, src, s };
     }
   if (!best) return null;
@@ -279,4 +328,29 @@ export function rejectionLookup(question, bundle) {
     field: null,
     citations: [cite(best.src, best.s)],
   };
+}
+
+// "How much is X?" where the record says no price was agreed for X.
+const NO_PRICE =
+  /\bno (?:price|amount|figure|fee)\b[^.;]*\b(?:agreed|set|decided)\b|\bnothing agreed\b|\bnot (?:been )?priced\b/i;
+export function subjectNegative(question, bundle) {
+  const toks = (question.toLowerCase().match(/[a-z][a-z-]{2,}/g) ?? []).filter(
+    (t) => !GENERIC.has(t),
+  );
+  if (!toks.length) return null;
+  for (const src of bundle.sources)
+    for (const s of sentencesOf(src)) {
+      if (!NO_PRICE.test(s.text)) continue;
+      const low = s.text.toLowerCase();
+      const hits = toks.filter((t) => low.includes(t.replace(/s$/, ""))).length;
+      if (hits >= Math.min(2, toks.length))
+        return {
+          spoken: `No price is agreed for that. ${cap(docLabelOf(src))}: ${s.text}`,
+          verdict: "NO-RECORD",
+          intent: "LOOKUP",
+          field: "fee",
+          citations: [cite(src, s)],
+        };
+    }
+  return null;
 }

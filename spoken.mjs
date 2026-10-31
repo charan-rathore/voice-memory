@@ -16,6 +16,7 @@ import {
   documentLookup,
   documentedReason,
   rejectionLookup,
+  subjectNegative,
   unboundSubject,
   subjectSentence,
   docLabelOf,
@@ -714,7 +715,9 @@ function askedValueKey(question, field) {
     return a ? a[0].replace(/[^\d]/g, "") : null;
   }
   if (field === "deadline") {
-    const d = question.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b/i);
+    const d = question.match(
+      /\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b/i,
+    );
     return d ? `${Number(d[1])} ${d[2].toLowerCase()}` : null;
   }
   if (field === "paymentSplit") {
@@ -737,14 +740,17 @@ function valueKeyOf(c, field) {
 // explicit rejection, its own approval, or "proposed, not approved" next to
 // the approved value. Never "yes" because some OTHER value was approved.
 function valueVerdict(question, field, fieldClaims, resolved, intent) {
-  if (!["FINALIZED", "LATEST", "REJECTED", "OTHER", "HISTORY"].includes(intent)) return null;
+  if (!["FINALIZED", "LATEST", "REJECTED", "OTHER", "HISTORY"].includes(intent))
+    return null;
   const key = askedValueKey(question, field);
   if (!key) return null;
   const mine = fieldClaims.filter((c) => valueKeyOf(c, field) === key);
   if (!mine.length) return null;
   const approved = resolved.approved.get(field) ?? [];
   const approvedOther = approved.filter((c) => valueKeyOf(c, field) !== key);
-  const rejection = mine.find((c) => /\brejected|turned down|declined\b/i.test(c.quote));
+  const rejection = mine.find((c) =>
+    /\brejected|turned down|declined\b/i.test(c.quote),
+  );
   const shown = (c) => String(c.value).replace(/(\S)\(/, "$1 (");
   if (rejection) {
     const tail = approvedOther.length
@@ -859,8 +865,24 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
     /\b(fee|retainer|price|rate|deadline|go-live|date|split|payment|schedule)\b|[$€£₹]\s?\d|\b\d{1,3}(?:,\d{3})+\b|\b\d{1,2}\s+[A-Z][a-z]+\b|\b\d{1,2}\/\d{1,2}\b/i.test(
       question,
     );
+  // An explicit "no price was agreed" for the subject the caller named
+  // outranks every figure: "how much do the SMS reminders cost?" must not be
+  // answered with the contract fee.
+  if (
+    field === "fee" &&
+    intent !== "MUTATE" &&
+    /^\s*(?:how much|what)\b/i.test(question)
+  ) {
+    const subj = subjectNegative(question, bundle);
+    if (subj) return subj;
+  }
+  const asksValue = /^\s*(?:how much|what(?:'s| is| are| was)?|which)\b/i.test(
+    question,
+  );
   if (
     !namesField &&
+    asksValue &&
+    ["LATEST", "OTHER"].includes(intent) &&
     ["fee", "deadline", "paymentSplit"].includes(field) &&
     intent !== "MUTATE"
   ) {
@@ -873,8 +895,21 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   const resolved = resolveClaims(fieldClaims);
   if (intent !== "MUTATE") {
     const vv = valueVerdict(question, field, fieldClaims, resolved, intent);
-    if (vv && guard(vv.spoken, vv.citations, vv.verdict === "REJECTED-EXPLICIT" ? "REJECTED-EXPLICIT" : "NO-RECORD"))
-      return { spoken: vv.spoken, verdict: vv.verdict, field, intent, citations: vv.citations.map(pack) };
+    if (
+      vv &&
+      guard(
+        vv.spoken,
+        vv.citations,
+        vv.verdict === "REJECTED-EXPLICIT" ? "REJECTED-EXPLICIT" : "NO-RECORD",
+      )
+    )
+      return {
+        spoken: vv.spoken,
+        verdict: vv.verdict,
+        field,
+        intent,
+        citations: vv.citations.map(pack),
+      };
   }
   const verdict = verdictFor(field, resolved, claims, question, intent, bundle);
   const actives = resolved.active.get(field) ?? [];
@@ -905,7 +940,9 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   if (engineResult.refused && (verdict === "UNKNOWN" || !current)) return null;
   if (intent === "WHY") {
     const why = documentedReason(current, bundle);
-    const spokenWhy = why?.spoken ?? "The records show the change, but they don't state a reason for it.";
+    const spokenWhy =
+      why?.spoken ??
+      "The records show the change, but they don't state a reason for it.";
     return {
       spoken: spokenWhy,
       verdict: why ? "QUOTED" : "UNKNOWN",

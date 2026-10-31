@@ -17,6 +17,7 @@ import {
   embedQueryReady,
 } from "./dense.mjs";
 import { spokenTurn, historyField } from "./spoken.mjs";
+import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import { clinicalTurn, observationEvidence } from "./clinical/answer.mjs";
 export function createVoiceAdapter({
@@ -295,6 +296,9 @@ export function createVoiceAdapter({
           { status: 400 },
         );
       if (req.signal.aborted) return new Response(null, { status: 499 });
+      // Speech notation -> document notation ("forty two thousand" ->
+      // "$42,000"). Notation only: no fact, field or value is added.
+      const asked = normalizeSpoken(last.content) || last.content;
       let spoken, turn;
       if (
         /^\s*(turn (that|this|the brief) into (an? )?email|draft (an? )?email)\s*[.!]?\s*$/i.test(
@@ -313,9 +317,9 @@ export function createVoiceAdapter({
       } else {
         let result = retrieval
           ? answerFromRetrieval(
-              last.content,
+              asked,
               grant.bundle,
-              await retrieval.retrieve(last.content, grant.bundle, {
+              await retrieval.retrieve(asked, grant.bundle, {
                 signal: req.signal,
               }),
               {
@@ -323,8 +327,8 @@ export function createVoiceAdapter({
                 embeddingModel: retrieval.embeddingModel,
               },
             )
-          : answer(last.content, grant.bundle, {
-              queryVector: await embedQueryReady(last.content),
+          : answer(asked, grant.bundle, {
+              queryVector: await embedQueryReady(asked),
               model: DENSE_MODEL_ID,
               available: denseAvailableFor(grant.bundle),
             });
@@ -358,7 +362,7 @@ export function createVoiceAdapter({
         // Lab results across reports (bundle.clinical, set by the server for
         // uploaded lab tables) answer first; absent for Northstar.
         const clinical = grant.bundle.clinical?.length
-          ? clinicalTurn(last.content, grant.bundle.clinical)
+          ? clinicalTurn(asked, grant.bundle.clinical)
           : null;
         let rendered = clinical
           ? {
@@ -380,7 +384,7 @@ export function createVoiceAdapter({
             }
           : null;
         rendered ??= spokenTurn(
-          last.content,
+          asked,
           grant.bundle,
           historyField(grant.bundle, data.messages.slice(0, -1)) ??
             grant.lastField ??
@@ -392,7 +396,7 @@ export function createVoiceAdapter({
         // carry no "no_field" reason and are never overridden.
         if (!clinical && (!rendered || rendered.reason === "no_field")) {
           const quoted = extractiveSpoken(
-            last.content,
+            asked,
             result,
             grant.bundle,
             grant.bundle.locateEvidence,

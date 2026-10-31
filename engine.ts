@@ -234,9 +234,10 @@ export function answer(
   // term. Original query still wins; this fires only when the original's
   // passages cannot contain the asked metric at all.
   if (!expansionUsed && found.evidence === "positive") {
-    const mf = /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
-      question,
-    );
+    const mf =
+      /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
+        question,
+      );
     if (mf) {
       const foundText = found.chunks
         .map((c) => c.text)
@@ -917,9 +918,10 @@ export function answer(
       !/\b\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\b|\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}|\b\d{4}-\d{2}-\d{2}\b|\b\d+\s*(?:business )?(?:days?|weeks?|months?|hours?|years?)\b|\b(?:daily|weekly|biweekly|monthly|quarterly|annually|yearly)\b/i.test(
         exText,
       );
-    const metricField = /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
-      question,
-    );
+    const metricField =
+      /\b([a-z][a-z-]{4,})\s+(?:level|count|reading|result|rate)\b/i.exec(
+        question,
+      );
     // A disclosed expansion bridge covers the asked metric when the bridged
     // term is what the evidence actually carries ("thyroid ... level" ->
     // "tsh"): the transform is shown in the UI, so the answer never pretends

@@ -33,8 +33,8 @@ export const SETS = [
     gold: path.join(here, "fixtures/heldout-harbor/gold.json"),
   },
   {
-    name: "lumen-heldout",
-    heldOut: true,
+    name: "lumen",
+    heldOut: false, // held-out at e6227d3: first run 12/14 (results/spoken-eval-*-d4c05ad.json); then fixed
     dir: path.join(here, "fixtures/heldout-lumen"),
     gold: path.join(here, "fixtures/heldout-lumen/gold.json"),
   },
@@ -47,7 +47,10 @@ export function loadBundle(dir) {
     readdirSync(dir)
       .filter((f) => f.endsWith(".md"))
       .sort()
-      .map((f) => ({ title: f, text: readFileSync(path.join(dir, f), "utf8") })),
+      .map((f) => ({
+        title: f,
+        text: readFileSync(path.join(dir, f), "utf8"),
+      })),
   );
 }
 
@@ -82,8 +85,10 @@ const low = (s) => s.toLowerCase();
 
 export function judge(c, text) {
   const fails = [];
-  for (const h of c.has) if (!low(text).includes(low(h))) fails.push(`missing "${h}"`);
-  for (const n of c.not) if (low(text).includes(low(n))) fails.push(`contains "${n}"`);
+  for (const h of c.has)
+    if (!low(text).includes(low(h))) fails.push(`missing "${h}"`);
+  for (const n of c.not)
+    if (low(text).includes(low(n))) fails.push(`contains "${n}"`);
   if (words(text) > 45) fails.push(`${words(text)} words`);
   if (/\.md\b|_/.test(text)) fails.push("reads a filename");
   if (!text.trim()) fails.push("empty");
@@ -110,7 +115,9 @@ export async function runSet(set) {
     }
     const ms = performance.now() - t0;
     const fails =
-      out.status === 200 ? judge(c, out.text) : [`status ${out.status} ${out.error ?? ""}`];
+      out.status === 200
+        ? judge(c, out.text)
+        : [`status ${out.status} ${out.error ?? ""}`];
     let retrieved = null;
     if (c.docs.length) {
       let r;
@@ -124,7 +131,16 @@ export async function runSet(set) {
       );
       retrieved = c.docs.some((d) => titles.some((t) => t.startsWith(d)));
     }
-    rows.push({ id: c.id, q: c.q, cls: c.cls, spoken: out.text, pass: !fails.length, fails, retrieved, ms: +ms.toFixed(1) });
+    rows.push({
+      id: c.id,
+      q: c.q,
+      cls: c.cls,
+      spoken: out.text,
+      pass: !fails.length,
+      fails,
+      retrieved,
+      ms: +ms.toFixed(1),
+    });
   }
   const withDocs = rows.filter((r) => r.retrieved !== null);
   return {
@@ -132,9 +148,18 @@ export async function runSet(set) {
     heldOut: set.heldOut,
     n: rows.length,
     answerCorrect: rows.filter((r) => r.pass).length,
-    retrievalRecall: { hit: withDocs.filter((r) => r.retrieved).length, n: withDocs.length },
-    p50ms: pct(rows.map((r) => r.ms), 0.5),
-    p95ms: pct(rows.map((r) => r.ms), 0.95),
+    retrievalRecall: {
+      hit: withDocs.filter((r) => r.retrieved).length,
+      n: withDocs.length,
+    },
+    p50ms: pct(
+      rows.map((r) => r.ms),
+      0.5,
+    ),
+    p95ms: pct(
+      rows.map((r) => r.ms),
+      0.95,
+    ),
     rows,
   };
 }
@@ -147,7 +172,9 @@ function pct(xs, p) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const sha = (() => {
     try {
-      return execSync("git rev-parse --short HEAD", { cwd: root }).toString().trim();
+      return execSync("git rev-parse --short HEAD", { cwd: root })
+        .toString()
+        .trim();
     } catch {
       return "unknown";
     }
@@ -159,12 +186,30 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       `${r.set}${r.heldOut ? " (held-out)" : ""}: answer ${r.answerCorrect}/${r.n}, retrieval recall ${r.retrievalRecall.hit}/${r.retrievalRecall.n}, engine p50 ${r.p50ms} ms p95 ${r.p95ms} ms`,
     );
     for (const row of r.rows.filter((x) => !x.pass))
-      console.log(`  FAIL ${row.id} "${row.q}" -> "${row.spoken}" [${row.fails.join("; ")}]`);
+      console.log(
+        `  FAIL ${row.id} "${row.q}" -> "${row.spoken}" [${row.fails.join("; ")}]`,
+      );
   }
   if (process.argv.includes("--write")) {
     mkdirSync(path.join(here, "results"), { recursive: true });
-    const file = path.join(here, "results", `spoken-eval-${new Date().toISOString().slice(0, 10)}-${sha}.json`);
-    writeFileSync(file, JSON.stringify({ sha, date: new Date().toISOString(), note: "Engine-only timing (no ASR/TTS/network). Keyword retrieval path, as the voice adapter uses.", results }, null, 1));
+    const file = path.join(
+      here,
+      "results",
+      `spoken-eval-${new Date().toISOString().slice(0, 10)}-${sha}.json`,
+    );
+    writeFileSync(
+      file,
+      JSON.stringify(
+        {
+          sha,
+          date: new Date().toISOString(),
+          note: "Engine-only timing (no ASR/TTS/network). Keyword retrieval path, as the voice adapter uses.",
+          results,
+        },
+        null,
+        1,
+      ),
+    );
     console.log("wrote", path.relative(root, file));
   }
 }

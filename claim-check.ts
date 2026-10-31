@@ -71,7 +71,9 @@ function statusOf(line: string): ClaimStatus {
 export function questionFields(q: string): ClaimField[] {
   const out = new Set<ClaimField>();
   if (
-    /\bfee|retainer|\brate\b|\bprice|invoic|how much|cost|bill|charg|money|commercial|paid|pay\b/i.test(q)
+    /\bfee|retainer|\brate\b|\bprice|invoic|how much|cost|bill|charg|money|commercial|paid|pay\b/i.test(
+      q,
+    )
   )
     out.add("fee");
   if (
@@ -278,8 +280,12 @@ export function extractClaims(
         );
         if (/\bfee\b|\bretainer\b/i.test(window)) push("fee", m[0], m.index);
       }
+      // Two percentages in one payment sentence that sum to 100 are a
+      // split, however the stages are named ("upfront", "on signature",
+      // "on signing", "on launch").
+      const pct = line.match(/(\d{1,2})%[^.\n]*?(\d{1,2})%/);
       const split =
-        line.match(/(\d{1,2})%[^.\n]*?upfront[^.\n]*?(\d{1,2})%/i) ||
+        (pct && Number(pct[1]) + Number(pct[2]) === 100 ? pct : null) ||
         line.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
       if (split && /payment|upfront|schedule|split/i.test(line))
         push("paymentSplit", `${split[1]}/${split[2]}`, split.index);
@@ -291,10 +297,7 @@ export function extractClaims(
         /\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+20\d{2})?)\b/gi,
       )) {
         const at = dm.index ?? 0;
-        const sentStart = Math.max(
-          line.lastIndexOf(". ", at) + 1,
-          0,
-        );
+        const sentStart = Math.max(line.lastIndexOf(". ", at) + 1, 0);
         const sentEndIdx = line.indexOf(". ", at);
         const sentence = line.slice(
           sentStart,
@@ -307,9 +310,17 @@ export function extractClaims(
         )
           continue;
         const before = line.slice(sentStart, at);
-        if (/\b(plan|submit|submission|reply|respond|report)\b[^.]*$/i.test(before))
+        if (
+          /\b(plan|submit|submission|reply|respond|report)\b[^.]*$/i.test(
+            before,
+          )
+        )
           continue;
-        if (/\b(countersigned|signed|dated|reported)\s+(?:by [^.]{0,40}\s+)?on\s*$/i.test(before))
+        if (
+          /\b(countersigned|signed|dated|reported)\s+(?:by [^.]{0,40}\s+)?on\s*$/i.test(
+            before,
+          )
+        )
           continue;
         push("deadline", dm[1], at);
       }
