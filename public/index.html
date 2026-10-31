@@ -283,6 +283,27 @@
           hidden
         ></div>
         <div id="voice-turn-evidence" class="voice-evidence"></div>
+        <details id="voicelab" class="more voicelab">
+          <summary>Measure this call</summary>
+          <p class="voicelab-help">
+            Read these lines aloud, one per turn, waiting for each answer.
+            Afterwards you get speech-to-answer time per stage and what the
+            recogniser heard against what you said. Nothing is sent anywhere.
+          </p>
+          <label class="voicelab-check">
+            <input id="voicelab-on" type="checkbox" /> Measure the next call
+          </label>
+          <ol id="voicelab-script" class="voicelab-script"></ol>
+          <p
+            id="voicelab-status"
+            class="voicelab-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <button id="voicelab-download" type="button" class="link" hidden>
+            Download measurement (JSON)
+          </button>
+        </details>
         <div class="readiness">
           <button id="readiness-check" type="button" class="link">
             Check demo readiness
@@ -324,5 +345,6 @@
     <script type="module" src="/app.js"></script>
     <script type="module" src="/workspace.js"></script>
     <script type="module" src="/notes.js"></script>
+    <script type="module" src="/voicelab.js"></script>
   </body>
 </html>

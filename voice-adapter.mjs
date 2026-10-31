@@ -257,6 +257,13 @@ export function createVoiceAdapter({
         );
       const grant = admitted.grant;
       const sequence = ++grant.sequence;
+      // Voice lab: wall-clock receipt of this turn, for stage latency.
+      const receivedAt = Date.now();
+      const logTurn = (entry) => {
+        grant.turnLog ??= [];
+        grant.turnLog.push({ seq: sequence, receivedAt, ...entry });
+        if (grant.turnLog.length > 50) grant.turnLog.shift();
+      };
       let data;
       try {
         const raw = await boundedBody(req, bodyTimeoutMs);
@@ -295,7 +302,10 @@ export function createVoiceAdapter({
           },
           { status: 400 },
         );
-      if (req.signal.aborted) return new Response(null, { status: 499 });
+      if (req.signal.aborted) {
+        logTurn({ transcript: last.content, outcome: "aborted" });
+        return new Response(null, { status: 499 });
+      }
       // Speech notation -> document notation ("forty two thousand" ->
       // "$42,000"). Notation only: no fact, field or value is added.
       const asked = normalizeSpoken(last.content) || last.content;
@@ -369,14 +379,19 @@ export function createVoiceAdapter({
           result = { refused: true, evidence: [] };
         for (const evidence of result.evidence)
           validateEvidence(evidence, grant.bundle);
-        if (req.signal.aborted) return new Response(null, { status: 499 });
+        if (req.signal.aborted) {
+          logTurn({ transcript: last.content, outcome: "aborted" });
+          return new Response(null, { status: 499 });
+        }
         if (grants.get(token) !== grant || grant.expires <= now())
           return Response.json(
             { error: "Invalid or expired session capability" },
             { status: 401 },
           );
-        if (sequence !== grant.sequence)
+        if (sequence !== grant.sequence) {
+          logTurn({ transcript: last.content, outcome: "superseded" });
           return Response.json({ error: "Superseded turn" }, { status: 409 });
+        }
         grant.last = result;
         turn = { result };
         // Deterministic spoken renderer: routes intent, resolves the field
@@ -470,6 +485,14 @@ export function createVoiceAdapter({
         id = "local-contract-" + randomBytes(8).toString("hex");
       const stream = new ReadableStream({
         start(controller) {
+          logTurn({
+            transcript: last.content,
+            normalized: asked ?? null,
+            firstByteAt: Date.now(),
+            spoken,
+            verdict: turn?.spokenTurn?.verdict ?? null,
+            outcome: "answered",
+          });
           for (const content of spoken.match(/.{1,64}(?:\s|$)|.{1,64}/g) ||
             []) {
             controller.enqueue(
@@ -507,6 +530,13 @@ export function createVoiceAdapter({
           "Cache-Control": "no-store",
         },
       });
+    },
+    // Voice lab: this grant's recent turns (transcript as received, receipt and
+    // first-byte wall-clock times, interruptions). Owner diagnostics only.
+    turnLog(token) {
+      const g = grants.get(token);
+      if (!g || g.expires <= now()) return [];
+      return [...(g.turnLog ?? [])];
     },
     lastTurn(token) {
       const g = grants.get(token);

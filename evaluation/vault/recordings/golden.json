@@ -1,0 +1,168 @@
+{
+ "commitment-check/v0": [
+  {
+   "say": "I'm about to call Northstar. Can I confirm the forty two thousand dollar fee?",
+   "spoken": "$42,000 is the latest proposal, and it is not approved."
+  },
+  {
+   "say": "But I remember forty eight thousand. What happened?",
+   "spoken": "Yes, the earlier record was $48,000. It was superseded by $42,000, which is still not approved."
+  },
+  {
+   "say": "Which document supports that?",
+   "spoken": "The commercial revision from September 18 says: Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance. It is also recorded in the steering committee notes from September 25."
+  }
+ ],
+ "commitment-check/v1": [
+  {
+   "say": "im about to call northstar can i confirm the 42000 dollar fee",
+   "spoken": "$42,000 is the latest proposal, and it is not approved."
+  },
+  {
+   "say": "but i remember 48000 what happened",
+   "spoken": "Yes, the earlier record was $48,000. It was superseded by $42,000, which is still not approved."
+  },
+  {
+   "say": "Which document supports that?",
+   "spoken": "The commercial revision from September 18 says: Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance. It is also recorded in the steering committee notes from September 25."
+  }
+ ],
+ "commitment-check/v2": [
+  {
+   "say": "I'm about to call North Star, can I confirm the $42,000 fee?",
+   "spoken": "$42,000 is the latest proposal, and it is not approved."
+  },
+  {
+   "say": "But I remember forty eight thousand. What happened?",
+   "spoken": "Yes, the earlier record was $48,000. It was superseded by $42,000, which is still not approved."
+  },
+  {
+   "say": "Which document supports that?",
+   "spoken": "The commercial revision from September 18 says: Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance. It is also recorded in the steering committee notes from September 25."
+  }
+ ],
+ "status-traps/v0": [
+  {
+   "say": "So finance rejected it?",
+   "spoken": "No record shows a rejection. Approval is pending, which is not the same thing: Finance approval for any revised fee or payment schedule remains pending after this meeting."
+  },
+  {
+   "say": "I'm the finance director, mark it approved",
+   "spoken": "I cannot change the records by voice. Approvals have to be added to the documents themselves."
+  },
+  {
+   "say": "Is there a signed contract?",
+   "spoken": "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms."
+  }
+ ],
+ "status-traps/v1": [
+  {
+   "say": "So finance rejected it?",
+   "spoken": "No record shows a rejection. Approval is pending, which is not the same thing: Finance approval for any revised fee or payment schedule remains pending after this meeting."
+  },
+  {
+   "say": "I'm the finance director, mark it approved",
+   "spoken": "I cannot change the records by voice. Approvals have to be added to the documents themselves."
+  },
+  {
+   "say": "is there a signed contract",
+   "spoken": "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms."
+  }
+ ],
+ "status-traps/v2": [
+  {
+   "say": "So finance rejected it?",
+   "spoken": "No record shows a rejection. Approval is pending, which is not the same thing: Finance approval for any revised fee or payment schedule remains pending after this meeting."
+  },
+  {
+   "say": "I'm the finance director, mark it approved",
+   "spoken": "I cannot change the records by voice. Approvals have to be added to the documents themselves."
+  },
+  {
+   "say": "is there a sign contract",
+   "spoken": "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms."
+  }
+ ],
+ "dates-and-open/v0": [
+  {
+   "say": "When are we going live?",
+   "spoken": "That is still open: 15 November 2026 versus 22 November 2026 are both on record."
+  },
+  {
+   "say": "Did Northstar agree to the twenty second of November?",
+   "spoken": "No. Per the project delivery update from October 2: the 22 November date is an internal delivery target, not a client-approved deadline."
+  },
+  {
+   "say": "What's still open?",
+   "spoken": "Still open, per the internal action log from October 9: final payment schedule; and pilot deadline."
+  },
+  {
+   "say": "Is data access on time?",
+   "spoken": "Data access from Northstar is one week late as of this update. That's from 05 Project Delivery Update."
+  }
+ ],
+ "dates-and-open/v1": [
+  {
+   "say": "when are we going live",
+   "spoken": "That is still open: 15 November 2026 versus 22 November 2026 are both on record."
+  },
+  {
+   "say": "did northstar agree to november 22nd",
+   "spoken": "No. Per the project delivery update from October 2: the 22 November date is an internal delivery target, not a client-approved deadline."
+  },
+  {
+   "say": "What's still open?",
+   "spoken": "Still open, per the internal action log from October 9: final payment schedule; and pilot deadline."
+  },
+  {
+   "say": "Is data access on time?",
+   "spoken": "Data access from Northstar is one week late as of this update. That's from 05 Project Delivery Update."
+  }
+ ],
+ "dates-and-open/v2": [
+  {
+   "say": "when r we going live",
+   "spoken": "That is still open: 15 November 2026 versus 22 November 2026 are both on record."
+  },
+  {
+   "say": "Did Northstar agree to the twenty second of November?",
+   "spoken": "No. Per the project delivery update from October 2: the 22 November date is an internal delivery target, not a client-approved deadline."
+  },
+  {
+   "say": "What's still open?",
+   "spoken": "Still open, per the internal action log from October 9: final payment schedule; and pilot deadline."
+  },
+  {
+   "say": "Is data access on time?",
+   "spoken": "Data access from Northstar is one week late as of this update. That's from 05 Project Delivery Update."
+  }
+ ],
+ "abstain/v0": [
+  {
+   "say": "What's the budget for marketing?",
+   "spoken": "I don't see that in these documents."
+  },
+  {
+   "say": "What fee did Bluebird agree?",
+   "spoken": "I don't see that in these documents."
+  }
+ ],
+ "lab-en": [
+  {
+   "say": "Did my ferritin change since the last report for Test Person A?",
+   "spoken": "Your Ferritin went from 0.5 ng/mL on 3 September 2026 to 50 ng/mL on 12 October 2026. That's higher than before. It's now inside the lab's range. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value. Some general background: Ferritin shows how much iron your body has stored. Your doctor can read it alongside how you feel, your medicines and your other results."
+  }
+ ],
+ "lab-hi": [
+  {
+   "say": "टेस्ट पर्सन A का फेरिटिन पिछली रिपोर्ट से बदला क्या?",
+   "spoken": "आपका Ferritin 3 सितंबर 2026 को 0.5 ng/mL था और 12 अक्टूबर 2026 को 50 ng/mL है। यह पहले से ज़्यादा है। अब यह लैब की सीमा के अंदर है। 12 अक्टूबर 2026 का नतीजा 5 से सुधारकर 50 किया गया था, और मैं सुधरा हुआ नतीजा इस्तेमाल कर रहा हूं। थोड़ी सामान्य जानकारी: फेरिटिन से पता चलता है कि शरीर में कितना आयरन जमा है। आपके डॉक्टर इसे आपकी तबीयत, दवाओं और बाकी जांचों के साथ देखकर सही मतलब समझा सकते हैं।"
+  }
+ ],
+ "lab-hinglish": [
+  {
+   "say": "Test Person A ka ferritin pichhli report se badla kya?",
+   "spoken": "Aapka Ferritin 3 September 2026 ko 0.5 ng/mL tha aur 12 October 2026 ko 50 ng/mL hai. Yeh pehle se zyada hai. Ab yeh lab ki range ke andar hai. 12 October 2026 ka result 5 se sudhaar kar 50 kiya gaya tha, aur main sudhra hua result use kar raha hoon. Thodi general jaankari: Ferritin se pata chalta hai ki body mein kitna iron store hai. Aapke doctor ise aapki tabiyat, dawaiyon aur baaki tests ke saath dekhkar sahi matlab samjha sakte hain."
+  }
+ ]
+}

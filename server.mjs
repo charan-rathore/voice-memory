@@ -50,6 +50,8 @@ const STATIC = {
   "/viewer.js": ["./public/viewer.js", "text/javascript"],
   "/notes.js": ["./public/notes.js", "text/javascript"],
   "/motion.js": ["./public/motion.js", "text/javascript"],
+  "/voicelab.js": ["./public/voicelab.js", "text/javascript"],
+  "/voicelab-score.mjs": ["./public/voicelab-score.mjs", "text/javascript"],
   "/style.css": ["./public/style.css", "text/css"],
   "/vendor/pdf.min.mjs": [
     "./node_modules/pdfjs-dist/build/pdf.min.mjs",
@@ -575,6 +577,20 @@ export function createLocalServer({
       if (req.method === "GET" && req.url === "/api/voice/last") {
         const token = s.voiceToken ?? (demoBundle ? fixedCap : null);
         res.end(JSON.stringify({ turn: token ? voice.lastTurn(token) : null }));
+        return;
+      }
+      // Voice lab feed: the transcript Bolna actually delivered for each
+      // turn plus server receipt / first-byte wall-clock times and the
+      // server's current time (for browser clock alignment). Same owner
+      // session gate as /api/voice/last; read-only.
+      if (req.method === "GET" && req.url === "/api/voice/turns") {
+        const token = s.voiceToken ?? (demoBundle ? fixedCap : null);
+        res.end(
+          JSON.stringify({
+            serverNow: Date.now(),
+            turns: token ? voice.turnLog(token) : [],
+          }),
+        );
         return;
       }
       // Session document library (read-only GETs, cookie-scoped like

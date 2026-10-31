@@ -159,6 +159,24 @@ export function normalizeSpoken(raw) {
         ? `${Number(d)} ${cap(mon)}`
         : m,
   );
+  // Recognisers drop "-ed" before a noun: "a sign contract" is "a signed
+  // contract" (no other reading is grammatical).
+  s = s.replace(
+    /\bsign (contract|agreement|copy|deal|statement of work)\b/gi,
+    "signed $1",
+  );
+  // Bare digit runs: "48000" -> "48,000" (years 19xx/20xx untouched; four
+  // digits only next to a money word).
+  s = s.replace(/(?<![\d,.$])\b(\d{4,7})\b(?![\d,.])/g, (m, n, off, str) => {
+    const v = Number(n);
+    if (n.length === 4) {
+      if (/^(19|20)\d\d$/.test(n)) return m;
+      const ctx = str.slice(Math.max(0, off - 30), off + 40);
+      if (!/fee|retainer|price|cost|amount|budget|dollar|\$/i.test(ctx))
+        return m;
+    }
+    return v.toLocaleString("en-US");
+  });
   // Payment splits said as words: "fifty fifty", "forty sixty" (two tens
   // summing to 100) -> "50/50", "40/60".
   s = s.replace(

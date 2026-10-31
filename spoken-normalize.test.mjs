@@ -50,3 +50,17 @@ test("notation only: small words, fillers and non-numbers are left alone", () =>
     "क्या मेरा हीमोग्लोबिन कम है",
   );
 });
+
+test("recogniser spellings: bare digits and dropped -ed", () => {
+  assert.equal(
+    normalizeSpoken("but i remember 48000 what happened"),
+    "i remember 48,000 what happened",
+  );
+  assert.equal(
+    normalizeSpoken("is there a sign contract"),
+    "is there a signed contract",
+  );
+  assert.equal(normalizeSpoken("the 2026 plan"), "the 2026 plan");
+  assert.equal(normalizeSpoken("room 4512 is booked"), "room 4512 is booked");
+  assert.equal(normalizeSpoken("is the fee 9500"), "is the fee $9,500");
+});
