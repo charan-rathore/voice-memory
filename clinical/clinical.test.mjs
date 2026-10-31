@@ -145,7 +145,7 @@ test("a flag that contradicts its own printed range is flagged", async () => {
   const said = clinicalTurn("What was the sodium result?", [
     { ...r, title: "d", sourceId: "d" },
   ]).spoken;
-  assert.match(said, /flag doesn't match its own reference range/);
+  assert.match(said, /flag doesn't match its own range/);
 });
 
 for (const c of gold.comparisons) {
@@ -165,7 +165,8 @@ for (const c of gold.comparisons) {
     }[c.outcome];
     assert.equal(t.verdict, expected, t.spoken);
     if (c.direction) assert.equal(t.direction, c.direction, t.spoken);
-    if (c.reason === "unit") assert.match(t.spoken, /don't convert units/);
+    if (c.reason === "unit")
+      assert.match(t.spoken, /don't convert between units/);
     if (c.latestRaw) {
       assert.equal(t.used[0].raw, c.latestRaw, "amended value used");
       assert.ok(
@@ -174,11 +175,14 @@ for (const c of gold.comparisons) {
       );
       assert.match(
         t.spoken,
-        new RegExp(`amended from ${c.supersededRaw} to ${c.latestRaw}`),
+        new RegExp(`corrected from ${c.supersededRaw} to ${c.latestRaw}`),
       );
     }
     if (expected === "COMPARED")
-      assert.match(t.spoken, /question for your clinician\.$/);
+      assert.match(
+        t.spoken,
+        /Your doctor can read it alongside how you feel, your medicines and your other results\.$/,
+      );
     assert.doesNotMatch(
       t.spoken,
       /\b(normal|healthy|nothing to worry|fine|good news|bad news|diagnos)/i,
@@ -196,7 +200,7 @@ test("a patient named in the question resolves the ambiguity, never mixes patien
   assert.ok(t.used.every((o) => o.report.meta.patient.id === "SYN-0001"));
   assert.match(
     t.spoken,
-    /^Hemoglobin for Test Person A went from 12\.1 g\/dL on 3 September 2026 to 12\.9 g\/dL on 12 October 2026: the later result is higher\./,
+    /^Your Hemoglobin went from 12\.1 g\/dL on 3 September 2026 to 12\.9 g\/dL on 12 October 2026\. That's higher than before\./,
   );
 });
 
