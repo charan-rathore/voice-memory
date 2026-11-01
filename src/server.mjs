@@ -44,7 +44,11 @@ import {
 } from "../clinical/answer.mjs";
 import { extractReport } from "../clinical/observations.mjs";
 import { sectionAnswer, fieldAnswer } from "./doc-sections.mjs";
-import { detectLang } from "../clinical/explain.mjs";
+import { detectLang, aliasesFor } from "../clinical/explain.mjs";
+import {
+  labVocabulary,
+  repairTestNames,
+} from "./spoken-repair.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { createMemory, recordTurn, liveEpisodes } from "../memory/memory.mjs";
 import { buildGraph } from "../memory/graph.mjs";
@@ -661,6 +665,19 @@ export function createLocalServer({
       // back in Hindi below.
       const original = question;
       question = repairDealTerms(stripPreamble(question)) || question;
+      // Recogniser and keyboard damage to a test this case actually reports
+      // ("ferrite in" -> Ferritin) is repaired against the case's own lab
+      // vocabulary; anything the reports don't hold stays untouched, and the
+      // repair is disclosed on the lead as "understood as".
+      let repairedLab = false;
+      if (bundle.clinical?.length) {
+        const vocab = labVocabulary(bundle.clinical, aliasesFor);
+        const fixed = repairTestNames(question, vocab);
+        if (fixed && fixed !== question) {
+          question = fixed;
+          repairedLab = true;
+        }
+      }
       const hindi = isHindi(langOfText(original));
       const gloss =
         hindi && (isDealQuestion(question) || !bundle.clinical?.length)
@@ -677,6 +694,7 @@ export function createLocalServer({
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
       shown.lead = leadFor(question, raw, bundle, ctx || null);
+      if (repairedLab && shown.lead) shown.lead.interpretedAs = question;
       // Reworded beyond keyword reach: one verbatim sentence with its
       // citation, only when the calibrated paraphrase gate is unambiguous.
       // A section-shaped question ("what does this report suggest?", "why

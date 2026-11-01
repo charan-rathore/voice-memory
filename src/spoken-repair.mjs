@@ -109,6 +109,27 @@ export function repairTestNames(text, vocab) {
   const entries = [...vocab.entries()]
     .filter(([n]) => !n.includes(" "))
     .map(([n, canon]) => ({ n, canon, sk: skeleton(n) }));
+  // Recognisers also SPLIT one word into two ("ferrite in", "hemo globin"):
+  // rejoin a pair only when the joined letters sit within a very tight
+  // distance of exactly one test name - ordinary pairs stay untouched.
+  text = text.replace(/[A-Za-z]{3,} [A-Za-z]{1,6}(?![A-Za-z])/g, (pair) => {
+    const joined = pair.replace(/ /g, "").toLowerCase();
+    if (joined.length < 5 || NOT_TESTS.has(joined) || vocab.has(joined))
+      return pair;
+    const sk = skeleton(joined);
+    if (sk.length < 4) return pair;
+    let best = null;
+    for (const e of entries) {
+      if (e.sk.length < 4) continue;
+      const d = lev(sk, e.sk);
+      if (d > 1) continue;
+      const raw = lev(joined, e.n);
+      if (raw > 2) continue;
+      if (!best || d < best.d || (d === best.d && raw < best.raw))
+        best = { d, raw, canon: e.canon };
+    }
+    return best ? best.canon : pair;
+  });
   return text.replace(/[A-Za-z][A-Za-z']{4,}/g, (w) => {
     const base = w.toLowerCase().replace(/'s$/, "");
     if (NOT_TESTS.has(base) || vocab.has(base)) return w;

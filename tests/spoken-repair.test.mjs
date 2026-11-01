@@ -48,6 +48,13 @@ test("misheard test names, without touching ordinary words", () => {
     assert.equal(repairTestNames(s, vocab), s);
 });
 
+test("split-word mishearings rejoin: 'ferrite in' -> Ferritin", () => {
+  assert.match(repairTestNames("what is my ferrite in level", vocab), /my Ferritin level/);
+  assert.match(repairTestNames("hemo globin low", vocab), /Hemoglobin low/);
+  for (const s of ["the protein in my diet", "what is in the report"])
+    assert.equal(repairTestNames(s, vocab), s);
+});
+
 test("fragments are recognised; full questions are not", () => {
   assert.ok(isFragment("tell me more about"));
   assert.ok(isFragment("can you tell me the what is the"));

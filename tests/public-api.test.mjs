@@ -38,6 +38,17 @@ test("cases load with no cookie, key or session", async () => {
   assert.equal(cases.find((c) => c.id === "deal").documents.length, 7);
 });
 
+test("speech-misrecognised analyte: 'ferrite in' routes to ferritin, not a generic overview", async () => {
+  const { status, body } = await ask("health", "what is my ferrite in level");
+  assert.equal(status, 200);
+  assert.equal(body.lead.verdict, "LATEST");
+  assert.match(body.lead.text, /Ferritin result is 50 ng\/mL/);
+  assert.ok(
+    body.lead.interpretedAs,
+    "the repair is disclosed as an 'understood as'",
+  );
+});
+
 test("ferritin: the amended 50 is used and the preliminary 5 is cited", async () => {
   const { status, body } = await ask(
     "health",
