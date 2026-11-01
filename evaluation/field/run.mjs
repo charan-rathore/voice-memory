@@ -8,7 +8,15 @@
 //
 // Set VM_DENSE_CACHE / VM_MEMORY_LIMIT_MB to include the embedding model.
 import { readFileSync, existsSync } from "node:fs";
-import { createLocalServer } from "../../src/server.mjs";
+// one local client asks many questions: lift the public per-IP limits
+Object.assign(process.env, {
+  VM_WS_PER_IP_HOUR: "1000",
+  VM_WS_UPLOADS_PER_IP_HOUR: "1000",
+  VM_PUBLIC_ASK_PER_MIN: "10000",
+  VM_PUBLIC_ASK_GLOBAL_PER_MIN: "10000",
+  VM_WS_MAX: "40",
+});
+const { createLocalServer } = await import("../../src/server.mjs");
 
 const dir = process.argv[2] ?? new URL("./files/", import.meta.url).pathname;
 const Q = JSON.parse(
@@ -56,13 +64,13 @@ for (const [file, qs] of Object.entries(Q.docs)) {
   if (process.env.VM_DENSE_CACHE)
     await new Promise((r) => setTimeout(r, 15000));
   for (const { q, expect } of qs) {
-    const b = await (
-      await fetch(base + "/api/public/ask", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ case: ws.id, question: q }),
-      })
-    ).json();
+    const res = await fetch(base + "/api/public/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ case: ws.id, question: q }),
+    });
+    const b = await res.json();
+    if (!res.ok) throw Error(`${res.status} ${b.error} (${file})`);
     const lead = b.lead?.text ?? null;
     const none = !lead || b.lead.verdict === "NOT_IN_REPORT";
     let outcome;

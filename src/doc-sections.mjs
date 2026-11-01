@@ -183,6 +183,8 @@ export function sectionsOf(src) {
       if (k) {
         kind = k;
         inlineStart = start + line.indexOf(t) + m[0].length;
+        heads.push({ i, kind, name: m[1].trim(), inlineStart, start });
+        return;
       }
     }
     if (!kind) {
@@ -190,8 +192,14 @@ export function sectionsOf(src) {
       const m = /^([A-Za-z' ]{3,40}?)\s*:\s*(\S.*)$/.exec(t);
       const k = m && NAME_TO_KIND.get(m[1].toLowerCase().replace(/[’']/g, "'"));
       if (k) {
-        kind = k;
-        inlineStart = start + line.indexOf(m[2]);
+        heads.push({
+          i,
+          kind: k,
+          name: m[1].trim(),
+          inlineStart: start + line.indexOf(m[2]),
+          start,
+        });
+        return;
       }
     }
     if (!kind && t.length > 90) return;

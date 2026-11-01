@@ -550,17 +550,20 @@ export function createLocalServer({
       // citation, only when the calibrated paraphrase gate is unambiguous.
       // A section-shaped question ("what does this report suggest?", "why
       // was the scan done?") is answered with that headed section, verbatim.
+      let sectioned = false;
       if (weakLead(shown.lead) || shown.lead?.verdict === "QUOTED") {
         const sec = sectionAnswer(question, bundle);
-        if (sec)
+        if (sec) {
+          sectioned = true;
           shown.lead = {
             text: sec.spoken,
             verdict: "QUOTED",
             field: null,
             citations: sec.citations,
           };
+        }
       }
-      if (weakLead(shown.lead)) {
+      if (!sectioned && weakLead(shown.lead)) {
         const p = await paraphraseLookup(question, bundle).catch(() => null);
         if (p)
           shown.lead = {
@@ -570,7 +573,7 @@ export function createLocalServer({
             citations: [p.citation],
           };
       }
-      if (junkQuote(shown.lead)) shown.lead = null;
+      if (!sectioned && junkQuote(shown.lead)) shown.lead = null;
       if (gloss && shown.lead?.text) shown.lead.text = toHindi(shown.lead.text);
       if (shown.lead)
         shown.lead.citations = decorateResult(
