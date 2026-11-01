@@ -1,5 +1,5 @@
-// Small synthesized sounds (Web Audio, no files): a tick for picks, a paper
-// slide when an answer prints, a stamp for the verdict, a marker squeak for
+// Small synthesized sounds (Web Audio, no files): a tick for picks, a soft
+// swipe when an answer arrives, a two-note confirm for the verdict, a marker for
 // the highlighted line, a chime when a call connects. Quiet by design,
 // played only after the visitor has interacted with the page (browsers
 // block audio before that anyway), and switchable from the nav.
@@ -79,10 +79,10 @@ function noise({ d = 0.12, f0 = 1200, f1 = null, q = 0.8, peak = 0.5, at = 0 } =
 export const sfx = {
   tick: () => tone(1900, { d: 0.035, peak: 0.25 }),
   pop: () => tone(620, { glideTo: 210, d: 0.12, peak: 0.45 }),
-  paper: () => noise({ d: 0.22, f0: 900, f1: 2600, q: 0.6, peak: 0.35 }),
-  stamp: () => {
-    tone(110, { glideTo: 60, d: 0.18, peak: 0.9 });
-    noise({ d: 0.07, f0: 400, q: 1.2, peak: 0.4 });
+  swipe: () => noise({ d: 0.18, f0: 700, f1: 2200, q: 0.7, peak: 0.22 }),
+  confirm: () => {
+    tone(880, { d: 0.06, peak: 0.22 });
+    tone(1320, { d: 0.1, peak: 0.16, at: 0.05 });
   },
   marker: () => noise({ d: 0.32, f0: 2200, f1: 4200, q: 4, peak: 0.18 }),
   chime: () => {

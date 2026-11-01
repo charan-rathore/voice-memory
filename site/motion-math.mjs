@@ -237,3 +237,30 @@ export function phyllotaxis(i, n) {
     a = i * GOLDEN_ANGLE;
   return [r * Math.cos(a), r * Math.sin(a)];
 }
+
+// ------------------------------------------------------------ springs
+/**
+ * Step response of a damped spring (unit mass, natural frequency `omega` in
+ * rad/s, damping ratio `zeta`): position at time t when released from 0
+ * toward 1. zeta < 1 overshoots and settles, zeta = 1 is critically damped.
+ */
+export function springStep(omega, zeta, t) {
+  if (zeta >= 1) return 1 - Math.exp(-omega * t) * (1 + omega * t);
+  const wd = omega * Math.sqrt(1 - zeta * zeta);
+  const env = Math.exp(-zeta * omega * t);
+  return 1 - env * (Math.cos(wd * t) + ((zeta * omega) / wd) * Math.sin(wd * t));
+}
+/** Seconds until the spring's envelope falls below `eps`. */
+export const springSettle = (omega, zeta, eps = 0.002) => -Math.log(eps) / (Math.min(1, zeta) * omega);
+/**
+ * The same spring as a CSS `linear()` easing, so stylesheet animations move
+ * with real spring physics. Returns { easing, ms }: sample the step response
+ * over its settle time and use that time as the animation's duration.
+ */
+export function springCSS(omega = 14, zeta = 0.62, samples = 40) {
+  const T = springSettle(omega, zeta);
+  const pts = [];
+  for (let i = 0; i <= samples; i++) pts.push(springStep(omega, zeta, (i / samples) * T));
+  pts[samples] = 1;
+  return { easing: `linear(${pts.map((v) => +v.toFixed(4)).join(", ")})`, ms: Math.round(T * 1000) };
+}

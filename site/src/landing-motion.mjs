@@ -240,17 +240,26 @@ export function splineMeter() {
   const box = $(".call-meter");
   if (!box) return;
   const cv = document.createElement("canvas");
-  const W = 92,
-    H = 26,
+  const H = 26,
     dpr = Math.min(2, devicePixelRatio || 1);
-  cv.width = W * dpr;
-  cv.height = H * dpr;
-  cv.style.width = W + "px";
-  cv.style.height = H + "px";
+  let W = 92;
   box.appendChild(cv);
   box.classList.add("spline");
   const ctx = cv.getContext("2d");
-  ctx.scale(dpr, dpr);
+  // the waveform spans whatever width the call bar gives it
+  const size = () => {
+    W = Math.max(60, Math.round(box.clientWidth || 92));
+    cv.width = W * dpr;
+    cv.height = H * dpr;
+    cv.style.width = W + "px";
+    cv.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  size();
+  new ResizeObserver(() => {
+    size();
+    draw();
+  }).observe(box);
   const N = P.meterSamples;
   const buf = new Float32Array(N);
   let level = 0,
@@ -313,7 +322,7 @@ export function catchFlights() {
     (e) => {
       const card = e.target.closest?.(".catch[data-ask]");
       if (!card) return;
-      const demo = $(".catch-demo", card) ?? card;
+      const demo = $(".catch-q", card) ?? card;
       const r = demo.getBoundingClientRect();
       const ghost = demo.cloneNode(true);
       ghost.className = "catch-ghost";

@@ -1,8 +1,9 @@
-// The live desk, given a hand: folder tabs that lift, suggestion sticky
-// notes that peel off into the ask bar, a question placeholder that types
-// itself in English and Hindi, answers that print out with a stamp, a
-// marker squeak when the cited line is highlighted, and a chime when a call
-// connects. Motion answers the visitor's actions; sound is optional.
+// The live desk as an app window: a segmented case control whose indicator
+// slides on a real spring, suggestions that lift into the command bar, a
+// question placeholder that types itself in English and Hindi, answers that
+// resolve with their verdict, a marker sound when the cited line is
+// highlighted, and a chime when a call connects. Motion answers the
+// visitor's actions; sound is optional.
 import { animate as motionAnimate } from "motion";
 import { sfx, mountToggle } from "./sound.mjs";
 import { reducedMotion, onVisible } from "../motion-loop.mjs";
@@ -60,7 +61,7 @@ function noteFlights() {
       document.body.appendChild(ghost);
       motionAnimate(
         ghost,
-        { x: t.left + 16 - r.left, y: t.top + 10 - r.top, rotate: [Number(getComputedStyle(chip).getPropertyValue("--tilt").replace("deg", "")) || 0, 0], scale: [1, 0.9], opacity: [1, 0] },
+        { x: t.left + 16 - r.left, y: t.top + 10 - r.top, scale: [1, 0.9], opacity: [1, 0] },
         { type: "spring", stiffness: 170, damping: 22 },
       ).then(() => ghost.remove());
     },
@@ -68,15 +69,31 @@ function noteFlights() {
   );
 }
 
+// Segmented control: one indicator that springs to the selected tab
+// (the easing is the damped spring set as --spring by figures.mjs).
 function tabs() {
   const box = $(".cases");
   if (!box) return;
+  const ind = document.createElement("span");
+  ind.className = "case-ind";
+  ind.setAttribute("aria-hidden", "true");
+  box.prepend(ind);
+  const place = () => {
+    const on = $('.case-tab[aria-selected="true"]', box);
+    if (!on) return;
+    ind.style.width = on.offsetWidth + "px";
+    ind.style.height = on.offsetHeight + "px";
+    ind.style.transform = `translate(${on.offsetLeft}px, ${on.offsetTop}px)`;
+  };
+  place();
+  new MutationObserver(place).observe(box, { attributes: true, subtree: true, attributeFilter: ["aria-selected"] });
+  new ResizeObserver(place).observe(box);
   box.addEventListener("click", (e) => {
     if (e.target.closest(".case-tab")) sfx.tick();
   });
 }
 
-// Answers print out of the desk: the slip slides down, then the verdict is stamped.
+// Answers resolve in place, then the verdict chip springs in.
 function answers() {
   const box = $("#answer");
   if (!box) return;
@@ -84,10 +101,10 @@ function answers() {
     box.classList.remove("printing");
     void box.offsetWidth; // restart the CSS animation
     box.classList.add("printing");
-    sfx.paper();
+    sfx.swipe();
     setTimeout(() => {
-      if ($(".verdict-chip", box)) sfx.stamp();
-    }, 430);
+      if ($(".verdict-chip", box)) sfx.confirm();
+    }, 260);
   });
   document.addEventListener("vm:source", (e) => {
     if (e.detail?.cited) setTimeout(() => sfx.marker(), 320);
