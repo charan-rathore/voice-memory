@@ -257,6 +257,13 @@ const patientNames = (bundle) =>
     .filter(Boolean)
     .map((n) => n.replace(/\s*\(synthetic\)/i, ""));
 
+/** Patient names AND ids: both are identifiers and never leave unredacted. */
+const patientIds = (bundle) =>
+  (bundle?.clinical ?? [])
+    .map((r) => r.meta?.patient?.id)
+    .filter(Boolean)
+    .map(String);
+
 /** Does the rewrite stay inside the catalog's words (no invented values)? */
 function safeRewrite(rewrite, original) {
   if (!rewrite || rewrite.length > 300) return false;
@@ -311,7 +318,20 @@ export async function semanticRescue(a) {
       .join("\n");
     const mentioned = hay.includes(intent.term.toLowerCase());
     let bg = null;
-    if (live && gemini.searchEnabled()) {
+    // Consent gate: the term is extracted from the visitor's own question;
+    // a name-shaped term is still document context. No consent, no call.
+    // Redaction check: if the term changes under patient-name redaction it
+    // carried an identifier and never leaves, consent or not.
+    const redTerm = redact(intent.term, [
+      ...patientNames(bundle),
+      ...patientIds(bundle),
+    ]);
+    if (
+      live &&
+      consent &&
+      gemini.searchEnabled() &&
+      redTerm.text === intent.term
+    ) {
       bg = await gemini.groundedExplain(intent.term, lang, { ip });
       trace.steps.push(bg ? "grounded_search" : "grounded_search_failed");
     }
@@ -367,9 +387,23 @@ export async function semanticRescue(a) {
   // Low confidence or unanswered: let the model *read the question* (not the
   // documents), then answer its rewrite deterministically.
   // (An answered question costs no model call, whatever its confidence.)
-  if (live && rerun && WEAK(lead) && intent.intent !== "MISSING") {
-    const red = redact(question, patientNames(bundle));
-    const cat = { ...catalogOf(bundle), previous: ctx || null };
+  // Consent gate: the interpret call carries a catalog of the document set.
+  // Without the visitor's explicit consent nothing about their documents -
+  // not titles, not subject labels, not the question - reaches the model.
+  if (live && consent && rerun && WEAK(lead) && intent.intent !== "MISSING") {
+    const ids = [...patientNames(bundle), ...patientIds(bundle)];
+    const red = redact(question, ids);
+    // Minimized catalog: subject labels are never sent (they can be patient
+    // IDs), titles and previous topic pass through identifier redaction,
+    // and tests stay (generic field names the rewrite must align to).
+    const full = catalogOf(bundle);
+    const cat = {
+      domain: full.domain,
+      tests: full.tests,
+      subjects: [],
+      documents: full.documents.map((t) => redact(t, ids).text),
+      previous: ctx ? redact(ctx, ids).text : null,
+    };
     const it = await gemini.interpret(red.text, cat, { ip });
     if (it) {
       trace.steps.push(`interpret:${it.intent}`);

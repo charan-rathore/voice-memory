@@ -419,7 +419,7 @@ test("router: the model's rewrite is answered by the engine; invented numbers in
       q === "What is the engagement fee?" ? engineLead : null,
     validate: () => true,
     gemini: gem,
-    consent: false,
+    consent: true,
   });
   assert.equal(out.lead.verdict, "PROPOSED");
   assert.equal(out.lead.interpretedAs, "What is the engagement fee?");
@@ -445,7 +445,7 @@ test("router: the model's rewrite is answered by the engine; invented numbers in
     rerun: async () => engineLead,
     validate: () => true,
     gemini: gem2,
-    consent: false,
+    consent: true,
   });
   assert.notEqual(
     out2.lead?.verdict,
@@ -485,5 +485,321 @@ test("router without a key: deterministic answers pass through unchanged; a why 
     why.trace.steps.some((x) =>
       x.startsWith("audit_failed:why_answered_with_value"),
     ),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// OpenRouter transport: translation, normalization, fail-closed defaults.
+const fakeFetch = (fn) => {
+  const calls = [];
+  const f = async (url, init) => {
+    calls.push({ url, init, body: JSON.parse(init.body) });
+    return fn(url, init);
+  };
+  f.calls = calls;
+  return f;
+};
+const orResponse = (content, extra = {}) => ({
+  ok: true,
+  json: async () => ({
+    choices: [{ message: { content, ...(extra.message ?? {}) } }],
+    usage: {
+      prompt_tokens: 120,
+      completion_tokens: 40,
+      ...(extra.usage ?? {}),
+    },
+  }),
+});
+
+test("openrouter: interpret translates the request and normalizes the reply", async () => {
+  const fetchImpl = fakeFetch(async () =>
+    orResponse(
+      '{"intent":"LOOKUP","language":"en","tests":["Ferritin"],"subject":"","rewrite":"What is the ferritin result?"}',
+    ),
+  );
+  const gem = createGemini({
+    env: { OPENROUTER_API_KEY: "sk-or-test" },
+    fetchImpl,
+  });
+  assert.equal(gem.enabled(), true);
+  assert.equal(gem.status().provider, "openrouter");
+  const it = await gem.interpret("mera ferritin?", {
+    domain: "lab reports",
+    tests: ["Ferritin"],
+    subjects: [],
+    documents: [],
+    previous: null,
+  });
+  assert.equal(it.intent, "LOOKUP");
+  assert.equal(fetchImpl.calls.length, 1);
+  const c = fetchImpl.calls[0];
+  assert.equal(c.url, "https://openrouter.ai/api/v1/chat/completions");
+  assert.equal(c.body.model, "google/gemini-3.8-flash");
+  assert.equal(c.body.messages[0].role, "user");
+  assert.match(c.body.messages[0].content, /mera ferritin\?/);
+  assert.equal(c.body.response_format.type, "json_schema");
+  assert.deepEqual(c.body.reasoning, { effort: "low" });
+  assert.equal(c.init.headers.authorization, "Bearer sk-or-test");
+  const st = gem.status();
+  assert.ok(st.budget.usd > 0, "usage is charged from normalized token counts");
+});
+
+test("openrouter: provider selection and kill switch", async () => {
+  const fetchImpl = fakeFetch(async () => orResponse("{}"));
+  // Explicit provider wins even when a direct Gemini key exists.
+  const forced = createGemini({
+    env: {
+      GEMINI_API_KEY: "g",
+      OPENROUTER_API_KEY: "sk-or-test",
+      VM_LLM_PROVIDER: "openrouter",
+    },
+    fetchImpl,
+  });
+  assert.equal(forced.status().provider, "openrouter");
+  // A direct Gemini key alone keeps the old provider and does no fetch.
+  const direct = createGemini({ env: { GEMINI_API_KEY: "g" }, fetchImpl });
+  assert.equal(direct.status().provider, "gemini");
+  // Kill switch beats everything.
+  const off = createGemini({
+    env: { OPENROUTER_API_KEY: "sk-or-test", VM_GEMINI: "off" },
+    fetchImpl,
+  });
+  assert.equal(off.enabled(), false);
+  assert.equal(
+    await off.interpret("q", {
+      domain: "d",
+      tests: [],
+      subjects: [],
+      documents: [],
+      previous: null,
+    }),
+    null,
+  );
+  assert.equal(fetchImpl.calls.length, 0);
+});
+
+test("openrouter: grounded search is off unless enabled; annotations become sources", async () => {
+  const fetchImpl = fakeFetch(async () =>
+    orResponse("Ferritin stores iron.", {
+      message: {
+        annotations: [
+          {
+            type: "url_citation",
+            url_citation: {
+              url: "https://medlineplus.gov/x",
+              title: "MedlinePlus",
+            },
+          },
+        ],
+      },
+    }),
+  );
+  const quiet = createGemini({
+    env: { OPENROUTER_API_KEY: "sk-or-test" },
+    fetchImpl,
+  });
+  assert.equal(quiet.searchEnabled(), false);
+  assert.equal(await quiet.groundedExplain("ferritin", "en"), null);
+  assert.equal(fetchImpl.calls.length, 0, "no search call without opt-in");
+
+  const on = createGemini({
+    env: { OPENROUTER_API_KEY: "sk-or-test", VM_OPENROUTER_SEARCH: "on" },
+    fetchImpl,
+  });
+  const bg = await on.groundedExplain("ferritin", "en");
+  assert.equal(fetchImpl.calls.length, 1);
+  assert.deepEqual(fetchImpl.calls[0].body.plugins, [{ id: "web" }]);
+  assert.match(bg.text, /iron/);
+  assert.deepEqual(bg.sources, [
+    { title: "MedlinePlus", uri: "https://medlineplus.gov/x" },
+  ]);
+});
+
+test("openrouter: audio maps to input_audio; provider errors fail closed to null", async () => {
+  const fetchImpl = fakeFetch(async (url) => {
+    if (url.includes("chat/completions")) return orResponse("what is ferritin");
+    throw new Error("unreachable");
+  });
+  const gem = createGemini({
+    env: { OPENROUTER_API_KEY: "sk-or-test" },
+    fetchImpl,
+  });
+  const text = await gem.transcribe(
+    Buffer.from("RIFF....synthetic-audio-bytes"),
+    "audio/webm",
+    ["Ferritin"],
+    "en",
+  );
+  assert.equal(text, "what is ferritin");
+  const part = fetchImpl.calls[0].body.messages[0].content.find(
+    (p) => p.type === "input_audio",
+  );
+  assert.equal(part.input_audio.format, "webm");
+  assert.equal(
+    part.input_audio.data,
+    Buffer.from("RIFF....synthetic-audio-bytes").toString("base64"),
+  );
+
+  const failing = createGemini({
+    env: { OPENROUTER_API_KEY: "sk-or-test" },
+    fetchImpl: fakeFetch(async () => ({
+      ok: false,
+      status: 429,
+      json: async () => ({}),
+    })),
+  });
+  assert.equal(
+    await failing.interpret("q", {
+      domain: "d",
+      tests: [],
+      subjects: [],
+      documents: [],
+      previous: null,
+    }),
+    null,
+    "a provider error falls back, never throws",
+  );
+  assert.equal(failing.status().lastError.code, 429);
+});
+
+// ---------------------------------------------------------------------------
+// Privacy: egress gates. All fixtures here are synthetic; no real personal
+// data appears in this file or in any payload these tests send to the fake
+// client (which is a recording stub, never a network).
+function identifiedBundle() {
+  const bundle = importBundle([
+    {
+      title: "Discharge summary - Test Person B.md",
+      text: "# Discharge summary\nPatient: Test Person B, ID SYN-4242. Ferritin 50 ng/mL on 2026-09-01. The revised dose is 65 mg daily.",
+    },
+    {
+      title: "02_Followup_Notes.md",
+      text: "# Followup\nTest Person B reported fatigue. Ferritin rechecked: 48 ng/mL on 2026-10-01.",
+    },
+  ]);
+  bundle.clinical = [
+    {
+      meta: { patient: { id: "SYN-4242", name: "Test Person B" } },
+      observations: [
+        { test: "Ferritin", value: 50, unit: "ng/mL", date: "2026-09-01" },
+        { test: "Ferritin", value: 48, unit: "ng/mL", date: "2026-10-01" },
+      ],
+    },
+  ];
+  return bundle;
+}
+const IDENTIFIERS = [/Test Person B/i, /SYN-?4242/i];
+const payloadsOf = (gem) =>
+  gem.calls.map((c) =>
+    JSON.stringify({ c: c.contents, p: c.config?.systemInstruction }),
+  );
+
+test("privacy: without visitor consent no Gemini call happens on any rescue path", async () => {
+  const bundle = identifiedBundle();
+  const src = bundle.sources[0];
+  const ev = {
+    sourceId: src.id,
+    title: src.title,
+    hash: src.hash,
+    start: 0,
+    end: 120,
+    quote: src.text.slice(0, 120),
+  };
+  const client = fakeClient((req) => {
+    if (req.config.responseJsonSchema?.properties?.claims)
+      return {
+        text: JSON.stringify({
+          answerable: false,
+          claims: [],
+        }),
+      };
+    return {
+      text: '{"intent":"LOOKUP","language":"en","tests":["Ferritin"],"subject":"","rewrite":""}',
+    };
+  });
+  const gem = createGemini({ env: {}, client });
+  const base = {
+    bundle,
+    lead: null,
+    raw: { evidence: [ev] },
+    rerun: async () => null,
+    validate: () => false,
+    gemini: gem,
+    consent: false,
+    ctx: "Test Person B ferritin trend",
+  };
+  // Path 1: TERM -> grounded explain (would send the extracted term).
+  await semanticRescue({ ...base, question: "What is ferritin?" });
+  // Path 2: weak lead + rerun -> interpret (would send question + catalog).
+  await semanticRescue({ ...base, question: "Did the dose change?" });
+  // Path 3: weak lead + evidence -> planClaims (would send passages).
+  await semanticRescue({ ...base, question: "how much ferritin", lead: null });
+  assert.equal(
+    client.calls.length,
+    0,
+    "no consent: zero model calls, so titles, ids, names, topics and passages never leave",
+  );
+});
+
+test("privacy: a consented interpret catalog carries no patient names, ids or raw titles", async () => {
+  const bundle = identifiedBundle();
+  const client = fakeClient(() => ({
+    text: '{"intent":"UNCLEAR","language":"en","tests":[],"subject":"","rewrite":"","clarify":"Which report do you mean?"}',
+  }));
+  const gem = createGemini({ env: {}, client });
+  await semanticRescue({
+    question: "What do the recent documents say?",
+    bundle,
+    lead: null,
+    raw: { evidence: [] },
+    rerun: async () => null,
+    validate: () => false,
+    gemini: gem,
+    consent: true,
+    ctx: "Test Person B and SYN-4242 trend",
+  });
+  assert.ok(client.calls.length >= 1, "consented path does call the model");
+  for (const p of payloadsOf(client))
+    for (const id of IDENTIFIERS)
+      assert.doesNotMatch(p, id, `identifier leaked in payload: ${id}`);
+  const interpretCall = client.calls.find((c) =>
+    String(c.contents).includes("Catalog subjects:"),
+  );
+  assert.ok(interpretCall, "interpret call recorded");
+  assert.match(
+    String(interpretCall.contents),
+    /Catalog subjects: \[\]/,
+    "subject labels are never sent, even consented",
+  );
+  assert.doesNotMatch(
+    String(interpretCall.contents),
+    /Discharge summary - Test Person B/,
+    "document titles are redacted before sending",
+  );
+});
+
+test("privacy: a name-shaped TERM never reaches grounded search, consent or not", async () => {
+  const bundle = identifiedBundle();
+  const client = fakeClient(() => ({ text: "background" }));
+  const gem = createGemini({ env: {}, client });
+  await semanticRescue({
+    question: "What is Test Person B?",
+    bundle,
+    lead: null,
+    raw: { evidence: [] },
+    rerun: async () => null,
+    validate: () => false,
+    gemini: gem,
+    consent: true,
+  });
+  const grounded = client.calls.filter(
+    (c) =>
+      String(c.config?.systemInstruction ?? "").includes("grounded") ||
+      (c.config?.tools ?? []).length > 0,
+  );
+  assert.equal(
+    grounded.length,
+    0,
+    "a term that redaction changes is never sent to grounded search",
   );
 });
