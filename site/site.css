@@ -729,8 +729,6 @@ kbd { font: 500 11px/1 var(--sans); min-width: 22px; height: 22px; padding: 0 6p
   .case-tab { padding: 8px 4px; }
 }
 
-.upload[hidden] { display: none; }
-
 /* Call entry points exist only when the server advertises voice readiness.
    The landing starts without .voice-on; connect() adds it only after
    /api/public/status reports voice.ready, so a visitor never sees a call
@@ -740,3 +738,8 @@ html:not(.voice-on) [data-call-link],
 html:not(.voice-on) .callbar {
   display: none !important;
 }
+
+/* Plain unavailability disclosure: visible only while the server gate
+   keeps voice off; hidden automatically once voice.ready returns. */
+.voice-off { display: none; margin: 14px 0 0; font-size: 13.5px; color: var(--ink-2); }
+html:not(.voice-on) .voice-off { display: block; }
