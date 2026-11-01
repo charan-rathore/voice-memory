@@ -1,6 +1,6 @@
 import { start } from "./landing-motion.mjs";
 import { mountDesk } from "./desk-motion.mjs";
-import { mountSketches } from "./sketches.mjs";
+import { mountFigures } from "./figures.mjs";
 start();
 mountDesk();
-mountSketches();
+mountFigures();

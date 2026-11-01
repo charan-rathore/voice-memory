@@ -122,21 +122,26 @@
         <h2 id="problem-title" class="h2 center">People read their records before anyone explains them.</h2>
         <div class="stats">
           <a class="stat" href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/10.1001/jamanetworkopen.2026.30698" data-reveal>
-            <canvas class="stat-art" data-art="spiral" aria-hidden="true"></canvas>
+            <span class="stat-fig" aria-hidden="true"><canvas class="stat-art" data-art="waffle"></canvas></span>
             <span class="stat-num" data-count="68.6" data-suffix="%">68.6%</span>
             <span class="stat-text">of US adults with online records opened their test results before hearing from a clinician.</span>
-            <span class="stat-src">JAMA Network Open, Aug 2026 · HINTS 2024, n = 4,982</span>
+            <span class="stat-src">JAMA Network Open, Aug 2026. HINTS 2024, n = 4,982</span>
           </a>
           <a class="stat" href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/10.1001/jamanetworkopen.2026.30698" data-reveal>
-            <canvas class="stat-art" data-art="sheets" aria-hidden="true"></canvas>
+            <span class="stat-fig fig-results" aria-hidden="true">
+              <span class="rr"><span>Ferritin</span><b>50</b><span>ng/mL</span><span>30–400</span></span>
+              <span class="rr"><span>TSH</span><b>2.10</b><span>mIU/L</span><span>0.40–4.00</span></span>
+              <span class="rr rr-lost"><span data-scramble>Creatinine</span><b data-scramble>106</b><span data-scramble>µmol/L</span><span data-scramble>62–115</span></span>
+            </span>
             <span class="stat-num" data-count="1" data-prefix="" data-suffix=" in 3">1 in 3</span>
             <span class="stat-text">of them said they understood those results only fairly well or poorly.</span>
             <span class="stat-src">Same study: 26.8% fairly well, 6.6% poorly</span>
           </a>
           <a class="stat" href="https://home.ecri.org/blogs/ecri-news/misuse-of-ai-chatbots-tops-annual-list-of-health-technology-hazards" data-reveal>
-            <canvas class="stat-art" data-art="flow" aria-hidden="true"></canvas>
+            <span class="stat-fig" aria-hidden="true"><canvas class="stat-art" data-art="streams"></canvas></span>
             <span class="stat-num" data-count="40" data-suffix="M+">40M+</span>
             <span class="stat-text">people a day ask ChatGPT about health. ECRI ranks misuse of AI chatbots the #1 health-technology hazard of 2026.</span>
+            <span class="stat-live" aria-hidden="true">About 463 a second, so roughly <b data-since>0</b> since you opened this page.</span>
             <span class="stat-src">ECRI Top 10 Health Technology Hazards, Jan 2026</span>
           </a>
         </div>
@@ -154,6 +159,9 @@
             The live evidence engine, on fictional documents. Every answer below is computed now, with the line it rests
             on.
           </p>
+          
+<p class="voice-off" role="status">Voice calling is temporarily off; typed asking is fully live.</p>
+
         </div>
 
         <div class="desk" id="desk">
@@ -256,40 +264,64 @@
         <p class="sub center">Six things a fluent assistant gets wrong. Click one to ask it live.</p>
         <div class="catch-grid">
           <button class="catch" data-ask-case="health" data-ask="What is SYN-0001's ferritin result?" data-reveal>
-            <canvas class="catch-art" data-art="fix" aria-hidden="true"></canvas>
-            <span class="catch-kind ok">Corrections</span>
+            <span class="fig fig-fix" aria-hidden="true">
+              <span class="fx-row fx-old"><span class="fx-k">Ferritin</span><span class="fx-v"><s>5</s> ng/mL</span><span class="tg tg-red">Preliminary 13 Oct</span></span>
+              <span class="fx-row fx-new"><span class="fx-k">Ferritin</span><span class="fx-v"><mark>50</mark> ng/mL</span><span class="tg tg-teal">Amended 15 Oct</span></span>
+              <span class="fx-use">Uses the amended value</span>
+            </span>
+            <span class="catch-kind">Corrections</span>
             <h3>An amended result replaces the preliminary one</h3>
-            <p class="catch-demo"><s>5</s> → <b>50</b> ng/mL, same collection</p>
+            <span class="catch-q"><q>What is SYN-0001's ferritin result?</q><kbd aria-hidden="true">↵</kbd></span>
           </button>
           <button class="catch" data-ask-case="health" data-ask="Has creatinine gone up since September?" data-reveal>
-            <canvas class="catch-art" data-art="units" aria-hidden="true"></canvas>
-            <span class="catch-kind no">Units</span>
+            <span class="fig fig-units" aria-hidden="true">
+              <span class="un-row"><span class="un-d">Sep</span><span class="un-scale"><i></i></span><span class="un-v">1.2 <small>mg/dL</small></span></span>
+              <span class="un-row"><span class="un-d">Oct</span><span class="un-scale"><i></i></span><span class="un-v">106 <small>µmol/L</small></span></span>
+              <span class="un-cmp"><span class="un-bar"></span><span class="tg tg-red">Not compared: different units</span></span>
+            </span>
+            <span class="catch-kind">Units</span>
             <h3>Different units are never compared by guesswork</h3>
-            <p class="catch-demo">1.2 mg/dL vs 106 µmol/L → <b>won't compare</b></p>
+            <span class="catch-q"><q>Has creatinine gone up since September?</q><kbd aria-hidden="true">↵</kbd></span>
           </button>
           <button class="catch" data-ask-case="health" data-ask="What is the TSH?" data-reveal>
-            <canvas class="catch-art" data-art="who" aria-hidden="true"></canvas>
-            <span class="catch-kind no">Patients</span>
+            <span class="fig fig-who" aria-hidden="true">
+              <span class="wh-q">What is the TSH?</span>
+              <svg class="wh-fork" viewBox="0 0 200 44" preserveAspectRatio="none"><path pathLength="1" d="M100 0 C100 26 45 18 45 44" /><path pathLength="1" d="M100 0 C100 26 155 18 155 44" /></svg>
+              <span class="wh-pts"><span class="wh-p">SYN-0001 <b>TSH 0.30</b></span><span class="wh-p">SYN-0003 <b>TSH 2.10</b></span></span>
+              <span class="tg tg-blue wh-ask">Asks which patient</span>
+            </span>
+            <span class="catch-kind">Patients</span>
             <h3>Two people's reports are never mixed</h3>
-            <p class="catch-demo">SYN-0001 or SYN-0003? → <b>asks which</b></p>
+            <span class="catch-q"><q>What is the TSH?</q><kbd aria-hidden="true">↵</kbd></span>
           </button>
           <button class="catch" data-ask-case="deal" data-ask="Was the $42,000 revision finalized?" data-reveal>
-            <canvas class="catch-art" data-art="price" aria-hidden="true"></canvas>
-            <span class="catch-kind warn">Contracts</span>
+            <span class="fig fig-ver" aria-hidden="true">
+              <span class="vr-track"><span class="vr-fill"></span></span>
+              <span class="vr-nodes"><span class="vr-n vr-a"><i></i><b>$48,000</b><small>Proposal v1</small></span><span class="vr-n vr-b"><i></i><b>$42,000</b><small>Revision, proposed</small></span><span class="vr-n vr-c"><i></i><b>Not recorded</b><small>Finance sign-off</small></span></span>
+            </span>
+            <span class="catch-kind">Contracts</span>
             <h3>A later proposal is not a signed agreement</h3>
-            <p class="catch-demo"><s>$48,000</s> → $42,000 <b>proposed, not approved</b></p>
+            <span class="catch-q"><q>Was the $42,000 revision finalized?</q><kbd aria-hidden="true">↵</kbd></span>
           </button>
           <button class="catch" data-ask-case="deal" data-ask="Did they agree on the payment split?" data-reveal>
-            <canvas class="catch-art" data-art="swing" aria-hidden="true"></canvas>
-            <span class="catch-kind warn">Meetings</span>
+            <span class="fig fig-meet" aria-hidden="true">
+              <span class="mt-row"><span class="mt-src">Revision memo</span><span class="mt-say">40% upfront, 60% after acceptance</span></span>
+              <span class="mt-row"><span class="mt-src">Steering notes</span><span class="mt-say">50/50</span></span>
+              <span class="mt-row mt-dec"><span class="mt-src">Decision</span><span class="mt-slot"><i class="mt-caret"></i><span class="tg tg-amber">Open</span></span></span>
+            </span>
+            <span class="catch-kind">Meetings</span>
             <h3>Discussed is not decided</h3>
-            <p class="catch-demo">40/60 proposed · 50/50 discussed → <b>still open</b></p>
+            <span class="catch-q"><q>Did they agree on the payment split?</q><kbd aria-hidden="true">↵</kbd></span>
           </button>
           <button class="catch" data-ask-case="deal" data-ask="Is there a signed contract?" data-reveal>
-            <canvas class="catch-art" data-art="sign" aria-hidden="true"></canvas>
-            <span class="catch-kind no">Absence</span>
+            <span class="fig fig-scan" aria-hidden="true">
+              <span class="sc-files"><span>Proposal v1</span><span>Kickoff notes</span><span>Commercial revision</span><span>Steering notes</span><span>Delivery update</span><span>Client email</span><span>Action log</span></span>
+              <span class="sc-beam"></span>
+              <span class="sc-out">Signed agreement <span class="tg tg-red">Not in any of 7 files</span></span>
+            </span>
+            <span class="catch-kind">Absence</span>
             <h3>Missing approvals stay missing</h3>
-            <p class="catch-demo">“No signed agreement exists” → <b>says no</b></p>
+            <span class="catch-q"><q>Is there a signed contract?</q><kbd aria-hidden="true">↵</kbd></span>
           </button>
         </div>
       </section>

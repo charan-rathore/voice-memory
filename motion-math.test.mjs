@@ -12,6 +12,9 @@ import {
   tAtDistance,
   pointAtDistance,
   decayFromHalfLife,
+  springStep,
+  springSettle,
+  springCSS,
 } from "./site/motion-math.mjs";
 
 const run = (hz, seconds, step) => {
@@ -175,4 +178,21 @@ test("phyllotaxis fills the unit disc evenly", async () => {
   }
   // half the area inside r = 1/sqrt(2) holds half the points
   assert.ok(Math.abs(inner - n / 2) <= 2, String(inner));
+});
+
+test("spring easing starts at 0, overshoots when underdamped, settles at 1", () => {
+  assert.equal(springStep(14, 0.6, 0), 0);
+  const T = springSettle(14, 0.6);
+  let peak = 0;
+  for (let i = 0; i <= 200; i++)
+    peak = Math.max(peak, springStep(14, 0.6, (i / 200) * T));
+  assert.ok(peak > 1.05 && peak < 1.2, `overshoot ${peak}`);
+  assert.ok(Math.abs(springStep(14, 0.6, T) - 1) < 0.003);
+  // critically damped never overshoots
+  for (let i = 0; i <= 200; i++)
+    assert.ok(springStep(14, 1, (i / 200) * springSettle(14, 1)) <= 1 + 1e-9);
+  const { easing, ms } = springCSS(14, 0.6, 20);
+  assert.match(easing, /^linear\(0, .*, 1\)$/);
+  assert.equal(easing.split(",").length, 21);
+  assert.ok(ms > 400 && ms < 1200, `${ms} ms`);
 });
