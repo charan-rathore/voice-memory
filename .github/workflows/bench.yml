@@ -1,0 +1,41 @@
+# Retrieval benchmarks that need the dense model (bge-small, ~33 MB from
+# Hugging Face), which the regression gate doesn't download. Run by hand, or
+# on pull requests that touch retrieval. Results are uploaded as an artifact
+# and printed in the job summary.
+name: bench
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "dense.mjs"
+      - "vendor/web/src/lib/rag/**"
+      - "evaluation/paraphrase-*"
+      - "evaluation/retrieval-*"
+jobs:
+  retrieval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: .cache/models
+          key: dense-models-bge-small-en-v1.5
+      - run: npm ci
+      - run: npm run build
+      - name: Paraphrase bench (keyword vs hybrid vs dense, dev + held-out)
+        run: node evaluation/paraphrase-bench.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          VM_DENSE_CACHE: .cache/models
+      - name: Hybrid retrieval bench
+        run: node evaluation/retrieval-bench-hybrid.mjs | tail -40 | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          VM_DENSE_CACHE: .cache/models
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-results
+          path: evaluation/results/
