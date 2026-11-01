@@ -1,0 +1,209 @@
+{
+  "label": "baseline-main",
+  "commit": "cd851a7",
+  "date": "2026-11-01",
+  "cases": 48,
+  "answerableCorrect": {
+    "k": 32,
+    "n": 41,
+    "ci95": "63.3%–88.0%"
+  },
+  "abstentionCorrect": {
+    "k": 2,
+    "n": 7,
+    "ci95": "8.2%–64.1%"
+  },
+  "falseAcceptance": {
+    "k": 4,
+    "n": 7
+  },
+  "unnecessaryRefusals": 1,
+  "criticalFailures": [
+    {
+      "id": "h01",
+      "class": "substitution",
+      "q": "Why is creatinine in different units?",
+      "said": "Your Creatinine result is 106 µmol/L, from 12 October 2026. That's within this lab's range of 62 to 115. Some general background: Creatinine is a waste product from muscles that the kidneys filter out, so it's used to check how the kidneys are working. Muscle mass, diet, activity and some medicines can affect it."
+    },
+    {
+      "id": "h02",
+      "class": "substitution",
+      "q": "creatinine ka unit alag kyun hai",
+      "said": "Your Creatinine result is 106 µmol/L, from 12 October 2026. That's within this lab's range of 62 to 115. Some general background: Creatinine is a waste product from muscles that the kidneys filter out, so it's used to check how the kidneys are working. Muscle mass, diet, activity and some medicines can affect it."
+    },
+    {
+      "id": "h17",
+      "class": "false_accept",
+      "q": "what is my blood pressure",
+      "said": "For SYN-0001, comparing the latest report with the one before: one correction matters first: Ferritin was corrected from 5 to 50, and I use the corrected value; Hemoglobin, Urea, TSH and Ferritin went up; HbA1c went down; Creatinine can't be compared because the units changed. Ask about any one test for the numbers."
+    },
+    {
+      "id": "h19",
+      "class": "false_accept",
+      "q": "What is the vitamin D level?",
+      "said": "For SYN-0001, comparing the latest report with the one before: one correction matters first: Ferritin was corrected from 5 to 50, and I use the corrected value; Hemoglobin, Urea, TSH and Ferritin went up; HbA1c went down; Creatinine can't be compared because the units changed. Ask about any one test for the numbers."
+    },
+    {
+      "id": "h26",
+      "class": "patient_mixup",
+      "q": "what is SYN-0003's ferritin?",
+      "said": "Your Ferritin result is 50 ng/mL, from 12 October 2026. That's within this lab's range of 30 to 400. Some general background: Ferritin shows how much iron your body has stored. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value."
+    },
+    {
+      "id": "d07",
+      "class": "substitution",
+      "q": "what is a retainer?",
+      "said": "$42,000 is the current proposal; approval is not recorded."
+    }
+  ],
+  "latencyMs": {
+    "p50": 5,
+    "p95": 16,
+    "max": 46
+  },
+  "semantic": null,
+  "failures": [
+    {
+      "id": "h01",
+      "q": "Why is creatinine in different units?",
+      "kind": "explain",
+      "verdict": "LATEST",
+      "said": "Your Creatinine result is 106 µmol/L, from 12 October 2026. That's within this lab's range of 62 to 115. Some general background: Creatinine is a waste product from muscles that the kidneys filter out, so it's used to check how the kidneys are working. Muscle mass, diet, activity and some medicines can affect it.",
+      "bad": [
+        "Your Creatinine result is"
+      ],
+      "notes": []
+    },
+    {
+      "id": "h02",
+      "q": "creatinine ka unit alag kyun hai",
+      "kind": "explain",
+      "verdict": "LATEST",
+      "said": "Your Creatinine result is 106 µmol/L, from 12 October 2026. That's within this lab's range of 62 to 115. Some general background: Creatinine is a waste product from muscles that the kidneys filter out, so it's used to check how the kidneys are working. Muscle mass, diet, activity and some medicines can affect it.",
+      "bad": [
+        "Your Creatinine result is"
+      ],
+      "notes": []
+    },
+    {
+      "id": "h04",
+      "q": "Why was the ferritin corrected?",
+      "kind": "explain",
+      "verdict": "LATEST",
+      "said": "Your Ferritin result is 50 ng/mL, from 12 October 2026. That's within this lab's range of 30 to 400. Some general background: Ferritin shows how much iron your body has stored. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h05",
+      "q": "why did ferritin change from 5 to 50",
+      "kind": "explain",
+      "verdict": "COMPARED",
+      "said": "Your Ferritin went from 0.5 ng/mL on 3 September 2026 to 50 ng/mL on 12 October 2026. That's higher than before. It's now inside the lab's range. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value. Some general background: Ferritin shows how much iron your body has stored. Your doctor can read it alongside how you feel, your medicines and your other results.",
+      "bad": [
+        "went from"
+      ],
+      "notes": []
+    },
+    {
+      "id": "h06",
+      "q": "Why is SYN-0001's TSH low?",
+      "kind": "explain",
+      "verdict": "LATEST",
+      "said": "Your TSH result is 0.30 mIU/L, from 12 October 2026. That's clearly below this lab's range of 0.40 to 4.00, so it's worth talking it through with your doctor soon. Some general background: TSH is a hormone that tells your thyroid how much thyroid hormone to make, so it's used to check how the thyroid is working. Your doctor can read it alongside how you feel, your medicines and your other results.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h08",
+      "q": "What is hemoglobin?",
+      "kind": "define",
+      "verdict": "AMBIGUOUS_PATIENT",
+      "said": "These reports have Hemoglobin results for more than one person (SYN-0001, SYN-0003). Whose results should I look at?",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h17",
+      "q": "what is my blood pressure",
+      "kind": "abstain",
+      "verdict": "OVERVIEW",
+      "said": "For SYN-0001, comparing the latest report with the one before: one correction matters first: Ferritin was corrected from 5 to 50, and I use the corrected value; Hemoglobin, Urea, TSH and Ferritin went up; HbA1c went down; Creatinine can't be compared because the units changed. Ask about any one test for the numbers.",
+      "bad": [
+        "went up",
+        "Hemoglobin, Urea"
+      ],
+      "notes": []
+    },
+    {
+      "id": "h18",
+      "q": "what is my pulse rate?",
+      "kind": "abstain",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h19",
+      "q": "What is the vitamin D level?",
+      "kind": "abstain",
+      "verdict": "OVERVIEW",
+      "said": "For SYN-0001, comparing the latest report with the one before: one correction matters first: Ferritin was corrected from 5 to 50, and I use the corrected value; Hemoglobin, Urea, TSH and Ferritin went up; HbA1c went down; Creatinine can't be compared because the units changed. Ask about any one test for the numbers.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h25",
+      "q": "What symptoms does this patient have?",
+      "kind": "abstain",
+      "verdict": "AMBIGUOUS_PATIENT",
+      "said": "These reports belong to more than one person (SYN-0001, SYN-0003). Whose report should I look at?",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h26",
+      "q": "what is SYN-0003's ferritin?",
+      "kind": "abstain",
+      "verdict": "LATEST",
+      "said": "Your Ferritin result is 50 ng/mL, from 12 October 2026. That's within this lab's range of 30 to 400. Some general background: Ferritin shows how much iron your body has stored. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value.",
+      "bad": [
+        "50 ng/mL",
+        "Your Ferritin result"
+      ],
+      "notes": []
+    },
+    {
+      "id": "h29",
+      "q": "What is urea?",
+      "kind": "define",
+      "verdict": "LATEST",
+      "said": "Your Urea result is 14 mg/dL, from 12 October 2026. That's within this lab's range of 7 to 20. Some general background: Urea is a waste product made when the body breaks down protein; it's one of the ways kidney function is checked.",
+      "bad": [
+        "Your Urea result is"
+      ],
+      "notes": []
+    },
+    {
+      "id": "d07",
+      "q": "what is a retainer?",
+      "kind": "define_or_abstain",
+      "verdict": "PROPOSED",
+      "said": "$42,000 is the current proposal; approval is not recorded.",
+      "bad": [
+        "$42,000 is the current proposal"
+      ],
+      "notes": []
+    },
+    {
+      "id": "d08",
+      "q": "summarize the deal",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    }
+  ]
+}

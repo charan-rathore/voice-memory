@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test --test-force-exit tests/test.mjs tests/motion-math.test.mjs tests/paraphrase.test.mjs tests/spoken-normalize.test.mjs tests/voicelab-score.test.mjs tests/retrieval-core.test.mjs tests/memorable-json.test.mjs tests/dense-guard.test.mjs tests/budget.test.mjs tests/spoken-repair.test.mjs",
+    "test": "node --test --test-force-exit tests/test.mjs tests/motion-math.test.mjs tests/paraphrase.test.mjs tests/spoken-normalize.test.mjs tests/voicelab-score.test.mjs tests/retrieval-core.test.mjs tests/memorable-json.test.mjs tests/dense-guard.test.mjs tests/budget.test.mjs tests/spoken-repair.test.mjs tests/semantic.test.mjs",
     "start": "node server.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test:boundaries": "node --test --test-force-exit tests/server.test.mjs tests/voice-adapter.test.mjs tests/synthesis.test.mjs tests/provider.test.mjs tests/retrieval-bridge.test.mjs tests/fictional-sample.test.mjs tests/cache.test.mjs tests/motion.test.mjs tests/persistence.test.mjs tests/public-api.test.mjs",
@@ -33,6 +33,7 @@
     "@fontsource-variable/newsreader": "5.2.8",
     "@fontsource/ibm-plex-mono": "5.2.7",
     "@fontsource/ibm-plex-sans": "5.2.8",
+    "@google/genai": "^2.32.0",
     "@huggingface/transformers": "^3.8.1",
     "@tesseract.js-data/eng": "1.0.0",
     "@xmldom/xmldom": "0.9.12",

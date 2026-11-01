@@ -209,7 +209,7 @@ export function nameOf(o) {
 }
 
 const HINGLISH =
-  /\b(kya|kyaa|mera|meri|mere|hai|hain|kitna|kitni|badla|badli|badha|badhi|ghata|ghati|pichhl\w*|pehle|batao|bataiye|samjhao|report\s+(me|mein)|kaisa|kaisi|theek)\b/i;
+  /\b(kya|kyaa|mera|meri|mere|hai|hain|kitna|kitni|badla|badli|badha|badhi|ghata|ghati|pichhl\w*|pehle|batao|bataiye|samjhao|report\s+(me|mein)|kaisa|kaisi|theek|kyun|kyu|kyon|kyoon|alag|nahi|nahin|kaun|kaunsa|kaunsi|kab|kahan|kaise|zyada|jyada|wajah|matlab|samjha\w*|hota|hoti|ka|ki|ke|aur|bhi|kuch)\b/i;
 export function detectLang(text) {
   if (/[ऀ-ॿ]/.test(text)) return "hi";
   const hits = (text.match(new RegExp(HINGLISH.source, "gi")) ?? []).length;

@@ -509,7 +509,7 @@ function renderTrace(r) {
   const rows = r.retrievalStages?.keyword ?? [];
   $("trace-panel").hidden = !rows.length && !r.queryTransform;
   $("mode").textContent =
-    "Found by keyword search over this session's documents, then checked against the original text. No language model writes these answers." +
+    "Found by keyword search over this session's documents, then checked against the original text." +
     (r.evidenceStatus === "ambiguous"
       ? " Several sources were similarly relevant, so no single answer is treated as settled."
       : "");

@@ -841,3 +841,10 @@ html:not(.voice-on) .voice-off { display: block; }
 .answer { border-top: 2px solid rgb(var(--accent) / 0.45); }
 .a-q .via { background: rgb(var(--accent) / 0.14); color: rgb(var(--accent)); }
 @media (max-width: 620px) { .case-tab { padding-left: 20px; } .case-tab::before { left: 8px; } }
+
+/* ---------------------------------------------------------------- dictation */
+.askbar { position: relative; }
+.dict-btn { --lvl: 0; position: relative; flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--rule); background: rgba(255, 255, 255, 0.04); color: var(--ink-2); cursor: pointer; margin-right: 6px; transition: background 160ms, color 160ms, border-color 160ms; }
+.dict-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.dict-btn:hover { color: var(--ink); border-color: rgba(255, 255, 255, 0.3); }
+.dict-btn:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
