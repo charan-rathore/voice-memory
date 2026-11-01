@@ -4,10 +4,17 @@
     "title": "Voice Memory public API",
     "version": "1.0.0",
     "summary": "Key-free evidence engine: answers about changing records, with a fixed verdict and the exact cited lines.",
-    "description": "Answers are built from the documents only (no language model writes them) and pass an exact-span evidence gate. Pass `lead.text` and its citations on as given. All data in the `health` and `deal` cases is fictional. Not a diagnostic or clinically validated product.",
-    "license": { "name": "See repository", "url": "https://github.com/charan-rathore/voice-memory" }
+    "description": "Answers are built from the documents only and pass an exact-span evidence gate (model-assisted claims are verified against their quoted span; general background is returned separately in `lead.background` with sources). Pass `lead.text` and its citations on as given. All data in the `health` and `deal` cases is fictional. Not a diagnostic or clinically validated product.",
+    "license": {
+      "name": "See repository",
+      "url": "https://github.com/charan-rathore/voice-memory"
+    }
   },
-  "servers": [{ "url": "https://voice-memory-beige.vercel.app/api/public" }],
+  "servers": [
+    {
+      "url": "https://voice-memory-beige.vercel.app/api/public"
+    }
+  ],
   "paths": {
     "/status": {
       "get": {
@@ -20,8 +27,15 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "cases": { "type": "object", "additionalProperties": { "type": "boolean" } },
-                    "voice": { "type": "object" }
+                    "cases": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "boolean"
+                      }
+                    },
+                    "voice": {
+                      "type": "object"
+                    }
                   }
                 }
               }
@@ -40,7 +54,14 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": { "cases": { "type": "array", "items": { "$ref": "#/components/schemas/Case" } } }
+                  "properties": {
+                    "cases": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Case"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -57,21 +78,55 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["case", "question"],
+                "required": [
+                  "case",
+                  "question"
+                ],
                 "properties": {
-                  "case": { "type": "string", "description": "`health`, `deal`, or a workspace id (`w_` + 32 hex)", "examples": ["health"] },
-                  "question": { "type": "string", "maxLength": 400, "examples": ["Has creatinine gone up since September?"] },
-                  "context": { "type": "string", "pattern": "^[A-Za-z]{1,40}$", "description": "The field asked about in the previous turn, so 'it' resolves (optional)" }
+                  "case": {
+                    "type": "string",
+                    "description": "`health`, `deal`, or a workspace id (`w_` + 32 hex)",
+                    "examples": [
+                      "health"
+                    ]
+                  },
+                  "question": {
+                    "type": "string",
+                    "maxLength": 400,
+                    "examples": [
+                      "Has creatinine gone up since September?"
+                    ]
+                  },
+                  "context": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z]{1,40}$",
+                    "description": "The field asked about in the previous turn, so 'it' resolves (optional)"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Answer", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Answer" } } } },
-          "400": { "$ref": "#/components/responses/Error" },
-          "429": { "$ref": "#/components/responses/Retry" },
-          "503": { "$ref": "#/components/responses/Retry" }
+          "200": {
+            "description": "Answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Answer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Retry"
+          },
+          "503": {
+            "$ref": "#/components/responses/Retry"
+          }
         }
       }
     },
@@ -79,54 +134,223 @@
       "get": {
         "summary": "A document's canonical text, pages and elements (for showing a citation)",
         "parameters": [
-          { "name": "case", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "name": "documentId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+          {
+            "name": "case",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
-        "responses": { "200": { "description": "Document" }, "404": { "$ref": "#/components/responses/Error" } }
+        "responses": {
+          "200": {
+            "description": "Document"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
     "/doc/{case}/{documentId}/original": {
       "get": {
         "summary": "The original uploaded bytes, served inert",
         "parameters": [
-          { "name": "case", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "name": "documentId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+          {
+            "name": "case",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
-        "responses": { "200": { "description": "Original file" }, "404": { "$ref": "#/components/responses/Error" } }
+        "responses": {
+          "200": {
+            "description": "Original file"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
     "/graph/{case}": {
       "get": {
         "summary": "The memory graph the engine answers from: patients, reports, values, tests and claims, with corrects / supersedes / not comparable edges",
-        "parameters": [{ "name": "case", "in": "path", "required": true, "schema": { "type": "string" } }],
-        "responses": { "200": { "description": "Graph with nodes and edges" }, "404": { "$ref": "#/components/responses/Error" }, "503": { "$ref": "#/components/responses/Retry" } }
+        "parameters": [
+          {
+            "name": "case",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Graph with nodes and edges"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Retry"
+          }
+        }
       }
     },
     "/workspace": {
       "post": {
         "summary": "Start a private workspace for your own documents (deleted after 30 idle minutes)",
         "responses": {
-          "200": { "description": "Workspace", "content": { "application/json": { "schema": { "type": "object", "properties": { "id": { "type": "string", "pattern": "^w_[0-9a-f]{32}$" } } } } } },
-          "429": { "$ref": "#/components/responses/Retry" }
+          "200": {
+            "description": "Workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^w_[0-9a-f]{32}$"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/Retry"
+          }
         }
       }
     },
     "/workspace/{id}": {
       "get": {
         "summary": "Workspace status and each document's processing stage",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^w_[0-9a-f]{32}$" } }],
-        "responses": { "200": { "description": "Status: documents[] with status uploaded | validating | parsing | ocr | indexing | ready | needs_review | failed" }, "404": { "$ref": "#/components/responses/Error" } }
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^w_[0-9a-f]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status: documents[] with status uploaded | validating | parsing | ocr | indexing | ready | needs_review | failed"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
     "/workspace/{id}/upload": {
       "post": {
         "summary": "Upload one file (PDF, DOCX, PNG, JPEG, TXT, MD; up to 4 MB; at most 5 per workspace)",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^w_[0-9a-f]{32}$" } },
-          { "name": "x-file-name", "in": "header", "required": true, "schema": { "type": "string" }, "description": "URI-encoded file name" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^w_[0-9a-f]{32}$"
+            }
+          },
+          {
+            "name": "x-file-name",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "URI-encoded file name"
+          }
         ],
-        "requestBody": { "required": true, "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } } },
-        "responses": { "202": { "description": "Accepted; poll the workspace until the document is ready" }, "400": { "$ref": "#/components/responses/Error" }, "413": { "$ref": "#/components/responses/Error" }, "429": { "$ref": "#/components/responses/Retry" } }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted; poll the workspace until the document is ready"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Retry"
+          }
+        }
+      }
+    },
+    "/visual/{case}": {
+      "get": {
+        "summary": "Visual summary of a case: each lab value on the lab's own printed range, corrections, unit changes and people kept apart (or a status board for records), with a narration in en, hi or hinglish.",
+        "parameters": [
+          {
+            "name": "case",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "hi",
+                "hinglish"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ visual }"
+          }
+        }
       }
     }
   },
@@ -135,55 +359,184 @@
       "Case": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "title": { "type": "string" },
-          "blurb": { "type": "string" },
-          "suggestions": { "type": "array", "items": { "type": "string" } },
-          "ready": { "type": "boolean" },
-          "documents": { "type": "array", "items": { "type": "object" } }
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "blurb": {
+            "type": "string"
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
         }
       },
       "Citation": {
         "type": "object",
         "properties": {
-          "documentId": { "type": ["string", "null"] },
-          "title": { "type": ["string", "null"] },
-          "quote": { "type": ["string", "null"], "description": "Verbatim span of the source text" },
-          "start": { "type": ["integer", "null"] },
-          "end": { "type": ["integer", "null"] },
-          "status": { "type": ["string", "null"] },
-          "location": { "type": ["object", "null"], "description": "Pages, regions (PDF points, top-left origin) and table rows of the cited span" }
+          "documentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quote": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Verbatim span of the source text"
+          },
+          "start": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "end": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "location": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Pages, regions (PDF points, top-left origin) and table rows of the cited span"
+          }
         }
       },
       "Answer": {
         "type": "object",
         "properties": {
-          "question": { "type": "string" },
+          "question": {
+            "type": "string"
+          },
           "lead": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "properties": {
-              "text": { "type": "string", "description": "The one sentence to say. Pass it on as given." },
+              "text": {
+                "type": "string",
+                "description": "The one sentence to say. Pass it on as given."
+              },
               "verdict": {
                 "type": "string",
                 "description": "Fixed label. Only LATEST and COMPARED state a value; for the others report the verdict, not a number.",
-                "examples": ["LATEST", "COMPARED", "NOT_COMPARABLE", "AMBIGUOUS_PATIENT", "PROPOSED", "APPROVED", "OPEN", "NO-RECORD", "UNKNOWN"]
+                "examples": [
+                  "LATEST",
+                  "COMPARED",
+                  "NOT_COMPARABLE",
+                  "AMBIGUOUS_PATIENT",
+                  "PROPOSED",
+                  "APPROVED",
+                  "OPEN",
+                  "NO-RECORD",
+                  "UNKNOWN"
+                ]
               },
-              "field": { "type": ["string", "null"] },
-              "citations": { "type": "array", "items": { "$ref": "#/components/schemas/Citation" } }
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "citations": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Citation"
+                }
+              }
             }
           },
-          "answer": { "type": ["string", "null"] },
-          "status": { "type": ["string", "null"] },
-          "evidence": { "type": "array", "items": { "$ref": "#/components/schemas/Citation" } }
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            }
+          }
         }
       }
     },
     "responses": {
-      "Error": { "description": "Error", "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string" } } } } } },
+      "Error": {
+        "description": "Error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
       "Retry": {
         "description": "Busy or still loading; retry after the given seconds",
-        "headers": { "Retry-After": { "schema": { "type": "integer" } } },
-        "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string" } } } } }
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

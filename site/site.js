@@ -28,6 +28,8 @@
     call: null,
     ticket: null,
     seenTurns: new Set(),
+    lang: /^hi\b/i.test(navigator.language || "") ? "hi" : "en",
+    visuals: {},
   };
 
   const esc = (s) =>
@@ -113,6 +115,7 @@
           state.cases = Object.fromEntries(cases.map((c) => [c.id, c]));
           state.live = true;
           state.voice = s.voice;
+          state.semantic = s.semantic ?? null;
           if (s.voice?.ready)
             document.documentElement.classList.add("voice-on");
           note(
@@ -120,6 +123,7 @@
           );
           renderRail();
           if (!$("#viewer-body .page, #viewer-body .vw-text")) showEmptyViewer();
+          if ($("#answer .overview")) renderOverview();
           return;
         }
       } catch (e) {
@@ -148,6 +152,13 @@
     OPEN: ["v-warn", "Still open"],
     "NO-RECORD": ["v-no", "Not on record"],
     UNKNOWN: ["v-no", "Not in these documents"],
+    EXPLAINED: ["v-ok", "Explained"],
+    NO_REASON: ["v-warn", "No reason recorded"],
+    DEFINED: ["v-ask", "General meaning"],
+    NOT_IN_REPORT: ["v-no", "Not in these reports"],
+    NOT_IN_DOCUMENTS: ["v-no", "Not in these documents"],
+    CLARIFY: ["v-ask", "Which one?"],
+    FLAGGED: ["v-warn", "Outside range"],
   };
   const verdictOf = (v) =>
     VERDICT[v] ??
@@ -276,7 +287,15 @@
       } catch {}
     }
     renderUploads();
-    if (state.case === "own") renderRail();
+    if (state.case === "own") {
+      renderRail();
+      const ready = (state.cases.own?.documents ?? []).length;
+      if (ready !== state.ownReady && $("#answer .overview")) {
+        state.ownReady = ready;
+        delete state.visuals["own|" + state.lang];
+        renderOverview("own");
+      }
+    }
   }
   let pollTimer = null;
   function pollWorkspace() {
@@ -363,10 +382,95 @@
       .join("");
     renderRail();
     if (!quiet) {
-      $("#answer").innerHTML =
-        `<div class="answer-empty"><p>${esc(c?.blurb ?? "")}</p><p class="dim">Pick a question or type your own.</p></div>`;
+      renderOverview(id);
       showEmptyViewer();
     }
+  }
+
+  // ------------------------------------------------------------ lazy parts
+  const loadScript = (src) =>
+    new Promise((ok, bad) => {
+      const sc = document.createElement("script");
+      sc.src = src;
+      sc.onload = ok;
+      sc.onerror = bad;
+      document.head.appendChild(sc);
+    });
+  const deskNear = new Promise((ok) => {
+    const desk = $("#desk");
+    if (!desk || !("IntersectionObserver" in window)) return ok();
+    const io = new IntersectionObserver(
+      (es) => {
+        if (es.some((e) => e.isIntersecting)) {
+          io.disconnect();
+          ok();
+        }
+      },
+      { rootMargin: "800px 0px" },
+    );
+    io.observe(desk);
+  });
+  let visualP = null;
+  const loadVisual = () =>
+    (visualP ??= Promise.all([
+      window.VMVisual ? null : loadScript("visual.js"),
+      new Promise((ok) => {
+        const l = document.createElement("link");
+        l.rel = "stylesheet";
+        l.href = "visual.css";
+        l.onload = l.onerror = ok;
+        document.head.appendChild(l);
+      }),
+    ]).catch(() => (visualP = null)));
+
+  // ------------------------------------------------------------ overview
+  // The empty answer panel: the case at a glance, narrated (visual.js).
+  const LANGS = [
+    ["en", "English"],
+    ["hi", "हिन्दी"],
+    ["hinglish", "Hinglish"],
+  ];
+  async function overviewFor(id, lang) {
+    const k = `${id}|${lang}`;
+    if (state.visuals[k]) return state.visuals[k];
+    let v = null;
+    if (state.live || id === "own") {
+      try {
+        if (id === "own" && !state.ws) throw 0;
+        v = (await api(`/visual/${apiCase(id)}?lang=${lang}`, {}, 15000)).visual;
+      } catch {
+        v = null;
+      }
+    }
+    const saved = snap.visuals?.[id];
+    v ??= saved?.visual
+      ? { ...saved.visual, lang, narration: saved.narration?.[lang] ?? saved.visual.narration }
+      : null;
+    if (v && id !== "own") state.visuals[k] = v;
+    return v;
+  }
+  async function renderOverview(id = state.case) {
+    const c = state.cases[id] ?? snap.cases?.find((x) => x.id === id);
+    const langBar = `<div class="ov-lang" role="group" aria-label="Narration language">${LANGS.map(
+      ([k, label]) =>
+        `<button type="button" data-lang="${k}" aria-pressed="${state.lang === k}">${esc(label)}</button>`,
+    ).join("")}</div>`;
+    $("#answer").innerHTML = `<div class="overview">
+        <div class="ov-top"><p class="ov-blurb">${esc(c?.blurb ?? "")}</p>${langBar}</div>
+        <div class="ov-body" id="ov-body"><div class="skeleton" style="width:92%"></div><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:84%"></div></div>
+        <p class="dim ov-hint">Pick a question, type or dictate your own.</p>
+      </div>`;
+    await deskNear;
+    const [v] = await Promise.all([overviewFor(id, state.lang), loadVisual()]);
+    if (state.case !== id || !$("#ov-body")) return;
+    if (!v || !window.VMVisual) {
+      $("#ov-body").innerHTML =
+        id === "own"
+          ? `<p class="ov-empty">Upload a lab report and its results appear here, each placed on the lab's own printed range.</p>`
+          : "";
+      return;
+    }
+    window.VMVisual.render($("#ov-body"), v, { lang: state.lang });
   }
 
   // Demo cases ask with a cacheable GET (repeats are served by the CDN, not
@@ -391,6 +495,7 @@
         case: apiCase(caseId),
         question,
         context: context || undefined,
+        semantic: caseId === "own" ? !!state.aiConsent : undefined,
       }),
     });
   }
@@ -403,7 +508,7 @@
     const btn = $(".ask-go");
     btn.disabled = true;
     $("#answer").innerHTML =
-      `<p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : "You asked"}</span><q>${esc(question)}</q></p><div class="skeleton" style="width:88%"></div><div class="skeleton" style="width:64%"></div><div class="skeleton" style="width:76%"></div>`;
+      `<p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : via === "voice" ? "You said" : "You asked"}</span><q>${esc(question)}</q></p><div class="skeleton" style="width:88%"></div><div class="skeleton" style="width:64%"></div><div class="skeleton" style="width:76%"></div>`;
     let result = null;
     let source = "live";
     try {
@@ -435,6 +540,7 @@
     }
     btn.disabled = false;
     if (result.lead?.field) state.context[caseId] = result.lead.field;
+    if (result.semantic?.lang) state.lang = result.semantic.lang;
     renderAnswer(result, { via, source, question, caseId });
     state.thread.unshift({ question, caseId });
     state.thread = state.thread.slice(0, 5);
@@ -479,10 +585,17 @@
       ? lead.citations
       : (r.evidence ?? []).slice(0, 3);
     $("#answer").innerHTML = `
-      <p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : "You asked"}</span><q>${esc(question)}</q></p>
+      <p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : via === "voice" ? "You said" : "You asked"}</span><q>${esc(question)}</q></p>
       <p class="a-lead"><span class="verdict-chip ${cls}">${esc(label)}</span>${words}</p>
+      ${
+        r.lead?.interpretedAs
+          ? `<p class="a-understood">Understood as “${esc(r.lead.interpretedAs)}”</p>`
+          : ""
+      }
+      ${backgroundHtml(r.lead?.background)}
+      <div class="a-visual" id="a-visual"></div>
       <div class="a-tools">
-        <button class="tool" type="button" data-listen>▶ Listen</button>
+        <button class="tool" type="button" data-listen><span>▶ Listen</span></button>
         <span class="dim" style="font-size:12.5px">${
           source === "saved"
             ? "Saved run of the same engine · live engine waking"
@@ -509,6 +622,16 @@
         .join("")}</div>`;
     state.currentCites = cites;
     state.currentCase = caseId;
+    state.currentLang = r.semantic?.lang ?? state.lang;
+    if (r.visual)
+      loadVisual().then(() => {
+        if (state.current !== r || !$("#a-visual") || !window.VMVisual) return;
+        window.VMVisual.render($("#a-visual"), r.visual, {
+          lang: state.currentLang,
+          narrateButton: false,
+        });
+      });
+    else $("#a-visual")?.remove();
     if (cites.length) openCitation(0);
     else
       showEmptyViewer(
@@ -516,6 +639,16 @@
       );
   }
 
+  // General knowledge, kept apart from the documents, with its sources.
+  function backgroundHtml(bg) {
+    if (!bg?.sources?.length) return "";
+    return `<p class="a-bg"><span>General background, not from these documents:</span> ${bg.sources
+      .map(
+        (s) =>
+          `<a href="${esc(/^https:\/\//.test(s.uri) ? s.uri : "#")}" target="_blank" rel="noopener noreferrer">${esc(s.title || new URL(s.uri).hostname)}</a>`,
+      )
+      .join(", ")}</p>`;
+  }
   const prettyQuote = (q) => {
     const s = String(q ?? "").trim();
     if (/^\|.*\|$/.test(s)) {
@@ -693,39 +826,11 @@
         st ? " · " + esc(st) : ""
       }</span>${primary ? esc(prettyQuote(primary.quote)) : "Original page, rendered from the PDF"}</p>`;
   }
-  async function openDoc(title, cites = [], primary = null) {
-    emit("vm:source", { title, cited: cites.length > 0 });
-    $$("#doc-rail button").forEach((b) =>
-      b.classList.toggle("on", b.dataset.doc === title),
-    );
-    $("#viewer-title").textContent = shortTitle(title);
-    const st = statusOfDoc(title);
-    if (/\.pdf$/i.test(title) && state.case === "health") {
-      const base = title.replace(/\.pdf$/i, "");
-      $("#viewer-meta").textContent =
-        `${title} · page 1${st ? " · " + st : ""}`;
-      const boxes = cites
-        .map((c) => ({ c, r: c.location?.focus?.regions?.[0] }))
-        .filter((x) => x.r?.bbox)
-        .map(({ c, r }, k) => {
-          const [x0, y0, x1, y1] = r.bbox;
-          const pad = 3;
-          const old = statusOfDoc(c.title) === "preliminary";
-          return `<span class="box${old ? " old" : ""}" style="left:${((x0 - pad) / 595) * 100}%;top:${((y0 - pad) / 400) * 100}%;width:${
-            ((x1 - x0 + pad * 2) / 595) * 100
-          }%;height:${((y1 - y0 + pad * 2) / 400) * 100}%;animation-delay:${250 + k * 120}ms"></span>`;
-        })
-        .join("");
-      $("#viewer-body").innerHTML = pageHtml(title, cites, primary, 0, boxes);
-      return;
-    }
-    $("#viewer-meta").textContent = title;
-    const text = await docText(title);
-    if (text == null) {
-      $("#viewer-body").innerHTML =
-        `<div class="viewer-empty">Couldn't load this document right now.</div>`;
-      return;
-    }
+  // ------------------------------------------------------------ reader
+  // Opening any document opens the whole case as one reader: every page of
+  // every document, in order, with a page strip to jump between them. The
+  // chosen document scrolls into view; a cited line is marked on its page.
+  const markText = (text, cites) => {
     let html = esc(text);
     for (const c of cites) {
       // Prefer the focused lines: a small document is one chunk, so the raw
@@ -735,18 +840,154 @@
         .filter((x) => x.length > 10);
       const needles = lines.length
         ? lines
-        : [esc(String(c.quote ?? "").trim())].filter(
-            (q) => q && q.length <= 600,
-          );
+        : [esc(String(c.quote ?? "").trim())].filter((q) => q && q.length <= 600);
       for (const q of needles)
         if (q && html.includes(q)) html = html.replace(q, `<mark>${q}</mark>`);
     }
-    html = html.replace(/^# (.*)$/m, '<span class="h">$1</span>');
-    $("#viewer-body").innerHTML = `<div class="vw-text">${html}</div>`;
-    $("#viewer-body mark")?.scrollIntoView({
-      block: "center",
-      behavior: reduced ? "auto" : "smooth",
+    return html.replace(/^# (.*)$/m, '<span class="h">$1</span>');
+  };
+  // Long text documents are set as pages (~42 lines), like a printout.
+  const textPages = (html) => {
+    const lines = html.split("\n");
+    const out = [];
+    for (let i = 0; i < lines.length; i += 42) out.push(lines.slice(i, i + 42).join("\n"));
+    return out.length ? out : [html];
+  };
+  function boxesHtml(cites) {
+    return cites
+      .map((c) => ({ c, r: c.location?.focus?.regions?.[0] }))
+      .filter((x) => x.r?.bbox)
+      .map(({ c, r }, k) => {
+        const [x0, y0, x1, y1] = r.bbox;
+        const pad = 3;
+        const old = statusOfDoc(c.title) === "preliminary";
+        return `<span class="box${old ? " old" : ""}" style="left:${((x0 - pad) / 595) * 100}%;top:${((y0 - pad) / 400) * 100}%;width:${
+          ((x1 - x0 + pad * 2) / 595) * 100
+        }%;height:${((y1 - y0 + pad * 2) / 400) * 100}%;animation-delay:${250 + k * 120}ms"></span>`;
+      })
+      .join("");
+  }
+  let pdfjsP = null;
+  const loadPdfjs = () =>
+    (pdfjsP ??= import("./vendor/pdf.min.mjs").then((m) => {
+      m.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.mjs";
+      return m;
+    }));
+  // Visitor PDFs: every page rendered from the original file, in the browser.
+  async function renderPdfPages(holder, docId, cites) {
+    try {
+      const pdfjs = await loadPdfjs();
+      const r = await fetch(`/api/public/doc/${apiCase("own")}/${docId}/original`);
+      if (!r.ok) throw 0;
+      const pdf = await pdfjs.getDocument({ data: new Uint8Array(await r.arrayBuffer()), isEvalSupported: false }).promise;
+      holder.innerHTML = "";
+      for (let n = 1; n <= pdf.numPages; n++) {
+        const page = await pdf.getPage(n);
+        const vp = page.getViewport({ scale: 1 });
+        const scale = Math.min(2, (holder.clientWidth || 560) / vp.width) * (window.devicePixelRatio || 1);
+        const view = page.getViewport({ scale });
+        const wrap = document.createElement("div");
+        wrap.className = "rd-page rd-canvas";
+        wrap.style.aspectRatio = `${vp.width} / ${vp.height}`;
+        wrap.innerHTML = `<span class="rd-pno">Page ${n} of ${pdf.numPages}</span>`;
+        const cv = document.createElement("canvas");
+        cv.width = view.width;
+        cv.height = view.height;
+        wrap.prepend(cv);
+        for (const c of cites)
+          for (const reg of c.location?.focus?.regions ?? [])
+            if (reg.page === n && reg.bbox) {
+              const [x0, y0, x1, y1] = reg.bbox;
+              const box = document.createElement("span");
+              box.className = "box";
+              Object.assign(box.style, {
+                left: `${(x0 / vp.width) * 100}%`,
+                top: `${(y0 / vp.height) * 100}%`,
+                width: `${((x1 - x0) / vp.width) * 100}%`,
+                height: `${((y1 - y0) / vp.height) * 100}%`,
+              });
+              wrap.appendChild(box);
+            }
+        holder.appendChild(wrap);
+        await page.render({ canvasContext: cv.getContext("2d"), viewport: view }).promise;
+      }
+    } catch {
+      holder.innerHTML = `<p class="viewer-note">Couldn't render the pages of this PDF here; its text is below.</p>`;
+      return false;
+    }
+    return true;
+  }
+
+  async function openDoc(title, cites = [], primary = null) {
+    emit("vm:source", { title, cited: cites.length > 0 });
+    loadVisual();
+    const c = state.cases[state.case] ?? snap.cases?.find((x) => x.id === state.case);
+    const docs = c?.documents?.length ? c.documents : [{ title, kind: /\.pdf$/i.test(title) ? "pdf" : "md", pages: 1 }];
+    $$("#doc-rail button").forEach((b) => b.classList.toggle("on", b.dataset.doc === title));
+    const pagesOf = (d) => Math.max(1, Number(d.pages) || 1);
+    const total = docs.reduce((n, d) => n + pagesOf(d), 0);
+    $("#viewer-title").textContent = shortTitle(title);
+    $("#viewer-meta").textContent = `${docs.length} document${docs.length === 1 ? "" : "s"}, ${total} page${total === 1 ? "" : "s"}`;
+    const strip = docs
+      .map(
+        (d, i) =>
+          `<button type="button" class="rd-thumb${d.title === title ? " on" : ""}" data-jump="${i}" title="${esc(d.title)}">${
+            /\.pdf$/i.test(d.title) && state.case === "health"
+              ? `<img src="pages/${esc(d.title.replace(/\.pdf$/i, ""))}.png" alt="" loading="lazy" />`
+              : `<span class="rd-tx" aria-hidden="true"><i></i><i></i><i></i><i></i></span>`
+          }<span>${esc(shortTitle(d.title))}</span></button>`,
+      )
+      .join("");
+    const sections = docs.map((d, i) => {
+      const st = statusOfDoc(d.title);
+      const mine = d.title === title ? cites : [];
+      const head = `<header class="rd-head"><b>${esc(shortTitle(d.title))}</b>${st ? `<span class="tagline tag-${esc(st)}">${esc(st)}</span>` : ""}<span class="rd-count">Document ${i + 1} of ${docs.length}, ${pagesOf(d)} page${pagesOf(d) === 1 ? "" : "s"}</span></header>`;
+      let pages = "";
+      if (/\.pdf$/i.test(d.title) && state.case === "health") {
+        const base = d.title.replace(/\.pdf$/i, "");
+        for (let n = 1; n <= pagesOf(d); n++)
+          pages += `<div class="page rd-page" style="animation-delay:${Math.min(i, 3) * 90}ms"><img src="pages/${esc(n === 1 ? base : `${base}-p${n}`)}.png" alt="Page ${n} of ${esc(d.title)}, a synthetic lab report" loading="lazy" />${n === 1 ? boxesHtml(mine) : ""}<span class="rd-pno">Page ${n} of ${pagesOf(d)}</span></div>`;
+      } else pages = `<div class="rd-pages" data-text="${i}"><div class="skeleton" style="width:80%"></div></div>`;
+      const note = primary && d.title === title ? `<p class="page-note">${esc(prettyQuote(primary.quote))}</p>` : "";
+      return `<section class="rd-doc${d.title === title ? " focus" : ""}" data-doc-i="${i}">${head}${pages}${note}</section>`;
     });
+    $("#viewer-body").innerHTML = `<div class="reader"><nav class="rd-strip" aria-label="Pages in this case">${strip}</nav>${sections.join("")}</div>`;
+    // Text documents (and visitor PDFs) fill in as they load.
+    await Promise.all(
+      docs.map(async (d, i) => {
+        const holder = $(`#viewer-body [data-text="${i}"]`);
+        if (!holder) return;
+        const mine = d.title === title ? cites : [];
+        if (state.case === "own" && d.kind === "pdf" && d.id) {
+          const pdfHolder = document.createElement("div");
+          pdfHolder.className = "rd-pdf";
+          holder.before(pdfHolder);
+          if (await renderPdfPages(pdfHolder, d.id, mine)) {
+            holder.remove();
+            return;
+          }
+        }
+        const text = await docText(d.title);
+        if (!holder.isConnected) return;
+        if (text == null) {
+          holder.innerHTML = `<p class="viewer-note">Couldn't load this document right now.</p>`;
+          return;
+        }
+        const pages = textPages(markText(text, mine));
+        holder.innerHTML = pages
+          .map((h, n) => `<div class="vw-text rd-page">${h}${pages.length > 1 ? `<span class="rd-pno">Page ${n + 1} of ${pages.length}</span>` : ""}</div>`)
+          .join("");
+      }),
+    );
+    const target = $("#viewer-body mark") ?? $("#viewer-body .rd-doc.focus");
+    if (target && $("#viewer-body").scrollHeight > $("#viewer-body").clientHeight)
+      target.scrollIntoView({ block: target.tagName === "MARK" ? "center" : "start", behavior: reduced ? "auto" : "smooth" });
+  }
+  function jumpTo(i) {
+    const sec = $(`#viewer-body [data-doc-i="${i}"]`);
+    if (!sec) return;
+    $$("#viewer-body .rd-thumb").forEach((b) => b.classList.toggle("on", b.dataset.jump === String(i)));
+    sec.scrollIntoView({ block: "start", behavior: reduced ? "auto" : "smooth" });
   }
 
   async function docText(title) {
@@ -1158,10 +1399,14 @@
   // ------------------------------------------------------------ wiring
   document.addEventListener("click", (e) => {
     const t = e.target.closest(
-      "[data-q],[data-ask],[data-cite],[data-doc],[data-files],[data-listen],[data-start-call],.case-tab",
+      "[data-q],[data-ask],[data-cite],[data-doc],[data-files],[data-listen],[data-start-call],[data-lang],[data-jump],.case-tab",
     );
     if (!t) return;
     if (t.matches(".case-tab")) return setCase(t.dataset.case);
+    if (t.matches("[data-lang]")) {
+      state.lang = t.dataset.lang;
+      return renderOverview();
+    }
     if (t.matches("[data-start-call]")) {
       e.preventDefault();
       return startCall();
@@ -1177,14 +1422,18 @@
       return ask(t.dataset.q, { caseId: t.dataset.case || state.case });
     if (t.matches("[data-cite]")) return openCitation(Number(t.dataset.cite));
     if (t.matches("[data-doc]")) return openDoc(t.dataset.doc);
+    if (t.matches("[data-jump]")) return jumpTo(Number(t.dataset.jump));
     if (t.matches("[data-files]")) {
       showEmptyViewer();
       if (matchMedia("(max-width: 1060px)").matches)
         $("#viewer").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
       return;
     }
-    if (t.matches("[data-listen]"))
-      return speak(state.current?.lead?.text ?? "");
+    if (t.matches("[data-listen]")) {
+      const text = state.current?.lead?.text ?? "";
+      if (window.VMVisual?.narrate(text, state.currentLang ?? state.lang, $("#a-visual"), t)) return;
+      return speak(text);
+    }
   });
   $("#askbar").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1209,6 +1458,33 @@
     { threshold: 0.18 },
   );
   $$("[data-reveal]").forEach((el) => io.observe(el));
+
+  // Dictation (dictate.js), loaded on the first sign of intent.
+  let dictP = null;
+  const loadDictate = () =>
+    (dictP ??= Promise.all([loadScript("dictate.js"), loadVisual()]).then(() =>
+      window.VMDictate?.init({
+        input: $("#q"),
+        button: $("#dict-btn"),
+        status: $("#dict-status"),
+        lang: () => state.lang,
+        caseId: () => (state.case === "own" ? (state.ws ?? "") : state.case),
+        serverTranscribe: () => !!state.semantic?.transcribe,
+        onText: (text) => ask(text, { via: "voice" }),
+      }),
+    ).catch(() => (dictP = null)));
+  const dictBtn = $("#dict-btn");
+  for (const ev of ["pointerenter", "focus", "touchstart"])
+    dictBtn?.addEventListener(ev, loadDictate, { once: true, passive: true });
+  dictBtn?.addEventListener(
+    "click",
+    async (e) => {
+      if (window.VMDictate) return; // dictate.js handles clicks once loaded
+      e.preventDefault();
+      const ctl = await loadDictate();
+      ctl?.start();
+    },
+  );
 
   setCase("health");
   miniGraph();

@@ -11,6 +11,8 @@
 //   GET  /api/public/doc/:case/:id/original original file bytes (inert)
 //   GET  /api/public/graph/:case            evidence graph (documents, values, sentences)
 //   POST /api/public/voice/session          mints one Bolna web-call session (capped)
+//   GET  /api/public/visual/:case?lang=     visual summary (ranges, series, statuses) + narration
+//   POST /api/public/transcribe             dictated audio -> text (Gemini, consented, capped)
 //
 // Rate limits are per client address and global; voice minting has its own
 // tighter caps because each call spends the operator's Bolna credits.
@@ -90,6 +92,8 @@ export function createPublicApi({
   stopVoice = null,
   counters = null,
   now = () => Date.now(),
+  visual = () => null,
+  gemini = null,
 }) {
   const tickets = new Map(); // ticket -> mint time (call evidence feed)
   const askLimit = limiter(num(process.env.VM_PUBLIC_ASK_PER_MIN, 40), 60000);
@@ -158,6 +162,12 @@ export function createPublicApi({
     3600000,
   );
   const WS_FILE_BYTES = num(process.env.VM_WS_FILE_MB, 4) * 1048576;
+  const transcribeLimit = limiter(
+    num(process.env.VM_TRANSCRIBE_PER_IP_HOUR, 30),
+    3600000,
+  );
+  const AUDIO_BYTES = num(process.env.VM_TRANSCRIBE_KB, 1536) * 1024;
+  const AUDIO_TYPES = /^audio\/(webm|ogg|mp4|mpeg|wav|x-wav|aac|m4a)(;.*)?$/i;
   async function readRaw(req, limit) {
     const declared = Number(req.headers["content-length"]);
     if (Number.isFinite(declared) && declared > limit)
@@ -197,6 +207,137 @@ export function createPublicApi({
     }
   }
 
+  // Words a recogniser should spell right for this case: test names, IDs,
+  // document terms. Names of things only, never values or people.
+  function vocabularyOf(cs) {
+    const out = new Set([
+      "ferritin",
+      "creatinine",
+      "hemoglobin",
+      "HbA1c",
+      "TSH",
+      "urea",
+      "SYN-0001",
+      "SYN-0003",
+      "Northstar",
+      "Meridian",
+      "engagement fee",
+      "payment split",
+      "steering committee",
+      "amended",
+      "preliminary",
+    ]);
+    for (const r of cs?.bundle?.clinical ?? [])
+      for (const o of r.observations) out.add(String(o.test).slice(0, 40));
+    return [...out].slice(0, 120);
+  }
+  // Records (not lab results): a decision board from the engine's own cited
+  // answers - each row is exactly what the typed question would say.
+  const RECORD_ROWS = [
+    ["fee", "Fee", "What is the engagement fee?"],
+    ["split", "Payment split", "Did they agree on the payment split?"],
+    ["deadline", "Deadline", "What is the deadline?"],
+    ["contract", "Signed contract", "Is there a signed contract?"],
+  ];
+  // Spoken summary of the board in the person's language. Figures are
+  // lifted from the engine's own cited sentences, never computed here.
+  const REC_SAY = {
+    en: {
+      labels: {
+        fee: "The fee",
+        split: "The payment split",
+        deadline: "The deadline",
+        contract: "A signed contract",
+      },
+      PROPOSED: (l, f) =>
+        `${l} on record is ${f}, but it is only proposed, not approved.`,
+      OPEN: (l, f) => `${l} is still open: ${f} are both on record.`,
+      "NO-RECORD": (l) => `${l} is not on record in any of these documents.`,
+      APPROVED: (l, f) => `${l} is approved at ${f}.`,
+      AGREED: (l, f) => `${l} is agreed at ${f}.`,
+      close:
+        "That is what the records show; nothing here was decided beyond it.",
+    },
+    hi: {
+      labels: {
+        fee: "फ़ीस",
+        split: "भुगतान का बंटवारा",
+        deadline: "डेडलाइन",
+        contract: "साइन किया हुआ कॉन्ट्रैक्ट",
+      },
+      PROPOSED: (l, f) =>
+        `${l} ${f} दर्ज है, पर यह सिर्फ़ प्रस्ताव है, मंज़ूर नहीं।`,
+      OPEN: (l, f) => `${l} अभी तय नहीं है: ${f} दोनों दर्ज हैं।`,
+      "NO-RECORD": (l) => `${l} इनमें से किसी दस्तावेज़ में दर्ज नहीं है।`,
+      APPROVED: (l, f) => `${l} ${f} पर मंज़ूर है।`,
+      AGREED: (l, f) => `${l} ${f} पर तय है।`,
+      close: "दस्तावेज़ इतना ही बताते हैं; इसके आगे कुछ तय नहीं हुआ।",
+    },
+    hinglish: {
+      labels: {
+        fee: "Fee",
+        split: "Payment split",
+        deadline: "Deadline",
+        contract: "Signed contract",
+      },
+      PROPOSED: (l, f) =>
+        `${l} ${f} record mein hai, par yeh sirf proposal hai, approved nahi.`,
+      OPEN: (l, f) => `${l} abhi open hai: ${f} dono record mein hain.`,
+      "NO-RECORD": (l) => `${l} in documents mein kahin record nahi hai.`,
+      APPROVED: (l, f) => `${l} ${f} par approved hai.`,
+      AGREED: (l, f) => `${l} ${f} par agreed hai.`,
+      close: "Records itna hi batate hain; isse aage kuch tay nahi hua.",
+    },
+  };
+  function recordsNarration(rows, lang) {
+    const t = REC_SAY[lang] ?? REC_SAY.en;
+    const join =
+      { en: " and ", hi: " और ", hinglish: " aur " }[lang] ?? " and ";
+    const out = [];
+    for (const r of rows) {
+      const vs =
+        /([\w$,./ ]{2,30}?)\s+versus\s+([\w$,./ ]{2,30}?)\s+(?:are|is)\b/i.exec(
+          r.text,
+        );
+      const fig = vs
+        ? `${vs[1].trim()}${join}${vs[2].trim()}`
+        : (/\$\d[\d,]*/.exec(r.text)?.[0] ?? "");
+      const say = t[r.verdict];
+      if (say) out.push(say(t.labels[r.id] ?? r.label, fig));
+    }
+    out.push(t.close);
+    return out.join(" ");
+  }
+  async function recordsVisual(s, lang) {
+    const rows = [];
+    for (const [id, label, q] of RECORD_ROWS) {
+      const a = await resolve(s, q, "", {});
+      if (!a?.lead || a.lead.verdict === "UNKNOWN") continue;
+      rows.push({
+        id,
+        label,
+        verdict: a.lead.verdict,
+        text: a.lead.text,
+        citations: (a.lead.citations ?? []).length,
+      });
+    }
+    const docs = (s.library ?? [])
+      .filter((e) => e.doc)
+      .map((e) => ({
+        title: e.title,
+        date: /Date:\s*(\d{4}-\d{2}-\d{2})/.exec(e.doc.text ?? "")?.[1] ?? null,
+        type: /Type:\s*([\w -]+)/.exec(e.doc.text ?? "")?.[1]?.trim() ?? null,
+      }));
+    if (!rows.length) return null;
+    return {
+      kind: "records",
+      lang,
+      rows,
+      documents: docs,
+      narration: recordsNarration(rows, lang),
+    };
+  }
+
   /** Returns true when the request was handled. */
   return async function handle(req, res) {
     const url = new URL(req.url, "http://x");
@@ -217,6 +358,13 @@ export function createPublicApi({
           voice: publicVoiceOn
             ? voiceState()
             : { configured: false, ready: false },
+          // What the semantic layer can do right now (never the key).
+          semantic: {
+            enabled: !!gemini?.enabled(),
+            search: !!gemini?.searchEnabled?.(),
+            transcribe: !!gemini?.enabled(),
+            model: gemini?.enabled() ? gemini.model : null,
+          },
         });
         return true;
       }
@@ -354,7 +502,11 @@ export function createPublicApi({
           /^[A-Za-z]{1,40}$/.test(data.context)
             ? data.context
             : "";
-        const shown = await resolve(s, q, ctx);
+        const shown = await resolve(s, q, ctx, {
+          // A visitor's own passages reach the model only on their say-so.
+          consent: data.semantic === true,
+          ip,
+        });
         send(
           res,
           200,
@@ -429,6 +581,77 @@ export function createPublicApi({
         send(res, 200, g, {
           "Cache-Control": isWs(graph[1]) ? "no-store" : "public, max-age=300",
         });
+        return true;
+      }
+      const vis = /^\/visual\/(\w+)$/.exec(path);
+      if (req.method === "GET" && vis) {
+        const s = caseOf(vis[1]);
+        if (!s?.bundle)
+          return (
+            send(res, s ? 503 : 404, { error: s ? "Loading." : "Not found." }),
+            true
+          );
+        const lang = ["en", "hi", "hinglish"].includes(
+          url.searchParams.get("lang"),
+        )
+          ? url.searchParams.get("lang")
+          : "en";
+        const v =
+          visual(s, lang) ?? (await recordsVisual(s, lang).catch(() => null));
+        send(
+          res,
+          200,
+          { visual: v },
+          {
+            "Cache-Control": isWs(vis[1]) ? "no-store" : "public, max-age=300",
+          },
+        );
+        return true;
+      }
+      if (req.method === "POST" && path === "/transcribe") {
+        if (!gemini?.enabled())
+          return (
+            send(res, 503, {
+              error: "Server transcription is off; using the browser's.",
+              fallback: true,
+            }),
+            true
+          );
+        // Explicit, per-request consent: the browser sends this header only
+        // after the person agreed to send their voice clip to Google Gemini.
+        if (req.headers["x-vm-consent"] !== "audio")
+          return (send(res, 403, { error: "Consent required." }), true);
+        if (!AUDIO_TYPES.test(String(req.headers["content-type"] ?? "")))
+          return (send(res, 415, { error: "Send an audio clip." }), true);
+        if (!transcribeLimit(ip))
+          return (
+            send(res, 429, { error: "Too many voice clips. Type instead." }),
+            true
+          );
+        const audio = await readRaw(req, AUDIO_BYTES);
+        if (audio.length < 800)
+          return (send(res, 400, { error: "That clip was empty." }), true);
+        const cs = caseOf(String(req.headers["x-vm-case"] ?? ""));
+        const vocab = vocabularyOf(cs);
+        const hint = ["en", "hi", "hinglish"].includes(req.headers["x-vm-lang"])
+          ? req.headers["x-vm-lang"]
+          : "auto";
+        const text = await gemini.transcribe(
+          audio,
+          String(req.headers["content-type"]).split(";")[0],
+          vocab,
+          hint,
+          { ip },
+        );
+        if (text == null)
+          return (
+            send(res, 503, {
+              error: "Transcription is busy; using the browser's.",
+              fallback: true,
+            }),
+            true
+          );
+        send(res, 200, { text });
         return true;
       }
       if (req.method === "POST" && path === "/voice/session") {
@@ -690,6 +913,33 @@ export function publicAnswer(shown) {
           verdict: shown.lead.verdict,
           field: shown.lead.field ?? null,
           citations: (shown.lead.citations ?? []).map(cite),
+          // General knowledge, kept apart from what the documents state.
+          background: shown.lead.background
+            ? {
+                text: shown.lead.background.text ?? null,
+                sources: (
+                  shown.lead.background.sources ??
+                  (shown.lead.background.source
+                    ? [
+                        {
+                          title: "MedlinePlus",
+                          uri: shown.lead.background.source,
+                        },
+                      ]
+                    : [])
+                ).slice(0, 4),
+              }
+            : null,
+          interpretedAs: shown.lead.interpretedAs ?? null,
+          origin: shown.lead.origin ?? "engine",
+        }
+      : null,
+    visual: shown.visual ?? null,
+    semantic: shown.semantic
+      ? {
+          intent: shown.semantic.intent,
+          lang: shown.semantic.lang ?? "en",
+          steps: shown.semantic.steps ?? [],
         }
       : null,
     answer: shown.answer ?? shown.text ?? null,

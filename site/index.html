@@ -27,7 +27,7 @@
         "operatingSystem": "Web",
         "url": "https://voice-memory-beige.vercel.app/",
         "codeRepository": "https://github.com/charan-rathore/voice-memory",
-        "description": "A voice agent on Bolna that answers questions about changing records (lab reports, contracts, meeting notes) only from what the documents support. It checks amended, preliminary, proposed and superseded values, units and patients, and cites the exact line on the original page. No language model writes the answers.",
+        "description": "A voice agent on Bolna that answers questions about changing records (lab reports, contracts, meeting notes) only from what the documents support. It checks amended, preliminary, proposed and superseded values, units and patients, and cites the exact line on the original page. Every answer is checked against the line it cites.",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
         "author": { "@type": "Person", "name": "Charan Rathore" },
         "isAccessibleForFree": true
@@ -195,10 +195,14 @@
             <form class="askbar" id="askbar" autocomplete="off">
               <label class="sr-only" for="q">Your question</label>
               <input id="q" name="q" type="text" maxlength="400" placeholder="What is SYN-0001's ferritin result?" />
+              <button class="dict-btn" id="dict-btn" type="button" aria-pressed="false" aria-label="Dictate your question" title="Dictate (press, speak, pause)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>
+              </button>
               <button class="ask-go" type="submit" aria-label="Ask">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg>
               </button>
             </form>
+            <p class="dict-status" id="dict-status" aria-live="polite"></p>
             <div class="chips-row" id="suggest" aria-label="Suggested questions"></div>
 
             <div class="callbar" id="callbar">
@@ -212,7 +216,7 @@
             <div class="answer" id="answer" aria-live="polite">
               <div class="answer-empty">
                 <p>Pick a question, type your own, or call and ask out loud.</p>
-                <p class="dim">Answers come from the documents only. No language model writes them.</p>
+                <p class="dim">Answers come from the documents only, checked against the exact line they cite.</p>
               </div>
             </div>
             <ol class="thread" id="thread" aria-label="Earlier questions"></ol>

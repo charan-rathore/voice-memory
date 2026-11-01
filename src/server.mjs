@@ -32,6 +32,9 @@ import {
   warmDense,
 } from "./dense.mjs";
 import { spokenTurn } from "./spoken.mjs";
+import { intentLead, semanticRescue } from "./semantic/route.mjs";
+import { createGemini } from "./semantic/gemini.mjs";
+import { visualFor, caseVisual } from "./visual-summary.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import {
   clinicalAnswer,
@@ -134,12 +137,19 @@ function leadFor(question, result, bundle, prevField) {
     // Lab results across reports first (synthetic-data research prototype):
     // typed observations, comparability checks, no clinical judgement.
     if (bundle.clinical?.length) {
+      // What kind of answer would answer this? A "why" gets a reason, a
+      // "what is X" a definition, an absent measurement an honest "not here".
+      const il = intentLead(question, bundle, (ev) =>
+        validateEvidence(ev, bundle),
+      );
+      if (il) return il;
       const c = clinicalAnswer(question, bundle.clinical);
       if (c)
         return {
           text: c.spoken,
           verdict: c.verdict,
           field: null,
+          used: c.used,
           citations: c.used
             .map((o) => observationEvidence(o, bundle))
             .filter((ev) => {
@@ -386,6 +396,9 @@ export function createLocalServer({
   }
   const signinFails = new Map();
   // Process-wide answer cache (keys are scoped per index build; see cache.mjs).
+  // Bounded semantic layer: off (deterministic only) unless GEMINI_API_KEY is
+  // set in the host's encrypted environment; VM_GEMINI=off is the kill switch.
+  const gemini = createGemini();
   const answerCache = createAnswerCache({
     max: Number(process.env.VM_CACHE_MAX || 1000),
   });
@@ -579,18 +592,64 @@ export function createLocalServer({
       (first.match(/\b[A-Z][A-Za-z #./]{1,20}:/g) ?? []).length >= 2
     );
   };
-  async function resolveAnswer(s, question, ctx) {
+  async function resolveAnswer(s, question, ctx, opts = {}) {
     const bundle = s.bundle;
+    // May this document set's passages go to the model? Fictional demo
+    // cases: yes. A visitor's own documents: only with their consent.
+    const consent = !String(s.sid ?? "").startsWith("ws:") || !!opts.consent;
+    const mode = gemini.enabled() ? (consent ? ":g1" : ":g0") : ":d";
     // Retrieval mode is part of the key: a keyword or partial-warm
     // answer cached while the embedder was cold or warming must not
     // outlive that state (see denseCacheSuffix in dense.mjs).
     const key = answerCache.key(
-      bundle.scope + denseCacheSuffix(bundle),
+      bundle.scope + denseCacheSuffix(bundle) + mode,
       question,
       ctx,
       detectLang(question),
     );
     return answerCache.resolve(key, async () => {
+      const original = question;
+      const { raw, shown } = await deterministicAnswer(s, question, ctx);
+      // Understand first, verify after: intent-specific rescue (grounded
+      // background, composed summaries, model interpretation, verified
+      // model claims) and the final "does this answer the question" audit.
+      const validate = (ev) => validateEvidence(ev, bundle);
+      const sem = await semanticRescue({
+        question: original,
+        bundle,
+        lead: shown.lead,
+        raw,
+        ctx,
+        validate,
+        gemini,
+        consent,
+        ip: opts.ip,
+        rerun: async (q) =>
+          (await deterministicAnswer(s, q, ctx)).shown.lead ?? null,
+      }).catch(() => ({
+        lead: shown.lead,
+        trace: { steps: ["semantic_error"] },
+      }));
+      if (sem.lead !== shown.lead && sem.lead?.citations?.length)
+        sem.lead.citations = decorateResult(
+          { evidence: sem.lead.citations, question: original },
+          s,
+        ).evidence;
+      shown.lead = sem.lead;
+      shown.semantic = sem.trace;
+      // The picture of the answer: ranges, series, corrections, units,
+      // drawn from the same typed rows the sentence came from.
+      shown.visual = visualFor(original, bundle, shown.lead);
+      if (shown.lead) delete shown.lead.used;
+      return { raw, shown };
+    });
+  }
+  // The deterministic chain (claim graph, clinical answers, sections, form
+  // fields, hybrid sentence search), unchanged in behaviour; the semantic
+  // router above decides what to do with its result.
+  async function deterministicAnswer(s, question, ctx) {
+    const bundle = s.bundle;
+    {
       // Phrased any way: drop a leading greeting, repair the deal's names,
       // and ask a Hindi deal question in the English the engine reads (lab
       // questions are understood in Hindi directly). The answer is rendered
@@ -669,7 +728,7 @@ export function createLocalServer({
           s,
         ).evidence;
       return { raw, shown };
-    });
+    }
   }
   // Built-in fictional cases for the public landing page. Each is an
   // internal, read-only session (never reachable by cookie): the synthetic
@@ -1012,11 +1071,13 @@ export function createLocalServer({
   const publicApi = createPublicApi({
     cases: caseSessions,
     workspaces: workspaceApi,
-    resolve: async (cs, question, ctx) => {
+    resolve: async (cs, question, ctx, opts = {}) => {
       const q = normalizeSpoken(question) || question;
-      const { json } = await resolveAnswer(cs, q, ctx);
+      const { json } = await resolveAnswer(cs, q, ctx, opts);
       return { ...JSON.parse(json).shown, question };
     },
+    visual: (cs, lang) => caseVisual(cs.bundle, lang),
+    gemini,
     mintVoice: mintBolna,
     stopVoice: stopBolna,
     counters: callCounters,
@@ -1082,6 +1143,7 @@ export function createLocalServer({
         JSON.stringify({
           ok: true,
           cache: { entries: answerCache.size, ...answerCache.stats },
+          semantic: gemini.status(),
           // Memory only: no documents, questions or identities.
           documents: {
             retainedBytes: globalBytes(),

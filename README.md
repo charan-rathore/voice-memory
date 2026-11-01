@@ -9,8 +9,10 @@ Voice Memory is a voice agent on [Bolna](https://bolna.ai) that answers question
 about changing records — lab reports, contracts, meeting notes — and checks the
 original source before it speaks: which report was amended, which value is only
 proposed, which patient, which unit, and whether an approval was ever recorded.
-No language model writes the answers. Every sentence is built from the record,
-and the cited line opens on the original page.
+Every sentence is built from the record, and the cited line opens on the
+original page. An optional, capped Gemini layer can help read the question and
+explain general terms; anything it proposes about the documents is verified
+against the exact quoted span first (see [docs/SEMANTIC.md](docs/SEMANTIC.md)).
 
 | | |
 | --- | --- |

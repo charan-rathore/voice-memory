@@ -122,10 +122,15 @@ export function normalizeSpoken(raw) {
   let s = String(raw ?? "");
   // Fillers and hesitation tokens that carry no meaning.
   s = s.replace(
-    /\b(?:um+|uh+|erm+|hmm+|uh-huh|you know|i mean|like,)\s*/gi,
+    /\b(?:um+|uh+|erm+|hmm+|uh-huh|you know|i mean|like,)(?![\w/])\s*/gi,
     "",
   );
   s = s.replace(/^\s*(?:so|okay|ok|right|and|but|well|hey)\b[,\s]+/i, "");
+  // Patient IDs as typed or heard: "syn 0003", "SYN0003" -> "SYN-0003".
+  s = s.replace(
+    /\bsyn\s*[- ]?\s*(\d{3,4})\b/gi,
+    (m, d) => `SYN-${d.padStart(4, "0")}`,
+  );
   // "go live" / "going live" / "golive" -> the documents' "go-live".
   s = s.replace(/\bgo(?:ing)?[\s-]?live\b/gi, (m) =>
     /going/i.test(m) ? "going live (go-live)" : "go-live",

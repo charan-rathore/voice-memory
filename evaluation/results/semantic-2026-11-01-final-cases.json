@@ -1,0 +1,53 @@
+{
+  "label": "final",
+  "commit": "cd851a7",
+  "date": "2026-11-01",
+  "cases": 48,
+  "answerableCorrect": {
+    "k": 41,
+    "n": 41,
+    "ci95": "91.4%–100.0%"
+  },
+  "abstentionCorrect": {
+    "k": 7,
+    "n": 7,
+    "ci95": "64.6%–100.0%"
+  },
+  "falseAcceptance": {
+    "k": 0,
+    "n": 7
+  },
+  "unnecessaryRefusals": 0,
+  "criticalFailures": [],
+  "latencyMs": {
+    "p50": 6,
+    "p95": 24,
+    "max": 69
+  },
+  "semantic": {
+    "configured": false,
+    "enabled": false,
+    "model": "gemini-3.8-flash",
+    "search": true,
+    "lastOkAt": null,
+    "lastError": null,
+    "budget": {
+      "calls": 0,
+      "search": 0,
+      "usd": 0,
+      "refused": 0,
+      "errors": 0,
+      "cached": 0,
+      "caps": {
+        "callsPerDay": 500,
+        "searchPerDay": 100,
+        "usdPerDay": 2,
+        "callsPerIpHour": 40,
+        "inUsdPerM": 0.75,
+        "outUsdPerM": 3.75,
+        "searchUsd": 0.014
+      }
+    }
+  },
+  "failures": []
+}

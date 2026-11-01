@@ -77,7 +77,7 @@ function phraseIn(qw, phrase) {
  * all of them, so the answer covers the group.
  * @returns {null | {key, test, keys: string[], score}}
  */
-function findTest(question, reports) {
+export function findTest(question, reports) {
   const q = norm(question);
   const qw = words(question);
   const hits = [];
@@ -107,7 +107,7 @@ function findTest(question, reports) {
 }
 
 /** Name a subject for a question back to the user. */
-function subjectLabel(id, reports) {
+export function subjectLabel(id, reports) {
   const r = reports.find((x) => subjectOf(x) === id);
   if (id.startsWith("doc:")) return r?.title ?? id.slice(4);
   const name = r?.meta.patient?.name?.replace(/\s*\(synthetic\)/i, "");
@@ -116,7 +116,7 @@ function subjectLabel(id, reports) {
   return /^SYN-/.test(id) || !name ? id : name;
 }
 /** Subjects with this test, narrowed to the one the question names, if any. */
-function subjectsFor(question, reports) {
+export function subjectsFor(question, reports) {
   let ids = [...new Set(reports.map(subjectOf))];
   const named = ids.filter((id) => {
     const r = reports.find((x) => subjectOf(x) === id);
@@ -145,9 +145,34 @@ export function clinicalTurn(question, reports) {
   const withTest = reports.filter((r) =>
     r.observations.some((o) => o.key === hit.key),
   );
-  const patients = subjectsFor(question, withTest);
   const intent = CHANGE_RE.test(question) ? "COMPARE" : "LOOKUP";
   const base = { field: null, intent, lang };
+  // The question names a person whose reports don't have this test: say so.
+  // Never fall back to someone else's value (that was SYN-0003's "ferritin"
+  // being answered with SYN-0001's 50 ng/mL).
+  const namedAll = subjectsFor(question, reports).filter(
+    (id) => !/^(doc|name):/.test(id) || reports.length > 1,
+  );
+  const allIds = new Set(reports.map(subjectOf));
+  if (namedAll.length && namedAll.length < allIds.size) {
+    const haveIt = new Set(withTest.map(subjectOf));
+    const missing = namedAll.filter((id) => !haveIt.has(id));
+    if (missing.length === namedAll.length) {
+      const who = missing.map((id) => subjectLabel(id, reports)).join(", ");
+      const test = nameOf(hit);
+      return {
+        ...base,
+        spoken: {
+          en: `${who}'s reports don't include a ${test} result.`,
+          hi: `${who} की रिपोर्ट्स में ${test} का कोई नतीजा नहीं है।`,
+          hinglish: `${who} ki reports mein ${test} ka koi result nahi hai.`,
+        }[lang],
+        verdict: "NOT_IN_REPORT",
+        used: [],
+      };
+    }
+  }
+  const patients = subjectsFor(question, withTest);
   if (patients.length > 1)
     return {
       ...base,

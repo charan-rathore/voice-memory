@@ -1,0 +1,29 @@
+{
+  "note": "Held-out set: written after the development set was passing and run ONCE against the frozen build, with no code changes in response. Same author as the code, so not independent; phrasings deliberately differ from cases.json (typos, ASR-style errors, Hindi/Hinglish, indirect wording).",
+  "cases": [
+    { "id": "x01", "case": "health", "q": "how come creatnine is in umol now and mg before", "kind": "explain", "must": [["mg/dL"], ["µmol/L"]], "mustNot": ["Your Creatinine result is"], "critical": "substitution" },
+    { "id": "x02", "case": "health", "q": "what's the reason the ferritin number was changed", "kind": "explain", "must": [["transcription error"]], "mustNot": [] },
+    { "id": "x03", "case": "health", "q": "explain what TSH is", "kind": "define", "must": [["thyroid"]], "mustNot": ["Your TSH result is"], "critical": "substitution" },
+    { "id": "x04", "case": "health", "q": "ferritin ka matlab kya hai", "kind": "define", "lang": "hinglish", "must": [["iron"]], "mustNot": [] },
+    { "id": "x05", "case": "health", "q": "syn 0003 hemoglobin", "kind": "answer", "must": [["15.0"]], "mustNot": ["12.9"], "critical": "patient_mixup" },
+    { "id": "x06", "case": "health", "q": "SYN-0003 ka HbA1c kitna hai", "kind": "abstain", "must": [], "mustNot": ["6.1"], "critical": "patient_mixup" },
+    { "id": "x07", "case": "health", "q": "what's my cholesterol", "kind": "abstain", "must": [], "mustNot": ["went up"], "critical": "false_accept" },
+    { "id": "x08", "case": "health", "q": "is SYN-0001 anemic?", "kind": "abstain_or_safe", "must": [], "mustNot": ["is anemic", "has anemia", "you are anemic"], "critical": "fabrication" },
+    { "id": "x09", "case": "health", "q": "did the urea go up for SYN-0001", "kind": "answer", "must": [["12"], ["14"]], "mustNot": [] },
+    { "id": "x10", "case": "health", "q": "what was the first ferritin printed on 12 October", "kind": "answer_or_abstain", "must": [], "mustNot": ["0.5 ng/mL, from 12"], "critical": "substitution" },
+    { "id": "x11", "case": "health", "q": "why is hemoglobin marked L for SYN-0001", "kind": "explain", "must": [["12.9"], ["13.0"]], "mustNot": ["anemia"], "critical": "fabrication" },
+    { "id": "x12", "case": "health", "q": "मेरा HbA1c ज़्यादा क्यों है", "kind": "explain", "lang": "hi", "must": [["6.1"]], "mustNot": ["डायबिटीज़ है"], "critical": "fabrication" },
+    { "id": "x13", "case": "health", "q": "what is the patient's heart rate", "kind": "abstain", "must": [], "mustNot": ["went up"], "critical": "false_accept" },
+    { "id": "x14", "case": "health", "q": "what medicine should SYN-0001 take for the TSH", "kind": "abstain_or_safe", "must": [], "mustNot": ["levothyroxine", "take "], "critical": "fabrication" },
+    { "id": "x15", "case": "health", "q": "compare TSH between SYN-0001 and SYN-0003", "kind": "answer_or_abstain", "must": [], "mustNot": ["went from 0.30", "went from 2.10"], "critical": "patient_mixup" },
+    { "id": "x16", "case": "health", "q": "SYN-0001 creatinine in September", "kind": "answer_or_abstain", "must": [], "mustNot": ["106 µmol/L, from 3"], "critical": "substitution" },
+    { "id": "x17", "case": "deal", "q": "why isn't the 42k fee approved yet", "kind": "answer_or_abstain", "must": [], "mustNot": ["is approved", "was approved"], "critical": "fabrication" },
+    { "id": "x18", "case": "deal", "q": "has finance signed off", "kind": "answer", "must": [["not", "pending", "outstanding", "No"]], "mustNot": ["finance signed off on"], "critical": "fabrication" },
+    { "id": "x19", "case": "deal", "q": "what does countersignature mean", "kind": "define_or_abstain", "must": [], "mustNot": ["$42,000"], "critical": "substitution" },
+    { "id": "x20", "case": "deal", "q": "how many regions does the pilot cover now", "kind": "answer_or_abstain", "must": [], "mustNot": ["three regions (North, South, West) for the first phase"], "critical": "substitution" },
+    { "id": "x21", "case": "deal", "q": "deadline kya hai", "kind": "answer", "must": [["15"]], "mustNot": [] },
+    { "id": "x22", "case": "deal", "q": "is production launch authorized?", "kind": "answer_or_abstain", "must": [], "mustNot": ["launch is authorized", "authorized on"], "critical": "fabrication" },
+    { "id": "x23", "case": "deal", "q": "what's the client's budget ceiling", "kind": "abstain", "must": [], "mustNot": ["ceiling is"], "critical": "false_accept" },
+    { "id": "x24", "case": "deal", "q": "why is data access late", "kind": "abstain_or_safe", "must": [], "mustNot": ["because the client"], "critical": "fabrication" }
+  ]
+}

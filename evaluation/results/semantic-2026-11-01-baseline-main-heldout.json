@@ -1,0 +1,75 @@
+{
+  "label": "baseline-main",
+  "commit": "cd851a7",
+  "date": "2026-11-01",
+  "cases": 24,
+  "answerableCorrect": {
+    "k": 17,
+    "n": 20,
+    "ci95": "64.0%–94.8%"
+  },
+  "abstentionCorrect": {
+    "k": 3,
+    "n": 4,
+    "ci95": "30.1%–95.4%"
+  },
+  "falseAcceptance": {
+    "k": 1,
+    "n": 4
+  },
+  "unnecessaryRefusals": 0,
+  "criticalFailures": [
+    {
+      "id": "x06",
+      "class": "patient_mixup",
+      "q": "SYN-0003 ka HbA1c kitna hai",
+      "said": "Aapka HbA1c result 6.1 % hai, 12 October 2026 ki jaanch se. Yeh is lab ki range (4.0 se 5.6) se thoda zyada hai. Range se thoda bahar aana aam baat hai: range aise set hoti hai ki bina kisi bimari wale lagbhag har 20 mein se 1 insaan ka result bhi iske bahar aata hai. Thodi general jaankari: HbA1c pichhle lagbhag do se teen mahine ki average blood sugar dikhata hai. Aapke doctor ise aapki tabiyat, dawaiyon aur baaki tests ke saath dekhkar sahi matlab samjha sakte hain."
+    }
+  ],
+  "latencyMs": {
+    "p50": 8,
+    "p95": 24,
+    "max": 40
+  },
+  "semantic": null,
+  "failures": [
+    {
+      "id": "x02",
+      "q": "what's the reason the ferritin number was changed",
+      "kind": "explain",
+      "verdict": "COMPARED",
+      "said": "Your Ferritin went from 0.5 ng/mL on 3 September 2026 to 50 ng/mL on 12 October 2026. That's higher than before. It's now inside the lab's range. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value. Some general background: Ferritin shows how much iron your body has stored. Your doctor can read it alongside how you feel, your medicines and your other results.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "x03",
+      "q": "explain what TSH is",
+      "kind": "define",
+      "verdict": "AMBIGUOUS_PATIENT",
+      "said": "These reports have TSH results for more than one person (SYN-0001, SYN-0003). Whose results should I look at?",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "x05",
+      "q": "syn 0003 hemoglobin",
+      "kind": "answer",
+      "verdict": "AMBIGUOUS_PATIENT",
+      "said": "These reports have Hemoglobin results for more than one person (SYN-0001, SYN-0003). Whose results should I look at?",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "x06",
+      "q": "SYN-0003 ka HbA1c kitna hai",
+      "kind": "abstain",
+      "verdict": "LATEST",
+      "said": "Aapka HbA1c result 6.1 % hai, 12 October 2026 ki jaanch se. Yeh is lab ki range (4.0 se 5.6) se thoda zyada hai. Range se thoda bahar aana aam baat hai: range aise set hoti hai ki bina kisi bimari wale lagbhag har 20 mein se 1 insaan ka result bhi iske bahar aata hai. Thodi general jaankari: HbA1c pichhle lagbhag do se teen mahine ki average blood sugar dikhata hai. Aapke doctor ise aapki tabiyat, dawaiyon aur baaki tests ke saath dekhkar sahi matlab samjha sakte hain.",
+      "bad": [
+        "6.1"
+      ],
+      "notes": []
+    }
+  ]
+}

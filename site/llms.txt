@@ -1,6 +1,6 @@
 # Voice Memory
 
-> A voice agent on Bolna that answers questions about records that change (lab reports, contracts, meeting notes) only from what the documents support. Before it answers it checks whether a value was amended, preliminary, proposed, approved or superseded, which patient it belongs to, and which unit it is in, and it cites the exact line on the original page. No language model writes the answers: every sentence is built from the record and passes an exact-span evidence gate. All data on the public site is fictional.
+> A voice agent on Bolna that answers questions about records that change (lab reports, contracts, meeting notes) only from what the documents support. Before it answers it checks whether a value was amended, preliminary, proposed, approved or superseded, which patient it belongs to, and which unit it is in, and it cites the exact line on the original page. Answers are built from the record and pass an exact-span evidence gate; when a language model (Gemini) helps read a question or phrase a claim, each claim's quote, values, units, status and subject are verified against the original span before it is used, and general background is labelled and sourced separately. All data on the public site is fictional.
 
 Use it when you need an answer about a document that must not guess: it refuses to compare values in different units, asks which patient when two people's reports match, and says "proposed, not approved" or "not on record" instead of inventing a final value.
 

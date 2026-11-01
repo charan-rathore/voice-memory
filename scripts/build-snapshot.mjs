@@ -23,7 +23,12 @@ for (const c of cases)
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ case: c.id, question: q }),
     });
-    answers[`${c.id}|${q}`] = await r.json();
+    // Saved answers keep the sentence and citations; the chart and trace
+    // come from the live engine.
+    const { visual, semantic, ...rest } = await r.json();
+    void visual;
+    void semantic;
+    answers[`${c.id}|${q}`] = rest;
   }
 const docs = {};
 for (const d of cases.find((c) => c.id === "deal").documents)
@@ -32,6 +37,24 @@ const graphs = {
   health: await get("/graph/health"),
   deal: await get("/graph/deal"),
 };
+// Visual summaries in each narration language, so the answer panel's
+// picture is there before the free host wakes.
+// The picture is the same in every language; only the narration differs.
+const visuals = {};
+for (const c of cases)
+  for (const lang of ["en", "hi", "hinglish"]) {
+    const { visual } = await get(`/visual/${c.id}?lang=${lang}`);
+    if (!visual) continue;
+    const v = (visuals[c.id] ??= { visual: null, narration: {} });
+    // The overview draws strips, not history: keep the snapshot lean.
+    if (lang === "en")
+      v.visual = JSON.parse(
+        JSON.stringify(visual, (k, x) =>
+          k === "history" || k === "printedRange" ? undefined : x,
+        ),
+      );
+    v.narration[lang] = visual.narration ?? null;
+  }
 const strip = (c) => ({
   ...c,
   documents: c.documents.map(({ title, filename, kind, pages }) => ({
@@ -50,6 +73,7 @@ writeFileSync(
       answers,
       docs,
       graphs,
+      visuals,
     }) +
     ";\n",
 );
