@@ -62,6 +62,11 @@ and the fixes, measured on a field set.
   serves a sentence when the lexical leader is also semantically close, in
   addition to the calibrated cosine gate. On the Northstar paraphrase bench
   this adds no wrong passages and no accepted unanswerable questions.
+- **Form fields**: in form-shaped documents, *who / when / where / how
+  old* questions read the matching `Label: value` line ("Full name of
+  doctor: …").
+- On a visitor's own documents, the hybrid sentence search outranks the
+  keyword-only extract.
 - **PDF ligatures** repaired at extraction (`ingest/pdf.mjs`).
 
 ## Measured
@@ -71,7 +76,17 @@ reports (Indian, Pakistani and US lab printouts, a radiology report, a
 narrative medical report). The files are third-party samples on GitHub;
 `fetch.mjs` downloads them locally and they are never committed.
 
-FIELD_RESULTS
+Field set: 11 public sample reports, 58 answerable questions and 9 the documents cannot answer. Each was asked through the same upload and `/ask` path a visitor uses.
+
+| Build | Right | Wrong | No answer | Unanswerable refused |
+| --- | --- | --- | --- | --- |
+| Before (main, keyword) | 9 / 58 (16%) | 22 (38%) | 27 | 9 / 9 |
+| After, keyword only (`VM_DENSE=off`) | 52 / 58 (90%) | 1 (2%) | 5 | 9 / 9 |
+| After, with the embedding model (production) | **57 / 58 (98%)** | **0** | 1 | 8 / 9 |
+
+- **Remaining miss:** "any fluid around the lungs?" gets no answer. The right sentence ("no … effusion") is the lexical leader but sits just below the semantic agreement band.
+- **One accepted unanswerable:** "what is his blood pressure reading?" got "He has had hypertension … since 1990". That sentence is relevant history, but it is not a reading.
+- **Before this change:** with the embedding model on, main matched the keyword-only row, because the missing constant disabled every semantic lookup.
 
 The visitor's own report is not part of the committed set (it is personal
 data); it was used locally only, and the fictional
