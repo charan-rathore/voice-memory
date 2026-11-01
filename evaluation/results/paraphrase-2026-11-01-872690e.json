@@ -1,0 +1,655 @@
+{
+  "sha": "872690e",
+  "date": "2026-11-01T06:17:49.244Z",
+  "model": "Xenova/bge-small-en-v1.5",
+  "denseAvailable": false,
+  "msPerQuery": 2.6,
+  "summary": {
+    "development": {
+      "n": 15,
+      "keyword": {
+        "recall1": 0.333,
+        "recall3": 0.4,
+        "abstain": 0.4
+      },
+      "hybrid": {
+        "recall1": 0.333,
+        "recall3": 0.4,
+        "abstain": 0.4
+      },
+      "dense": {
+        "recall1": 0,
+        "recall3": 0
+      },
+      "nAbstain": 5
+    },
+    "heldout": {
+      "n": 15,
+      "keyword": {
+        "recall1": 0.333,
+        "recall3": 0.333,
+        "abstain": 0.8
+      },
+      "hybrid": {
+        "recall1": 0.333,
+        "recall3": 0.333,
+        "abstain": 0.8
+      },
+      "dense": {
+        "recall1": 0,
+        "recall3": 0
+      },
+      "nAbstain": 5
+    }
+  },
+  "rows": [
+    {
+      "q": "How much was the first quote for the project?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "hit": false
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "What does the work cost now that the scope was cut back?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "How is the reduced price split between before and after delivery?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "What was the original finish date?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [
+        {
+          "title": "06_Client_Email_Extract.md",
+          "hit": false
+        },
+        {
+          "title": "03_Commercial_Revision.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "06_Client_Email_Extract.md",
+          "hit": false
+        },
+        {
+          "title": "03_Commercial_Revision.md",
+          "hit": false
+        }
+      ],
+      "evidence": "ambiguous",
+      "dense": []
+    },
+    {
+      "q": "Which areas were taken out of the first phase?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "02_Client_Kickoff_Notes.md",
+          "hit": true
+        },
+        {
+          "title": "07_Internal_Action_Log.md",
+          "hit": false
+        },
+        {
+          "title": "04_Steering_Committee_Notes.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "02_Client_Kickoff_Notes.md",
+          "hit": true
+        },
+        {
+          "title": "07_Internal_Action_Log.md",
+          "hit": false
+        },
+        {
+          "title": "04_Steering_Committee_Notes.md",
+          "hit": false
+        }
+      ],
+      "evidence": "ambiguous",
+      "dense": []
+    },
+    {
+      "q": "How often will the customer hear about progress?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": true
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": true
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "Who has to okay changes to the money terms?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "02_Client_Kickoff_Notes.md",
+          "hit": true
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "02_Client_Kickoff_Notes.md",
+          "hit": true
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "Did the leadership group object to the price?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "Was there a ballot on how payments are staged?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "When does our own team expect to be ready?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": false
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "Is the later ready date something the customer agreed to?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "hit": true
+        },
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "hit": true
+        },
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": false
+        }
+      ],
+      "evidence": "ambiguous",
+      "dense": []
+    },
+    {
+      "q": "What could make the ready date slip?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "How far behind is the customer in handing over their data?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "What did the customer say about keeping the first end date?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": false
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "Has the customer accepted a new end date?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": false
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "What does the customer want put in writing before the next leadership session?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [
+        {
+          "title": "06_Client_Email_Extract.md",
+          "hit": true
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "06_Client_Email_Extract.md",
+          "hit": true
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "Is there a countersigned contract for the new terms?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "Has going live in production been authorised?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [
+        {
+          "title": "07_Internal_Action_Log.md",
+          "hit": true
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "07_Internal_Action_Log.md",
+          "hit": true
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "What has to happen before the first offer becomes binding?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": true
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": true
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "How was the original price going to be billed?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "Does the price change note mention a new end date?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "Until when is the cheaper price only an offer?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "Where do unresolved money questions get tracked?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "Which two areas does the current plan cover?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "What are the two competing ways of staging payment?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "02_Client_Kickoff_Notes.md",
+          "hit": false
+        },
+        {
+          "title": "07_Internal_Action_Log.md",
+          "hit": true
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "02_Client_Kickoff_Notes.md",
+          "hit": false
+        },
+        {
+          "title": "07_Internal_Action_Log.md",
+          "hit": true
+        }
+      ],
+      "evidence": "ambiguous",
+      "dense": []
+    },
+    {
+      "q": "Which end dates are in conflict?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "Which consultancy is running this engagement?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": true
+        },
+        {
+          "title": "04_Steering_Committee_Notes.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": true
+        },
+        {
+          "title": "04_Steering_Committee_Notes.md",
+          "hit": false
+        }
+      ],
+      "evidence": "ambiguous",
+      "dense": []
+    },
+    {
+      "q": "What kind of study is being run for the retailer?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": true
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": true
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "Had the accountants signed off the reworked pricing by the time leadership met?",
+      "kind": "answer",
+      "split": "development",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "After the first meeting, was the money approval done?",
+      "kind": "answer",
+      "split": "heldout",
+      "keyword": [
+        {
+          "title": "02_Client_Kickoff_Notes.md",
+          "hit": true
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "02_Client_Kickoff_Notes.md",
+          "hit": true
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "What is the penalty for finishing late?",
+      "kind": "abstain",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "hit": false
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "What is the client's head office address?",
+      "kind": "abstain",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "How many analysts are on the delivery team?",
+      "kind": "abstain",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "hit": false
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "Which software licences are included?",
+      "kind": "abstain",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "What interest is charged on late invoices?",
+      "kind": "abstain",
+      "split": "development",
+      "keyword": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "hit": false
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "Who is the client's chief executive?",
+      "kind": "abstain",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "What is the travel budget?",
+      "kind": "abstain",
+      "split": "development",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "Which cloud provider hosts the data?",
+      "kind": "abstain",
+      "split": "heldout",
+      "keyword": [
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "hit": false
+        }
+      ],
+      "hybrid": [
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "hit": false
+        }
+      ],
+      "evidence": "positive",
+      "dense": []
+    },
+    {
+      "q": "What discount applies for paying early?",
+      "kind": "abstain",
+      "split": "development",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    },
+    {
+      "q": "How long is the warranty period?",
+      "kind": "abstain",
+      "split": "heldout",
+      "keyword": [],
+      "hybrid": [],
+      "evidence": "insufficient",
+      "dense": []
+    }
+  ]
+}

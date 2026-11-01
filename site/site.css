@@ -378,3 +378,24 @@ button { font: inherit; color: inherit; }
 .upl-st.busy::after { content: ""; display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 700ms linear infinite; vertical-align: -1px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 620px) { .cases { grid-template-columns: 1fr 1fr; } .case-own { grid-column: span 2; } }
+
+/* ---------------------------------------------------------------- motion module (motion.bundle.mjs) */
+/* Hero: the preliminary 5 flies along a spline into the amended value. JS
+   owns the amended box's entrance while this runs, so its layout is final
+   when the path is measured. */
+.hc-motion .hc-val.amended { animation: none; opacity: 0; transform: none; }
+.hc-motion .hc-d5 { opacity: 0; }
+.hc-motion .hc-d0 { opacity: 0; display: inline-block; transform-origin: 30% 80%; }
+.hc-ghost { position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; will-change: transform; color: var(--coral); }
+.hero-card { transform-style: preserve-3d; will-change: transform; }
+/* How it works: a question travels an unseen spline through the steps. */
+.pipe-token { position: absolute; left: 0; top: 0; z-index: 3; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--mark); box-shadow: 0 0 0 4px rgba(244, 220, 74, 0.25), 0 0 18px rgba(244, 220, 74, 0.85); opacity: 0; transition: opacity 300ms var(--ease); pointer-events: none; }
+/* Live call: spline waveform replaces the bars. */
+.call-meter.spline i { display: none; }
+.call-meter canvas { display: block; }
+/* Catch cards: the question flies to the answer desk. */
+.catch-ghost { position: fixed; z-index: 60; margin: 0; pointer-events: none; background: #fffffb; border: 1px solid var(--ink); border-radius: 12px; padding: 8px 12px; font-size: 14px; color: var(--ink-2); box-shadow: 0 18px 30px -20px rgba(22, 28, 45, 0.6); }
+.catch-ghost s { color: var(--red); }
+.catch-ghost b { color: var(--ink); }
+/* 3D memory graph: fade the canvas edges into the band. */
+.graph-3d { display: block; width: 100%; height: auto; -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent); mask-image: radial-gradient(closest-side, #000 72%, transparent); }

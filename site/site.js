@@ -68,6 +68,7 @@
               : "Request failed."),
         );
         e.status = r.status;
+        e.retryAfter = Number(r.headers.get("retry-after")) || 0;
         throw e;
       }
       return body;
@@ -76,12 +77,35 @@
     }
   }
 
+  // Capped exponential backoff with full jitter (AWS Architecture Blog,
+  // "Exponential Backoff And Jitter"): wait a random time in [0, min(cap,
+  // base * 2^attempt)], so many visitors arriving during one cold boot spread
+  // their probes out instead of hitting the waking host in lockstep. A
+  // server's Retry-After is honoured as a floor.
+  const backoff = (attempt, { base = 1000, cap = 30000, floor = 0 } = {}) =>
+    Math.max(floor, Math.random() * Math.min(cap, base * 2 ** attempt));
+  // Hidden tabs don't probe: a forgotten background tab would otherwise keep
+  // the free host awake (and spend its monthly hours) indefinitely.
+  const whenVisible = () =>
+    document.hidden
+      ? new Promise((r) =>
+          document.addEventListener("visibilitychange", function on() {
+            if (document.hidden) return;
+            document.removeEventListener("visibilitychange", on);
+            r();
+          }),
+        )
+      : Promise.resolve();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   async function connect() {
     note("Connecting to the live engine…");
     // Never give up: a cold free-tier boot plus first-ingest can take several
-    // minutes, so after the fast phase keep polling slowly in the background.
-    // A page that stops retrying strands every visitor who arrived early.
+    // minutes, so keep probing (with backoff) while the page is visible. A
+    // page that stops retrying strands every visitor who arrived early.
+    const t0 = Date.now();
     for (let i = 0; ; i++) {
+      let floor = 0;
       try {
         const s = await api("/status", {}, 8000);
         if (s.cases.health && s.cases.deal) {
@@ -90,20 +114,21 @@
           state.live = true;
           state.voice = s.voice;
           note(
-            "Live engine connected · every answer is computed now from the fictional records.",
+            "Live engine connected. Every answer is computed now from the fictional records.",
           );
           renderRail();
           return;
         }
-      } catch {
-        /* free host cold start */
+      } catch (e) {
+        floor = (e.retryAfter || 0) * 1000; /* free host cold start */
       }
       note(
-        i < 40
+        Date.now() - t0 < 120000
           ? "Waking the live engine (free hosting can take up to a minute). Suggested questions answer from a saved run of the same engine meanwhile."
-          : "Still waking the live engine — retrying in the background. Uploads and questions work the moment it is up.",
+          : "Still waking the live engine, retrying in the background. Uploads and questions work the moment it is up.",
       );
-      await new Promise((r) => setTimeout(r, i < 40 ? 3000 : 15000));
+      await sleep(backoff(Math.min(i, 5), { base: 1500, cap: 20000, floor }));
+      await whenVisible();
     }
   }
 
@@ -330,6 +355,32 @@
     }
   }
 
+  // Demo cases ask with a cacheable GET (repeats are served by the CDN, not
+  // the free host); visitor workspaces always POST. If the engine predates
+  // GET /answer (the site deploys before the engine does), fall back to POST.
+  let getAnswers = true;
+  async function askEngine(caseId, question, context) {
+    if (caseId !== "own" && getAnswers) {
+      const qs = new URLSearchParams({ case: caseId, q: question });
+      if (context) qs.set("context", context);
+      try {
+        return await api("/answer?" + qs);
+      } catch (e) {
+        if (e.status !== 404 && e.status !== 405) throw e;
+        getAnswers = false;
+      }
+    }
+    return api("/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        case: apiCase(caseId),
+        question,
+        context: context || undefined,
+      }),
+    });
+  }
+
   async function ask(question, { via = "typed", caseId = state.case } = {}) {
     question = String(question ?? "").trim();
     if (!question) return;
@@ -351,15 +402,7 @@
         throw Object.assign(new Error("not live"), { offline: true });
       if (caseId === "own" && !state.cases.own?.ready)
         throw new Error("Upload a document first, then ask about it.");
-      result = await api("/ask", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          case: apiCase(caseId),
-          question,
-          context: state.context[caseId] || undefined,
-        }),
-      });
+      result = await askEngine(caseId, question, state.context[caseId]);
     } catch (e) {
       const saved = snap.answers?.[`${caseId}|${question}`];
       if (saved) {
@@ -651,12 +694,35 @@
   const callState = (html) => ($("#call-state").innerHTML = html);
   const meter = $$(".call-meter i");
 
+  // The Bolna call library is ~235 KB; most visitors never call, so it loads
+  // on the first sign of intent (hover, focus or touch on a call button), or
+  // at the latest when the call starts.
+  let bolnaP = null;
+  const loadBolna = () =>
+    (bolnaP ??= window.BolnaWebCall
+      ? Promise.resolve()
+      : new Promise((ok, bad) => {
+          const sc = document.createElement("script");
+          sc.src = "vendor/bolna-web-call.min.js";
+          sc.onload = ok;
+          sc.onerror = () => ((bolnaP = null), bad(Error("load failed")));
+          document.head.appendChild(sc);
+        }));
+  for (const ev of ["pointerenter", "focusin", "touchstart"])
+    document.addEventListener(
+      ev,
+      (e) =>
+        e.target.closest?.("[data-start-call],[data-call-link]") && loadBolna(),
+      { capture: true, passive: true },
+    );
+
   async function startCall() {
     $("#try").scrollIntoView({
       behavior: reduced ? "auto" : "smooth",
       block: "start",
     });
     if (state.call) return stopCall();
+    await loadBolna().catch(() => {});
     if (!window.BolnaWebCall) {
       callState(
         "The call library didn't load. Refresh the page and try again.",
@@ -738,6 +804,9 @@
       pollTurns();
     });
     call.on("volume-level", (v) => {
+      // The motion module draws a spline waveform from these levels; the
+      // bars below are the fallback when it isn't loaded.
+      document.dispatchEvent(new CustomEvent("vm:level", { detail: v }));
       meter.forEach(
         (m, i) =>
           (m.style.height = `${4 + Math.max(0, v * 26 - Math.abs(i - 3) * 3) * (0.7 + Math.random() * 0.6)}px`),
@@ -764,6 +833,7 @@
   }
 
   function endUi(reason) {
+    document.dispatchEvent(new CustomEvent("vm:level", { detail: -1 }));
     callbar.classList.remove("live", "busy");
     $("#call-label").textContent = "Call Voice Memory";
     meter.forEach((m) => (m.style.height = "4px"));
@@ -809,9 +879,12 @@
   }
 
   // ------------------------------------------------------------ graph preview
+  // A small force layout. Integrated with dt so it runs the same at 60 Hz
+  // and 144 Hz (the old per-frame `v *= 0.82` ran 2.4x faster on 144 Hz
+  // screens), and the loop stops entirely while the canvas is off screen.
   function miniGraph() {
     const cv = $("#graph-mini");
-    if (!cv) return;
+    if (!cv || cv.dataset.engine === "3d") return;
     const ctx = cv.getContext("2d");
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const W = 640,
@@ -840,16 +913,12 @@
       const edges = g.edges
         .map((e) => ({ ...e, a: by.get(e.from), b: by.get(e.to) }))
         .filter((e) => e.a && e.b);
-      let t = 0;
-      let visible = true;
-      new IntersectionObserver(([en]) => (visible = en.isIntersecting)).observe(
-        cv,
-      );
-      const tick = () => {
-        requestAnimationFrame(tick);
-        if (!visible) return;
-        t += 1;
-        // tiny force layout
+      let t = 0,
+        raf = 0,
+        last = 0,
+        visible = false;
+      // Constants were tuned per 60 Hz frame; k = dt * 60 rescales them.
+      const step = (k) => {
         for (const a of nodes) {
           for (const b of nodes) {
             if (a === b) continue;
@@ -857,30 +926,33 @@
               dy = a.y - b.y;
             const d2 = dx * dx + dy * dy + 0.01;
             if (d2 < 9000) {
-              const f = 60 / d2;
+              const f = (60 / d2) * k;
               a.vx += dx * f;
               a.vy += dy * f;
             }
           }
-          a.vx += (W / 2 - a.x) * 0.0016;
-          a.vy += (H / 2 - a.y) * 0.0024;
+          a.vx += (W / 2 - a.x) * 0.0016 * k;
+          a.vy += (H / 2 - a.y) * 0.0024 * k;
         }
         for (const e of edges) {
           const dx = e.b.x - e.a.x,
             dy = e.b.y - e.a.y;
           const d = Math.hypot(dx, dy) || 1;
-          const f = (d - (e.kind === "corrects" ? 40 : 62)) * 0.006;
+          const f = (d - (e.kind === "corrects" ? 40 : 62)) * 0.006 * k;
           e.a.vx += (dx / d) * f;
           e.a.vy += (dy / d) * f;
           e.b.vx -= (dx / d) * f;
           e.b.vy -= (dy / d) * f;
         }
+        const damp = Math.pow(0.82, k); // exponential decay, frame-rate independent
         for (const n of nodes) {
-          n.vx *= 0.82;
-          n.vy *= 0.82;
-          n.x += n.vx + Math.sin(t / 90 + n.x) * 0.06;
-          n.y += n.vy + Math.cos(t / 110 + n.y) * 0.06;
+          n.vx *= damp;
+          n.vy *= damp;
+          n.x += (n.vx + Math.sin(t / 1.5 + n.x) * 0.06) * k;
+          n.y += (n.vy + Math.cos(t / 1.8 + n.y) * 0.06) * k;
         }
+      };
+      const draw = () => {
         ctx.clearRect(0, 0, W, H);
         for (const e of edges) {
           const special = e.kind === "corrects" || e.kind === "not comparable";
@@ -892,7 +964,7 @@
                 : "rgba(160,170,200,0.22)";
           ctx.lineWidth = special ? 2 : 1;
           ctx.setLineDash(special ? [5, 5] : []);
-          ctx.lineDashOffset = -t / 2;
+          ctx.lineDashOffset = -t * 30;
           ctx.beginPath();
           ctx.moveTo(e.a.x, e.a.y);
           ctx.lineTo(e.b.x, e.b.y);
@@ -911,13 +983,9 @@
           const col =
             n.status === "superseded" ? "#e8735a" : (COLORS[n.kind] ?? "#ccc");
           ctx.fillStyle = col;
-          ctx.shadowColor = col;
-          ctx.shadowBlur =
-            n.kind === "patient" || n.status === "superseded" ? 16 : 6;
           ctx.beginPath();
           ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
           ctx.fill();
-          ctx.shadowBlur = 0;
           if (
             n.kind === "patient" ||
             (n.kind === "topic" && /ferritin|creatinine/i.test(n.label)) ||
@@ -929,7 +997,29 @@
           }
         }
       };
-      tick();
+      const tick = (now) => {
+        const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
+        last = now;
+        t += dt;
+        step(dt * 60);
+        draw();
+        raf = visible && !document.hidden ? requestAnimationFrame(tick) : 0;
+        if (!raf) last = 0;
+      };
+      const wake = () => {
+        if (!raf && visible && !document.hidden)
+          raf = requestAnimationFrame(tick);
+      };
+      // Settle the layout before the first paint, so the band never shows an
+      // empty canvas (or a burst of motion) when it scrolls into view.
+      for (let i = 0; i < 240; i++) step(1);
+      draw();
+      if (reduced) return;
+      new IntersectionObserver(([en]) => {
+        visible = en.isIntersecting;
+        wake();
+      }).observe(cv);
+      document.addEventListener("visibilitychange", wake);
     });
   }
 
@@ -968,28 +1058,15 @@
     ),
   );
 
-  // reveal + count-up
+  // Reveal on scroll. The stat count-up lives in motion.bundle.mjs (it
+  // times the numbers with the same cubic-bezier as the CSS transitions);
+  // without it the final figures are already in the HTML.
   const io = new IntersectionObserver(
     (entries) =>
       entries.forEach((en) => {
         if (!en.isIntersecting) return;
         en.target.classList.add("on");
         io.unobserve(en.target);
-        const num = $(".stat-num", en.target);
-        if (num && !reduced) {
-          const to = Number(num.dataset.count),
-            pre = num.dataset.prefix ?? "",
-            suf = num.dataset.suffix ?? "";
-          const dec = String(to).includes(".") ? 1 : 0;
-          const t0 = performance.now();
-          const step = (now) => {
-            const k = Math.min(1, (now - t0) / 1100);
-            const v = to * (1 - Math.pow(1 - k, 3));
-            num.textContent = pre + v.toFixed(dec) + suf;
-            if (k < 1) requestAnimationFrame(step);
-          };
-          requestAnimationFrame(step);
-        }
       }),
     { threshold: 0.18 },
   );

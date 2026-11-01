@@ -1,0 +1,45 @@
+# Every push and pull request runs the regression gate before anything ships.
+# Render can be set to deploy only after these checks pass
+# (Settings -> Auto-Deploy -> "After CI checks pass").
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:boundaries
+      - run: npm run test:evaluation
+      - run: npm run test:ingest
+      - run: npm run test:clinical
+      - run: npm run test:vault
+      - name: Bring-your-own documents flow in a real browser
+        run: node site-check.mjs
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: Landing page in a real browser (desktop and phone)
+        run: node scripts/site-shots.mjs .shots
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: landing-screenshots
+          path: .shots
+          retention-days: 7

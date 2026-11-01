@@ -16,6 +16,23 @@
     <meta property="og:image" content="og.png" />
     <meta name="theme-color" content="#fbfaf2" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="alternate" type="text/plain" href="llms.txt" title="Voice Memory for language models" />
+    <link rel="describedby" type="application/json" href="openapi.json" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Voice Memory",
+        "applicationCategory": "Voice agent / document question answering",
+        "operatingSystem": "Web",
+        "url": "https://voice-memory-beige.vercel.app/",
+        "codeRepository": "https://github.com/charan-rathore/voice-memory",
+        "description": "A voice agent on Bolna that answers questions about changing records (lab reports, contracts, meeting notes) only from what the documents support. It checks amended, preliminary, proposed and superseded values, units and patients, and cites the exact line on the original page. No language model writes the answers.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "author": { "@type": "Person", "name": "Charan Rathore" },
+        "isAccessibleForFree": true
+      }
+    </script>
     <link rel="preload" href="fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="site.css" />
@@ -71,7 +88,7 @@
             <svg class="hc-arrow" viewBox="0 0 80 24" aria-hidden="true"><path d="M2 12h70" /><path d="M64 4l10 8-10 8" /></svg>
             <div class="hc-val amended">
               <span class="hc-tag">Amended · 15 Oct</span>
-              <span class="hc-num">50</span>
+              <span class="hc-num"><span class="hc-d5">5</span><span class="hc-d0">0</span></span>
               <span class="hc-unit">ng/mL</span>
             </div>
           </div>
@@ -91,7 +108,7 @@
       <!-- ============================================================ film -->
       <section class="film" id="film" aria-labelledby="film-title">
         <h2 id="film-title" class="sr-only">The 80-second film</h2>
-        <video controls preload="metadata" playsinline poster="media/film-poster.jpg">
+        <video controls preload="none" playsinline poster="media/film-poster.jpg">
           <source src="media/voice-memory-film.mp4" type="video/mp4" />
           <track kind="captions" src="media/voice-memory-film.vtt" srclang="en" label="English" default />
         </video>
@@ -294,13 +311,14 @@
               <li>PDF, Word, scanned image and text ingestion with page-anchored citations</li>
               <li>Lab explanations in English, Hindi or Hinglish, in the language you ask</li>
               <li>A memory graph of documents, values and the sentences behind them</li>
+              <li>Your own documents on this page, in a private workspace deleted after 30 idle minutes</li>
+              <li>A key-free API for scripts and agents (<a href="llms.txt">llms.txt</a>, <a href="openapi.json">OpenAPI</a>)</li>
             </ul>
           </div>
           <div style="--i: 1">
             <h3>Next</h3>
             <ul>
-              <li>Bring-your-own documents on this page, in an encrypted, private workspace</li>
-              <li>Paraphrase-aware search with a dense retriever behind the same evidence gate</li>
+              <li>Paraphrase-aware search: the dense retriever finds the right passage, the evidence gate doesn't accept it yet (<a href="https://github.com/charan-rathore/voice-memory/blob/main/docs/PARAPHRASE-RETRIEVAL.md">measured</a>)</li>
               <li>A benchmark of real, messy records written by people outside the team</li>
               <li>Clinician review of lab explanations before any patient pilot</li>
               <li>Phone-number calls and WhatsApp voice notes through Bolna</li>
@@ -326,8 +344,8 @@
       </p>
     </footer>
 
-    <script src="vendor/bolna-web-call.min.js" defer></script>
     <script src="snapshot.js" defer></script>
     <script src="site.js" defer></script>
+    <script type="module" src="motion.bundle.mjs"></script>
   </body>
 </html>

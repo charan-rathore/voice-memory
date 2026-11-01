@@ -1,0 +1,67 @@
+# Renders the Manim explainer clip(s) in docs/explainer/ and commits the
+# result to docs/media/ on the same branch, so the README can embed it.
+name: explainer
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "docs/explainer/**"
+      - ".github/workflows/explainer.yml"
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: System libraries for Manim (Cairo, Pango) and the Newsreader font
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libcairo2-dev libpango1.0-dev ffmpeg fonts-dejavu
+          mkdir -p ~/.fonts
+          cp node_modules/@fontsource-variable/newsreader/files/*.woff2 ~/.fonts/ 2>/dev/null || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - name: Newsreader as TTF for Pango
+        run: |
+          pip install -q fonttools brotli
+          for f in node_modules/@fontsource-variable/newsreader/files/newsreader-latin-wght-normal.woff2; do
+            python -c "from fontTools.ttLib import TTFont; f=TTFont('$f'); f.flavor=None; f.save('$HOME/.fonts/Newsreader.ttf')"
+          done
+          fc-cache -f
+      - run: pip install -q "manim==0.19.*"
+      - name: Render
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          manim -qm --disable_caching docs/explainer/units.py Units > render.log 2>&1
+          code=$?
+          set -e
+          if [ $code -ne 0 ]; then
+            if [ -n "${{ github.event.pull_request.number }}" ]; then
+              { echo "### Manim render failed"; echo '```'; tail -60 render.log; echo '```'; } > fail.md
+              gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -F body=@fail.md >/dev/null
+            fi
+            tail -60 render.log
+            exit 1
+          fi
+          mkdir -p docs/media
+          cp media/videos/units/720p30/Units.mp4 docs/media/units.mp4
+          ffmpeg -y -loglevel error -i docs/media/units.mp4 -vf "fps=15,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=48[p];[b][p]paletteuse" docs/media/units.gif
+          ls -la docs/media
+      - name: Commit the rendered clip
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/media/units.mp4 docs/media/units.gif
+          git diff --cached --quiet || (git commit -m "Render units explainer (Manim)" && git push)
