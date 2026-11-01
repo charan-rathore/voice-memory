@@ -113,6 +113,8 @@
           state.cases = Object.fromEntries(cases.map((c) => [c.id, c]));
           state.live = true;
           state.voice = s.voice;
+          if (s.voice?.ready)
+            document.documentElement.classList.add("voice-on");
           note(
             "Live engine connected. Every answer is computed now from the fictional records.",
           );
@@ -736,6 +738,13 @@
     );
 
   async function startCall() {
+    // Server gate first: when minting is closed, never ask for the
+    // microphone - say so and stop. The buttons are hidden in this state;
+    // this guard is the programmatic backstop.
+    if (!state.voice?.ready) {
+      callState("Voice calls are currently disabled on this server.");
+      return;
+    }
     $("#try").scrollIntoView({
       behavior: reduced ? "auto" : "smooth",
       block: "start",
