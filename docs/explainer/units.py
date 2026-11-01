@@ -31,15 +31,18 @@ class Units(Scene):
         q = t("“Has creatinine gone up since September?”", 34).to_edge(UP, buff=0.6)
         self.play(Write(q), run_time=1.4)
 
-        sep = NumberLine(x_range=[0, 2, 0.5], length=5.2, color=INK, include_numbers=True,
-                         font_size=22, decimal_number_config={"num_decimal_places": 1, "color": INK})
-        octl = NumberLine(x_range=[0, 160, 40], length=5.2, color=INK, include_numbers=True,
-                          font_size=22, decimal_number_config={"num_decimal_places": 0, "color": INK})
+        # tick labels as plain Text (DecimalNumber would need LaTeX)
+        sep = NumberLine(x_range=[0, 2, 0.5], length=5.2, color=INK)
+        octl = NumberLine(x_range=[0, 160, 40], length=5.2, color=INK)
         sep.shift(LEFT * 3.3 + DOWN * 0.2)
         octl.shift(RIGHT * 3.3 + DOWN * 0.2)
+        ticks = VGroup(
+            *[t(f"{v:g}", 20).next_to(sep.n2p(v), DOWN, buff=0.15) for v in (0, 0.5, 1, 1.5, 2)],
+            *[t(f"{v:g}", 20).next_to(octl.n2p(v), DOWN, buff=0.15) for v in (0, 40, 80, 120, 160)],
+        )
         sl = t("3 Sept report · mg/dL", 24, CORAL).next_to(sep, UP, buff=0.5)
         ol = t("12 Oct report · µmol/L", 24, TEAL).next_to(octl, UP, buff=0.5)
-        self.play(Create(sep), Create(octl), FadeIn(sl, shift=DOWN * 0.2), FadeIn(ol, shift=DOWN * 0.2))
+        self.play(Create(sep), Create(octl), FadeIn(ticks), FadeIn(sl, shift=DOWN * 0.2), FadeIn(ol, shift=DOWN * 0.2))
 
         a = Dot(sep.n2p(0), color=CORAL, radius=0.11)
         b = Dot(octl.n2p(0), color=TEAL, radius=0.11)
@@ -47,12 +50,12 @@ class Units(Scene):
         # each value travels to its place on its own scale (eased, not linear)
         self.play(a.animate.move_to(sep.n2p(1.2)), b.animate.move_to(octl.n2p(106)),
                   rate_func=rate_functions.ease_in_out_cubic, run_time=1.4)
-        av = t("1.2", 30, CORAL).next_to(a, DOWN, buff=0.45)
-        bv = t("106", 30, TEAL).next_to(b, DOWN, buff=0.45)
+        av = t("1.2", 32, CORAL).next_to(a, UP, buff=0.3)
+        bv = t("106", 32, TEAL).next_to(b, UP, buff=0.3)
         self.play(FadeIn(av), FadeIn(bv))
 
         naive = Arrow(av.get_right() + RIGHT * 0.1, bv.get_left() + LEFT * 0.1, color=INK, buff=0.1, stroke_width=4)
-        claim = t("“up 88×”", 28).next_to(naive, DOWN, buff=0.25)
+        claim = t("“up 88×”", 28).next_to(naive, UP, buff=0.2)
         self.play(Create(naive), FadeIn(claim), run_time=1.0)
         self.wait(0.5)
         x = Cross(VGroup(naive, claim), stroke_color=RED, stroke_width=6)
