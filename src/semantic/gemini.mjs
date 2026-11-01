@@ -15,8 +15,13 @@
 //                      test names / document terms (no values, no names).
 //
 // Safety and cost:
-//   - Off unless GEMINI_API_KEY is set server-side; VM_GEMINI=off is a kill switch.
-//     Without a key every caller gets null and the deterministic path answers.
+//   - Off unless GEMINI_API_KEY (direct Gemini) or OPENROUTER_API_KEY is set
+//     server-side; VM_GEMINI=off is a kill switch. Without a key every caller
+//     gets null and the deterministic path answers.
+//   - With OPENROUTER_API_KEY the same four bounded calls go to OpenRouter's
+//     chat-completions API (default model google/gemini-3.8-flash, override
+//     VM_OPENROUTER_MODEL). Grounded web search stays OFF on OpenRouter unless
+//     VM_OPENROUTER_SEARCH=on (per-search provider cost).
 //   - The key never leaves the server, is never logged, never sent to the browser.
 //   - Hard caps: calls/day, search calls/day, estimated USD/day, calls/IP/hour,
 //     per-call timeouts. Over a cap -> null (deterministic fallback), not an error.
@@ -224,12 +229,35 @@ export function createGemini({
   env = process.env,
   client = null,
   now = () => Date.now(),
-  budget = createBudget(env, now),
+  budget = null,
+  fetchImpl = globalThis.fetch,
 } = {}) {
   const key = env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "";
-  const model = env.VM_GEMINI_MODEL || "gemini-3.8-flash";
+  const orKey = env.OPENROUTER_API_KEY || "";
+  // Provider: explicit VM_LLM_PROVIDER wins; otherwise an OpenRouter key is
+  // used only when no direct Gemini key is set.
+  const useOpenRouter =
+    env.VM_LLM_PROVIDER === "openrouter" || (!!orKey && !key);
+  const model = useOpenRouter
+    ? env.VM_OPENROUTER_MODEL || "google/gemini-3.8-flash"
+    : env.VM_GEMINI_MODEL || "gemini-3.8-flash";
   const killed = env.VM_GEMINI === "off";
-  const searchOn = env.VM_GEMINI_SEARCH !== "off";
+  // Grounded search is a separate per-search cost. On OpenRouter it stays
+  // off unless explicitly enabled; direct Gemini keeps the old default.
+  const searchOn =
+    env.VM_GEMINI_SEARCH !== "off" &&
+    (!useOpenRouter || env.VM_OPENROUTER_SEARCH === "on");
+  // Provider-accurate default prices (OpenRouter list, 2026-11): the USD/day
+  // cap is fail-closed, so estimates must not understate the provider's.
+  const pricedEnv = useOpenRouter
+    ? {
+        ...env,
+        VM_GEMINI_IN_USD_PER_M: env.VM_GEMINI_IN_USD_PER_M ?? "0.825",
+        VM_GEMINI_OUT_USD_PER_M: env.VM_GEMINI_OUT_USD_PER_M ?? "4.125",
+        VM_GEMINI_SEARCH_USD: env.VM_GEMINI_SEARCH_USD ?? "0.014",
+      }
+    : env;
+  budget ??= createBudget(pricedEnv, now);
   const timeouts = {
     interpret: num(env.VM_GEMINI_INTERPRET_MS, 4500),
     claims: num(env.VM_GEMINI_CLAIMS_MS, 8000),
@@ -243,12 +271,105 @@ export function createGemini({
   let lastError = null;
   let lastOkAt = null;
 
-  const enabled = () => !killed && (!!key || !!client);
+  const enabled = () =>
+    !killed && (!!key || !!client || (useOpenRouter && !!orKey));
   async function getClient() {
     if (sdk) return sdk;
     const { GoogleGenAI } = await import("@google/genai");
     sdk = new GoogleGenAI({ apiKey: key });
     return sdk;
+  }
+
+  /** audio/* mime -> OpenRouter input_audio format. */
+  const audioFormat = (mime) => {
+    const sub = String(mime || "")
+      .split("/")[1]
+      ?.split(";")[0]
+      .toLowerCase();
+    return { "x-wav": "wav", mpeg: "mp3", m4a: "mp4" }[sub] ?? sub ?? "webm";
+  };
+
+  /**
+   * Translate one genai-style request into an OpenRouter chat completion and
+   * normalize the reply back into the genai shape the parsers expect.
+   */
+  async function openRouterGenerate(request, signal, timeoutMs) {
+    const cfg = request.config ?? {};
+    let content;
+    if (typeof request.contents === "string") content = request.contents;
+    else {
+      const parts = request.contents?.[0]?.parts ?? [];
+      content = parts.map((p) =>
+        p.inlineData
+          ? {
+              type: "input_audio",
+              input_audio: {
+                data: p.inlineData.data,
+                format: audioFormat(p.inlineData.mimeType),
+              },
+            }
+          : { type: "text", text: p.text ?? "" },
+      );
+    }
+    const body = {
+      model,
+      messages: [{ role: "user", content }],
+      max_tokens: cfg.maxOutputTokens ?? 2048,
+    };
+    if (cfg.responseJsonSchema)
+      body.response_format = {
+        type: "json_schema",
+        json_schema: {
+          name: "voice_memory_response",
+          strict: false,
+          schema: cfg.responseJsonSchema,
+        },
+      };
+    if (cfg.thinkingConfig) body.reasoning = { effort: "low" };
+    if ((cfg.tools ?? []).some((t) => t.googleSearch))
+      body.plugins = [{ id: "web" }];
+    const res = await fetchImpl(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        signal,
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${orKey}`,
+          "http-referer": "https://voice-memory-beige.vercel.app",
+          "x-title": "Voice Memory",
+        },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!res.ok) {
+      const e = new Error(`openrouter ${res.status}`);
+      e.status = res.status;
+      throw e;
+    }
+    const j = await res.json();
+    const msg = j.choices?.[0]?.message ?? {};
+    const citations = (msg.annotations ?? [])
+      .filter((a) => a?.type === "url_citation" && a.url_citation?.url)
+      .map((a) => ({
+        web: {
+          title: a.url_citation.title ?? a.url_citation.url,
+          uri: a.url_citation.url,
+        },
+      }));
+    return {
+      text: typeof msg.content === "string" ? msg.content : "",
+      candidates: [
+        {
+          content: { parts: [{ text: msg.content ?? "" }] },
+          groundingMetadata: { groundingChunks: citations },
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: j.usage?.prompt_tokens ?? 0,
+        candidatesTokenCount: j.usage?.completion_tokens ?? 0,
+      },
+    };
   }
 
   /** One bounded call: cache -> budget -> timeout -> usage accounting. */
@@ -264,16 +385,19 @@ export function createGemini({
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), timeouts[kind] ?? 6000);
     try {
-      const c = await getClient();
-      const res = await c.models.generateContent({
-        model,
-        ...request,
-        config: {
-          ...request.config,
-          abortSignal: ctl.signal,
-          httpOptions: { timeout: timeouts[kind] ?? 6000 },
-        },
-      });
+      const res = useOpenRouter
+        ? await openRouterGenerate(request, ctl.signal, timeouts[kind] ?? 6000)
+        : await (
+            await getClient()
+          ).models.generateContent({
+            model,
+            ...request,
+            config: {
+              ...request.config,
+              abortSignal: ctl.signal,
+              httpOptions: { timeout: timeouts[kind] ?? 6000 },
+            },
+          });
       budget.charge(res?.usageMetadata, kind);
       lastOkAt = now();
       const value = res;
@@ -322,7 +446,8 @@ export function createGemini({
     enabled,
     searchEnabled: () => enabled() && searchOn,
     status: () => ({
-      configured: !!key,
+      configured: useOpenRouter ? !!orKey : !!key,
+      provider: useOpenRouter ? "openrouter" : "gemini",
       enabled: enabled(),
       model,
       search: searchOn,

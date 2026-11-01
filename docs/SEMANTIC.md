@@ -5,21 +5,21 @@ is deliberately not claimed. Nothing here is clinical validation.
 
 ## 1. The failure this starts from
 
-The live smoke test asked *"Why is creatinine in different units?"* and heard
-*"Your Creatinine result is 106 µmol/L…"*: a related value substituted for the
+The live smoke test asked _"Why is creatinine in different units?"_ and heard
+_"Your Creatinine result is 106 µmol/L…"_: a related value substituted for the
 answer. Reproducing on `main` (cd851a7) found more of the same shape:
 
-| Question | `main` answered | Problem |
-| --- | --- | --- |
-| Why is creatinine in different units? | the October value | why → value |
-| creatinine ka unit alag kyun hai | the October value, in English | why → value, wrong language |
-| Why was the ferritin corrected? | the ferritin value | the report states the reason ("transcription error") |
-| What is hemoglobin? | "Whose results?" | definition asked, patient asked back |
-| what is a retainer? | "$42,000 is the current proposal" | term → fee |
-| what is my blood pressure | a whole-report overview | absent measure → other values |
-| what is SYN-0003's ferritin? | **SYN-0001's 50 ng/mL** | **patient mix-up** (SYN-0003 has no ferritin) |
-| SYN-0003 ka HbA1c kitna hai | **SYN-0001's 6.1 %** | **patient mix-up** |
-| how come creatnine is in umol… | filler removal turned "umol" into "ol" | normaliser bug |
+| Question                              | `main` answered                        | Problem                                              |
+| ------------------------------------- | -------------------------------------- | ---------------------------------------------------- |
+| Why is creatinine in different units? | the October value                      | why → value                                          |
+| creatinine ka unit alag kyun hai      | the October value, in English          | why → value, wrong language                          |
+| Why was the ferritin corrected?       | the ferritin value                     | the report states the reason ("transcription error") |
+| What is hemoglobin?                   | "Whose results?"                       | definition asked, patient asked back                 |
+| what is a retainer?                   | "$42,000 is the current proposal"      | term → fee                                           |
+| what is my blood pressure             | a whole-report overview                | absent measure → other values                        |
+| what is SYN-0003's ferritin?          | **SYN-0001's 50 ng/mL**                | **patient mix-up** (SYN-0003 has no ferritin)        |
+| SYN-0003 ka HbA1c kitna hai           | **SYN-0001's 6.1 %**                   | **patient mix-up**                                   |
+| how come creatnine is in umol…        | filler removal turned "umol" into "ol" | normaliser bug                                       |
 
 ## 2. Architecture (smallest change that fixes the class, not the cases)
 
@@ -52,46 +52,70 @@ number and unit in the statement is printed in that quote, a strong status
 names no other subject. Citation ≠ correctness, so all five run.
 
 **Gemini** (`src/semantic/gemini.mjs`, official `@google/genai`, model
-`VM_GEMINI_MODEL`, default `gemini-3.8-flash`):
+`VM_GEMINI_MODEL`, default `gemini-3.8-flash`). The same four bounded calls
+can instead run through **OpenRouter** (`OPENROUTER_API_KEY`, or
+`VM_LLM_PROVIDER=openrouter` to force it; model `VM_OPENROUTER_MODEL`,
+default `google/gemini-3.8-flash`); the budget, cache, timeouts and redaction
+behave identically, and grounded web search stays off there unless
+`VM_OPENROUTER_SEARCH=on`:
 
-| Control | Default | Env |
-| --- | --- | --- |
-| Off without a key; kill switch | off | `GEMINI_API_KEY`, `VM_GEMINI=off` |
-| Grounded search | on when keyed | `VM_GEMINI_SEARCH=off` |
-| Calls / day | 500 | `VM_GEMINI_DAILY_CALLS` |
-| Search calls / day | 100 | `VM_GEMINI_DAILY_SEARCH` |
-| Estimated spend / day | $2 | `VM_GEMINI_DAILY_USD` (prices: `VM_GEMINI_IN_USD_PER_M` 0.75, `…OUT…` 3.75, `VM_GEMINI_SEARCH_USD` 0.014) |
-| Calls / IP / hour | 40 | `VM_GEMINI_CALLS_PER_IP_HOUR` |
-| Timeouts | 4.5 s interpret, 8 s claims, 9 s search, 12 s transcribe | `VM_GEMINI_*_MS` |
-| Cache | 600 entries, 24 h, by content hash | — |
+| Control                        | Default                                                  | Env                                                                                                       |
+| ------------------------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Off without a key; kill switch | off                                                      | `GEMINI_API_KEY` or `OPENROUTER_API_KEY`, `VM_GEMINI=off`                                                 |
+| Grounded search                | on when keyed                                            | `VM_GEMINI_SEARCH=off`                                                                                    |
+| Calls / day                    | 500                                                      | `VM_GEMINI_DAILY_CALLS`                                                                                   |
+| Search calls / day             | 100                                                      | `VM_GEMINI_DAILY_SEARCH`                                                                                  |
+| Estimated spend / day          | $2                                                       | `VM_GEMINI_DAILY_USD` (prices: `VM_GEMINI_IN_USD_PER_M` 0.75, `…OUT…` 3.75, `VM_GEMINI_SEARCH_USD` 0.014) |
+| Calls / IP / hour              | 40                                                       | `VM_GEMINI_CALLS_PER_IP_HOUR`                                                                             |
+| Timeouts                       | 4.5 s interpret, 8 s claims, 9 s search, 12 s transcribe | `VM_GEMINI_*_MS`                                                                                          |
+| Cache                          | 600 entries, 24 h, by content hash                       | —                                                                                                         |
 
 Over any cap, on any error or timeout: `null`, and the deterministic answer
 stands. Patient IDs, printed names, phones, emails and dates of birth are
 replaced with placeholders before document text leaves the server; search
-receives only a generic term and refuses anything identifier-shaped. Visitor
-documents reach the model only when the request carries `semantic: true`
-(the fictional demo cases are always allowed). `/healthz` reports counts,
-spend estimate and the last error class — never the key or content.
+receives only a generic term and refuses anything identifier-shaped. **Every**
+model path is consent-gated: without the visitor's explicit `semantic: true`
+(a per-request `x-vm-consent: audio` header for dictation) no call is made at
+all — not the question, not a term, not the catalog. For consented workspace
+questions the interpret catalog is minimized: subject labels are never sent,
+document titles and the previous topic pass through patient-name/ID redaction,
+and only generic test names go with the question. (The fictional demo cases
+carry implicit consent.) `/healthz` reports counts, spend estimate and the
+last error class — never the key or content.
 
-## 3. Setting the Gemini key (Render encrypted environment variables)
+## 3. Setting the key (Render encrypted environment variables)
 
 Do not put the key in Git, in `site/` (Vercel serves it to browsers), in chat,
-or in logs. The browser never talks to Gemini; only the Render engine does.
+or in logs. The browser never talks to the model provider; only the Render
+engine does.
 
-1. Create a key in Google AI Studio (aistudio.google.com → *Get API key*), and
-   in Google Cloud restrict it to the *Generative Language API*. Set a budget
+**Option A: OpenRouter.** Render dashboard → the `voice-memory` web service →
+**Environment** → **Add Environment Variable**: key `OPENROUTER_API_KEY`,
+value = the key. Optional in the same screen: `VM_LLM_PROVIDER=openrouter`
+(force it even if a Gemini key is also set), `VM_OPENROUTER_MODEL` (default
+`google/gemini-3.8-flash`), `VM_OPENROUTER_SEARCH=on` (grounded web search;
+per-search provider cost), `VM_GEMINI_DAILY_USD=2`. The key's own spend limit
+on OpenRouter is a second, provider-side cap; keep it.
+
+**Option B: Google direct.**
+
+1. Create a key in Google AI Studio (aistudio.google.com → _Get API key_), and
+   in Google Cloud restrict it to the _Generative Language API_. Set a budget
    alert on that project.
-2. Render dashboard → the `voice-memory` web service → **Environment** →
-   **Add Environment Variable**: key `GEMINI_API_KEY`, value = the key. Render
-   encrypts it at rest and injects it at runtime only.
-3. Optional in the same screen: `VM_GEMINI_MODEL=gemini-3.8-flash`,
-   `VM_GEMINI_DAILY_USD=2`, `VM_GEMINI_DAILY_CALLS=500`.
+2. Same Render screen: key `GEMINI_API_KEY`, value = the key. Render encrypts
+   it at rest and injects it at runtime only.
+3. Optional: `VM_GEMINI_MODEL=gemini-3.8-flash`, `VM_GEMINI_DAILY_USD=2`,
+   `VM_GEMINI_DAILY_CALLS=500`.
+
+Then for either option:
+
 4. **Save, rebuild and deploy.**
 5. Check `https://voice-memory.onrender.com/healthz` → `semantic.configured: true`,
-   `semantic.enabled: true`, `semantic.lastError: null`; and
+   `semantic.enabled: true`, `semantic.provider`, `semantic.lastError: null`; and
    `/api/public/status` → `semantic.enabled: true`.
 6. To switch it off at once without removing the key: `VM_GEMINI=off`, deploy.
-   To rotate: add the new key value, deploy, then delete the old key in AI Studio.
+   To rotate: add the new key value, deploy, then delete the old key at the
+   provider.
 
 Without the key the product behaves exactly as described in §2 minus the
 model steps: every result in §5 below was measured that way.
@@ -134,13 +158,13 @@ question needs; required facts present; known substitutions absent; language).
 Labels were written from the documents by the same author as the code, so the
 sets are **not independent**; 95% Wilson intervals are wide at these sizes.
 
-| Set | Build | Answerable correct | Correct abstention | Critical failures |
-| --- | --- | --- | --- | --- |
-| Development (48) | `main` cd851a7 | 32/41 (78.0%, CI 63.3–88.0) | 2/7 (28.6%) | 6 (3 substitution incl. term→fee, 2 false accept, **1 patient mix-up**) |
-| Development (48) | this branch | 41/41 (100%, CI 91.4–100) | 7/7 (CI 64.6–100) | 0 |
-| Held-out (24), first and only frozen run | `main` | 17/20 (85%) | 3/4 | 1 (**patient mix-up**, x06) |
-| Held-out (24), first and only frozen run | this branch | 15/20 (75%, CI 53.1–88.8) | 4/4 | 0 (4 unnecessary refusals) |
-| Held-out after fixing those 5 (now development) | this branch | 20/20 | 4/4 | 0 |
+| Set                                             | Build          | Answerable correct          | Correct abstention | Critical failures                                                       |
+| ----------------------------------------------- | -------------- | --------------------------- | ------------------ | ----------------------------------------------------------------------- |
+| Development (48)                                | `main` cd851a7 | 32/41 (78.0%, CI 63.3–88.0) | 2/7 (28.6%)        | 6 (3 substitution incl. term→fee, 2 false accept, **1 patient mix-up**) |
+| Development (48)                                | this branch    | 41/41 (100%, CI 91.4–100)   | 7/7 (CI 64.6–100)  | 0                                                                       |
+| Held-out (24), first and only frozen run        | `main`         | 17/20 (85%)                 | 3/4                | 1 (**patient mix-up**, x06)                                             |
+| Held-out (24), first and only frozen run        | this branch    | 15/20 (75%, CI 53.1–88.8)   | 4/4                | 0 (4 unnecessary refusals)                                              |
+| Held-out after fixing those 5 (now development) | this branch    | 20/20                       | 4/4                | 0                                                                       |
 
 The held-out first run is the honest generalisation number: the new build was
 safer (no mix-up, no false accept) but refused 4 answerable "why" phrasings
@@ -151,10 +175,10 @@ held out.
 Field set (11 public reports, `evaluation/field/`), keyword-only because the
 embedding model can't be downloaded here:
 
-| Build | Right | Wrong | Unanswerable refused |
-| --- | --- | --- | --- |
-| `main`, keyword | 52/58 | 1 | 9/9 |
-| this branch, keyword | 52/58 | 1 | 9/9 |
+| Build                | Right | Wrong | Unanswerable refused |
+| -------------------- | ----- | ----- | -------------------- |
+| `main`, keyword      | 52/58 | 1     | 9/9                  |
+| this branch, keyword | 52/58 | 1     | 9/9                  |
 
 No regression; the production figure with the embedding model (57/58) was not
 re-measured here. Latency (in-process, keyword): p50 7 ms, p95 23–27 ms.
