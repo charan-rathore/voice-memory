@@ -33,6 +33,7 @@ import {
 } from "./dense.mjs";
 import { spokenTurn } from "./spoken.mjs";
 import { intentLead, semanticRescue } from "./semantic/route.mjs";
+import { semanticConsentFor } from "./semantic/scope.mjs";
 import { createGemini } from "./semantic/gemini.mjs";
 import { visualFor, caseVisual } from "./visual-summary.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
@@ -287,6 +288,9 @@ export function createLocalServer({
   }),
   // Vendor transport, injectable so tests never reach the real Bolna API.
   vendorFetch = fetch,
+  // Semantic layer, injectable so tests can count provider calls without a
+  // network. Default builds from the host's encrypted environment.
+  gemini = createGemini(),
 } = {}) {
   // Deployment configuration (all optional; unset = local-only behavior):
   // VM_PUBLIC_HOST / VM_PUBLIC_ORIGIN: the one public hostname/origin the UI
@@ -396,9 +400,9 @@ export function createLocalServer({
   }
   const signinFails = new Map();
   // Process-wide answer cache (keys are scoped per index build; see cache.mjs).
-  // Bounded semantic layer: off (deterministic only) unless GEMINI_API_KEY is
+  // Bounded semantic layer: off (deterministic only) unless a provider key is
   // set in the host's encrypted environment; VM_GEMINI=off is the kill switch.
-  const gemini = createGemini();
+  // Injectable (see createLocalServer options) so tests never spend.
   const answerCache = createAnswerCache({
     max: Number(process.env.VM_CACHE_MAX || 1000),
   });
@@ -595,8 +599,9 @@ export function createLocalServer({
   async function resolveAnswer(s, question, ctx, opts = {}) {
     const bundle = s.bundle;
     // May this document set's passages go to the model? Fictional demo
-    // cases: yes. A visitor's own documents: only with their consent.
-    const consent = !String(s.sid ?? "").startsWith("ws:") || !!opts.consent;
+    // cases: yes. A visitor's own documents: only with their consent, and
+    // only outside VM_SEMANTIC_AUDIENCE=demo trial scope (see scope.mjs).
+    const consent = semanticConsentFor(s.sid, opts.consent);
     const mode = gemini.enabled() ? (consent ? ":g1" : ":g0") : ":d";
     // Retrieval mode is part of the key: a keyword or partial-warm
     // answer cached while the embedder was cold or warming must not

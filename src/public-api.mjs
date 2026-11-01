@@ -609,6 +609,19 @@ export function createPublicApi({
         return true;
       }
       if (req.method === "POST" && path === "/transcribe") {
+        // Trial scope (VM_SEMANTIC_AUDIENCE=demo): no audio leaves this
+        // server at all, consent header or not - the approved trial covers
+        // typed asks on the built-in demos only, so dictation always falls
+        // back to the browser's speech service (the client already does on
+        // this exact response). Nothing below may run in this scope.
+        if (process.env.VM_SEMANTIC_AUDIENCE === "demo")
+          return (
+            send(res, 503, {
+              error: "Server transcription is off during the demo trial; using the browser's.",
+              fallback: true,
+            }),
+            true
+          );
         if (!gemini?.enabled())
           return (
             send(res, 503, {

@@ -7,6 +7,7 @@ import { classifyIntent, termOf } from "../src/semantic/intent.mjs";
 import { verifyClaims, auditLead } from "../src/semantic/verify.mjs";
 import { createGemini, createBudget, redact } from "../src/semantic/gemini.mjs";
 import { semanticRescue } from "../src/semantic/route.mjs";
+import { semanticConsentFor } from "../src/semantic/scope.mjs";
 import { importBundle, validateEvidence } from "../dist/engine.mjs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 
@@ -801,5 +802,52 @@ test("privacy: a name-shaped TERM never reaches grounded search, consent or not"
     grounded.length,
     0,
     "a term that redaction changes is never sent to grounded search",
+  );
+});
+
+// The demo-trial audience gate: VM_SEMANTIC_AUDIENCE=demo keeps paid
+// semantics on the built-in synthetic cases only. The decision is
+// server-side; a visitor's opt-in cannot widen it.
+test("privacy: demo trial scope gates paid semantics off for visitor uploads, consent flag or not", async () => {
+  // Outside trial scope: pre-existing rule preserved exactly.
+  assert.equal(semanticConsentFor("case:voice", false, {}), true, "internal fictional cases keep old behavior");
+  assert.equal(semanticConsentFor("ws:visitor1", false, {}), false, "no consent, no model");
+  assert.equal(semanticConsentFor("ws:visitor1", true, {}), true, "outside trial scope, opt-in allows");
+  // Under demo scope: exact two-case allowlist; everything else fails closed.
+  const demoEnv = { VM_SEMANTIC_AUDIENCE: "demo" };
+  assert.equal(semanticConsentFor("case:deal", false, demoEnv), true, "demo case: deal");
+  assert.equal(semanticConsentFor("case:health", false, demoEnv), true, "demo case: health");
+  assert.equal(semanticConsentFor("case:voice", false, demoEnv), false, "voice session is NOT in the trial allowlist");
+  assert.equal(semanticConsentFor("case:unknown", false, demoEnv), false, "unknown case sid fails closed");
+  assert.equal(semanticConsentFor("", false, demoEnv), false, "empty sid fails closed");
+  assert.equal(
+    semanticConsentFor("ws:visitor1", true, demoEnv),
+    false,
+    "trial scope: a client opt-in cannot widen the server gate",
+  );
+  // And the gate's output actually means zero egress on every rescue path,
+  // even for a visitor who opted in.
+  const bundle = identifiedBundle();
+  const src = bundle.sources[0];
+  const ev = {
+    sourceId: src.id, title: src.title, hash: src.hash,
+    start: 0, end: 120, quote: src.text.slice(0, 120),
+  };
+  const client = fakeClient((req) => {
+    if (req.config.responseJsonSchema?.properties?.claims)
+      return { text: JSON.stringify({ answerable: false, claims: [] }) };
+    return { text: '{"intent":"LOOKUP","language":"en","tests":["Ferritin"],"subject":"","rewrite":""}' };
+  });
+  const gem = createGemini({ env: {}, client });
+  const consent = semanticConsentFor("ws:visitor1", true, { VM_SEMANTIC_AUDIENCE: "demo" });
+  for (const q of ["What is ferritin?", "Did the dose change?", "how much ferritin"])
+    await semanticRescue({
+      question: q, bundle, lead: null, raw: { evidence: [ev] },
+      rerun: async () => null, validate: () => false, gemini: gem, consent, ctx: null,
+    });
+  assert.equal(
+    client.calls.length,
+    0,
+    "demo trial scope: an opted-in upload still produces zero model calls",
   );
 });

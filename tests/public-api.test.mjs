@@ -1049,3 +1049,56 @@ test("file backend: parseable but invalid counter shape fails closed", async () 
     (e) => e.status === 503 && /invalid shape/.test(e.message),
   );
 });
+
+test("demo trial scope: server transcription is refused for every caller, zero provider calls", async () => {
+  // Under VM_SEMANTIC_AUDIENCE=demo the approved trial covers typed asks on
+  // the built-in demos only: no audio may reach a provider from this server,
+  // consent header or not. Dictation falls back to the browser's speech
+  // service (503 + fallback flag, which the client already handles).
+  let providerCalls = 0;
+  const countingGemini = new Proxy(
+    {},
+    {
+      get: (_, prop) => {
+        if (prop === "enabled" || prop === "searchEnabled") return () => true;
+        return (..._args) => {
+          providerCalls++;
+          if (prop === "status") return {};
+          return Promise.resolve(null);
+        };
+      },
+    },
+  );
+  const srv6 = createLocalServer({ port: 0, gemini: countingGemini });
+  await new Promise((r) => srv6.listen(0, "127.0.0.1", r));
+  const base6 = `http://127.0.0.1:${srv6.address().port}`;
+  const prev = process.env.VM_SEMANTIC_AUDIENCE;
+  process.env.VM_SEMANTIC_AUDIENCE = "demo";
+  const audio = Buffer.alloc(1200, 7);
+  const clip = (headers) =>
+    fetch(base6 + "/api/public/transcribe", {
+      method: "POST",
+      headers: { "content-type": "audio/webm", ...headers },
+      body: audio,
+    }).then(async (r) => ({ status: r.status, body: await r.json() }));
+  try {
+    const variants = [
+      ["no consent header", {}],
+      ["consented, built-in demo case", { "x-vm-consent": "audio", "x-vm-case": "deal" }],
+      ["consented, other built-in demo", { "x-vm-consent": "audio", "x-vm-case": "health" }],
+      ["consented, workspace case", { "x-vm-consent": "audio", "x-vm-case": "ws:owner-case-1" }],
+      ["consented, unknown case", { "x-vm-consent": "audio", "x-vm-case": "nope" }],
+      ["consented, no case at all", { "x-vm-consent": "audio" }],
+    ];
+    for (const [label, headers] of variants) {
+      const { status, body } = await clip(headers);
+      assert.equal(status, 503, `${label}: refused`);
+      assert.equal(body.fallback, true, `${label}: browser fallback signalled`);
+    }
+    assert.equal(providerCalls, 0, "no provider call in demo scope");
+  } finally {
+    if (prev === undefined) delete process.env.VM_SEMANTIC_AUDIENCE;
+    else process.env.VM_SEMANTIC_AUDIENCE = prev;
+    await new Promise((r) => srv6.close(() => r()));
+  }
+});
