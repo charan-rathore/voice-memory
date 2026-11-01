@@ -26,4 +26,4 @@ Use it when you need an answer about a document that must not guess: it refuses 
 
 ## Optional
 
-- [Landing page](https://voice-memory-beige.vercel.app/): try it typed or on a live Bolna call
+- [Landing page](https://voice-memory-beige.vercel.app/): try it typed (voice calling is paused for now)

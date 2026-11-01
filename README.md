@@ -16,7 +16,7 @@ against the exact quoted span first (see [docs/SEMANTIC.md](docs/SEMANTIC.md)).
 
 | | |
 | --- | --- |
-| **Try it** | https://voice-memory-beige.vercel.app — ask by typing or start a live Bolna call |
+| **Try it** | https://voice-memory-beige.vercel.app — ask by typing (voice calling is paused for now) |
 | **Memory graph** | https://voice-memory-beige.vercel.app/graph |
 | Engine / API | https://voice-memory.onrender.com (Render, free tier) |
 | For agents | [`llms.txt`](https://voice-memory-beige.vercel.app/llms.txt) · [OpenAPI](https://voice-memory-beige.vercel.app/openapi.json) |
