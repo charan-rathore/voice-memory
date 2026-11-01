@@ -8,6 +8,54 @@
 //   3. the source viewer marks only the focused line, not the whole page.
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+// Synthetic catering agreement as a real PDF, generated deterministically
+// with the repo's declared pdf-lib: each visual line is drawn separately with
+// paragraph-like spacing, so the text layer wraps the deadline sentence
+// exactly like the user-reported PDF case (and the engine regression fixture).
+// No fixture file on disk, nothing private.
+import { PDFDocument, StandardFonts } from "pdf-lib";
+
+const FIXTURE_LINES = [
+  "This agreement is made between Riverglass Studios (the Client) and Harbor & Fig",
+  "Catering Co. (the Caterer), effective 3 January 2027.",
+  "1. Services. The Caterer will provide full event catering for the Client's",
+  "annual showcase on 17 April 2027 at the Meadowbrook Hall, Pune.",
+  "2. Menu deadline. Final menu selections and headcount must be confirmed in",
+  "writing no later than 27 March 2027. Changes after that date incur a",
+  "replanning fee of Rs 18,000.",
+  "3. Payment. A deposit of Rs 42,500 is due on signing. The balance is due",
+  "within 15 days of the event.",
+  "4. Cancellation. Either party may cancel with at least 60 days written",
+  "notice. Cancellations inside 60 days forfeit the deposit.",
+  "5. Allergens. The Caterer will label all dishes containing nuts, dairy and",
+  "gluten, and will provide a nut-free preparation line on request.",
+];
+
+async function buildFixture() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([595, 400]);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const body = await doc.embedFont(StandardFonts.Helvetica);
+  let y = 360;
+  page.drawText("Harbor & Fig Catering Services Agreement", {
+    x: 56,
+    y,
+    size: 13,
+    font: bold,
+  });
+  y -= 26;
+  for (const line of FIXTURE_LINES) {
+    page.drawText(line, { x: 56, y, size: 10, font: body });
+    y -= 22; // generous leading so extraction keeps visual lines as blocks
+  }
+  return {
+    name: "harbor-fig-catering.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from(await doc.save()),
+  };
+}
+
+const FIXTURE = await buildFixture();
 
 const fail = (m) => {
   throw Error(m);
@@ -37,7 +85,7 @@ try {
 
   // Path A: upload through the "Your documents" tab, then ask.
   await page.locator('.case-tab[data-case="own"]').click();
-  await page.locator("#files").setInputFiles("/tmp/harbor-fig-catering.pdf");
+  await page.locator("#files").setInputFiles(FIXTURE);
   await page
     .locator("#upl-list li", { hasText: "Ready" })
     .first()
@@ -72,7 +120,7 @@ try {
   });
   await page2.goto("http://127.0.0.1:4500/");
   await page2.locator('.case-tab[data-case="health"]').waitFor();
-  await page2.locator("#files").setInputFiles("/tmp/harbor-fig-catering.pdf");
+  await page2.locator("#files").setInputFiles(FIXTURE);
   await page2
     .locator("#upl-list li", { hasText: "Ready" })
     .first()
@@ -112,7 +160,7 @@ try {
   );
   await page3.goto("http://127.0.0.1:4500/");
   await page3.locator('.case-tab[data-case="health"]').waitFor();
-  await page3.locator("#files").setInputFiles("/tmp/harbor-fig-catering.pdf");
+  await page3.locator("#files").setInputFiles(FIXTURE);
   await page3
     .locator("#upl-list li", { hasText: "Ready" })
     .first()
