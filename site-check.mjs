@@ -199,12 +199,18 @@ try {
   // Let connect() resolve status; voice stays off in the harness.
   await page4.waitForTimeout(3000);
   const callElsVisible = await page4.evaluate(() =>
-    [...document.querySelectorAll("[data-start-call], [data-call-link], .callbar")]
+    [
+      ...document.querySelectorAll(
+        "[data-start-call], [data-call-link], .callbar",
+      ),
+    ]
       .filter((el) => getComputedStyle(el).display !== "none")
       .map((el) => el.className || el.id || el.tagName),
   );
   if (callElsVisible.length)
-    fail(`call entry points visible while voice is gated off: ${callElsVisible.join(", ")}`);
+    fail(
+      `call entry points visible while voice is gated off: ${callElsVisible.join(", ")}`,
+    );
   await page4.evaluate(() => {
     document.querySelector("[data-start-call]")?.click();
   });
