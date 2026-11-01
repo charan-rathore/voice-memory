@@ -176,8 +176,44 @@ try {
   const lead3Text = await lead3.innerText();
   if (!lead3Text.includes("27 March 2027") || !lead3Text.includes("18,000"))
     fail(`cold-boot own ask did not answer: ${lead3Text.slice(0, 200)}`);
+  // Path D: voice gate off (the harness never configures voice) - no call
+  // entry point may be visible, and invoking the call path must never ask
+  // for the microphone. Regression for the static call buttons that used to
+  // render while the server refused to mint.
+  const page4 = await browser.newPage({
+    viewport: { width: 1280, height: 1000 },
+  });
+  await page4.addInitScript(() => {
+    window.__micCalls = 0;
+    const md = navigator.mediaDevices;
+    if (md?.getUserMedia) {
+      const orig = md.getUserMedia.bind(md);
+      md.getUserMedia = (...a) => {
+        window.__micCalls++;
+        return orig(...a);
+      };
+    }
+  });
+  await page4.goto("http://127.0.0.1:4500/");
+  await page4.locator('.case-tab[data-case="health"]').waitFor();
+  // Let connect() resolve status; voice stays off in the harness.
+  await page4.waitForTimeout(3000);
+  const callElsVisible = await page4.evaluate(() =>
+    [...document.querySelectorAll("[data-start-call], [data-call-link], .callbar")]
+      .filter((el) => getComputedStyle(el).display !== "none")
+      .map((el) => el.className || el.id || el.tagName),
+  );
+  if (callElsVisible.length)
+    fail(`call entry points visible while voice is gated off: ${callElsVisible.join(", ")}`);
+  await page4.evaluate(() => {
+    document.querySelector("[data-start-call]")?.click();
+  });
+  await page4.waitForTimeout(1500);
+  const micCalls = await page4.evaluate(() => window.__micCalls);
+  if (micCalls !== 0)
+    fail(`getUserMedia invoked while voice is gated off (${micCalls}x)`);
   console.log(
-    "site-check OK: own-case selection, deadline+fee answer, focused highlight, cold-boot ask",
+    "site-check OK: own-case selection, deadline+fee answer, focused highlight, cold-boot ask, voice-gated call buttons",
   );
 } finally {
   await browser?.close();
