@@ -359,10 +359,16 @@ export function createPublicApi({
             ? voiceState()
             : { configured: false, ready: false },
           // What the semantic layer can do right now (never the key).
+          // transcribe mirrors the POST /transcribe gate exactly: under the
+          // demo-typed trial the endpoint refuses every clip, so clients must
+          // see it as off (dictation then stays on the browser's speech
+          // service and never attempts a server round trip).
           semantic: {
             enabled: !!gemini?.enabled(),
             search: !!gemini?.searchEnabled?.(),
-            transcribe: !!gemini?.enabled(),
+            transcribe:
+              !!gemini?.enabled() &&
+              process.env.VM_SEMANTIC_AUDIENCE !== "demo",
             model: gemini?.enabled() ? gemini.model : null,
           },
         });
