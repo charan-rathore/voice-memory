@@ -10,7 +10,7 @@ import {
   compare,
   seriesFor,
 } from "./observations.mjs";
-import { clinicalTurn } from "./answer.mjs";
+import { clinicalTurn, clinicalAnswer } from "./answer.mjs";
 
 const gold = JSON.parse(
   readFileSync(new URL("./fixtures/gold.json", import.meta.url), "utf8"),
@@ -223,4 +223,21 @@ test("a series uses one value per collection date", async () => {
 test("questions about something that isn't a test are left to the document engine", async () => {
   const reports = [await report("a-2026-09.pdf")];
   assert.equal(clinicalTurn("Who prepared this report?", reports), null);
+});
+
+test("overview: one patient answers, several patients ask whose", async () => {
+  const a09 = await report("a-2026-09.pdf");
+  const a10 = await report("a-2026-10-amended.pdf");
+  const c10 = await report("c-2026-10.pdf");
+  // A genuine single-patient overview still answers.
+  const solo = clinicalAnswer("how am i doing", [a09, a10]);
+  assert.equal(solo?.verdict, "OVERVIEW");
+  // A second patient in the set makes an unnamed overview a question back,
+  // never a silent pick of the patient holding more reports.
+  const multi = clinicalAnswer("how am i doing", [a09, a10, c10]);
+  assert.equal(multi?.verdict, "AMBIGUOUS_PATIENT");
+  assert.match(multi?.spoken, /more than one person/);
+  // Naming the patient resolves it.
+  const named = clinicalAnswer("what are SYN-0001's blood levels", [a09, a10, c10]);
+  assert.equal(named?.verdict, "OVERVIEW");
 });

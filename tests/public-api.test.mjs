@@ -63,16 +63,24 @@ test("a known test these reports lack still says not-in-report", async () => {
   assert.equal(body.lead.verdict, "NOT_IN_REPORT");
 });
 
-test("an intentional overview request stays an overview", async () => {
+test("an unnamed overview asks whose reports, never a silent patient pick", async () => {
   const { status, body } = await ask("health", "how am i doing");
   assert.equal(status, 200);
-  assert.equal(body.lead.verdict, "OVERVIEW");
+  assert.equal(body.lead.verdict, "AMBIGUOUS_PATIENT");
+  assert.match(body.lead.text, /more than one person/);
 });
 
-test("a generic 'my blood levels' phrasing still gets the overview", async () => {
+test("a generic 'my blood levels' phrasing also asks whose", async () => {
   const { status, body } = await ask("health", "what are my blood levels");
   assert.equal(status, 200);
+  assert.equal(body.lead.verdict, "AMBIGUOUS_PATIENT");
+});
+
+test("an overview naming the patient still answers for that patient", async () => {
+  const { status, body } = await ask("health", "what are SYN-0001's blood levels");
+  assert.equal(status, 200);
   assert.equal(body.lead.verdict, "OVERVIEW");
+  assert.match(body.lead.text, /SYN-0001/);
 });
 
 test("ferritin: the amended 50 is used and the preliminary 5 is cited", async () => {

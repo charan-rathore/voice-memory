@@ -309,13 +309,25 @@ export function clinicalOverview(question, reports) {
   const upper = question.toUpperCase();
   let pid = ids.find((id) => !/^(doc|name):/.test(id) && upper.includes(id));
   if (!pid) {
+    // More than one person in the reports and the question names neither:
+    // ask whose - never silently pick the one who happens to hold more
+    // reports, or the overview could narrate the wrong person's health.
+    if (ids.length > 1) {
+      const lang = detectLang(question);
+      return {
+        spoken: SAY[lang].which(ids.map((id) => subjectLabel(id, reports))),
+        verdict: "AMBIGUOUS_PATIENT",
+        field: null,
+        lang,
+        used: [],
+      };
+    }
     const multi = ids.filter(
       (id) => reports.filter((r) => subjectOf(r) === id).length > 1,
     );
     if (!/\b(my|mine|patient|syn)\b/i.test(question) && !multi.length)
       return null;
-    if (multi.length !== 1) return null;
-    pid = multi[0];
+    pid = ids[0];
   }
   const own = reports.filter((r) => subjectOf(r) === pid);
   const tests = [];
