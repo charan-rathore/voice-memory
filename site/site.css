@@ -728,3 +728,15 @@ kbd { font: 500 11px/1 var(--sans); min-width: 22px; height: 22px; padding: 0 6p
   .case-tab b { font-size: 12.5px; white-space: nowrap; }
   .case-tab { padding: 8px 4px; }
 }
+
+.upload[hidden] { display: none; }
+
+/* Call entry points exist only when the server advertises voice readiness.
+   The landing starts without .voice-on; connect() adds it only after
+   /api/public/status reports voice.ready, so a visitor never sees a call
+   button that cannot mint a session. */
+html:not(.voice-on) [data-start-call],
+html:not(.voice-on) [data-call-link],
+html:not(.voice-on) .callbar {
+  display: none !important;
+}
