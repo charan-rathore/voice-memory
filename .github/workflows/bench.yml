@@ -35,10 +35,12 @@ jobs:
         run: node evaluation/paraphrase-bench.mjs | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           VM_DENSE_CACHE: .cache/models
+          VM_MEMORY_LIMIT_MB: "4096"
       - name: Hybrid retrieval bench
         run: node evaluation/retrieval-bench-hybrid.mjs | tail -40 | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           VM_DENSE_CACHE: .cache/models
+          VM_MEMORY_LIMIT_MB: "4096"
       - uses: actions/upload-artifact@v4
         with:
           name: retrieval-results
@@ -51,8 +53,8 @@ jobs:
           f=$(ls -t evaluation/results/paraphrase-*.json | head -1)
           node -e '
             const d = require("./" + process.argv[1]);
-            const compact = d.rows.map((r) => [r.split[0], r.kind[0], r.hybrid.length ? (r.hybrid[0].hit ? 1 : 0) : "-", r.dense.slice(0, 3).map((x) => x.cos + (x.hit ? "*" : "")).join(" "), r.q].join(" | "));
-            const body = "### Paraphrase bench (" + d.sha + ", " + d.model + ")\n\n```json\n" + JSON.stringify(d.summary, null, 1) + "\n```\n\n<details><summary>Per question: split | kind | hybrid top-1 hit | top-3 dense cosine (* = right passage) | question</summary>\n\n```\n" + compact.join("\n") + "\n```\n</details>";
+            const compact = d.rows.map((r) => [r.split[0], r.kind === "abstain" ? "x" : "a", r.hybrid.length ? (r.hybrid[0].hit ? 1 : 0) : "-", r.dense.slice(0, 3).map((x) => x.cos + (x.hit ? "*" : "")).join(" "), r.q].join(" | "));
+            const body = "### Paraphrase bench (" + d.sha + ", " + d.model + ", dense " + (d.denseAvailable ? "on" : "OFF") + ")\n\n```json\n" + JSON.stringify(d.summary, null, 1) + "\n```\n\n<details><summary>Per question: split | kind | hybrid top-1 hit | top-3 dense cosine (* = right passage) | question</summary>\n\n```\n" + compact.join("\n") + "\n```\n</details>";
             require("fs").writeFileSync("comment.md", body);
           ' "$f"
           gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -F body=@comment.md >/dev/null
