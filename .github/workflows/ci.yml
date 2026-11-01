@@ -30,7 +30,7 @@ jobs:
       - run: npm run test:clinical
       - run: npm run test:vault
       - name: Bring-your-own documents flow in a real browser
-        run: node site-check.mjs
+        run: node tests/site-check.mjs
         env:
           CHROME_PATH: /usr/bin/google-chrome
       - name: Landing page in a real browser (desktop and phone)
