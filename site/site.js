@@ -427,8 +427,14 @@
     renderThread();
   }
 
+  // The motion module listens for these (sound, print and stamp effects).
+  const emit = (name, detail) =>
+    document.dispatchEvent(new CustomEvent(name, { detail }));
   function renderAnswer(r, { via, source, question, caseId }) {
     state.current = r;
+    queueMicrotask(() =>
+      emit("vm:answer", { verdict: r.lead?.verdict ?? null, via, source }),
+    );
     const lead = r.lead;
     const [cls, label] = lead
       ? verdictOf(lead.verdict)
@@ -605,6 +611,7 @@
       }</span>${primary ? esc(prettyQuote(primary.quote)) : "Original page, rendered from the PDF"}</p>`;
   }
   async function openDoc(title, cites = [], primary = null) {
+    emit("vm:source", { title, cited: cites.length > 0 });
     $$("#doc-rail button").forEach((b) =>
       b.classList.toggle("on", b.dataset.doc === title),
     );
@@ -708,11 +715,23 @@
           sc.onerror = () => ((bolnaP = null), bad(Error("load failed")));
           document.head.appendChild(sc);
         }));
+  // The same intent also wakes the engine, so a free host that went to
+  // sleep is up by the time the caller has clicked and allowed the mic
+  // (a call into a sleeping engine hears the caller but never answers).
+  let warmed = 0;
+  const warmEngine = () => {
+    if (Date.now() - warmed < 60000) return;
+    warmed = Date.now();
+    api("/status", {}, 60000).catch(() => {});
+  };
   for (const ev of ["pointerenter", "focusin", "touchstart"])
     document.addEventListener(
       ev,
-      (e) =>
-        e.target.closest?.("[data-start-call],[data-call-link]") && loadBolna(),
+      (e) => {
+        if (!e.target.closest?.("[data-start-call],[data-call-link]")) return;
+        loadBolna();
+        warmEngine();
+      },
       { capture: true, passive: true },
     );
 
@@ -767,6 +786,19 @@
       );
       return;
     }
+    // Never put a caller through to a sleeping engine: wait for it first.
+    if (!state.live) {
+      callState("Waking the voice engine (free hosting, up to a minute)…");
+      for (let i = 0; i < 24; i++) {
+        try {
+          const s = await api("/status", {}, 8000);
+          if (s.cases?.health && s.cases?.deal) break;
+        } catch {
+          /* still waking */
+        }
+        await sleep(backoff(Math.min(i, 4), { base: 1500, cap: 6000 }));
+      }
+    }
     callState("Getting a call line…");
     const call = new window.BolnaWebCall({
       ...(audio ? { audio } : {}),
@@ -795,6 +827,7 @@
     });
     call.on("media-permission", () => callState("Microphone on · connecting…"));
     call.on("call-start", () => {
+      emit("vm:call", "start");
       callbar.classList.remove("busy");
       callbar.classList.add("live");
       $("#call-label").textContent = "Hang up";
@@ -833,6 +866,7 @@
   }
 
   function endUi(reason) {
+    emit("vm:call", "end");
     document.dispatchEvent(new CustomEvent("vm:level", { detail: -1 }));
     callbar.classList.remove("live", "busy");
     $("#call-label").textContent = "Call Voice Memory";

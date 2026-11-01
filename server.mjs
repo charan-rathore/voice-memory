@@ -1,6 +1,16 @@
 import http from "node:http";
 import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
+import { paraphraseLookup } from "./paraphrase.mjs";
+import {
+  repairDealTerms,
+  stripPreamble,
+  isHindi,
+  langOfText,
+  isDealQuestion,
+  glossHindi,
+  toHindi,
+} from "./conversation.mjs";
 import {
   importBundle,
   answer,
@@ -492,6 +502,18 @@ export function createLocalServer({
       detectLang(question),
     );
     return answerCache.resolve(key, async () => {
+      // Phrased any way: drop a leading greeting, repair the deal's names,
+      // and ask a Hindi deal question in the English the engine reads (lab
+      // questions are understood in Hindi directly). The answer is rendered
+      // back in Hindi below.
+      const original = question;
+      question = repairDealTerms(stripPreamble(question)) || question;
+      const hindi = isHindi(langOfText(original));
+      const gloss =
+        hindi && (isDealQuestion(question) || !bundle.clinical?.length)
+          ? glossHindi(question)
+          : null;
+      if (gloss) question = gloss;
       const queryVector = await embedQueryReady(question);
       const raw = answer(question, bundle, {
         queryVector,
@@ -502,6 +524,19 @@ export function createLocalServer({
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
       shown.lead = leadFor(question, raw, bundle, ctx || null);
+      // Reworded beyond keyword reach: one verbatim sentence with its
+      // citation, only when the calibrated paraphrase gate is unambiguous.
+      if (!shown.lead || shown.lead.verdict === "UNKNOWN") {
+        const p = await paraphraseLookup(question, bundle).catch(() => null);
+        if (p)
+          shown.lead = {
+            text: p.spoken,
+            verdict: "QUOTED",
+            field: null,
+            citations: [p.citation],
+          };
+      }
+      if (gloss && shown.lead?.text) shown.lead.text = toHindi(shown.lead.text);
       if (shown.lead)
         shown.lead.citations = decorateResult(
           { evidence: shown.lead.citations, question },

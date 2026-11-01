@@ -47,16 +47,55 @@ Findings:
    billed?" got the revision memo). For an engine whose promise is "never
    the wrong line", +1 right and +1 wrong on 15 questions is not a win, so
    the gate is unchanged.
-4. **Production probably never loads the model.** `dense.mjs` refuses to
-   load bge-small (~360 MB resident) without memory headroom, and the free
-   Render instance has 512 MB, so live answers are likely keyword-only. The
-   first CI run also measured keyword only until `VM_MEMORY_LIMIT_MB` was
-   set; the guard reason is now part of the bench output.
+4. **Production does load the model** (Render logs, 1 Nov 2026: the
+   transformers "dtype not specified … fp32" line at boot), but in fp32: the
+   `quantized: true` option is ignored by transformers v3, which wants
+   `dtype: "q8"`. Switching would cut the resident model roughly fourfold on
+   the 512 MB instance; it changes the vectors slightly, so it needs a
+   re-tuned gate and is listed under next experiments. CI sets
+   `VM_MEMORY_LIMIT_MB`, without which the guard refuses to load the model.
 
-## Next experiment
+## Shipped: sentence units + calibrated rescue (paraphrase.mjs)
 
-Embed numbered lines and table rows instead of whole documents (the corpus
-is already one claim per line), so a paraphrase is compared with one claim,
-not a page. Then re-tune the rescue threshold on development and report
-held-out again. Ship only if held-out r@1 improves with zero additional
-wrong passages and no unanswerable question is newly accepted.
+What changed, each from published practice and none using a language model:
+
+- **Small units, big context.** Every sentence or table row is a retrieval
+  unit (25 for Northstar instead of 7 documents), prefixed with its
+  document's heading, type and date, after Anthropic's *Contextual
+  Retrieval* (the prefix is built from the document's own header, not
+  generated).
+- **Weighted reciprocal-rank fusion** of bge-small cosine and BM25, 0.8 / 0.2,
+  k = 60 (Cormack et al. 2009; Anthropic contextual-embeddings cookbook).
+- **Query instruction measured, not assumed.** The BGE instruction prefix
+  raised held-out unit recall@1 (0.40 → 0.47) but its best development gate
+  served a wrong passage on held-out; without it, none. Queries are embedded
+  plain.
+- **Calibrated gate.** Serve one verbatim sentence only when the engine
+  abstained, the top unit's cosine is ≥ 0.62 and it beats the best unit of
+  any other document. Chosen on development as the most rescues with zero
+  wrong passages and zero accepted unanswerable questions.
+
+| Held-out (15 answerable + 5 unanswerable) | recall@1 | wrong passages served | unanswerable accepted |
+| --- | --- | --- | --- |
+| Shipped hybrid, before | 0.33 | 3 | 1 |
+| + paraphrase rescue | **0.40** | 3 (no new) | 1 (no new) |
+
+Sentence units alone (no gate) put the right sentence in the top 3 for 11 of
+15 held-out paraphrases. The gate is deliberately strict: an evidence engine
+should say "I don't see that" rather than read the wrong line, so the rescue
+only fires when one sentence clearly stands out.
+
+Wired into both the voice call and typed answers after an abstention; it
+never replaces an answer the engine gives. Unit tests: `paraphrase.test.mjs`;
+numbers: the `bench` workflow posts them on every pull request that touches
+retrieval.
+
+## Next experiments
+
+- A cross-encoder reranker (bge-reranker-base) over the top 10 units, the
+  step that gave the largest gain in Anthropic's numbers, if it fits the
+  free instance's memory.
+- `dtype: "q8"` for the resident model (about a quarter of the memory), with
+  the gate re-tuned on development.
+- A larger, outside-authored question set: 15 held-out questions can show a
+  direction, not a reliable size.

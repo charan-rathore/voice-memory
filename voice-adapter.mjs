@@ -30,6 +30,22 @@ import {
   isFragment,
   FRAGMENT_REPLY,
 } from "./spoken-repair.mjs";
+import { paraphraseLookup } from "./paraphrase.mjs";
+import {
+  callLanguage,
+  isHindi,
+  socialTurn,
+  stripPreamble,
+  repairDealTerms,
+  glossHindi,
+  splitCompound,
+  isVagueLab,
+  clarifyLab,
+  fragmentReply,
+  toHindi,
+  hasSubject,
+  isDealQuestion,
+} from "./conversation.mjs";
 export function createVoiceAdapter({
   ttlMs = 120000,
   now = () => Date.now(),
@@ -346,16 +362,50 @@ export function createVoiceAdapter({
       // own previous utterances. Lab questions take the first candidate the
       // clinical layer can answer.
       const reports = bundle?.clinical ?? [];
-      const candidates = voiceQuestions(data.messages, {
-        reports,
-        ids: [
-          ...new Set(reports.map((r) => r.meta?.patient?.id).filter(Boolean)),
-        ],
-        aliasesFor,
-        text: messageText,
-      }).map((q) => normalizeSpoken(q) || q);
+      // Earlier utterances are joined in only when this one is a fragment or
+      // has no subject of its own ("and the other one?"); otherwise a deal
+      // question right after a lab question would be answered as lab.
+      const ownOnly = hasSubject(transcript) && !isFragment(transcript);
+      const candidates = voiceQuestions(
+        ownOnly ? data.messages.slice(-1) : data.messages,
+        {
+          reports,
+          ids: [
+            ...new Set(reports.map((r) => r.meta?.patient?.id).filter(Boolean)),
+          ],
+          aliasesFor,
+          text: messageText,
+        },
+      )
+        // phrased any way: drop a leading "hi, can you hear me", repair the
+        // deal's names as the recogniser spells them, and add an English
+        // rendering of a Hindi question so both reach the same intent
+        .flatMap((q) => {
+          const r = repairDealTerms(stripPreamble(q)) || q;
+          const g = glossHindi(r);
+          return [r, ...(g ? [g] : []), q];
+        })
+        .map((q) => normalizeSpoken(q) || q)
+        .filter((q, i, all) => q && all.indexOf(q) === i);
+      // This call's own history only (a fixed bearer is shared by callers).
+      const userHistory = data.messages
+        .slice(0, -1)
+        .filter((m) => m?.role === "user")
+        .map((m) => messageText(m.content));
+      const lang = callLanguage(transcript, userHistory);
+      const lastSpoken =
+        [...data.messages.slice(0, -1)]
+          .reverse()
+          .find((m) => m?.role === "assistant" && messageText(m.content).trim())
+          ?.content ?? null;
+      const social = socialTurn(repairDealTerms(transcript), {
+        lang,
+        last: lastSpoken ? messageText(lastSpoken) : null,
+      });
       let asked = candidates[0] || normalizeSpoken(transcript) || transcript;
-      if (reports.length) {
+      let clinicalHit = false;
+      const deal = isDealQuestion(transcript) || isDealQuestion(asked);
+      if (reports.length && !deal) {
         const hit = candidates.find((q) => {
           try {
             return clinicalTurn(q, reports);
@@ -363,8 +413,17 @@ export function createVoiceAdapter({
             return false;
           }
         });
-        if (hit) asked = hit;
+        if (hit) ((asked = hit), (clinicalHit = true));
       }
+      // A Hindi question about the deal: the engine reads English, so ask
+      // with the English rendering (lab questions are read in Hindi already).
+      if (!clinicalHit && isHindi(lang)) {
+        const g = glossHindi(repairDealTerms(stripPreamble(transcript)));
+        if (g) asked = normalizeSpoken(g) || g;
+      }
+      // Two questions in one breath: answer the first here, the second below.
+      const [firstQ, secondQ] = splitCompound(asked);
+      if (secondQ) asked = firstQ;
       const streaming = true;
       const sequence = ++grant.sequence;
       grant.busy = (grant.busy ?? 0) + 1;
@@ -377,7 +436,18 @@ export function createVoiceAdapter({
         return new Response(null, { status: 499 });
       }
       let spoken, turn;
-      if (
+      if (social) {
+        // about the call itself: a fixed reply, no record facts
+        spoken = social.spoken;
+        turn = {
+          spokenTurn: {
+            intent: social.intent,
+            verdict: "SOCIAL",
+            spoken,
+            citations: [],
+          },
+        };
+      } else if (
         /^\s*(turn (that|this|the brief) into (an? )?email|draft (an? )?email)\s*[.!]?\s*$/i.test(
           transcript,
         )
@@ -470,13 +540,14 @@ export function createVoiceAdapter({
         // for evidence; this layer only chooses what is spoken.
         // Lab results across reports (bundle.clinical, set by the server for
         // uploaded lab tables) answer first; absent for Northstar.
-        const clinical = bundle.clinical?.length
-          ? (clinicalTurn(asked, bundle.clinical) ??
-            candidates
-              .map((q) => clinicalOverview(q, bundle.clinical))
-              .find(Boolean) ??
-            null)
-          : null;
+        const clinical =
+          bundle.clinical?.length && !deal
+            ? (clinicalTurn(asked, bundle.clinical) ??
+              candidates
+                .map((q) => clinicalOverview(q, bundle.clinical))
+                .find(Boolean) ??
+              null)
+            : null;
         let rendered = clinical
           ? {
               spoken: clinical.spoken,
@@ -555,14 +626,94 @@ export function createVoiceAdapter({
               ? "I could not find supporting evidence in these documents."
               : `I found ${grant.last.evidence.length} relevant source passages. This local build shows excerpts rather than a synthesized answer. Review the sources on screen, including any conditions or differing decision statements.`);
       }
-      // A cut-off fragment gets a helpful prompt, not a flat abstention.
+      const refusal = (x) =>
+        /^I (don't|do not) see that in these documents\.?$|^I could not find supporting evidence/i.test(
+          x ?? "",
+        );
+      // The second half of a compound question, from the same deterministic
+      // renderers (clinical first, then the claim graph).
+      if (!social && secondQ) {
+        let second = null;
+        try {
+          second =
+            (bundle.clinical?.length && !deal
+              ? clinicalTurn(secondQ, bundle.clinical)
+              : null) ??
+            spokenTurn(secondQ, bundle, turn?.spokenTurn?.field ?? null);
+        } catch {
+          second = null;
+        }
+        const s2 = second?.spoken;
+        if (s2 && !refusal(s2) && s2 !== spoken)
+          spoken = refusal(spoken) ? s2 : `${spoken} ${s2}`;
+        else if (
+          !deal &&
+          refusal(spoken) &&
+          isVagueLab(secondQ) &&
+          bundle.clinical?.length
+        )
+          spoken = clarifyLab(lang);
+      }
+      // A broad question about the deal ("what exactly changed in the
+      // Northstar deal?"): the fee change and what is still open, from the
+      // same renderers, rather than an abstention.
+      // Reworded beyond keyword reach: one verbatim sentence, only when the
+      // calibrated paraphrase gate is unambiguous (paraphrase.mjs).
+      if (!social && refusal(spoken) && !isFragment(transcript)) {
+        let p = null;
+        try {
+          p = await paraphraseLookup(asked, bundle);
+        } catch {
+          p = null;
+        }
+        if (p) {
+          spoken = p.spoken;
+          turn = {
+            ...turn,
+            spokenTurn: {
+              intent: "LOOKUP",
+              verdict: "QUOTED",
+              spoken,
+              citations: [p.citation],
+            },
+          };
+        }
+      }
+      // Only for a broad question that names this deal: an abstention about
+      // anything else (another company, an unknown amount) must stand.
+      const broadDeal =
+        /\b(northstar|deal)\b/i.test(asked + " " + (secondQ ?? "")) &&
+        /\b(chang\w*|happen\w*|exactly|summary|summari[sz]e|status|update|overview|badl\w*)\b|बदल|क्या\s+हुआ/i.test(
+          transcript,
+        );
+      if (!social && deal && broadDeal && refusal(spoken)) {
+        const parts = ["What happened to the fee?", "What's still open?"]
+          .map((q) => {
+            try {
+              return spokenTurn(q, bundle, null)?.spoken;
+            } catch {
+              return null;
+            }
+          })
+          .filter((x) => x && !refusal(x));
+        if (parts.length) spoken = parts.join(" ");
+      }
+      // "my result" without a test name: ask which, don't abstain.
       if (
-        /^I (don't|do not) see that in these documents\.?$/i.test(
-          spoken ?? "",
-        ) &&
-        isFragment(transcript)
+        !social &&
+        !deal &&
+        refusal(spoken) &&
+        bundle.clinical?.length &&
+        isVagueLab(asked)
       )
-        spoken = FRAGMENT_REPLY;
+        spoken = clarifyLab(lang);
+      // A cut-off fragment gets a helpful prompt, not a flat abstention.
+      if (refusal(spoken) && isFragment(transcript))
+        spoken = fragmentReply(lang) ?? FRAGMENT_REPLY;
+      // Hindi on request or when spoken to in Hindi. Clinical answers are
+      // already rendered in the caller's language; deal templates are
+      // rendered here, with record quotes kept verbatim.
+      if (isHindi(lang) && !clinicalHit && !social) spoken = toHindi(spoken);
       releaseBusy();
       const id = "local-contract-" + randomBytes(8).toString("hex");
       const encoder = new TextEncoder();

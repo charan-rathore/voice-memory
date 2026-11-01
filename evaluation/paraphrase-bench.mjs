@@ -18,7 +18,16 @@ import {
   denseAvailableFor,
   embedQueryReady,
   warmDense,
+  embedTextsReady,
 } from "../dense.mjs";
+import {
+  unitsOf,
+  warmUnits,
+  rankUnits,
+  gate,
+  GATE,
+  QUERY_INSTRUCTION,
+} from "../paraphrase.mjs";
 
 const spec = JSON.parse(
   readFileSync(new URL("./paraphrase-questions.json", import.meta.url), "utf8"),
@@ -30,6 +39,7 @@ const docs = readdirSync(md)
   .map((f) => ({ title: f, text: readFileSync(new URL(f, md), "utf8") }));
 const bundle = importBundle(docs);
 await warmDense(bundle.rows);
+await warmUnits(bundle);
 const storage = {
   backend: "ephemeral",
   durable: false,
@@ -85,6 +95,32 @@ for (const item of all) {
       title: c.title,
       hit: item.need ? contains(c.text, item.need) : false,
     }));
+  // sentence-level contextual units (paraphrase.mjs), with and without
+  // the BGE query instruction
+  const unit = {};
+  for (const [name, prefix] of [
+    ["instructed", QUERY_INSTRUCTION],
+    ["plain", ""],
+  ]) {
+    const [qv] = (await embedTextsReady([prefix + item.q])) ?? [];
+    const ranked = qv ? rankUnits(item.q, bundle, qv) : [];
+    const top = ranked[0];
+    const rival = top ? ranked.find((r) => r.unit.src !== top.unit.src) : null;
+    unit[name] = top
+      ? {
+          title: top.unit.src.title,
+          hit: item.need ? contains(top.unit.sent.text, item.need) : false,
+          hit3: item.need
+            ? ranked
+                .slice(0, 3)
+                .some((r) => contains(r.unit.sent.text, item.need))
+            : false,
+          cosine: Math.round(top.cosine * 10000) / 10000,
+          margin:
+            Math.round((top.cosine - (rival?.cosine ?? 0)) * 10000) / 10000,
+        }
+      : null;
+  }
   rows.push({
     q: item.q,
     kind: item.kind,
@@ -93,6 +129,7 @@ for (const item of all) {
     hybrid: served(hy),
     evidence: hy.evidence,
     dense,
+    unit,
   });
 }
 const ms = Math.round(((performance.now() - t0) / all.length) * 10) / 10;
@@ -134,6 +171,105 @@ for (const split of ["development", "heldout"]) {
     nAbstain: abs.length,
   };
 }
+// ------------------------------------------------------------ the gate
+// Rescue = serve the top unit when the shipped hybrid served nothing and the
+// unit clears (minCosine, minMargin). Chosen on DEVELOPMENT only: the most
+// correct rescues with zero wrong passages and zero accepted unanswerables;
+// ties go to the stricter gate. Then reported on held-out.
+const rescue = (set, mode, t) => {
+  let right = 0,
+    wrong = 0,
+    falseAccept = 0;
+  for (const r of set) {
+    const u = r.unit[mode];
+    if (r.hybrid.length || !u) continue;
+    const pass = u.cosine >= t.minCosine && u.margin >= t.minMargin;
+    if (!pass) continue;
+    if (r.kind === "abstain") falseAccept++;
+    else if (u.hit) right++;
+    else wrong++;
+  }
+  return { right, wrong, falseAccept };
+};
+const combined = (set, mode, t) => {
+  const ans = set.filter((r) => r.kind === "answer");
+  const ok = ans.filter((r) =>
+    r.hybrid.length
+      ? r.hybrid[0].hit
+      : r.unit[mode] &&
+        r.unit[mode].cosine >= t.minCosine &&
+        r.unit[mode].margin >= t.minMargin &&
+        r.unit[mode].hit,
+  ).length;
+  return Math.round((ok / (ans.length || 1)) * 1000) / 1000;
+};
+const dev = rows.filter((r) => r.split === "development");
+const held = rows.filter((r) => r.split === "heldout");
+const tuning = {};
+for (const mode of ["instructed", "plain"]) {
+  let best = null;
+  for (let c = 0.5; c <= 0.95; c += 0.005)
+    for (const m of [0, 0.005, 0.01, 0.015, 0.02, 0.03, 0.04, 0.06, 0.08]) {
+      const t = { minCosine: Math.round(c * 1000) / 1000, minMargin: m };
+      const r = rescue(dev, mode, t);
+      if (r.wrong || r.falseAccept) continue;
+      if (
+        !best ||
+        r.right > best.dev.right ||
+        (r.right === best.dev.right && t.minCosine > best.t.minCosine)
+      )
+        best = { t, dev: r };
+    }
+  tuning[mode] = best && {
+    chosenOnDevelopment: best.t,
+    development: {
+      ...best.dev,
+      recall1WithRescue: combined(dev, mode, best.t),
+    },
+    heldout: {
+      ...rescue(held, mode, best.t),
+      recall1WithRescue: combined(held, mode, best.t),
+    },
+  };
+}
+const shipped = {
+  gate: GATE,
+  development: {
+    ...rescue(dev, "plain", GATE),
+    recall1WithRescue: combined(dev, "plain", GATE),
+  },
+  heldout: {
+    ...rescue(held, "plain", GATE),
+    recall1WithRescue: combined(held, "plain", GATE),
+  },
+};
+const unitRecall = (set, mode, key) => {
+  const ans = set.filter((r) => r.kind === "answer");
+  return (
+    Math.round(
+      (ans.filter((r) => r.unit[mode]?.[key]).length / (ans.length || 1)) *
+        1000,
+    ) / 1000
+  );
+};
+for (const [split, set] of [
+  ["development", dev],
+  ["heldout", held],
+])
+  summary[split].units = {
+    instructed: {
+      recall1: unitRecall(set, "instructed", "hit"),
+      recall3: unitRecall(set, "instructed", "hit3"),
+    },
+    plain: {
+      recall1: unitRecall(set, "plain", "hit"),
+      recall3: unitRecall(set, "plain", "hit3"),
+    },
+  };
+summary.tuning = tuning;
+summary.shipped = shipped;
+summary.units = unitsOf(bundle).units.length;
+
 let sha = "unknown";
 try {
   sha = execSync("git rev-parse --short HEAD").toString().trim();

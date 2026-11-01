@@ -51,6 +51,9 @@
           <li><a href="graph.html">Memory graph</a></li>
           <li><a href="https://github.com/charan-rathore/voice-memory">Code</a></li>
         </ul>
+        <button class="nav-sound" type="button" data-sound aria-label="Sound effects" aria-pressed="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path class="w1" d="M16.5 8.5a5 5 0 0 1 0 7" /><path class="w2" d="M19 6a8.5 8.5 0 0 1 0 12" /></svg>
+        </button>
         <a class="nav-cta" href="#try" data-call-link>Call it</a>
       </nav>
     </header>
@@ -119,16 +122,19 @@
         <h2 id="problem-title" class="h2 center">People read their records before anyone explains them.</h2>
         <div class="stats">
           <a class="stat" href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/10.1001/jamanetworkopen.2026.30698" data-reveal>
+            <canvas class="stat-art" data-art="spiral" aria-hidden="true"></canvas>
             <span class="stat-num" data-count="68.6" data-suffix="%">68.6%</span>
             <span class="stat-text">of US adults with online records opened their test results before hearing from a clinician.</span>
             <span class="stat-src">JAMA Network Open, Aug 2026 · HINTS 2024, n = 4,982</span>
           </a>
           <a class="stat" href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/10.1001/jamanetworkopen.2026.30698" data-reveal>
+            <canvas class="stat-art" data-art="sheets" aria-hidden="true"></canvas>
             <span class="stat-num" data-count="1" data-prefix="" data-suffix=" in 3">1 in 3</span>
             <span class="stat-text">of them said they understood those results only fairly well or poorly.</span>
             <span class="stat-src">Same study: 26.8% fairly well, 6.6% poorly</span>
           </a>
           <a class="stat" href="https://home.ecri.org/blogs/ecri-news/misuse-of-ai-chatbots-tops-annual-list-of-health-technology-hazards" data-reveal>
+            <canvas class="stat-art" data-art="flow" aria-hidden="true"></canvas>
             <span class="stat-num" data-count="40" data-suffix="M+">40M+</span>
             <span class="stat-text">people a day ask ChatGPT about health. ECRI ranks misuse of AI chatbots the #1 health-technology hazard of 2026.</span>
             <span class="stat-src">ECRI Top 10 Health Technology Hazards, Jan 2026</span>
@@ -250,31 +256,37 @@
         <p class="sub center">Six things a fluent assistant gets wrong. Click one to ask it live.</p>
         <div class="catch-grid">
           <button class="catch" data-ask-case="health" data-ask="What is SYN-0001's ferritin result?" data-reveal>
+            <canvas class="catch-art" data-art="fix" aria-hidden="true"></canvas>
             <span class="catch-kind ok">Corrections</span>
             <h3>An amended result replaces the preliminary one</h3>
             <p class="catch-demo"><s>5</s> → <b>50</b> ng/mL, same collection</p>
           </button>
           <button class="catch" data-ask-case="health" data-ask="Has creatinine gone up since September?" data-reveal>
+            <canvas class="catch-art" data-art="units" aria-hidden="true"></canvas>
             <span class="catch-kind no">Units</span>
             <h3>Different units are never compared by guesswork</h3>
             <p class="catch-demo">1.2 mg/dL vs 106 µmol/L → <b>won't compare</b></p>
           </button>
           <button class="catch" data-ask-case="health" data-ask="What is the TSH?" data-reveal>
+            <canvas class="catch-art" data-art="who" aria-hidden="true"></canvas>
             <span class="catch-kind no">Patients</span>
             <h3>Two people's reports are never mixed</h3>
             <p class="catch-demo">SYN-0001 or SYN-0003? → <b>asks which</b></p>
           </button>
           <button class="catch" data-ask-case="deal" data-ask="Was the $42,000 revision finalized?" data-reveal>
+            <canvas class="catch-art" data-art="price" aria-hidden="true"></canvas>
             <span class="catch-kind warn">Contracts</span>
             <h3>A later proposal is not a signed agreement</h3>
             <p class="catch-demo"><s>$48,000</s> → $42,000 <b>proposed, not approved</b></p>
           </button>
           <button class="catch" data-ask-case="deal" data-ask="Did they agree on the payment split?" data-reveal>
+            <canvas class="catch-art" data-art="swing" aria-hidden="true"></canvas>
             <span class="catch-kind warn">Meetings</span>
             <h3>Discussed is not decided</h3>
             <p class="catch-demo">40/60 proposed · 50/50 discussed → <b>still open</b></p>
           </button>
           <button class="catch" data-ask-case="deal" data-ask="Is there a signed contract?" data-reveal>
+            <canvas class="catch-art" data-art="sign" aria-hidden="true"></canvas>
             <span class="catch-kind no">Absence</span>
             <h3>Missing approvals stay missing</h3>
             <p class="catch-demo">“No signed agreement exists” → <b>says no</b></p>

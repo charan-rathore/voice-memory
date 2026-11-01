@@ -25,7 +25,8 @@ export const easeInOutCubic = (t) => {
 
 // ------------------------------------------------------------ damping
 /** Frame-rate independent smoothing toward `b`. `decay` ≈ 1 (slow) … 25 (snappy). */
-export const expDecay = (a, b, decay, dt) => b + (a - b) * Math.exp(-decay * dt);
+export const expDecay = (a, b, decay, dt) =>
+  b + (a - b) * Math.exp(-decay * dt);
 /** Decay constant that halves the remaining distance every `halfLife` seconds. */
 export const decayFromHalfLife = (halfLife) => Math.LN2 / halfLife;
 
@@ -126,7 +127,8 @@ export function catmullRom(pts) {
   const p = (i) => {
     if (i < 0) return [2 * pts[0][0] - pts[1][0], 2 * pts[0][1] - pts[1][1]];
     const n = pts.length - 1;
-    if (i > n) return [2 * pts[n][0] - pts[n - 1][0], 2 * pts[n][1] - pts[n - 1][1]];
+    if (i > n)
+      return [2 * pts[n][0] - pts[n - 1][0], 2 * pts[n][1] - pts[n - 1][1]];
     return pts[i];
   };
   const segs = [];
@@ -145,9 +147,7 @@ export function catmullRom(pts) {
   return segs;
 }
 export const segsD = (segs) =>
-  segs
-    .map((s, i) => (i ? pathD(s).replace(/^M[^C]+/, "") : pathD(s)))
-    .join("");
+  segs.map((s, i) => (i ? pathD(s).replace(/^M[^C]+/, "") : pathD(s))).join("");
 
 // ------------------------------------------------------------ timing curves
 /**
@@ -207,4 +207,33 @@ export function travel(path, s) {
     }
     rest -= tb.total;
   }
+}
+
+// ------------------------------------------------------------ noise
+// Smooth 2D value noise in [-1, 1] (hash on the integer lattice, smoothstep
+// interpolation). Deterministic, so hand-drawn wobble is the same each load.
+function hash2(ix, iy, seed) {
+  let h = (ix * 374761393 + iy * 668265263 + seed * 982451653) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+export function noise2(x, y, seed = 0) {
+  const ix = Math.floor(x),
+    iy = Math.floor(y),
+    fx = x - ix,
+    fy = y - iy;
+  const sx = fx * fx * (3 - 2 * fx),
+    sy = fy * fy * (3 - 2 * fy);
+  const a = hash2(ix, iy, seed),
+    b = hash2(ix + 1, iy, seed),
+    c = hash2(ix, iy + 1, seed),
+    d = hash2(ix + 1, iy + 1, seed);
+  return lerp(lerp(a, b, sx), lerp(c, d, sx), sy) * 2 - 1;
+}
+/** Golden-angle (Vogel) spiral: the i-th of n points in a unit disc. */
+export const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+export function phyllotaxis(i, n) {
+  const r = Math.sqrt((i + 0.5) / n),
+    a = i * GOLDEN_ANGLE;
+  return [r * Math.cos(a), r * Math.sin(a)];
 }

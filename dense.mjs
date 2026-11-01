@@ -217,3 +217,24 @@ export const denseStatus = () => ({
     dropped: guard.dropped,
   },
 });
+
+/**
+ * Embeddings for arbitrary texts, only when the model is ALREADY resident
+ * (never triggers a load on the request path). Returns null otherwise.
+ * Vectors are mean-pooled and L2-normalised, so a dot product is a cosine.
+ */
+export async function embedTextsReady(texts) {
+  relieveMemoryPressure();
+  if (!state.pipe || !texts.length) return null;
+  try {
+    const out = [];
+    for (const t of texts) {
+      const v = await state.pipe(t, { pooling: "mean", normalize: true });
+      out.push(Float32Array.from(v.data));
+    }
+    return out;
+  } catch (e) {
+    state.failed = String((e && e.message) || e);
+    return null;
+  }
+}
