@@ -18,7 +18,7 @@ CORAL = "#e8735a"
 TEAL = "#1f9e8f"
 MARK = "#f4dc4a"
 RED = "#c2412f"
-SERIF = "Newsreader"
+SERIF = "DejaVu Serif"  # installed on the runner; renders identically everywhere
 config.background_color = PAPER
 
 
@@ -40,8 +40,8 @@ class Units(Scene):
             *[t(f"{v:g}", 20).next_to(sep.n2p(v), DOWN, buff=0.15) for v in (0, 0.5, 1, 1.5, 2)],
             *[t(f"{v:g}", 20).next_to(octl.n2p(v), DOWN, buff=0.15) for v in (0, 40, 80, 120, 160)],
         )
-        sl = t("3 Sept report · mg/dL", 24, CORAL).next_to(sep, UP, buff=0.5)
-        ol = t("12 Oct report · µmol/L", 24, TEAL).next_to(octl, UP, buff=0.5)
+        sl = t("3 Sept report, mg/dL", 24, CORAL).next_to(sep, UP, buff=1.25)
+        ol = t("12 Oct report, µmol/L", 24, TEAL).next_to(octl, UP, buff=1.25)
         self.play(Create(sep), Create(octl), FadeIn(ticks), FadeIn(sl, shift=DOWN * 0.2), FadeIn(ol, shift=DOWN * 0.2))
 
         a = Dot(sep.n2p(0), color=CORAL, radius=0.11)

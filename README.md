@@ -38,6 +38,11 @@ prototype, not a diagnostic or clinically validated product.
 
 ## What it catches (live on the landing page)
 
+![Why Voice Memory won't compare 1.2 mg/dL with 106 µmol/L](docs/media/units.gif)
+
+<sub>Rendered with [Manim](https://github.com/ManimCommunity/manim) from
+[`docs/explainer/units.py`](docs/explainer/units.py) in CI.</sub>
+
 | Case | Question | Answer the engine gives |
 | --- | --- | --- |
 | Correction | "What is SYN-0001's ferritin result?" | 50 ng/mL — the 12 Oct result was corrected from 5 to 50 (amended report), cites both rows |
