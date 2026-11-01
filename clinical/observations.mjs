@@ -14,6 +14,20 @@
 //  - an amended report supersedes the preliminary/final one for the same
 //    collection, and the superseded value stays visible;
 //  - "<0.05" stays a bound: direction is only reported when certain.
+//
+// Real-world layouts (header on its own line, method lines between rows,
+// sex-specific ranges, qualitative serology) are read by lab-lines.mjs and
+// merged in with the same shape and the same rules.
+import {
+  readLabText,
+  genericMeta,
+  flatHeader,
+  parseReference,
+  parseResult,
+  normUnit,
+} from "./lab-lines.mjs";
+import { locate } from "../ingest/canonical.mjs";
+import { canonOf } from "./explain.mjs";
 
 const MONTHS = {
   january: 1,
@@ -49,9 +63,11 @@ function isoDate(d, m, y) {
   return `${y}-${String(mm).padStart(2, "0")}-${String(Number(d)).padStart(2, "0")}`;
 }
 
-export function reportMeta(text) {
+export function reportMeta(full) {
+  const text = flatHeader(full.slice(0, 6000)) + full.slice(6000);
+  // The synthetic header: "Patient: Test Person A (synthetic), ID SYN-0001".
   const patient =
-    /Patient:?\s*([^\n,]+?)\s*,?\s*ID\s*:?\s*([A-Z0-9][A-Z0-9-]{2,})/i.exec(
+    /\b[Pp]atient:\s*([^\n,|]+?)\s*,\s*\bID\b\s*:?\s*([A-Z0-9][A-Z0-9-]{2,})/.exec(
       text,
     );
   const collected = new RegExp(`Collected:?\\s*(?:on\\s*)?${DATE}`, "i").exec(
@@ -61,16 +77,35 @@ export function reportMeta(text) {
     text,
   );
   const status =
-    /Report status:?\s*(final|preliminary|amended|corrected)/i.exec(text);
+    /Report status\s*:?\s*(final|preliminary|provisional|interim|partial|amended|corrected|revised)/i.exec(
+      text,
+    );
+  const g = genericMeta(text);
+  const st = status?.[1].toLowerCase();
   return {
     patient: patient
-      ? { name: patient[1].trim(), id: patient[2].toUpperCase() }
-      : null,
+      ? {
+          name: patient[1].trim(),
+          id: patient[2].toUpperCase(),
+          sex: g.patient?.sex ?? null,
+          age: g.patient?.age ?? null,
+        }
+      : g.patient,
     collected: collected
       ? isoDate(collected[1], collected[2], collected[3])
-      : null,
-    reported: reported ? isoDate(reported[1], reported[2], reported[3]) : null,
-    status: status ? status[1].toLowerCase() : "unknown",
+      : g.collected,
+    reported: reported
+      ? isoDate(reported[1], reported[2], reported[3])
+      : g.reported,
+    dateRaw: g.dateRaw,
+    status: st
+      ? ({
+          provisional: "preliminary",
+          interim: "preliminary",
+          partial: "preliminary",
+          revised: "amended",
+        }[st] ?? st)
+      : "unknown",
     amendmentNotes: (text.match(/^.*\bamended\b.*$/gim) ?? [])
       .filter((l) => !/Report status/i.test(l))
       .map((l) => l.trim()),
@@ -78,11 +113,11 @@ export function reportMeta(text) {
 }
 
 const COLS = {
-  test: /^(test|tests|analyte|investigation|parameter|component|test name)$/i,
-  result: /^(result|results|value|observed value|your result)$/i,
+  test: /^(test|tests|analyte|investigation|investigations|parameter|parameters|component|test name|test description|description)$/i,
+  result: /^(result|results|value|observed value|your result|result value)$/i,
   unit: /^(unit|units)$/i,
   range:
-    /^(reference|ref\.?|normal|biological)?\s*(range|interval|reference range|reference interval)$|^reference$/i,
+    /^(reference|ref\.?|normal|biological|bio\.?)?\s*(ref\.?\s*)?(range|interval|reference range|reference interval|values?)$|^reference$/i,
   flag: /^(flag|flags|abnormal|h\/l)$/i,
 };
 
@@ -113,8 +148,8 @@ function flagConflict(v, range, flag) {
   );
   if (!m) return false;
   const [lo, hi] = [Number(m[1]), Number(m[2])];
-  if (/^h/i.test(flag)) return v.value <= hi;
-  if (/^l/i.test(flag)) return v.value >= lo;
+  if (/^h(igh)?$/i.test(flag)) return v.value <= hi;
+  if (/^l(ow)?$/i.test(flag)) return v.value >= lo;
   return false;
 }
 
@@ -143,7 +178,10 @@ export function extractReport(doc) {
     const col = {};
     header.cells.forEach((h, i) => {
       for (const [k, re] of Object.entries(COLS))
-        if (col[k] === undefined && re.test(h.trim())) col[k] = i;
+        if (col[k] === undefined && re.test(h.trim())) {
+          col[k] = i;
+          break; // one role per column ("Value" is the result, not a range)
+        }
     });
     if (col.test === undefined || col.result === undefined) continue; // not a results table
     for (const row of doc.elements.filter(
@@ -152,12 +190,28 @@ export function extractReport(doc) {
       const cell = (k) =>
         col[k] === undefined ? null : (row.cells[col[k]] ?? "").trim() || null;
       const test = cell("test");
-      const raw = cell("result");
+      let raw = cell("result");
+      // A flag printed inside the result cell ("H 141.0", "12.5 L").
+      let inFlag = null;
+      const fm = raw && /^(H|L|HH|LL)\s+(.+)$|^(.+?)\s+(H|L|HH|LL)$/.exec(raw);
+      if (fm) {
+        inFlag = fm[1] ?? fm[4];
+        raw = fm[2] ?? fm[3];
+      }
       if (!test || raw == null) continue;
       const v = parseValue(raw);
+      const qual = v.value == null ? (parseResult(raw)?.qual ?? null) : null;
+      // "Primary Sample Type : | Blood" is a label, not a result.
+      if (
+        v.value == null &&
+        qual == null &&
+        (/[:#]\s*$/.test(test) || raw.split(/\s+/).length > 3)
+      )
+        continue;
       observations.push({
         test,
         key: testKey(test),
+        canon: canonOf(test),
         raw,
         comparator: v.comparator,
         value: v.value,
@@ -168,8 +222,15 @@ export function extractReport(doc) {
         unit: cell("unit")?.replace(/\u03bc/g, "\u00b5") ?? null,
         unitRaw: cell("unit"),
         range: cell("range"),
-        flag: cell("flag"),
-        flagConflict: flagConflict(v, cell("range"), cell("flag")),
+        flag: cell("flag") ?? inFlag,
+        flagConflict: flagConflict(v, cell("range"), cell("flag") ?? inFlag),
+        qual,
+        ref: parseReference(
+          cell("range"),
+          meta.patient?.sex ?? null,
+          meta.patient?.age ?? null,
+        ),
+        section: null,
         source: {
           elementId: row.id,
           start: row.start,
@@ -181,6 +242,45 @@ export function extractReport(doc) {
         },
       });
     }
+  }
+  // Real-world layouts: every line the table reader did not already cover.
+  const taken = observations.map((o) => [o.source.start, o.source.end]);
+  const overlaps = (a, b) =>
+    taken.some(([s, e]) => typeof s === "number" && s < b && e > a);
+  for (const r of readLabText(doc.text)) {
+    if (overlaps(r.start, r.end)) continue;
+    const where = doc.elements?.length ? locate(doc, r.start, r.end) : null;
+    const region = where?.regions?.[0];
+    observations.push({
+      test: r.test,
+      key: testKey(r.test),
+      canon: canonOf(r.test),
+      raw: r.raw,
+      comparator: r.comparator,
+      value: r.value,
+      notation: r.notation,
+      unit: normUnit(r.unit),
+      unitRaw: r.unit,
+      range: r.range,
+      flag: r.flag,
+      flagConflict: flagConflict(r, r.range, r.flag),
+      qual: r.qual,
+      ref: parseReference(
+        r.range,
+        meta.patient?.sex ?? null,
+        meta.patient?.age ?? null,
+      ),
+      section: r.section,
+      source: {
+        elementId: where?.elementIds?.[0] ?? null,
+        start: r.start,
+        end: r.end,
+        page: region?.page ?? where?.pages?.[0] ?? null,
+        bbox: region?.bbox ?? null,
+        method: "lab-lines",
+        confidence: where?.minConfidence ?? null,
+      },
+    });
   }
   return { meta, observations };
 }
@@ -197,15 +297,45 @@ const STATUS_RANK = {
  * One value per collection: an amended/corrected report supersedes the
  * preliminary/final one collected the same day; the superseded stays listed.
  */
+/**
+ * Whose results these are: the printed patient ID, else the printed name,
+ * else the document itself. Reports are only ever combined under the same
+ * subject, so two unidentified uploads are never treated as one person.
+ */
+export function subjectOf(r) {
+  const p = r.meta?.patient;
+  if (p?.id) return p.id;
+  if (p?.name)
+    return (
+      "name:" +
+      p.name
+        .toLowerCase()
+        .replace(/[^a-z]+/g, " ")
+        .trim()
+    );
+  return "doc:" + (r.sourceId ?? r.title);
+}
+/** When a report's sample was taken: ISO date, else the printed date, else the document. */
+export const dateKeyOf = (r) =>
+  r.meta?.collected ??
+  r.meta?.reported ??
+  (r.meta?.dateRaw
+    ? "raw:" + r.meta.dateRaw
+    : "doc:" + (r.sourceId ?? r.title));
+
 export function seriesFor(reports, key, patientId) {
   const byDate = new Map();
   for (const r of reports) {
-    if (r.meta.patient?.id !== patientId || !r.meta.collected) continue;
+    if (subjectOf(r) !== patientId) continue;
+    const date = dateKeyOf(r);
     for (const o of r.observations) {
       if (o.key !== key) continue;
-      const list = byDate.get(r.meta.collected) ?? [];
+      const list = byDate.get(date) ?? [];
+      // the same test twice in one report (percent and absolute count) is
+      // two rows, not a correction: keep the first, as printed
+      if (list.some((x) => x.report === r)) continue;
       list.push({ ...o, report: r });
-      byDate.set(r.meta.collected, list);
+      byDate.set(date, list);
     }
   }
   return [...byDate.entries()]

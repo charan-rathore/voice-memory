@@ -119,6 +119,7 @@
             "Live engine connected. Every answer is computed now from the fictional records.",
           );
           renderRail();
+          if (!$("#viewer-body .page, #viewer-body .vw-text")) showEmptyViewer();
           return;
         }
       } catch (e) {
@@ -330,6 +331,17 @@
     uploadFiles(e.dataTransfer.files);
   });
 
+  // Colour-code suggestions by what they test: a change over time, whose
+  // record, or a claim to check; plain lookups take the case's own hue.
+  const chipKind = (q) =>
+    /\b(chang|since|gone up|went|increase|decrease|before|previous)/i.test(q)
+      ? "change"
+      : /\b(which|whose|SYN-0003|for SYN|who)\b/i.test(q)
+        ? "who"
+        : /\b(signed|approved|final|finaliz|agree|decided|still open)/i.test(q)
+          ? "check"
+          : "value";
+
   // ------------------------------------------------------------ asking
   function setCase(id, { quiet = false } = {}) {
     $("#upload").hidden = id !== "own";
@@ -346,7 +358,7 @@
     $("#suggest").innerHTML = (c?.suggestions ?? [])
       .map(
         (s) =>
-          `<button class="chip" type="button" data-q="${esc(s)}">${esc(s)}</button>`,
+          `<button class="chip" type="button" data-q="${esc(s)}" data-kind="${chipKind(s)}">${esc(s)}</button>`,
       )
       .join("");
     renderRail();
@@ -527,18 +539,87 @@
   }
 
   // ------------------------------------------------------------ viewer
-  function showEmptyViewer(
-    msg = "The original page opens here, with the cited line marked.",
-  ) {
-    $("#viewer-title").textContent = "Source";
+  // What is in each demo case, so a reader sees the traps before asking.
+  // Every line here restates the fictional documents themselves.
+  const CASE_FILES = {
+    health: {
+      intro:
+        "Four synthetic lab reports for two fictional people. One result was printed wrong and corrected; one test changed units between visits; a second person has their own TSH.",
+      docs: {
+        "a-2026-09.pdf": ["SYN-0001 · 3 Sep 2026 · final", "Baseline: creatinine 1.2 mg/dL, ferritin 0.5 ng/mL"],
+        "a-2026-10-prelim.pdf": ["SYN-0001 · 12 Oct · preliminary", "Ferritin printed as 5; creatinine now in µmol/L"],
+        "a-2026-10-amended.pdf": ["SYN-0001 · 12 Oct · amended 15 Oct", "Ferritin corrected from 5 to 50 ng/mL"],
+        "c-2026-10.pdf": ["SYN-0003 · Oct 2026", "A second person, so “the TSH” is ambiguous"],
+      },
+    },
+    deal: {
+      intro:
+        "Seven fictional records of one consulting deal. The fee was revised, the payment split was discussed two ways, and nothing was ever signed.",
+      docs: {
+        "01_Northstar_Proposal_v1.md": ["Proposal v1 · 4 Sep", "$48,000, 50/50 billing; an offer, not an agreement"],
+        "02_Client_Kickoff_Notes.md": ["Kickoff notes · 11 Sep", "Scope narrowed to two regions; finance approval pending"],
+        "03_Commercial_Revision.md": ["Commercial revision · 18 Sep", "$42,000, 40% upfront / 60% after; subject to sign-off"],
+        "04_Steering_Committee_Notes.md": ["Steering notes · 25 Sep", "50/50 discussed; no vote taken"],
+        "05_Project_Delivery_Update.md": ["Delivery update · 2 Oct", "22 Nov is an internal target, not a deadline"],
+        "06_Client_Email_Extract.md": ["Client email · 6 Oct", "Client keeps the 15 Nov deadline"],
+        "07_Internal_Action_Log.md": ["Action log · 9 Oct", "Open decisions; no signed agreement exists"],
+      },
+    },
+  };
+  function caseFilesHtml() {
+    const c = state.cases[state.case] ?? snap.cases?.find((x) => x.id === state.case);
+    const docs = c?.documents ?? [];
+    if (!docs.length)
+      return `<div class="viewer-empty">${
+        state.case === "own"
+          ? "Your uploaded documents will be listed here. Open one to read it; answers mark the line they rest on."
+          : "The original page opens here, with the cited line marked."
+      }</div>`;
+    const meta = CASE_FILES[state.case] ?? { intro: "", docs: {} };
+    const cards = docs
+      .map((d, i) => {
+        const [head, note] = meta.docs[d.title] ?? [shortTitle(d.title), d.kind === "pdf" ? `${d.pages ?? ""} page PDF`.trim() : "Text document"];
+        return `<button type="button" class="file-card" data-doc="${esc(d.title)}" style="--i:${i}">
+          <span class="file-kind">${esc((d.kind ?? "doc").replace("markdown", "md").toUpperCase())}</span>
+          <b>${esc(head)}</b><span>${esc(note)}</span><i aria-hidden="true">Open</i>
+        </button>`;
+      })
+      .join("");
+    return `<div class="case-files">
+      <p class="case-files-intro"><b>${docs.length} documents in this case.</b> ${esc(meta.intro)}</p>
+      <div class="file-grid">${cards}</div>
+    </div>`;
+  }
+  function showEmptyViewer(msg = null) {
+    $("#viewer-title").textContent = msg ? "Source" : "Documents";
     $("#viewer-meta").textContent = "";
-    $("#viewer-body").innerHTML = `<div class="viewer-empty">${esc(msg)}</div>`;
+    // the case's documents are always one glance away; a message (e.g. "no
+    // passage supports an answer") sits above them
+    const files = caseFilesHtml();
+    $("#viewer-body").innerHTML =
+      msg && /case-files/.test(files)
+        ? `<p class="viewer-note">${esc(msg)}</p>${files}`
+        : msg
+          ? `<div class="viewer-empty">${esc(msg)}</div>`
+          : files;
     $$("#doc-rail button").forEach((b) => b.classList.remove("on"));
+    const n = (state.cases[state.case]?.documents ?? []).length;
+    const btn = $("#files-btn");
+    if (btn) {
+      btn.hidden = !n;
+      btn.querySelector("b").textContent = `View the ${n} document${n === 1 ? "" : "s"}`;
+    }
   }
 
   function renderRail() {
-    const c = state.cases[state.case];
+    const c =
+      state.cases[state.case] ?? snap.cases?.find((x) => x.id === state.case);
     const docs = c?.documents ?? [];
+    const btn = $("#files-btn");
+    if (btn) {
+      btn.hidden = !docs.length;
+      btn.querySelector("b").textContent = `View the ${docs.length} document${docs.length === 1 ? "" : "s"}`;
+    }
     $("#doc-rail").innerHTML = docs
       .map(
         (d) =>
@@ -1069,7 +1150,7 @@
   // ------------------------------------------------------------ wiring
   document.addEventListener("click", (e) => {
     const t = e.target.closest(
-      "[data-q],[data-ask],[data-cite],[data-doc],[data-listen],[data-start-call],.case-tab",
+      "[data-q],[data-ask],[data-cite],[data-doc],[data-files],[data-listen],[data-start-call],.case-tab",
     );
     if (!t) return;
     if (t.matches(".case-tab")) return setCase(t.dataset.case);
@@ -1088,6 +1169,12 @@
       return ask(t.dataset.q, { caseId: t.dataset.case || state.case });
     if (t.matches("[data-cite]")) return openCitation(Number(t.dataset.cite));
     if (t.matches("[data-doc]")) return openDoc(t.dataset.doc);
+    if (t.matches("[data-files]")) {
+      showEmptyViewer();
+      if (matchMedia("(max-width: 1060px)").matches)
+        $("#viewer").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+      return;
+    }
     if (t.matches("[data-listen]"))
       return speak(state.current?.lead?.text ?? "");
   });

@@ -1,0 +1,137 @@
+{
+  "_note": "Questions written by reading each public sample report before running the engine. Files are third-party samples published on GitHub (see sources); they are downloaded by evaluation/field/fetch.mjs into a local, git-ignored folder and never committed. expect = regex the on-screen lead must match; null = the record cannot answer (a right answer is no lead, or NOT_IN_REPORT).",
+  "sources": {
+    "HimanshuBh__chest-mri-without-contrast-sample-report-1.pdf": "HimanshuBhosale25/AI-RAG-based-Medical-Report-Analyzer:data/chest-mri-without-contrast-sample-report-1.pdf",
+    "HimanshuBh__KFT-test-report-format-example-sample-template-Drlogy-lab-report.pdf": "HimanshuBhosale25/AI-RAG-based-Medical-Report-Analyzer:data/KFT-test-report-format-example-sample-template-Drlogy-lab-report.pdf",
+    "HimanshuBh__THYROID-PROFILE-test-report-format-example-sample-template-Drlogy-lab-report.pdf": "HimanshuBhosale25/AI-RAG-based-Medical-Report-Analyzer:data/THYROID-PROFILE-test-report-format-example-sample-template-Drlogy-lab-report.pdf",
+    "lilbabycry__sample_cbc_drlogy.pdf": "lilbabycrypto/healthvest-ai:sample_reports/sample_cbc_drlogy.pdf",
+    "tkarim45__MR._ATTIQ.pdf": "tkarim45/CureWise-AI-Medical-Healthcare:backend/data/blood_reports/MR. ATTIQ.pdf",
+    "tkarim45__MR._AAHID_ZAKI.pdf": "tkarim45/CureWise-AI-Medical-Healthcare:backend/data/blood_reports/MR. AAHID ZAKI.pdf",
+    "Dhanush-R-__Sumathi_blood_report.pdf": "Dhanush-R-git/Medical-Report-Summarization:uploads/blood_reports/Sumathi blood report.pdf",
+    "Aditya9739__WM17S_blood_sample_test.pdf": "Aditya97394/blood-test-report-analyzer:blood_test_report/WM17S_blood_sample_test.pdf",
+    "armandaspa__sample_report.pdf": "armandaspatt/Blood_Report_Analyser:sample_report.pdf",
+    "medlabtech__lab_report_15f89ec931fb44468e5e392abe3d54cf.pdf": "medlabtech2013/ai-powered-lab-report-analyzer:lab_report_15f89ec931fb44468e5e392abe3d54cf.pdf",
+    "kaustubhdu__Sample-medical-report.pdf": "kaustubhduse/Medical-Report-Analyzer:uploads/Sample-medical-report.pdf"
+  },
+  "docs": {
+    "HimanshuBh__chest-mri-without-contrast-sample-report-1.pdf": [
+      {
+        "q": "What does this report suggest?",
+        "expect": "(?i)impression.*ground glass"
+      },
+      {
+        "q": "Summarize this report",
+        "expect": "(?i)impression.*hyperinflation"
+      },
+      {
+        "q": "What did the scan find?",
+        "expect": "(?i)findings.*thyroid gland is unremarkable"
+      },
+      { "q": "Why was this scan done?", "expect": "(?i)smoking.*cough" },
+      { "q": "Was contrast used?", "expect": "(?i)contrast.*none" },
+      { "q": "Is the heart enlarged?", "expect": "(?i)cardiomegaly" },
+      { "q": "Any fluid around the lungs?", "expect": "(?i)effusion" },
+      { "q": "Is there a hernia?", "expect": "(?i)hiatal hernia" },
+      { "q": "Any fractures?", "expect": "(?i)compression fractures" },
+      { "q": "Is the patient a smoker?", "expect": "(?i)smoking" },
+      {
+        "q": "Any problem with the spine?",
+        "expect": "(?i)spondylosis|compression fractures"
+      },
+      { "q": "Are the lymph nodes swollen?", "expect": "(?i)adenopathy" },
+      { "q": "Any kidney stones?", "expect": null },
+      { "q": "Is there cancer?", "expect": null },
+      { "q": "What medicines is the patient taking?", "expect": null }
+    ],
+    "HimanshuBh__KFT-test-report-format-example-sample-template-Drlogy-lab-report.pdf": [
+      {
+        "q": "What is my creatinine?",
+        "expect": "(?i)creatinine.*1\\.5.*above"
+      },
+      { "q": "How are my kidneys?", "expect": "(?i)creatinine 1\\.5" },
+      {
+        "q": "Is anything abnormal?",
+        "expect": "(?i)creatinine.*phosphorus|phosphorus.*creatinine"
+      },
+      {
+        "q": "What is the phosphorus level?",
+        "expect": "(?i)phosphorus.*1\\.4.*below"
+      },
+      { "q": "potassium?", "expect": "(?i)3\\.9" },
+      { "q": "What is my TSH?", "expect": null },
+      { "q": "mera urea kitna hai?", "expect": "(?i)urea.*15" }
+    ],
+    "HimanshuBh__THYROID-PROFILE-test-report-format-example-sample-template-Drlogy-lab-report.pdf": [
+      { "q": "What is the TSH?", "expect": "(?i)10\\.10.*above" },
+      { "q": "How is my thyroid?", "expect": "(?i)T3.*T4|TSH" },
+      { "q": "Is my T4 high?", "expect": "(?i)13\\.60" },
+      { "q": "What is my hemoglobin?", "expect": null }
+    ],
+    "lilbabycry__sample_cbc_drlogy.pdf": [
+      { "q": "What is my hemoglobin?", "expect": "(?i)12\\.5.*below" },
+      { "q": "Is my PCV high?", "expect": "(?i)57\\.5" },
+      { "q": "platelets?", "expect": "(?i)150000" },
+      {
+        "q": "Anything outside the normal range?",
+        "expect": "(?i)packed cell volume.*hemoglobin|hemoglobin.*packed cell volume"
+      },
+      { "q": "what is my cholesterol", "expect": null }
+    ],
+    "tkarim45__MR._ATTIQ.pdf": [
+      { "q": "What is my WBC count?", "expect": "(?i)12040.*above" },
+      { "q": "Is my hemoglobin okay?", "expect": "(?i)14\\.9.*within" },
+      { "q": "lymphocytes?", "expect": "(?i)18\\.5.*below" },
+      { "q": "Summarize my report", "expect": "(?i)WBC" },
+      { "q": "Is my sugar high?", "expect": null }
+    ],
+    "tkarim45__MR._AAHID_ZAKI.pdf": [
+      { "q": "What is my hemoglobin?", "expect": "(?i)11\\.3.*adult" },
+      { "q": "Summarize this report", "expect": "(?i)child" },
+      { "q": "What is the platelet count?", "expect": "(?i)315000" }
+    ],
+    "Dhanush-R-__Sumathi_blood_report.pdf": [
+      { "q": "Is my sugar high?", "expect": "(?i)231.*above" },
+      { "q": "What is my fasting blood sugar?", "expect": "(?i)231" },
+      { "q": "How is my cholesterol?", "expect": "(?i)191" },
+      { "q": "triglycerides?", "expect": "(?i)176.*above" },
+      { "q": "How are my kidneys?", "expect": "(?i)urea.*creatinine" },
+      { "q": "What is my ESR?", "expect": "(?i)18" },
+      { "q": "kya meri report mein sab theek hai?", "expect": "(?i)bahar" },
+      { "q": "मेरा हीमोग्लोबिन कितना है?", "expect": "13\\.5" },
+      { "q": "What is my vitamin D?", "expect": null }
+    ],
+    "Aditya9739__WM17S_blood_sample_test.pdf": [
+      { "q": "What is my hemoglobin?", "expect": "(?i)15\\.00" },
+      {
+        "q": "How is my liver?",
+        "expect": "(?i)alkaline phosphatase.*above|ALP.*above"
+      },
+      { "q": "What is the vitamin B12?", "expect": "(?i)280" },
+      { "q": "cholesterol?", "expect": "(?i)105" },
+      { "q": "Is my sugar okay?", "expect": "(?i)glucose" },
+      { "q": "Any abnormal results?", "expect": "(?i)outside" }
+    ],
+    "armandaspa__sample_report.pdf": [
+      { "q": "What is my HbA1c?", "expect": "(?i)6\\.8.*above" },
+      { "q": "Summarize the report", "expect": "(?i)glucose|HbA1c" },
+      { "q": "How is my liver?", "expect": "(?i)ALT|SGPT" },
+      { "q": "thyroid?", "expect": "(?i)5\\.1" }
+    ],
+    "medlabtech__lab_report_15f89ec931fb44468e5e392abe3d54cf.pdf": [
+      { "q": "What is my WBC?", "expect": "(?i)14\\.2" },
+      { "q": "Is my hemoglobin low?", "expect": "(?i)10\\.1" }
+    ],
+    "kaustubhdu__Sample-medical-report.pdf": [
+      { "q": "What is the diagnosis?", "expect": "(?i)dementia" },
+      { "q": "Who is the doctor?", "expect": "(?i)tan ah moi" },
+      {
+        "q": "Can the patient do simple arithmetic?",
+        "expect": "(?i)arithmetic|4 plus 3"
+      },
+      { "q": "Does he own property?", "expect": "(?i)propert|flat" },
+      { "q": "When was he examined?", "expect": "(?i)20 june 2015" },
+      { "q": "Did he have strokes?", "expect": "(?i)stroke" },
+      { "q": "What is his blood pressure reading?", "expect": null }
+    ]
+  }
+}

@@ -1,7 +1,7 @@
 import http from "node:http";
 import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
-import { paraphraseLookup } from "./paraphrase.mjs";
+import { paraphraseLookup, warmUnits } from "./paraphrase.mjs";
 import {
   repairDealTerms,
   stripPreamble,
@@ -31,12 +31,12 @@ import {
 import { spokenTurn } from "./spoken.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import {
-  clinicalTurn,
-  clinicalOverview,
+  clinicalAnswer,
   clinicalReportsFor,
   observationEvidence,
 } from "../clinical/answer.mjs";
 import { extractReport } from "../clinical/observations.mjs";
+import { sectionAnswer } from "./doc-sections.mjs";
 import { detectLang } from "../clinical/explain.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { createMemory, recordTurn, liveEpisodes } from "../memory/memory.mjs";
@@ -131,9 +131,7 @@ function leadFor(question, result, bundle, prevField) {
     // Lab results across reports first (synthetic-data research prototype):
     // typed observations, comparability checks, no clinical judgement.
     if (bundle.clinical?.length) {
-      const c =
-        clinicalTurn(question, bundle.clinical) ??
-        clinicalOverview(question, bundle.clinical);
+      const c = clinicalAnswer(question, bundle.clinical);
       if (c)
         return {
           text: c.spoken,
@@ -490,6 +488,30 @@ export function createLocalServer({
   // One deterministic answer path for the workspace, the public landing API
   // and (via the same leadFor) the voice call: engine answer, located
   // citations, and the short lead sentence a call would speak.
+  // No answer, an abstention, or a "quote" that is only a heading line.
+  const weakLead = (l) => {
+    if (!l || l.verdict === "UNKNOWN") return true;
+    if (l.verdict !== "QUOTED") return false;
+    return (
+      junkQuote(l) ||
+      String(l.text)
+        .split(/(?<=[.!?])\s/)[0]
+        .trim()
+        .split(/\s+/).length < 6
+    );
+  };
+  // A heading ("IMPRESSION.") or a form header ("PATIENT: ... DOB: ...") is
+  // a place in the document, not an answer: better to say nothing.
+  const junkQuote = (l) => {
+    if (l?.verdict !== "QUOTED") return false;
+    const first = String(l.text)
+      .split(/(?<=[.!?])\s/)[0]
+      .trim();
+    return (
+      !/[a-z]/.test(first.replace(/[A-Z][a-z]*\b/, "")) ||
+      (first.match(/\b[A-Z][A-Za-z #./]{1,20}:/g) ?? []).length >= 2
+    );
+  };
   async function resolveAnswer(s, question, ctx) {
     const bundle = s.bundle;
     // Retrieval mode is part of the key: a keyword or partial-warm
@@ -526,7 +548,19 @@ export function createLocalServer({
       shown.lead = leadFor(question, raw, bundle, ctx || null);
       // Reworded beyond keyword reach: one verbatim sentence with its
       // citation, only when the calibrated paraphrase gate is unambiguous.
-      if (!shown.lead || shown.lead.verdict === "UNKNOWN") {
+      // A section-shaped question ("what does this report suggest?", "why
+      // was the scan done?") is answered with that headed section, verbatim.
+      if (weakLead(shown.lead) || shown.lead?.verdict === "QUOTED") {
+        const sec = sectionAnswer(question, bundle);
+        if (sec)
+          shown.lead = {
+            text: sec.spoken,
+            verdict: "QUOTED",
+            field: null,
+            citations: sec.citations,
+          };
+      }
+      if (weakLead(shown.lead)) {
         const p = await paraphraseLookup(question, bundle).catch(() => null);
         if (p)
           shown.lead = {
@@ -536,6 +570,7 @@ export function createLocalServer({
             citations: [p.citation],
           };
       }
+      if (junkQuote(shown.lead)) shown.lead = null;
       if (gloss && shown.lead?.text) shown.lead.text = toHindi(shown.lead.text);
       if (shown.lead)
         shown.lead.citations = decorateResult(
@@ -727,6 +762,7 @@ export function createLocalServer({
     bundle.clinical = clinicalReportsFor(bundle, docsNow, extractReport);
     ws.bundle = bundle; // the library keeps every entry, indexed or not
     warmDense(bundle.rows);
+    warmUnits(bundle);
   };
   const workspaceApi = {
     create() {

@@ -23284,7 +23284,7 @@ var require_zod = __commonJS({
   }
 });
 
-// context.ts
+// src/context.ts
 function contextReview(bundle, validate) {
   const groups = { changes: [], open: [], conditions: [], decisions: [] };
   for (const source of bundle.sources) {
@@ -23330,7 +23330,7 @@ function contextReview(bundle, validate) {
   };
 }
 
-// query-expand.ts
+// src/query-expand.ts
 var NEGATIONS = /* @__PURE__ */ new Set([
   "not",
   "no",
@@ -23422,7 +23422,7 @@ function expandQuery(question) {
   return { original, expanded, applied };
 }
 
-// claim-check.ts
+// src/claim-check.ts
 function statusOf(line) {
   if (/pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) approved|no decision (was )?taken|not [^.;]{0,20}(approved|signed|countersign|confirmed)|no\s+(signed|countersigned|executed)\s/i.test(
     line
@@ -23767,7 +23767,7 @@ function resolveClaims(claims) {
   return { active, superseded, approved };
 }
 
-// engine.ts
+// src/engine.ts
 import { createHash, randomUUID } from "node:crypto";
 
 // vendor/memorable/src/domain/memory/limits.ts
@@ -31251,7 +31251,7 @@ function extractiveAnswer(question, chunks) {
   return "Relevant source excerpts\n\n" + extracts.join("\n\n") + "\n\nThese are retrieved passages, not a generated recommendation. Add a model in Settings to reason across them.";
 }
 
-// engine.ts
+// src/engine.ts
 var hash = (s) => createHash("sha256").update(s).digest("hex");
 var MAX_DOC_CHARS = 25e4;
 function anchorChunk(src, chunk, from) {

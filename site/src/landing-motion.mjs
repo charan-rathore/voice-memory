@@ -1,8 +1,9 @@
 // Landing motion. Splines and springs applied inside the existing
 // components, never drawn as decoration:
-//   - hero card: the preliminary 5 travels a Catmull-Rom path into the
-//     amended report and becomes the first digit of 50; the card leans
-//     toward the pointer on a critically damped spring;
+//   - hero card: a looping replay of one call (question with a live
+//     waveform, the page scanned, the preliminary 5 flown along a
+//     Catmull-Rom path into 50, the answer spoken word by word); the card
+//     leans toward the pointer on a critically damped spring;
 //   - stats: count-ups timed by the same cubic-bezier as the CSS;
 //   - how it works: a question travels an unseen spline through the four
 //     steps, and each card reacts as it passes;
@@ -44,70 +45,159 @@ const rgb = (el) =>
 const rel = (r, base) => ({ x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height });
 
 // ------------------------------------------------------------ hero card
+// The card replays one real exchange on a loop while it is on screen:
+//   ask   - the question arrives with a live voice waveform;
+//   scan  - a read head sweeps the amended page and marks the line;
+//   fix   - the preliminary 5 is struck and flies (Catmull-Rom path,
+//           arc-length timed) into the amended report, becoming 50;
+//   answer- the verdict springs in and the spoken answer arrives word by word;
+//   hold  - everything rests long enough to read, then resets softly.
+// Steps are CSS states on [data-step]; JS owns only the flight and timing.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function heroFlight() {
   const card = $(".hero-card");
   if (!card || still) return;
   const from = $(".hc-val.prelim .hc-num s", card);
   const to5 = $(".hc-val.amended .hc-d5", card);
   const to0 = $(".hc-val.amended .hc-d0", card);
-  const amended = $(".hc-val.amended", card);
   if (!from || !to5 || !to0) return;
-  // JS owns the amended box's entrance, so its layout is final when the
-  // flight path is measured (the CSS version slid it 10px).
-  card.classList.add("hc-motion");
-  await document.fonts?.ready;
-  const base = card.getBoundingClientRect();
-  const a = rel(from.getBoundingClientRect(), base);
-  const b = rel(to5.getBoundingClientRect(), base);
-  const ghost = document.createElement("span");
-  ghost.className = "hc-ghost";
-  ghost.textContent = "5";
-  const fs = getComputedStyle(from);
-  Object.assign(ghost.style, { fontSize: fs.fontSize, lineHeight: fs.lineHeight, fontFamily: fs.fontFamily, letterSpacing: fs.letterSpacing });
-  ghost.setAttribute("aria-hidden", "true");
-  card.appendChild(ghost);
-  const c0 = rgb(from),
-    c1 = rgb(to5);
-  // Path through the glyphs' top-left corners: lift off the struck value,
-  // arc over the arrow, settle into the first digit of the amended value.
-  const pts = [
-    [a.x, a.y],
-    [a.x + 18, a.y - P.lift * 0.75],
-    [(a.x + b.x) / 2, Math.min(a.y, b.y) - P.lift],
-    [b.x - 20, b.y - P.lift * 0.45],
-    [b.x, b.y],
-  ];
-  const path = pathOf(catmullRom(pts));
-  const ease = cubicBezierTiming(...P.flightEase);
-  const place = (u) => {
-    const { p, tangent } = travel(path, path.total * u);
-    // lean into the direction of travel, upright again on landing
-    const lean = Math.atan2(tangent[1], tangent[0]) * 0.18 * Math.sin(Math.PI * u);
-    const c = c0.map((v, i) => Math.round(lerp(v, c1[i], u)));
-    ghost.style.transform = `translate3d(${p[0]}px, ${p[1]}px, 0) rotate(${lean}rad) scale(${1 + 0.12 * Math.sin(Math.PI * u)})`;
-    ghost.style.color = `rgb(${c})`;
+  card.classList.add("hc-motion", "hc-loop");
+  // the spoken answer, word by word
+  const ans = $(".hc-answer", card);
+  const chip = $(".verdict-chip", ans);
+  const text = [...ans.childNodes].filter((n) => n !== chip).map((n) => n.textContent).join("").trim();
+  ans.innerHTML = "";
+  ans.append(chip, " ");
+  text.split(/\s+/).forEach((w, i) => {
+    const sp = document.createElement("span");
+    sp.className = "hc-w";
+    sp.style.setProperty("--w", i);
+    sp.textContent = w + " ";
+    ans.append(sp);
+  });
+  // a live voice waveform beside the question (Catmull-Rom through noise)
+  const q = $(".hc-q", card);
+  const wave = document.createElement("canvas");
+  wave.className = "hc-wave";
+  wave.setAttribute("aria-hidden", "true");
+  q.before(wave);
+  const W = 46,
+    H = 18,
+    dpr = Math.min(2, devicePixelRatio || 1);
+  wave.width = W * dpr;
+  wave.height = H * dpr;
+  const wctx = wave.getContext("2d");
+  wctx.scale(dpr, dpr);
+  let level = 0,
+    target = 0,
+    t = 0;
+  const color = getComputedStyle(document.documentElement).getPropertyValue("--teal").trim() || "#1f9e8f";
+  const drawWave = (dt) => {
+    t += dt;
+    level = expDecay(level, target, 10, dt);
+    wctx.clearRect(0, 0, W, H);
+    const pts = [];
+    for (let i = 0; i <= 8; i++) {
+      const x = (i / 8) * W;
+      const env = Math.sin((Math.PI * i) / 8);
+      const y = H / 2 - env * level * (H / 2 - 2) * Math.sin(t * 9 + i * 1.7) * (0.6 + 0.4 * Math.sin(t * 3.1 + i));
+      pts.push([x, y]);
+    }
+    wctx.beginPath();
+    wctx.moveTo(...pts[0]);
+    for (const [, c1, c2, p] of catmullRom(pts)) wctx.bezierCurveTo(...c1, ...c2, ...p);
+    wctx.strokeStyle = color;
+    wctx.lineWidth = 1.6;
+    wctx.lineCap = "round";
+    wctx.stroke();
+    return true;
   };
-  place(0);
-  ghost.style.opacity = "0";
-  const flight = { u: 0 };
-  createTimeline()
-    .add(ghost, { opacity: [0, 1], duration: 160, ease: "linear" }, 1050)
-    .add(amended, { opacity: [0, 1], duration: 420, ease: "out(3)" }, 1250)
-    .add(
-      flight,
-      {
-        u: [0, 1],
-        duration: P.flightMs,
-        ease, // the bezier solver, so JS and CSS curves agree
-        onUpdate: () => place(flight.u),
-      },
-      1100,
-    )
-    .call(() => {
-      to5.style.opacity = "1";
-      ghost.remove();
-    }, 1100 + P.flightMs)
-    .add(to0, { opacity: [0, 1], scale: [0.55, 1], duration: 520, ease: "outBack(2.2)" }, 1100 + P.flightMs + 20);
+  let stopWave = null;
+  await document.fonts?.ready;
+
+  const fly = async () => {
+    const base = card.getBoundingClientRect();
+    const a = rel(from.getBoundingClientRect(), base);
+    const b = rel(to5.getBoundingClientRect(), base);
+    const ghost = document.createElement("span");
+    ghost.className = "hc-ghost";
+    ghost.textContent = "5";
+    const fs = getComputedStyle(from);
+    Object.assign(ghost.style, { fontSize: fs.fontSize, lineHeight: fs.lineHeight, fontFamily: fs.fontFamily, letterSpacing: fs.letterSpacing });
+    ghost.setAttribute("aria-hidden", "true");
+    card.appendChild(ghost);
+    const c0 = rgb(from),
+      c1 = rgb(to5);
+    // lift off the struck value, arc over the arrow, settle into "5" of 50
+    const path = pathOf(
+      catmullRom([
+        [a.x, a.y],
+        [a.x + 18, a.y - P.lift * 0.75],
+        [(a.x + b.x) / 2, Math.min(a.y, b.y) - P.lift],
+        [b.x - 20, b.y - P.lift * 0.45],
+        [b.x, b.y],
+      ]),
+    );
+    const ease = cubicBezierTiming(...P.flightEase);
+    const place = (u) => {
+      const { p, tangent } = travel(path, path.total * u);
+      const lean = Math.atan2(tangent[1], tangent[0]) * 0.18 * Math.sin(Math.PI * u);
+      const c = c0.map((v, i) => Math.round(lerp(v, c1[i], u)));
+      ghost.style.transform = `translate3d(${p[0]}px, ${p[1]}px, 0) rotate(${lean}rad) scale(${1 + 0.12 * Math.sin(Math.PI * u)})`;
+      ghost.style.color = `rgb(${c})`;
+    };
+    place(0);
+    const flight = { u: 0 };
+    await new Promise((done) =>
+      createTimeline()
+        .add(ghost, { opacity: [0, 1], duration: 140, ease: "linear" }, 0)
+        .add(flight, { u: [0, 1], duration: P.flightMs, ease, onUpdate: () => place(flight.u) }, 0)
+        .call(() => {
+          to5.style.opacity = "1";
+          ghost.remove();
+          done();
+        }, P.flightMs),
+    );
+    anime(to0, { opacity: [0, 1], scale: [0.55, 1], duration: 520, ease: "outBack(2.2)" });
+  };
+
+  let alive = false,
+    running = false;
+  const cycle = async () => {
+    running = true;
+    while (alive) {
+      card.dataset.step = "ask";
+      to5.style.opacity = "0";
+      to0.style.opacity = "0";
+      target = 1;
+      stopWave ??= loop(drawWave);
+      await sleep(1300);
+      target = 0.08;
+      card.dataset.step = "scan";
+      await sleep(1100);
+      card.dataset.step = "fix";
+      await sleep(250);
+      await fly();
+      card.dataset.step = "landed";
+      await sleep(450);
+      card.dataset.step = "answer";
+      await sleep(5200);
+      card.dataset.step = "rest";
+      target = 0;
+      await sleep(900);
+      stopWave?.();
+      stopWave = null;
+    }
+    running = false;
+  };
+  onVisible(card, (vis) => {
+    alive = vis && !document.hidden;
+    if (alive && !running) cycle();
+  }, "0px");
+  document.addEventListener("visibilitychange", () => {
+    alive = !document.hidden && card.getBoundingClientRect().bottom > 0;
+    if (alive && !running) cycle();
+  });
 }
 
 export function heroTilt() {
