@@ -111,7 +111,8 @@ export function repairTestNames(text, vocab) {
     .map(([n, canon]) => ({ n, canon, sk: skeleton(n) }));
   // Recognisers also SPLIT one word into two ("ferrite in", "hemo globin"):
   // rejoin a pair only when the joined letters sit within a very tight
-  // distance of exactly one test name - ordinary pairs stay untouched.
+  // distance of exactly one test name - a tie between two names, like an
+  // ordinary pair, stays untouched rather than silently picking one.
   text = text.replace(/[A-Za-z]{3,} [A-Za-z]{1,6}(?![A-Za-z])/g, (pair) => {
     const joined = pair.replace(/ /g, "").toLowerCase();
     if (joined.length < 5 || NOT_TESTS.has(joined) || vocab.has(joined))
@@ -119,16 +120,21 @@ export function repairTestNames(text, vocab) {
     const sk = skeleton(joined);
     if (sk.length < 4) return pair;
     let best = null;
+    let tied = false;
     for (const e of entries) {
       if (e.sk.length < 4) continue;
       const d = lev(sk, e.sk);
       if (d > 1) continue;
       const raw = lev(joined, e.n);
       if (raw > 2) continue;
-      if (!best || d < best.d || (d === best.d && raw < best.raw))
+      if (!best || d < best.d || (d === best.d && raw < best.raw)) {
         best = { d, raw, canon: e.canon };
+        tied = false;
+      } else if (d === best.d && raw === best.raw && e.canon !== best.canon) {
+        tied = true;
+      }
     }
-    return best ? best.canon : pair;
+    return best && !tied ? best.canon : pair;
   });
   return text.replace(/[A-Za-z][A-Za-z']{4,}/g, (w) => {
     const base = w.toLowerCase().replace(/'s$/, "");
@@ -136,16 +142,21 @@ export function repairTestNames(text, vocab) {
     const sk = skeleton(base);
     if (sk.length < 4) return w;
     let best = null;
+    let tied = false;
     for (const e of entries) {
       if (e.sk.length < 4) continue;
       const d = lev(sk, e.sk);
       const tol = sk.length >= 5 && e.sk.length >= 4 ? 2 : 1;
       if (d > tol) continue;
       const raw = lev(base, e.n);
-      if (!best || d < best.d || (d === best.d && raw < best.raw))
+      if (!best || d < best.d || (d === best.d && raw < best.raw)) {
         best = { d, raw, canon: e.canon };
+        tied = false;
+      } else if (d === best.d && raw === best.raw && e.canon !== best.canon) {
+        tied = true;
+      }
     }
-    return best ? best.canon + (/'s$/i.test(w) ? "'s" : "") : w;
+    return best && !tied ? best.canon + (/'s$/i.test(w) ? "'s" : "") : w;
   });
 }
 

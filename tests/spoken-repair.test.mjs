@@ -55,6 +55,25 @@ test("split-word mishearings rejoin: 'ferrite in' -> Ferritin", () => {
     assert.equal(repairTestNames(s, vocab), s);
 });
 
+test("an exact tie between two test names repairs nothing", () => {
+  // "ferritil" sits at the same skeleton and raw distance from both vocab
+  // entries; choosing either silently would be a guess, so it must abstain.
+  const tied = new Map([
+    ["ferritin", "Ferritin"],
+    ["ferritim", "Ferritim"],
+  ]);
+  assert.equal(
+    repairTestNames("what is my ferritil level", tied),
+    "what is my ferritil level",
+  );
+  assert.equal(
+    repairTestNames("what is my ferri til level", tied),
+    "what is my ferri til level",
+  );
+  // A clear single nearest match still repairs against the same vocab.
+  assert.match(repairTestNames("what is my ferritun level", tied), /my Ferritin level/);
+});
+
 test("fragments are recognised; full questions are not", () => {
   assert.ok(isFragment("tell me more about"));
   assert.ok(isFragment("can you tell me the what is the"));
