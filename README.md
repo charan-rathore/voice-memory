@@ -1,5 +1,8 @@
 # Voice Memory
 
+[![ci](https://github.com/charan-rathore/voice-memory/actions/workflows/ci.yml/badge.svg)](https://github.com/charan-rathore/voice-memory/actions/workflows/ci.yml)
+[![canary](https://github.com/charan-rathore/voice-memory/actions/workflows/canary.yml/badge.svg)](https://github.com/charan-rathore/voice-memory/actions/workflows/canary.yml)
+
 **The report changed. The answer shouldn't be a guess.**
 
 Voice Memory is a voice agent on [Bolna](https://bolna.ai) that answers questions
@@ -14,6 +17,7 @@ and the cited line opens on the original page.
 | **Try it** | https://voice-memory-beige.vercel.app — ask by typing or start a live Bolna call |
 | **Memory graph** | https://voice-memory-beige.vercel.app/graph |
 | Engine / API | https://voice-memory.onrender.com (Render, free tier) |
+| For agents | [`llms.txt`](https://voice-memory-beige.vercel.app/llms.txt) · [OpenAPI](https://voice-memory-beige.vercel.app/openapi.json) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
 All patients, values and companies are fictional or synthetic. It is a research
@@ -119,6 +123,48 @@ Spoken-answer evaluation (`npm run eval:spoken`): Northstar 23/23, Harbor 15/15,
 Lumen 14/14 after fixes; Lumen's first, unseen run was 12/14. All three corpora
 were written by the same author.
 
+## Ask it from code or an agent
+
+No key needed. Demo answers are cacheable at the edge (`GET`), your own
+documents use `POST` against a private workspace.
+
+```sh
+curl -s 'https://voice-memory-beige.vercel.app/api/public/answer?case=health&q=Has%20creatinine%20gone%20up%20since%20September%3F'
+# {"lead":{"verdict":"NOT_COMPARABLE","text":"I can't compare your two Creatinine results: ...",
+#          "citations":[{"title":"a-2026-10-amended.pdf","quote":"| Creatinine | 106 | μmol/L | 62-115 |  |", ...}]}}
+```
+
+Pass `lead.text` and its citations on as given; only `LATEST` and
+`COMPARED` state a value. Full contract: [`site/openapi.json`](site/openapi.json),
+summary for language models: [`site/llms.txt`](site/llms.txt).
+
+## Staying up on a free host
+
+The engine runs on Render's free tier, which sleeps after 15 idle minutes and
+takes about a minute to wake. The page is built so a visitor rarely notices:
+
+- **Edge-cached demo answers.** `GET /api/public/answer` returns
+  `CDN-Cache-Control: s-maxage=3600, stale-while-revalidate=86400`, which
+  Vercel honours on external rewrites, so repeat questions are served from
+  the CDN and a stale answer is served while it revalidates
+  ([Vercel: caching external rewrites](https://vercel.com/docs/routing/rewrites)).
+  Demo document ids are derived from case + file name, so cached answers stay
+  valid across restarts.
+- **Saved answers while it wakes.** `site/snapshot.js` holds the engine's
+  answers to the suggested questions; a test keeps it equal to the live engine.
+- **Polite retries.** The page probes with capped exponential backoff and full
+  jitter, honours `Retry-After`, and stops probing in hidden tabs
+  ([AWS: Exponential Backoff and Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/);
+  [Brooker: backoff only helps short-term overload](https://brooker.co.za/blog/2022/08/11/backoff.html),
+  which is why the cache, not retries, carries the load).
+- **Graceful restarts.** Header and request timeouts against slow clients;
+  `SIGTERM` drains in-flight requests before a deploy replaces the instance.
+- **Continuous checks.** [`ci.yml`](.github/workflows/ci.yml) runs the whole
+  gate plus a real-browser smoke test on every push;
+  [`canary.yml`](.github/workflows/canary.yml) asks production the hero's
+  questions every 14 minutes from 08:00 to 24:00 IST, fails if an answer drifts
+  from the shipped snapshot, and keeps the engine warm within the free hours.
+
 ## Run locally
 
 ```sh
@@ -162,8 +208,11 @@ shown while the free host wakes up; a test keeps it equal to the live engine).
 
 ## Next
 
-- Bring-your-own documents on the landing page, in an encrypted private workspace
-- Paraphrase-aware retrieval (dense stage behind the same evidence gate)
+- **Paraphrase-aware search.** The dense retriever exists but is not yet a
+  win: on held-out paraphrases it ranks the right passage top-3 for 13 of 15,
+  while the lexical evidence gate keeps shipped recall@1 at keyword level
+  (0.33). Measured, and why the gate is unchanged:
+  [docs/PARAPHRASE-RETRIEVAL.md](docs/PARAPHRASE-RETRIEVAL.md).
 - A benchmark of real, messy records written by people outside the team
 - Clinician review of lab explanations before any patient pilot
 - Phone-number calls and WhatsApp voice notes through Bolna
