@@ -10,7 +10,7 @@
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-  const C = { mark: "#f5e27a", teal: "#8ea2ff", coral: "#f4a3b6", amber: "#f5e27a", blue: "#aab6ff", violet: "#c3b5ff", ink: "#e9ecf3", dim: "#747d96" };
+  const C = { mark: "#f4dc4a", teal: "#4fd1bd", coral: "#ff8a6b", amber: "#f2b84b", blue: "#8fa3ff", violet: "#b69cff", ink: "#eceae0", dim: "#6d7389" };
   const STATUS_COLOR = {
     current: C.teal, amended: C.teal, final: C.teal, approved: C.teal, agreed: C.teal,
     superseded: C.coral, preliminary: C.amber, proposed: C.amber, discussed: C.amber, requested: C.amber, "internal-target": C.amber, unresolved: C.coral,
@@ -244,7 +244,7 @@
         ctx.fillStyle = s.color; ctx.shadowColor = s.color; ctx.shadowBlur = 12;
         ctx.beginPath(); ctx.arc(px, py, 2.6, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
         if (on && view.k > 0.75) {
-          ctx.font = `500 ${10.5 / Math.sqrt(view.k)}px "Public Sans", system-ui`; ctx.fillStyle = s.color; ctx.textAlign = "center";
+          ctx.font = `500 ${10.5 / Math.sqrt(view.k)}px Plex, system-ui`; ctx.fillStyle = s.color; ctx.textAlign = "center";
           ctx.fillText(e.kind, mx, my - 5);
         }
       }
@@ -261,7 +261,7 @@
       const isSel = selected === n || hover === n;
       if (n.kind === "document") {
         const label = labelOf(n);
-        ctx.font = "500 12px "Public Sans", system-ui";
+        ctx.font = "500 12px Plex, system-ui";
         const w = Math.min(200, ctx.measureText(label).width + 26), h = 28;
         roundRect(n.x - w / 2, n.y - h / 2, w, h, 8);
         ctx.fillStyle = "rgba(20,26,46,0.95)"; ctx.fill();
@@ -275,9 +275,9 @@
       if (n.kind === "value") {
         hex(n.x, n.y, r); ctx.fillStyle = col + "33"; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke();
       } else if (n.kind === "patient") {
-        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = "rgba(245,226,122,0.12)"; ctx.fill();
+        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = "rgba(244,220,74,0.12)"; ctx.fill();
         ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.stroke();
-        ctx.beginPath(); ctx.arc(n.x, n.y, r + 6 + Math.sin(t / 20) * 2, 0, Math.PI * 2); ctx.lineWidth = 1; ctx.strokeStyle = "rgba(245,226,122,0.35)"; ctx.stroke();
+        ctx.beginPath(); ctx.arc(n.x, n.y, r + 6 + Math.sin(t / 20) * 2, 0, Math.PI * 2); ctx.lineWidth = 1; ctx.strokeStyle = "rgba(244,220,74,0.35)"; ctx.stroke();
       } else {
         ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill();
       }
@@ -286,7 +286,7 @@
       const label = labelOf(n);
       if (label && (n.kind !== "evidence")) {
         const fs = n.kind === "patient" ? 14 : n.kind === "value" ? 12.5 : 11.5;
-        ctx.font = `${n.kind === "value" || n.kind === "patient" ? 600 : 500} ${fs}px "Public Sans", system-ui`;
+        ctx.font = `${n.kind === "value" || n.kind === "patient" ? 600 : 500} ${fs}px Plex, system-ui`;
         ctx.textAlign = "center";
         ctx.fillStyle = n.kind === "topic" ? "#cfc3ff" : n.status === "superseded" ? C.coral : C.ink;
         ctx.fillText(label, n.x, n.y + r + fs + 3);

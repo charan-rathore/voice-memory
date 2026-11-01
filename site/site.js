@@ -804,6 +804,9 @@
       pollTurns();
     });
     call.on("volume-level", (v) => {
+      // The motion module draws a spline waveform from these levels; the
+      // bars below are the fallback when it isn't loaded.
+      document.dispatchEvent(new CustomEvent("vm:level", { detail: v }));
       meter.forEach(
         (m, i) =>
           (m.style.height = `${4 + Math.max(0, v * 26 - Math.abs(i - 3) * 3) * (0.7 + Math.random() * 0.6)}px`),
@@ -830,6 +833,7 @@
   }
 
   function endUi(reason) {
+    document.dispatchEvent(new CustomEvent("vm:level", { detail: -1 }));
     callbar.classList.remove("live", "busy");
     $("#call-label").textContent = "Call Voice Memory";
     meter.forEach((m) => (m.style.height = "4px"));
@@ -880,7 +884,7 @@
   // screens), and the loop stops entirely while the canvas is off screen.
   function miniGraph() {
     const cv = $("#graph-mini");
-    if (!cv) return;
+    if (!cv || cv.dataset.engine === "3d") return;
     const ctx = cv.getContext("2d");
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const W = 640,
@@ -891,10 +895,10 @@
     const load = async () =>
       snap.graphs?.health ?? (await api("/graph/health").catch(() => null));
     const COLORS = {
-      patient: "#f5e27a",
-      document: "#aab6ff",
-      topic: "#e9ecf3",
-      value: "#7f95ff",
+      patient: "#f4dc4a",
+      document: "#8fa3ff",
+      topic: "#eceae0",
+      value: "#4fd1bd",
     };
     load().then((g) => {
       if (!g) return;
@@ -954,10 +958,10 @@
           const special = e.kind === "corrects" || e.kind === "not comparable";
           ctx.strokeStyle =
             e.kind === "corrects"
-              ? "rgba(245,226,122,0.9)"
+              ? "rgba(244,220,74,0.9)"
               : e.kind === "not comparable"
-                ? "rgba(255,122,131,0.9)"
-                : "rgba(170,182,255,0.22)";
+                ? "rgba(232,115,90,0.9)"
+                : "rgba(160,170,200,0.22)";
           ctx.lineWidth = special ? 2 : 1;
           ctx.setLineDash(special ? [5, 5] : []);
           ctx.lineDashOffset = -t * 30;
@@ -977,7 +981,7 @@
                   ? 4.5
                   : 5.5;
           const col =
-            n.status === "superseded" ? "#f4c3cf" : (COLORS[n.kind] ?? "#ccc");
+            n.status === "superseded" ? "#e8735a" : (COLORS[n.kind] ?? "#ccc");
           ctx.fillStyle = col;
           ctx.beginPath();
           ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
@@ -987,8 +991,8 @@
             (n.kind === "topic" && /ferritin|creatinine/i.test(n.label)) ||
             /^(5|50) ng/.test(n.label)
           ) {
-            ctx.fillStyle = "rgba(233,236,243,0.88)";
-            ctx.font = "500 12px 'Public Sans', system-ui, sans-serif";
+            ctx.fillStyle = "rgba(236,234,224,0.85)";
+            ctx.font = "500 12px Plex, system-ui, sans-serif";
             ctx.fillText(n.label, n.x + r + 5, n.y + 4);
           }
         }
@@ -1054,10 +1058,19 @@
     ),
   );
 
-  const nav = $(".nav");
-  const onScroll = () => nav?.classList.toggle("scrolled", scrollY > 8);
-  addEventListener("scroll", onScroll, { passive: true });
-  onScroll();
+  // Reveal on scroll. The stat count-up lives in motion.bundle.mjs (it
+  // times the numbers with the same cubic-bezier as the CSS transitions);
+  // without it the final figures are already in the HTML.
+  const io = new IntersectionObserver(
+    (entries) =>
+      entries.forEach((en) => {
+        if (!en.isIntersecting) return;
+        en.target.classList.add("on");
+        io.unobserve(en.target);
+      }),
+    { threshold: 0.18 },
+  );
+  $$("[data-reveal]").forEach((el) => io.observe(el));
 
   setCase("health");
   miniGraph();

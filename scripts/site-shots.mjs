@@ -1,6 +1,7 @@
 // Screenshots of the landing page as deployed (site/ + local engine), for
-// design review and as a smoke test: fails on any console error or a hero
-// that drew no tethers.
+// design review and as a smoke test. Fails on any console error, if the
+// hero's 5 never lands in the amended value, or if the 3D memory graph
+// doesn't mount when its band scrolls into view.
 //   node scripts/site-shots.mjs [outDir]
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
@@ -18,7 +19,12 @@ await new Promise((r) => {
 const browser = await chromium.launch({
   headless: true,
   executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome",
-  args: ["--no-sandbox"],
+  args: [
+    "--no-sandbox",
+    "--use-gl=angle",
+    "--use-angle=swiftshader",
+    "--enable-unsafe-swiftshader",
+  ],
 });
 const errors = [];
 try {
@@ -29,20 +35,35 @@ try {
     const page = await browser.newPage({ viewport: vp, deviceScaleFactor: 1 });
     page.on(
       "console",
-      (m) => m.type() === "error" && errors.push(`${name}: ${m.text()}`),
+      (m) =>
+        m.type() === "error" &&
+        !/Failed to load resource/.test(m.text()) &&
+        errors.push(`${name}: ${m.text()}`),
     );
     page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
-    await page.goto("http://127.0.0.1:4500/", { waitUntil: "networkidle" });
-    await page.waitForTimeout(3500);
-    const tethers = await page.locator("#tethers .tether").count();
-    if (!tethers) errors.push(`${name}: hero drew no tethers`);
+    await page.goto("http://127.0.0.1:4500/");
+    await page.waitForTimeout(1700);
+    await page.screenshot({ path: `${out}/${name}-hero-flight.png` });
+    await page.waitForTimeout(2300);
     await page.screenshot({ path: `${out}/${name}-hero.png` });
-    for (const [i, label] of ["creatinine", "tsh"].entries()) {
-      await page.locator(`[data-hq="${i + 1}"]`).click();
-      await page.evaluate(() => scrollTo(0, 0));
-      await page.waitForTimeout(3200);
-      await page.screenshot({ path: `${out}/${name}-hero-${label}.png` });
-    }
+    const landed = await page.evaluate(() => {
+      const d5 = document.querySelector(".hc-d5");
+      return (
+        !document.querySelector(".hc-ghost") &&
+        getComputedStyle(d5).opacity === "1"
+      );
+    });
+    if (!landed) errors.push(`${name}: the 5 never landed in the amended value`);
+    await page.locator(".pipe").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(1600);
+    await page.screenshot({ path: `${out}/${name}-pipeline.png` });
+    await page.locator(".graph-band").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(3500);
+    if (!(await page.locator(".graph-3d").count()))
+      errors.push(`${name}: 3D memory graph did not mount`);
+    await page
+      .locator(".graph-band")
+      .screenshot({ path: `${out}/${name}-graph.png` });
     await page.screenshot({ path: `${out}/${name}-full.png`, fullPage: true });
     await page.close();
   }

@@ -111,79 +111,9 @@ export function tAtDistance(table, s) {
 export const pointAtDistance = (table, s) =>
   bezier(...table.pts, tAtDistance(table, s));
 
-/**
- * Control points for a tether from a word (p0) to a line on a page (p1).
- * It leaves the word heading `out` with a short handle (so it doesn't loop
- * back through the sentence) and arrives at the line heading `into` with a
- * longer one. Both handles grow with distance but are capped, so a long
- * tether stays calm instead of ballooning.
- */
-export function tether(p0, p1, out = [0, 1], into = [1, 0], k0 = 0.28, k1 = 0.45) {
-  const d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-  const a = Math.min(140, k0 * d),
-    b = Math.min(260, k1 * d);
-  const n = Math.hypot(out[0], out[1]) || 1,
-    m = Math.hypot(into[0], into[1]) || 1;
-  return [
-    p0,
-    [p0[0] + (out[0] / n) * a, p0[1] + (out[1] / n) * a],
-    [p1[0] - (into[0] / m) * b, p1[1] - (into[1] / m) * b],
-    p1,
-  ];
-}
 export const pathD = ([p0, p1, p2, p3]) =>
   `M${f(p0[0])} ${f(p0[1])}C${f(p1[0])} ${f(p1[1])} ${f(p2[0])} ${f(p2[1])} ${f(p3[0])} ${f(p3[1])}`;
 const f = (n) => Math.round(n * 10) / 10;
-
-// ------------------------------------------------------------ answer ↔ source
-const norm = (s) => String(s ?? "").replace(/μ/g, "µ");
-const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/**
- * Find, for each citation, the words in the answer that rest on it, so the
- * hero can tie them together. Uses only the cited table row (value + unit):
- * "50 ng/mL" first, then the bare value as a whole number that is not part of
- * a date, then the unit. Returns [{ cite, start, end }] in citation order;
- * a citation with no matching words is left out rather than guessed.
- */
-export function anchorTokens(text, citations) {
-  const t = norm(text);
-  const used = [];
-  const free = (s, e) => used.every(([a, b]) => e <= a || s >= b);
-  const out = [];
-  citations.forEach((c, i) => {
-    const cells = c?.location?.focus?.rows?.[0]?.cells;
-    if (!cells) return;
-    const value = norm(cells[1]).trim(),
-      unit = norm(cells[2]).trim();
-    const tries = [];
-    if (value && unit) tries.push(new RegExp(`${esc(value)}\\s?${esc(unit)}`, "g"));
-    if (value)
-      tries.push(
-        new RegExp(
-          `(?<![\\d.,])${esc(value)}(?![\\d.,]|\\s(?:January|February|March|April|May|June|July|August|September|October|November|December))`,
-          "g",
-        ),
-      );
-    if (unit) tries.push(new RegExp(`(?<![\\w/])${esc(unit)}(?![\\w/])`, "g"));
-    for (const re of tries) {
-      let m,
-        hit = null;
-      while ((m = re.exec(t))) {
-        if (free(m.index, m.index + m[0].length)) {
-          hit = m;
-          break;
-        }
-      }
-      if (hit) {
-        used.push([hit.index, hit.index + hit[0].length]);
-        out.push({ cite: i, start: hit.index, end: hit.index + hit[0].length });
-        return;
-      }
-    }
-  });
-  return out;
-}
 
 // ------------------------------------------------------------ splines
 /**
@@ -218,3 +148,63 @@ export const segsD = (segs) =>
   segs
     .map((s, i) => (i ? pathD(s).replace(/^M[^C]+/, "") : pathD(s)))
     .join("");
+
+// ------------------------------------------------------------ timing curves
+/**
+ * CSS-style cubic-bezier(x1, y1, x2, y2) timing function: for progress t,
+ * find s with Bx(s) = t (Newton-Raphson, falling back to bisection, as
+ * browser engines do), then return By(s). Lets JS-driven motion land on
+ * exactly the same curve as the page's CSS transitions.
+ */
+export function cubicBezierTiming(x1, y1, x2, y2) {
+  const cx = 3 * x1,
+    bx = 3 * (x2 - x1) - cx,
+    ax = 1 - cx - bx;
+  const cy = 3 * y1,
+    by = 3 * (y2 - y1) - cy,
+    ay = 1 - cy - by;
+  const X = (s) => ((ax * s + bx) * s + cx) * s;
+  const Y = (s) => ((ay * s + by) * s + cy) * s;
+  const dX = (s) => (3 * ax * s + 2 * bx) * s + cx;
+  const solve = (t) => {
+    let s = t;
+    for (let i = 0; i < 8; i++) {
+      const e = X(s) - t;
+      if (Math.abs(e) < 1e-7) return s;
+      const d = dX(s);
+      if (Math.abs(d) < 1e-6) break;
+      s -= e / d;
+    }
+    let lo = 0,
+      hi = 1;
+    s = t;
+    while (hi - lo > 1e-7) {
+      if (X(s) < t) lo = s;
+      else hi = s;
+      s = (lo + hi) / 2;
+    }
+    return s;
+  };
+  return (t) => (t <= 0 ? 0 : t >= 1 ? 1 : Y(solve(t)));
+}
+
+// ------------------------------------------------------------ paths
+/** Measure a chain of Bézier segments once, for travel by distance. */
+export function pathOf(segs, n = 48) {
+  const tables = segs.map((s) => arcTable(...s, n));
+  return { tables, total: tables.reduce((a, t) => a + t.total, 0) };
+}
+/** Point and unit tangent at distance s along a measured path. */
+export function travel(path, s) {
+  let rest = Math.max(0, Math.min(path.total, s));
+  for (const tb of path.tables) {
+    if (rest <= tb.total || tb === path.tables.at(-1)) {
+      const t = tAtDistance(tb, rest);
+      const p = bezier(...tb.pts, t);
+      const d = bezierDeriv(...tb.pts, t);
+      const m = Math.hypot(d[0], d[1]) || 1;
+      return { p, tangent: [d[0] / m, d[1] / m] };
+    }
+    rest -= tb.total;
+  }
+}

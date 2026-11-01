@@ -6,21 +6,18 @@
     <title>Voice Memory</title>
     <meta
       name="description"
-      content="Ask your records out loud. Voice Memory answers only what the documents support, checks amendments, units, patients and approvals, and ties every claim to the line it came from."
+      content="Talk to your records. Voice Memory checks corrections, conflicting values and missing approvals, then shows exactly what the evidence supports."
     />
-    <meta property="og:title" content="Voice Memory: answers tied to the line they came from" />
+    <meta property="og:title" content="Voice Memory — the report changed, the answer shouldn't be a guess" />
     <meta
       property="og:description"
       content="A voice agent on Bolna that checks amendments, units, patients and approvals against the original record before it speaks."
     />
     <meta property="og:image" content="og.png" />
-    <meta name="theme-color" content="#f2f4f6" />
+    <meta name="theme-color" content="#fbfaf2" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="alternate" type="text/plain" href="llms.txt" title="Voice Memory for language models" />
     <link rel="describedby" type="application/json" href="openapi.json" />
-    <link rel="preload" href="fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="stylesheet" href="site.css" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -36,195 +33,131 @@
         "isAccessibleForFree": true
       }
     </script>
+    <link rel="preload" href="fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="site.css" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
 
-    <header class="nav">
-      <a class="brand" href="#top">Voice Memory</a>
-      <nav aria-label="Main">
+    <header class="nav-wrap">
+      <nav class="nav" aria-label="Main">
+        <a class="brand" href="#top">Voice Memory</a>
         <ul>
-          <li><a href="#how">How it decides</a></li>
-          <li><a href="#catches">What it catches</a></li>
+          <li><a href="#film">Film</a></li>
           <li><a href="#try">Try it</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#catches">What it catches</a></li>
           <li><a href="graph.html">Memory graph</a></li>
-          <li><a href="#agents">API</a></li>
-          <li><a href="https://github.com/charan-rathore/voice-memory">GitHub</a></li>
+          <li><a href="https://github.com/charan-rathore/voice-memory">Code</a></li>
         </ul>
+        <a class="nav-cta" href="#try" data-call-link>Call it</a>
       </nav>
-      <a class="nav-call" href="#try" data-call-link>Call it</a>
     </header>
 
     <main id="main">
       <!-- ============================================================ hero -->
-      <section class="hero" id="top" aria-labelledby="hero-title">
-        <div class="hero-text">
-          <h1 id="hero-title">Ask your records out loud.</h1>
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="dot-live" aria-hidden="true"></span>Voice agent on Bolna · evidence engine underneath</p>
+          <h1>The report changed. The answer shouldn't be a&nbsp;<em>guess</em>.</h1>
           <p class="lede">
-            Voice Memory answers only what your documents support, and ties every claim to the line it came from. It
-            checks amendments, units, patients and approvals before it speaks.
+            Talk to your records. Voice Memory checks corrections, conflicting values and missing approvals, then shows
+            exactly what the evidence supports.
           </p>
-
-          <div class="spoken" aria-live="polite">
-            <p class="asked">
-              <span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-              <q id="hero-q">What is SYN-0001's ferritin result?</q>
-            </p>
-            <p class="hero-answer" id="hero-answer">
-              Your Ferritin result is 50 ng/mL, from 12 October 2026. That's within this lab's range of 30 to 400. Some
-              general background: Ferritin shows how much iron your body has stored. The 12 October 2026 result was
-              corrected from 5 to 50, and I'm using the corrected value.
-            </p>
-            <p class="hero-meta"><span class="verdict v-ok" id="hero-verdict">Corrected value used</span> The engine's answer on fictional reports. No language model wrote it.</p>
+          <div class="ctas">
+            <a class="btn btn-mark" href="#try">Ask the records</a>
+            <button class="btn btn-line" type="button" data-start-call>
+              <span class="bars mini" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Call it, live
+            </button>
           </div>
-
+          <p class="fine">Illustrative synthetic records only. Not a diagnostic or clinically validated product.</p>
         </div>
 
-        <div class="hero-pages" id="hero-pages">
-          <figure class="sheet sheet-current">
-            <div class="sheet-page">
-              <img
-                src="pages/a-2026-10-amended.png"
-                width="1666"
-                height="1120"
-                alt="Amended report, 15 October 2026. Ferritin 50 ng/mL. Amended 15 October 2026: ferritin result corrected from 5 to 50 (transcription error)."
-              />
+        <figure class="hero-card" aria-label="Ferritin was 5 on the preliminary report and 50 on the amended report">
+          <div class="hc-head">
+            <span class="hc-patient">SYN-0001 · Ferritin · collected 12 Oct</span>
+            <span class="hc-q">“What's my ferritin?”</span>
+          </div>
+          <div class="hc-row">
+            <div class="hc-val prelim">
+              <span class="hc-tag">Preliminary · 13 Oct</span>
+              <span class="hc-num"><s>5</s></span>
+              <span class="hc-unit">ng/mL</span>
             </div>
-            <figcaption>Amended report, 15 October</figcaption>
-          </figure>
-        </div>
-        <div class="hero-controls">
-          <div class="hero-switch" role="group" aria-label="Show a different question">
-              <button type="button" data-hq="0" aria-pressed="true">Ferritin was corrected</button>
-              <button type="button" data-hq="1" aria-pressed="false">Creatinine changed units</button>
-              <button type="button" data-hq="2" aria-pressed="false">TSH belongs to two people</button>
+            <svg class="hc-arrow" viewBox="0 0 80 24" aria-hidden="true"><path d="M2 12h70" /><path d="M64 4l10 8-10 8" /></svg>
+            <div class="hc-val amended">
+              <span class="hc-tag">Amended · 15 Oct</span>
+              <span class="hc-num"><span class="hc-d5">5</span><span class="hc-d0">0</span></span>
+              <span class="hc-unit">ng/mL</span>
             </div>
-
-            <div class="ctas">
-              <a class="btn btn-ink" href="#try">Ask your own question</a>
-              <button class="btn btn-line" type="button" data-start-call>
-                <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Call it, live
-              </button>
-            </div>
-        </div>
-        <svg class="tethers" id="tethers" aria-hidden="true"></svg>
-      </section>
-
-      <!-- ============================================================ why -->
-      <section class="why" aria-labelledby="why-title">
-        <h2 id="why-title" class="h2">People read their results before anyone explains them.</h2>
-        <div class="why-body">
-          <p>
-            <b>68.6%</b> of US adults with online records opened their test results before hearing from a clinician,
-            and <b>about 1 in 3</b> of them understood those results only fairly well or poorly
-            (<a href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/10.1001/jamanetworkopen.2026.30698">JAMA Network Open, August 2026</a>,
-            HINTS 2024, n = 4,982).
+          </div>
+          <div class="hc-source">
+            <span class="hc-file">a-2026-10-amended.pdf · page 1</span>
+            <p><mark>Amended 15 October 2026: ferritin result corrected from 5 to 50</mark> (transcription error).</p>
+          </div>
+          <p class="hc-answer">
+            <span class="verdict-chip v-latest">Corrected value</span>
+            “Your ferritin is 50 ng/mL. The 12 October result was corrected from 5 to 50, and I'm using the corrected
+            value.”
           </p>
-          <p>
-            <b>40 million</b> people a day ask ChatGPT about health, and ECRI ranks misuse of AI chatbots the top
-            health-technology hazard of 2026
-            (<a href="https://home.ecri.org/blogs/ecri-news/misuse-of-ai-chatbots-tops-annual-list-of-health-technology-hazards">ECRI, January 2026</a>).
-          </p>
-          <p class="why-turn">
-            Records change after they are first read. A preliminary result gets amended, a lab switches units, a
-            proposal is revised. An assistant that reads the newest line, or the wrong patient's, sounds just as
-            confident either way.
-          </p>
-        </div>
-      </section>
-
-      <!-- ============================================================ how -->
-      <section class="how" id="how" aria-labelledby="how-title">
-        <h2 id="how-title" class="h2">How an answer is decided</h2>
-        <p class="sub">A question arrives as speech. It leaves as one sentence the record supports, or as a refusal that says why.</p>
-        <figure class="pipe">
-          <svg id="pipe-svg" viewBox="0 0 1200 300" role="img" aria-label="Five stations from speech to a spoken sentence, with refusal exits after the status check"></svg>
-          <figcaption class="pipe-caption" id="pipe-caption" aria-live="off"></figcaption>
+          <figcaption>Real engine output on fictional reports. Try it below.</figcaption>
         </figure>
-        <ol class="stations">
-          <li><h3>Bolna hears it</h3><p>Speech recognition, turn-taking and the voice run on Bolna. The question arrives as text.</p></li>
-          <li><h3>Resolve the words</h3><p>“Forty two thousand” becomes $42,000. “It” becomes the fee you just asked about.</p></li>
-          <li><h3>Find the line</h3><p>Keyword search, with meaning-based search behind the same evidence gate. A quote must match the source exactly.</p></li>
-          <li><h3>Check its status</h3><p>Amended or preliminary, proposed or approved, which patient, which unit. Anything that fails stops here.</p></li>
-          <li><h3>Say one sentence</h3><p>The same sentence is spoken on the call and shown on screen, with the cited line on the original page.</p></li>
-        </ol>
       </section>
 
-      <!-- ============================================================ catches -->
-      <section class="catches" id="catches" aria-labelledby="catches-title">
-        <h2 id="catches-title" class="h2">What it catches</h2>
-        <p class="sub">Six questions a fluent assistant gets wrong. Each row asks the live engine below.</p>
-        <ul class="register">
-          <li>
-            <button type="button" data-ask-case="health" data-ask="What is SYN-0001's ferritin result?">
-              <q>What is SYN-0001's ferritin result?</q>
-              <span class="g g-fix" aria-hidden="true"><s>5</s><span>50</span></span>
-              <span class="r-verdict s-old">Correction applied</span>
-              <span class="r-says">50 ng/mL. The preliminary 5 was a transcription error, corrected on 15 October.</span>
-            </button>
-          </li>
-          <li>
-            <button type="button" data-ask-case="health" data-ask="Has creatinine gone up since September?">
-              <q>Has creatinine gone up since September?</q>
-              <span class="g g-units" aria-hidden="true"><span>mg/dL</span><i>≠</i><span>µmol/L</span></span>
-              <span class="r-verdict s-no">Won't compare</span>
-              <span class="r-says">1.2 mg/dL and 106 µmol/L are in different units, and it doesn't convert between them.</span>
-            </button>
-          </li>
-          <li>
-            <button type="button" data-ask-case="health" data-ask="What is the TSH?">
-              <q>What is the TSH?</q>
-              <span class="g g-who" aria-hidden="true"><i></i><i></i></span>
-              <span class="r-verdict s-ask">Asks which patient</span>
-              <span class="r-says">Two people's reports have a TSH result: SYN-0001 and SYN-0003.</span>
-            </button>
-          </li>
-          <li>
-            <button type="button" data-ask-case="deal" data-ask="Was the $42,000 revision finalized?">
-              <q>Was the $42,000 revision finalized?</q>
-              <span class="g g-fix" aria-hidden="true"><s>$48k</s><span class="hollow">$42k</span></span>
-              <span class="r-verdict s-prop">Proposed, not approved</span>
-              <span class="r-says">$42,000 is the latest proposal, and it is not approved.</span>
-            </button>
-          </li>
-          <li>
-            <button type="button" data-ask-case="deal" data-ask="Did they agree on the payment split?">
-              <q>Did they agree on the payment split?</q>
-              <span class="g g-open" aria-hidden="true"><span>40/60</span><span>50/50</span></span>
-              <span class="r-verdict s-prop">Still open</span>
-              <span class="r-says">40/60 and 50/50 are both on record, and neither is approved.</span>
-            </button>
-          </li>
-          <li>
-            <button type="button" data-ask-case="deal" data-ask="Is there a signed contract?">
-              <q>Is there a signed contract?</q>
-              <span class="g g-none" aria-hidden="true"><span></span></span>
-              <span class="r-verdict s-no">Not on record</span>
-              <span class="r-says">No. The internal action log says no signed agreement exists for the revised terms.</span>
-            </button>
-          </li>
-        </ul>
-        <p class="legend">
-          Colour is record status throughout: <span class="k k-old">superseded</span> <span class="k k-prop">proposed or preliminary</span>
-          <span class="k k-no">refused</span> <span class="k k-ok">what the engine says</span>
+      <!-- ============================================================ film -->
+      <section class="film" id="film" aria-labelledby="film-title">
+        <h2 id="film-title" class="sr-only">The 80-second film</h2>
+        <video controls preload="none" playsinline poster="media/film-poster.jpg">
+          <source src="media/voice-memory-film.mp4" type="video/mp4" />
+          <track kind="captions" src="media/voice-memory-film.vtt" srclang="en" label="English" default />
+        </video>
+      </section>
+
+      <!-- ============================================================ problem -->
+      <section class="problem" aria-labelledby="problem-title">
+        <h2 id="problem-title" class="h2 center">People read their records before anyone explains them.</h2>
+        <div class="stats">
+          <a class="stat" href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/10.1001/jamanetworkopen.2026.30698" data-reveal>
+            <span class="stat-num" data-count="68.6" data-suffix="%">68.6%</span>
+            <span class="stat-text">of US adults with online records opened their test results before hearing from a clinician.</span>
+            <span class="stat-src">JAMA Network Open, Aug 2026 · HINTS 2024, n = 4,982</span>
+          </a>
+          <a class="stat" href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/10.1001/jamanetworkopen.2026.30698" data-reveal>
+            <span class="stat-num" data-count="1" data-prefix="" data-suffix=" in 3">1 in 3</span>
+            <span class="stat-text">of them said they understood those results only fairly well or poorly.</span>
+            <span class="stat-src">Same study: 26.8% fairly well, 6.6% poorly</span>
+          </a>
+          <a class="stat" href="https://home.ecri.org/blogs/ecri-news/misuse-of-ai-chatbots-tops-annual-list-of-health-technology-hazards" data-reveal>
+            <span class="stat-num" data-count="40" data-suffix="M+">40M+</span>
+            <span class="stat-text">people a day ask ChatGPT about health. ECRI ranks misuse of AI chatbots the #1 health-technology hazard of 2026.</span>
+            <span class="stat-src">ECRI Top 10 Health Technology Hazards, Jan 2026</span>
+          </a>
+        </div>
+        <p class="sub center problem-kicker">
+          Records change: a preliminary result gets amended, a lab switches units, a proposal gets revised. A chatbot that
+          reads the newest line, or the wrong patient's, sounds confident either way.
         </p>
       </section>
 
       <!-- ============================================================ try -->
       <section class="try" id="try" aria-labelledby="try-title">
         <div class="try-head">
-          <h2 id="try-title" class="h2">Ask the records, out loud or typed</h2>
-          <p class="sub">The live evidence engine on fictional documents. Every answer is computed now, with the line it rests on.</p>
+          <h2 id="try-title" class="h2">Ask the records. Out loud or typed.</h2>
+          <p class="sub">
+            The live evidence engine, on fictional documents. Every answer below is computed now, with the line it rests
+            on.
+          </p>
         </div>
 
         <div class="desk" id="desk">
           <div class="desk-left">
             <div class="cases" role="tablist" aria-label="Documents to ask">
               <button role="tab" class="case-tab" data-case="health" aria-selected="true">
-                <b>Lab reports</b><span>SYN-0001, 4 PDFs</span>
+                <b>Lab reports</b><span>SYN-0001 · 4 PDFs</span>
               </button>
               <button role="tab" class="case-tab" data-case="deal" aria-selected="false">
-                <b>Northstar deal</b><span>Contract and meetings, 7 files</span>
+                <b>Northstar deal</b><span>Contract + meetings · 7 files</span>
               </button>
               <button role="tab" class="case-tab case-own" data-case="own" aria-selected="false">
                 <b>Your documents</b><span>Upload and ask</span>
@@ -235,7 +168,7 @@
               <label class="drop" id="drop">
                 <input id="files" type="file" multiple accept=".pdf,.docx,.png,.jpg,.jpeg,.txt,.md,application/pdf" />
                 <b>Drop PDFs, Word files, scans or notes</b>
-                <span>Up to 5 files, 4 MB each. Private to this tab, deleted after 30 idle minutes. Please don't upload real medical or personal records.</span>
+                <span>Up to 5 files, 4 MB each. Private to you, deleted after 30 idle minutes. Please don't upload real medical or personal records.</span>
               </label>
               <ul class="upl-list" id="upl-list"></ul>
             </div>
@@ -254,7 +187,7 @@
                 <span class="call-ico" aria-hidden="true"></span><span id="call-label">Call Voice Memory</span>
               </button>
               <div class="call-meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-              <p class="call-state" id="call-state" aria-live="polite">Live Bolna web call. Uses your microphone.</p>
+              <p class="call-state" id="call-state" aria-live="polite">Live Bolna web call · uses your microphone</p>
             </div>
 
             <div class="answer" id="answer" aria-live="polite">
@@ -282,88 +215,137 @@
         <p class="engine-note" id="engine-note"></p>
       </section>
 
-      <!-- ============================================================ film -->
-      <section class="film" id="film" aria-labelledby="film-title">
-        <h2 id="film-title" class="h2">The 80-second film</h2>
-        <video controls preload="none" playsinline poster="media/film-poster.jpg">
-          <source src="media/voice-memory-film.mp4" type="video/mp4" />
-          <track kind="captions" src="media/voice-memory-film.vtt" srclang="en" label="English" default />
-        </video>
+      <!-- ============================================================ how -->
+      <section class="how" id="how" aria-labelledby="how-title">
+        <h2 id="how-title" class="h2 center">Bolna hears it. The record decides it.</h2>
+        <p class="sub center">Speech in, a checked sentence out, and the source on screen while you listen.</p>
+        <ol class="pipe" data-reveal>
+          <li style="--i: 0">
+            <span class="pipe-n">01</span>
+            <h3>Bolna takes the call</h3>
+            <p>Speech recognition, turn-taking and the voice you hear run on Bolna. Your question arrives as text.</p>
+          </li>
+          <li style="--i: 1">
+            <span class="pipe-n">02</span>
+            <h3>Voice Memory resolves it</h3>
+            <p>“Forty two thousand” becomes $42,000. “It” becomes the fee you just asked about.</p>
+          </li>
+          <li style="--i: 2">
+            <span class="pipe-n">03</span>
+            <h3>The engine checks the source</h3>
+            <p>Finds the original passage, then its status: amended, preliminary, proposed, approved, which patient, which unit.</p>
+          </li>
+          <li style="--i: 3">
+            <span class="pipe-n">04</span>
+            <h3>One sentence, one line</h3>
+            <p>A short answer the record supports goes back to Bolna to speak. The cited line opens on screen.</p>
+          </li>
+        </ol>
+        <svg class="pipe-wire" viewBox="0 0 1000 40" preserveAspectRatio="none" aria-hidden="true"><path d="M20 20 H980" /></svg>
       </section>
 
-      <!-- ============================================================ graph -->
+      <!-- ============================================================ catches -->
+      <section class="catches" id="catches" aria-labelledby="catches-title">
+        <h2 id="catches-title" class="h2 center">What it catches</h2>
+        <p class="sub center">Six things a fluent assistant gets wrong. Click one to ask it live.</p>
+        <div class="catch-grid">
+          <button class="catch" data-ask-case="health" data-ask="What is SYN-0001's ferritin result?" data-reveal>
+            <span class="catch-kind ok">Corrections</span>
+            <h3>An amended result replaces the preliminary one</h3>
+            <p class="catch-demo"><s>5</s> → <b>50</b> ng/mL, same collection</p>
+          </button>
+          <button class="catch" data-ask-case="health" data-ask="Has creatinine gone up since September?" data-reveal>
+            <span class="catch-kind no">Units</span>
+            <h3>Different units are never compared by guesswork</h3>
+            <p class="catch-demo">1.2 mg/dL vs 106 µmol/L → <b>won't compare</b></p>
+          </button>
+          <button class="catch" data-ask-case="health" data-ask="What is the TSH?" data-reveal>
+            <span class="catch-kind no">Patients</span>
+            <h3>Two people's reports are never mixed</h3>
+            <p class="catch-demo">SYN-0001 or SYN-0003? → <b>asks which</b></p>
+          </button>
+          <button class="catch" data-ask-case="deal" data-ask="Was the $42,000 revision finalized?" data-reveal>
+            <span class="catch-kind warn">Contracts</span>
+            <h3>A later proposal is not a signed agreement</h3>
+            <p class="catch-demo"><s>$48,000</s> → $42,000 <b>proposed, not approved</b></p>
+          </button>
+          <button class="catch" data-ask-case="deal" data-ask="Did they agree on the payment split?" data-reveal>
+            <span class="catch-kind warn">Meetings</span>
+            <h3>Discussed is not decided</h3>
+            <p class="catch-demo">40/60 proposed · 50/50 discussed → <b>still open</b></p>
+          </button>
+          <button class="catch" data-ask-case="deal" data-ask="Is there a signed contract?" data-reveal>
+            <span class="catch-kind no">Absence</span>
+            <h3>Missing approvals stay missing</h3>
+            <p class="catch-demo">“No signed agreement exists” → <b>says no</b></p>
+          </button>
+        </div>
+      </section>
+
+      <!-- ============================================================ graph teaser -->
       <section class="graph-band" aria-labelledby="graph-title">
         <div class="graph-copy">
+          <p class="eyebrow light">Memory graph</p>
           <h2 id="graph-title" class="h2">Every value remembers where it came from, and what replaced it.</h2>
           <p class="sub">
             Reports, values and the exact sentences behind them, joined by <b>corrects</b>, <b>supersedes</b> and
-            <b>not comparable</b> edges. It is the same graph the engine answers from.
+            <b>not comparable</b> edges. The same graph the engine answers from.
           </p>
-          <a class="btn btn-paper" href="graph.html">Open the memory graph</a>
+          <a class="btn btn-mark" href="graph.html">Open the memory graph</a>
         </div>
         <canvas class="graph-mini" id="graph-mini" width="640" height="420" aria-label="Animated preview of the memory graph"></canvas>
       </section>
 
-      <!-- ============================================================ agents -->
-      <section class="agents" id="agents" aria-labelledby="agents-title">
-        <h2 id="agents-title" class="h2">For agents and scripts</h2>
-        <p class="sub">
-          The same engine answers over a key-free JSON API. Point an agent at <a href="llms.txt">llms.txt</a> or the
-          <a href="openapi.json">OpenAPI description</a>; answers come back with a verdict and the exact quoted lines.
-        </p>
-        <pre class="code" tabindex="0"><code>curl -s https://voice-memory-beige.vercel.app/api/public/ask \
-  -H 'content-type: application/json' \
-  -d '{"case":"health","question":"Has creatinine gone up since September?"}'
-
-{ "lead": { "verdict": "NOT_COMPARABLE",
-            "text": "I can't compare your two Creatinine results: the 3 September 2026
-                     one is in mg/dL and the 12 October 2026 one is in µmol/L…",
-            "citations": [ { "title": "a-2026-10-amended.pdf",
-                             "quote": "| Creatinine | 106 | μmol/L | 62-115 |  |" }, … ] } }</code></pre>
-        <p class="agents-note">
-          The verdict is a fixed label, not prose: for example <code>LATEST</code>, <code>NOT_COMPARABLE</code>,
-          <code>AMBIGUOUS_PATIENT</code>, <code>PROPOSED</code>, <code>OPEN</code>, <code>NO-RECORD</code> or
-          <code>UNKNOWN</code>. An agent should pass on <code>text</code> and its citations as they are, rather than
-          reword them: the sentence is what the evidence gate checked.
-        </p>
-      </section>
-
       <!-- ============================================================ status -->
       <section class="status" id="status" aria-labelledby="status-title">
-        <h2 id="status-title" class="h2">Where it stands</h2>
-        <p class="sub">Built for the Bolna Symphony Buildathon. Every patient, value and company here is fictional.</p>
-        <ul class="roadmap">
-          <li class="done"><b>Shipped</b><span>Questions by voice on a live Bolna call, or typed, on this page.</span></li>
-          <li class="done"><b>Shipped</b><span>Amended, preliminary, proposed, superseded and still-open values, tracked per value; lab results compared across reports, refused when units or patients differ.</span></li>
-          <li class="done"><b>Shipped</b><span>PDF, Word, scanned image and text ingestion with page-anchored citations; lab explanations in English, Hindi or Hinglish.</span></li>
-          <li class="done"><b>Shipped</b><span>Your own documents on this page, in a private workspace that is deleted after 30 idle minutes.</span></li>
-          <li class="wip"><b>Measuring</b><span>Paraphrase-aware search. On held-out paraphrases the dense retriever ranks the right passage in its top 3 for 13 of 15, but the evidence gate still only accepts word matches, so it isn't switched on yet (<a href="https://github.com/charan-rathore/voice-memory/blob/main/docs/PARAPHRASE-RETRIEVAL.md">results</a>).</span></li>
-          <li class="next"><b>Next</b><span>A benchmark of real, messy records written by people outside the team.</span></li>
-          <li class="next"><b>Next</b><span>Clinician review of lab explanations before any patient pilot.</span></li>
-          <li class="next"><b>Next</b><span>Phone-number calls and WhatsApp voice notes through Bolna.</span></li>
-        </ul>
+        <h2 id="status-title" class="h2 center">Where it stands</h2>
+        <p class="sub">Built for the Bolna Symphony Buildathon, running on fictional records.</p>
+        <div class="cols two" data-reveal>
+          <div style="--i: 0">
+            <h3>Works now</h3>
+            <ul>
+              <li>Questions by voice on a live Bolna call, or typed, on this page</li>
+              <li>Amended, preliminary, proposed, superseded and still-open values, tracked per value</li>
+              <li>Lab results compared across reports, refusing when units or patients differ</li>
+              <li>Short spoken answers built from the record, with the cited line on the original page</li>
+              <li>PDF, Word, scanned image and text ingestion with page-anchored citations</li>
+              <li>Lab explanations in English, Hindi or Hinglish, in the language you ask</li>
+              <li>A memory graph of documents, values and the sentences behind them</li>
+              <li>Your own documents on this page, in a private workspace deleted after 30 idle minutes</li>
+              <li>A key-free API for scripts and agents (<a href="llms.txt">llms.txt</a>, <a href="openapi.json">OpenAPI</a>)</li>
+            </ul>
+          </div>
+          <div style="--i: 1">
+            <h3>Next</h3>
+            <ul>
+              <li>Paraphrase-aware search: the dense retriever finds the right passage, the evidence gate doesn't accept it yet (<a href="https://github.com/charan-rathore/voice-memory/blob/main/docs/PARAPHRASE-RETRIEVAL.md">measured</a>)</li>
+              <li>A benchmark of real, messy records written by people outside the team</li>
+              <li>Clinician review of lab explanations before any patient pilot</li>
+              <li>Phone-number calls and WhatsApp voice notes through Bolna</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
       <section class="closing">
         <h2>Ask out loud. Check the line.</h2>
-        <div class="ctas">
-          <a class="btn btn-ink" href="#try">Ask the records</a>
-          <a class="btn btn-line" href="https://github.com/charan-rathore/voice-memory">Read the code</a>
+        <div class="ctas center">
+          <a class="btn btn-mark" href="#try">Ask the records</a>
+          <a class="btn btn-line" href="graph.html">See the memory graph</a>
         </div>
       </section>
     </main>
 
     <footer class="foot">
-      <p>Voice Memory, built for the Bolna Symphony Buildathon by Charan Rathore.</p>
+      <p>Voice Memory · built for the Bolna Symphony Buildathon by Charan Rathore.</p>
       <p>
         All patients, values and companies shown are fictional. Do not enter real medical or personal information.
-        Not a diagnostic or clinically validated product.
+        <a href="https://github.com/charan-rathore/voice-memory">Source on GitHub</a>
       </p>
     </footer>
 
     <script src="snapshot.js" defer></script>
     <script src="site.js" defer></script>
-    <script type="module" src="hero.mjs"></script>
-    <script type="module" src="pipeline.mjs"></script>
+    <script type="module" src="motion.bundle.mjs"></script>
   </body>
 </html>

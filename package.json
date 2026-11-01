@@ -25,7 +25,8 @@
     "test:graph": "node graph-check.mjs",
     "verify:parallel": "node scripts/verify-parallel.mjs",
     "verify:fast": "node scripts/verify-parallel.mjs --fast",
-    "hooks:install": "node scripts/hooks-install.mjs"
+    "hooks:install": "node scripts/hooks-install.mjs",
+    "build:site": "node scripts/build-site-motion.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "5.2.8",
@@ -41,11 +42,16 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@fontsource-variable/public-sans": "^5.3.0",
     "@types/node": "22.20.5",
+    "animejs": "4.5.0",
+    "motion": "14.9.0",
     "pdf-lib": "1.17.1",
     "playwright": "1.62.0",
+    "postprocessing": "6.39.5",
     "prettier": "3.6.2",
+    "three": "0.186.0",
+    "three.quarks": "0.17.1",
+    "tweakpane": "4.0.5",
     "typescript": "5.9.3"
   },
   "overrides": {

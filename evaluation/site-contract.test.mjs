@@ -101,15 +101,6 @@ test("every local asset the landing page references exists", () => {
   );
 });
 
-test("the hero's questions are all in the saved snapshot", () => {
-  const hero = readFileSync(site("hero.mjs"), "utf8");
-  const snap = readFileSync(site("snapshot.js"), "utf8");
-  const keys = [...hero.matchAll(/key: "([^"]+)"/g)].map((m) => m[1]);
-  assert.equal(keys.length, 3);
-  for (const k of keys)
-    assert.ok(snap.includes(JSON.stringify(k)), `snapshot lacks ${k}`);
-});
-
 test("GET /answer is the cacheable twin of POST /ask, for demo cases only", async () => {
   const srv = createLocalServer({ port: 0 });
   await new Promise((r) => srv.listen(0, "127.0.0.1", r));
@@ -183,7 +174,7 @@ test("demo document ids are identical across boots, so cached answers stay valid
   assert.deepEqual(ids[0], ids[1]);
 });
 
-test("first load stays inside its weight budget (call library and film are deferred)", () => {
+test("first load stays inside its weight budget (3D graph, call library and film are deferred)", () => {
   const eager = [
     "index.html",
     ...[
@@ -191,10 +182,6 @@ test("first load stays inside its weight budget (call library and film are defer
         /<(?:script|link)[^>]+(?:src|href)="([^"]+\.(?:js|mjs|css|woff2))"/g,
       ),
     ].map((m) => m[1]),
-    "motion-math.mjs",
-    "motion-loop.mjs",
-    "pages/a-2026-10-amended.png",
-    "pages/a-2026-10-prelim.png",
   ];
   const bytes = [...new Set(eager)].reduce(
     (n, f) => n + statSync(site(f)).size,
@@ -203,8 +190,38 @@ test("first load stays inside its weight budget (call library and film are defer
   assert.doesNotMatch(
     html,
     /bolna-web-call/,
-    "the call library loads on intent, not on page load",
+    "the call library loads on intent",
+  );
+  assert.doesNotMatch(
+    html,
+    /graph3d\.bundle/,
+    "the 3D graph loads near its band",
+  );
+  assert.doesNotMatch(
+    html,
+    /tune\.bundle/,
+    "the tuning panel loads only with ?tune",
   );
   assert.match(html, /<video[^>]*preload="none"/);
-  assert.ok(bytes < 520_000, `first load is ${bytes} bytes`);
+  // index.html + CSS + preloaded fonts + site.js + snapshot + motion bundle
+  assert.ok(bytes < 560_000, `first load is ${bytes} bytes`);
+});
+
+test("the motion bundle is built from the committed sources", async () => {
+  const { build } = await import("esbuild");
+  const r = await build({
+    entryPoints: [new URL("../site/src/entry.mjs", import.meta.url).pathname],
+    bundle: true,
+    format: "esm",
+    minify: true,
+    target: "es2022",
+    legalComments: "eof",
+    write: false,
+  });
+  const built = new TextDecoder().decode(r.outputFiles[0].contents);
+  assert.equal(
+    built,
+    readFileSync(site("motion.bundle.mjs"), "utf8"),
+    "run node scripts/build-site-motion.mjs",
+  );
 });

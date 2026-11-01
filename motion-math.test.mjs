@@ -1,11 +1,8 @@
 // The landing page's motion math (site/motion-math.mjs): frame-rate
-// independence, springs that never overshoot, arc-length accuracy, and the
-// answer-to-source anchoring the hero tethers rely on, checked against the
-// real saved engine answers in site/snapshot.js.
+// independence, springs that never overshoot, arc-length accuracy, spline
+// continuity, and CSS-equivalent cubic-bezier timing.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import vm from "node:vm";
 import {
   expDecay,
   lerp,
@@ -14,8 +11,6 @@ import {
   arcTable,
   tAtDistance,
   pointAtDistance,
-  tether,
-  anchorTokens,
   decayFromHalfLife,
 } from "./site/motion-math.mjs";
 
@@ -91,66 +86,6 @@ test("travelling by distance gives even steps, travelling by t does not", () => 
   assert.equal(tAtDistance(tb, tb.total + 1), 1);
 });
 
-test("tether handles stay bounded for long tethers", () => {
-  const [, c1, c2] = tether([0, 0], [2000, 900]);
-  assert.ok(Math.hypot(c1[0], c1[1]) <= 260 + 1e-9);
-  assert.ok(Math.hypot(2000 - c2[0], 900 - c2[1]) <= 260 + 1e-9);
-});
-
-// ------------------------------------------------------------ anchoring
-const sandbox = { window: {} };
-vm.runInNewContext(
-  readFileSync(new URL("./site/snapshot.js", import.meta.url), "utf8"),
-  sandbox,
-);
-const snap = sandbox.window.VM_SNAPSHOT;
-const lead = (k) => snap.answers[k].lead;
-const words = (l) =>
-  anchorTokens(l.text, l.citations).map((a) => ({
-    title: l.citations[a.cite].title,
-    word: l.text.replace(/μ/g, "µ").slice(a.start, a.end),
-    start: a.start,
-  }));
-
-test("ferritin: 50 ng/mL ties to the amended row, the 5 to the preliminary row", () => {
-  const l = lead("health|What is SYN-0001's ferritin result?");
-  const w = words(l);
-  assert.deepEqual(
-    w.map((x) => [x.title, x.word]),
-    [
-      ["a-2026-10-amended.pdf", "50 ng/mL"],
-      ["a-2026-10-prelim.pdf", "5"],
-    ],
-  );
-  assert.ok(l.text.slice(w[1].start - 5, w[1].start + 6).includes("from 5 to"));
-});
-
-test("creatinine: each unit ties to the report that uses it, dates are never anchors", () => {
-  const l = lead("health|Has creatinine gone up since September?");
-  assert.deepEqual(
-    words(l).map((x) => [x.title, x.word]),
-    [
-      ["a-2026-10-amended.pdf", "µmol/L"],
-      ["a-2026-09.pdf", "mg/dL"],
-    ],
-  );
-});
-
-test("every saved answer's anchors are real words in the answer, never inside a date", () => {
-  for (const [k, a] of Object.entries(snap.answers)) {
-    const l = a.lead;
-    if (!l?.citations?.length) continue;
-    for (const x of words(l)) {
-      assert.ok(x.word.trim().length > 0, k);
-      assert.doesNotMatch(
-        l.text.slice(x.start, x.start + x.word.length + 10),
-        /^\d+ (January|February|March|April|May|June|July|August|September|October|November|December)/,
-        k,
-      );
-    }
-  }
-});
-
 test("Catmull-Rom passes through every station with a continuous tangent", async () => {
   const { catmullRom, bezierDeriv } = await import("./site/motion-math.mjs");
   const pts = [
@@ -173,5 +108,45 @@ test("Catmull-Rom passes through every station with a continuous tangent", async
       Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-9,
       "C1 at station " + (i + 1),
     );
+  }
+});
+
+test("cubic-bezier timing matches the CSS reference curves", async () => {
+  const { cubicBezierTiming } = await import("./site/motion-math.mjs");
+  const ease = cubicBezierTiming(0.25, 0.1, 0.25, 1);
+  // Chromium/WebKit value for `ease` at 50%
+  assert.ok(Math.abs(ease(0.5) - 0.8024033877399112) < 1e-5);
+  const linear = cubicBezierTiming(0, 0, 1, 1);
+  for (const t of [0, 0.1, 0.37, 0.9, 1])
+    assert.ok(Math.abs(linear(t) - t) < 1e-6);
+  const site = cubicBezierTiming(0.2, 0.7, 0.2, 1);
+  let prev = 0;
+  for (let i = 1; i <= 100; i++) {
+    const v = site(i / 100);
+    assert.ok(v >= prev - 1e-9, "monotone");
+    prev = v;
+  }
+  assert.equal(site(1), 1);
+});
+
+test("travel along a multi-segment path is continuous and ends at the end", async () => {
+  const { catmullRom, pathOf, travel } = await import("./site/motion-math.mjs");
+  const pts = [
+    [0, 0],
+    [40, -60],
+    [120, -50],
+    [160, 0],
+  ];
+  const path = pathOf(catmullRom(pts));
+  const end = travel(path, path.total).p;
+  assert.ok(Math.hypot(end[0] - 160, end[1]) < 1e-6);
+  let last = travel(path, 0).p;
+  for (let i = 1; i <= 200; i++) {
+    const { p, tangent } = travel(path, (path.total * i) / 200);
+    assert.ok(
+      Math.hypot(p[0] - last[0], p[1] - last[1]) < (path.total / 200) * 1.05,
+    );
+    assert.ok(Math.abs(Math.hypot(...tangent) - 1) < 1e-9);
+    last = p;
   }
 });
