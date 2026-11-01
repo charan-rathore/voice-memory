@@ -167,6 +167,7 @@
       }
       refreshWorkspace();
     }
+    if (state.case !== "own") setCase("own");
     pollWorkspace();
   }
   async function refreshWorkspace() {
@@ -272,10 +273,14 @@
     const lead = r.lead;
     const [cls, label] = lead ? verdictOf(lead.verdict) : (r.evidence ?? []).length ? ["v-ask", "Cited passages"] : verdictOf(null);
     const ev = r.evidence ?? [];
+    // Without a structured lead (bring-your-own documents), the citation
+    // quote can span the whole document; the retrieved passage in r.answer
+    // names the actual lines the answer rests on, so show that instead.
+    const retrieved = /Relevant source excerpts\n\n([\s\S]*?)\n\[Source 1\]/.exec(r.answer ?? "")?.[1]?.trim();
     const text =
       lead?.text ??
       (ev.length
-        ? `From the document: “${prettyQuote(ev[0].quote).slice(0, 280)}”${ev.length > 1 ? ` (and ${ev.length - 1} more cited passage${ev.length > 2 ? "s" : ""})` : ""}`
+        ? `From the document: “${prettyQuote(retrieved || ev[0].quote).slice(0, 280)}”${ev.length > 1 ? ` (and ${ev.length - 1} more cited passage${ev.length > 2 ? "s" : ""})` : ""}`
         : "I don't see a supported answer to that in these documents.");
     const words = text
       .split(/(\s+)/)
@@ -417,8 +422,16 @@
     }
     let html = esc(text);
     for (const c of cites) {
-      const q = esc(String(c.quote ?? "").trim());
-      if (q && html.includes(q)) html = html.replace(q, `<mark>${q}</mark>`);
+      // Prefer the focused lines: a small document is one chunk, so the raw
+      // quote can span the whole file and marking it highlights everything.
+      const lines = (c.location?.focus?.text ?? [])
+        .map((x) => esc(String(x).trim()))
+        .filter((x) => x.length > 10);
+      const needles = lines.length
+        ? lines
+        : [esc(String(c.quote ?? "").trim())].filter((q) => q && q.length <= 600);
+      for (const q of needles)
+        if (q && html.includes(q)) html = html.replace(q, `<mark>${q}</mark>`);
     }
     html = html.replace(/^# (.*)$/m, '<span class="h">$1</span>');
     $("#viewer-body").innerHTML = `<div class="vw-text">${html}</div>`;
