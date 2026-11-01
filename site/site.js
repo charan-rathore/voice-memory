@@ -708,11 +708,23 @@
           sc.onerror = () => ((bolnaP = null), bad(Error("load failed")));
           document.head.appendChild(sc);
         }));
+  // The same intent also wakes the engine, so a free host that went to
+  // sleep is up by the time the caller has clicked and allowed the mic
+  // (a call into a sleeping engine hears the caller but never answers).
+  let warmed = 0;
+  const warmEngine = () => {
+    if (Date.now() - warmed < 60000) return;
+    warmed = Date.now();
+    api("/status", {}, 60000).catch(() => {});
+  };
   for (const ev of ["pointerenter", "focusin", "touchstart"])
     document.addEventListener(
       ev,
-      (e) =>
-        e.target.closest?.("[data-start-call],[data-call-link]") && loadBolna(),
+      (e) => {
+        if (!e.target.closest?.("[data-start-call],[data-call-link]")) return;
+        loadBolna();
+        warmEngine();
+      },
       { capture: true, passive: true },
     );
 
@@ -766,6 +778,19 @@
         "Microphone blocked. Allow it in the address bar, then call again.",
       );
       return;
+    }
+    // Never put a caller through to a sleeping engine: wait for it first.
+    if (!state.live) {
+      callState("Waking the voice engine (free hosting, up to a minute)…");
+      for (let i = 0; i < 24; i++) {
+        try {
+          const s = await api("/status", {}, 8000);
+          if (s.cases?.health && s.cases?.deal) break;
+        } catch {
+          /* still waking */
+        }
+        await sleep(backoff(Math.min(i, 4), { base: 1500, cap: 6000 }));
+      }
     }
     callState("Getting a call line…");
     const call = new window.BolnaWebCall({
