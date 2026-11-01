@@ -47,11 +47,13 @@ Findings:
    billed?" got the revision memo). For an engine whose promise is "never
    the wrong line", +1 right and +1 wrong on 15 questions is not a win, so
    the gate is unchanged.
-4. **Production probably never loads the model.** `dense.mjs` refuses to
-   load bge-small (~360 MB resident) without memory headroom, and the free
-   Render instance has 512 MB, so live answers are likely keyword-only. The
-   first CI run also measured keyword only until `VM_MEMORY_LIMIT_MB` was
-   set; the guard reason is now part of the bench output.
+4. **Production does load the model** (Render logs, 1 Nov 2026: the
+   transformers "dtype not specified … fp32" line at boot), but in fp32: the
+   `quantized: true` option is ignored by transformers v3, which wants
+   `dtype: "q8"`. Switching would cut the resident model roughly fourfold on
+   the 512 MB instance; it changes the vectors slightly, so it needs a
+   re-tuned gate and is listed under next experiments. CI sets
+   `VM_MEMORY_LIMIT_MB`, without which the guard refuses to load the model.
 
 ## Shipped: sentence units + calibrated rescue (paraphrase.mjs)
 
@@ -93,5 +95,7 @@ retrieval.
 - A cross-encoder reranker (bge-reranker-base) over the top 10 units, the
   step that gave the largest gain in Anthropic's numbers, if it fits the
   free instance's memory.
+- `dtype: "q8"` for the resident model (about a quarter of the memory), with
+  the gate re-tuned on development.
 - A larger, outside-authored question set: 15 held-out questions can show a
   direction, not a reliable size.
