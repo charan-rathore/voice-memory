@@ -163,7 +163,7 @@ test("fractional cumulative exhaustion retains both receipts and stops before th
   assert.equal(saved.at(-1).status, "failed");
 });
 test("native transport wire-sink failure makes zero fetch calls", async () => {
-  const { createSynthesisProvider } = await import("../provider.mjs");
+  const { createSynthesisProvider } = await import("../src/provider.mjs");
   let calls = 0;
   const saved = [];
   const provider = createSynthesisProvider({

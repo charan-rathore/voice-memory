@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { importBundle, answer } from "../dist/engine.mjs";
-import { NORTHSTAR_DOCS } from "../corpus-northstar.mjs";
+import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 
 // Audit cases from review: expansion must never create false authority, stale
 // single-source positives must be labeled partial, and "not recorded" in one

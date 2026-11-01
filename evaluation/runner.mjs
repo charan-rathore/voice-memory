@@ -7,7 +7,7 @@ const splits = JSON.parse(
   readFileSync(new URL("./splits.json", import.meta.url), "utf8"),
 );
 import { importBundle } from "../dist/engine.mjs";
-import { synthesize } from "../synthesis.mjs";
+import { synthesize } from "../src/synthesis.mjs";
 export async function runEvaluation({
   cases,
   provider,

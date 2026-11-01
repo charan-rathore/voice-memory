@@ -29,9 +29,9 @@ const headers = () => ({
   cookie,
   "x-csrf-token": csrf,
 });
-const docs = readdirSync("corpus-md")
+const docs = readdirSync("examples/corpus-md")
   .filter((f) => f.endsWith(".md"))
-  .map((f) => ({ title: f, text: readFileSync(join("corpus-md", f), "utf8") }));
+  .map((f) => ({ title: f, text: readFileSync(join("examples/corpus-md", f), "utf8") }));
 const imp = await fetch(origin + "/api/import", {
   method: "POST",
   headers: headers(),

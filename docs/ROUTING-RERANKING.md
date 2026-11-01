@@ -8,7 +8,7 @@ tests pass on the frozen benchmark.
 
 One explicit route exists today:
 
-- **Clinical route** (server.mjs `leadFor`): when the bundle carries typed
+- **Clinical route** (src/server.mjs `leadFor`): when the bundle carries typed
   lab observations (`bundle.clinical.length > 0`), the question goes to
   `clinicalTurn` first: typed observations, comparability checks (unit,
   patient, amended-report), no clinical judgement. Tone is test-enforced in

@@ -19,7 +19,7 @@ import {
   embedQueryReady,
   warmDense,
   embedTextsReady,
-} from "../dense.mjs";
+} from "../src/dense.mjs";
 import {
   unitsOf,
   warmUnits,
@@ -27,12 +27,12 @@ import {
   gate,
   GATE,
   QUERY_INSTRUCTION,
-} from "../paraphrase.mjs";
+} from "../src/paraphrase.mjs";
 
 const spec = JSON.parse(
   readFileSync(new URL("./paraphrase-questions.json", import.meta.url), "utf8"),
 );
-const md = new URL("../corpus-md/", import.meta.url);
+const md = new URL("../examples/corpus-md/", import.meta.url);
 const docs = readdirSync(md)
   .filter((f) => f.endsWith(".md"))
   .sort()

@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { importBundle } from "../dist/engine.mjs";
-import { spokenTurn } from "../spoken.mjs";
+import { spokenTurn } from "../src/spoken.mjs";
 
 const base = (extra) =>
   importBundle([

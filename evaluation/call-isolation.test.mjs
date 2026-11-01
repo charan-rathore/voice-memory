@@ -4,10 +4,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadBundle, speak } from "./spoken-eval.mjs";
-import { createVoiceAdapter } from "../voice-adapter.mjs";
+import { createVoiceAdapter } from "../src/voice-adapter.mjs";
 
 const CAP = "spokeneval" + "0".repeat(56);
-const dir = new URL("../corpus-md/", import.meta.url).pathname;
+const dir = new URL("../examples/corpus-md/", import.meta.url).pathname;
 
 test("caller B's follow-up does not inherit caller A's field", async () => {
   const voice = createVoiceAdapter({

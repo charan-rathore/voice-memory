@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { expandQuery } from "../dist/query-expand.mjs";
 import { importBundle, answer } from "../dist/engine.mjs";
-import { NORTHSTAR_DOCS } from "../corpus-northstar.mjs";
+import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { retrieveFromRows } from "../dist/evaluation/baseline-entry.mjs";
 
 const bundle = importBundle(NORTHSTAR_DOCS);

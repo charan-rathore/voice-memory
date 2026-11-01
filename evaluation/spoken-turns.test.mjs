@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { importBundle } from "../dist/engine.mjs";
-import { createVoiceAdapter } from "../voice-adapter.mjs";
+import { createVoiceAdapter } from "../src/voice-adapter.mjs";
 
 const load = (dir) =>
   importBundle(
@@ -53,7 +53,7 @@ const CASES = (v) => [
 ];
 
 for (const [name, dir, v] of [
-  ["northstar", new URL("../corpus-md/", import.meta.url).pathname, {
+  ["northstar", new URL("../examples/corpus-md/", import.meta.url).pathname, {
     fee: "42,000", oldFee: "48,000", feeSpoken: "42,000", oldFeeSpoken: "48,000", splitA: "40/60", splitB: "50/50",
   }],
   ["bluebird", new URL("./fixtures/alt-corpus-bluebird/", import.meta.url).pathname, {

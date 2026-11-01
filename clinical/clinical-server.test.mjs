@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createLocalServer } from "../server.mjs";
+import { createLocalServer } from "../src/server.mjs";
 
 const FIX = (f) =>
   readFileSync(new URL("./fixtures/files/" + f, import.meta.url));

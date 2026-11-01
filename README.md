@@ -119,7 +119,7 @@ source sentence.
 | Suite | Covers |
 | --- | --- |
 | `npm test` | unit, normaliser, retrieval core, memory guard |
-| `npm run test:boundaries` | HTTP/session/voice boundaries, **public API** (`public-api.test.mjs`) |
+| `npm run test:boundaries` | HTTP/session/voice boundaries, **public API** (`tests/public-api.test.mjs`) |
 | `npm run test:evaluation` | spoken answers on 3 corpora, call isolation, longitudinal memory, **landing snapshot equals the live engine** |
 | `npm run test:ingest` / `test:clinical` | PDF/DOCX/OCR ingestion; lab comparisons incl. Hindi and Hinglish |
 | `npm run test:vault` | Bolna-shaped calls over HTTP |
@@ -198,18 +198,18 @@ shown while the free host wakes up; a test keeps it equal to the live engine).
 
 | Path | Role |
 | --- | --- |
-| `public-api.mjs` | Key-free landing API: cases, ask, documents, graphs, capped call minting |
-| `server.mjs` | HTTP server, workspace API, Bolna routes, case loading |
-| `engine.ts`, `claim-check.ts` | Evidence engine and claim vocabulary |
-| `spoken*.mjs` | Spoken layer: intent, verdicts, normalisation |
+| `src/public-api.mjs` | Key-free landing API: cases, ask, documents, graphs, capped call minting |
+| `server.mjs` / `src/server.mjs` | Stable entry point / HTTP server, workspace API, Bolna routes, case loading |
+| `src/engine.ts`, `src/claim-check.ts` | Evidence engine and claim vocabulary |
+| `src/spoken*.mjs` | Spoken layer: intent, verdicts, normalisation |
 | `clinical/` | Lab observations, comparability, explanations (en/hi/Hinglish) |
-| `voice-adapter.mjs` | OpenAI-compatible SSE endpoint for Bolna, per-call isolation |
-| `ingest/`, `library.mjs` | File ingestion and page-anchored documents |
+| `src/voice-adapter.mjs` | OpenAI-compatible SSE endpoint for Bolna, per-call isolation |
+| `ingest/`, `src/library.mjs` | File ingestion and page-anchored documents |
 | `memory/` | Episodic memory and the knowledge-graph view |
 | `site/` | Landing page, memory graph page, engine snapshot (Vercel) |
 | `public/` | Local owner workspace (uploads, voice notes, voice lab) |
 | `film/` | The submission film (Remotion source) |
-| `evaluation/`, `*.test.mjs` | Tests and benchmarks |
+| `evaluation/`, `tests/` | Tests and benchmarks |
 
 ## Next
 

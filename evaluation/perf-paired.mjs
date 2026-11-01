@@ -47,11 +47,11 @@ const EXTRA3 = [
 ];
 
 function corpora(dir) {
-  const full = readdirSync(path.join(dir, "corpus-md"))
+  const full = readdirSync(path.join(dir, "examples/corpus-md"))
     .filter((f) => f.endsWith(".md"))
     .map((f) => ({
       title: f,
-      text: readFileSync(path.join(dir, "corpus-md", f), "utf8"),
+      text: readFileSync(path.join(dir, "examples/corpus-md", f), "utf8"),
     }));
   let pad = full[full.length - 1].text;
   const filler =

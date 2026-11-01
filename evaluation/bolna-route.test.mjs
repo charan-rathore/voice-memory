@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createLocalServer } from "../server.mjs";
-import { createVoiceAdapter } from "../voice-adapter.mjs";
+import { createLocalServer } from "../src/server.mjs";
+import { createVoiceAdapter } from "../src/voice-adapter.mjs";
 import { importBundle } from "../dist/engine.mjs";
-import { NORTHSTAR_DOCS } from "../corpus-northstar.mjs";
+import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { raw } from "./http-raw.mjs";
 
 async function start() {

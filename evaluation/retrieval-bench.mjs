@@ -19,7 +19,7 @@ const spec = JSON.parse(
 );
 
 export async function buildCorpus() {
-  const md = new URL("../corpus-md/", import.meta.url);
+  const md = new URL("../examples/corpus-md/", import.meta.url);
   const docs = readdirSync(md)
     .filter((f) => f.endsWith(".md"))
     .sort()

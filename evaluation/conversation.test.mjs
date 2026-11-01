@@ -13,7 +13,7 @@ import {
   callLanguage,
   toHindi,
   isVagueLab,
-} from "../conversation.mjs";
+} from "../src/conversation.mjs";
 
 // ------------------------------------------------------------ unit
 test("hear-checks, greetings and screen questions are answered as such", () => {

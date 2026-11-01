@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { createLocalServer } from "../server.mjs";
+import { createLocalServer } from "../src/server.mjs";
 
 const sandbox = { window: {} };
 vm.runInNewContext(

@@ -6,7 +6,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { SETS, loadBundle, speak } from "./spoken-eval.mjs";
-import { createVoiceAdapter } from "../voice-adapter.mjs";
+import { createVoiceAdapter } from "../src/voice-adapter.mjs";
 import { readFileSync } from "node:fs";
 
 const here = path.dirname(new URL(import.meta.url).pathname);

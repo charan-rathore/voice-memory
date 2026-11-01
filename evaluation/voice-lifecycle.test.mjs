@@ -5,7 +5,7 @@
 // expiry; only explicit owner reset retires permanently.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createVoiceAdapter } from "../voice-adapter.mjs";
+import { createVoiceAdapter } from "../src/voice-adapter.mjs";
 import { importBundle } from "../dist/engine.mjs";
 
 const FIXED = "f".repeat(48);

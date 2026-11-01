@@ -21,7 +21,7 @@ const QUESTIONS = [
   "What payment structure did the steering committee discuss?",
   "Is there a signed commercial agreement?",
 ];
-const md = new URL("../corpus-md/", import.meta.url);
+const md = new URL("../examples/corpus-md/", import.meta.url);
 const DOCS = readdirSync(md)
   .filter((f) => f.endsWith(".md"))
   .sort()

@@ -90,7 +90,7 @@ on the line, not the whole chunk.
   the screen showed raw excerpt dumps.
 - **Choice:** the claim renderer stays first. If it has no field, speak one
   verbatim sentence or table row from the engine's validated evidence
-  (`spoken-extract.mjs`), with column headers for rows and comparators as
+  (`src/spoken-extract.mjs`), with column headers for rows and comparators as
   words (`<0.05` → "less than 0.05"). Commands are never answered with a quote.
   Deliberate abstentions (unknown entity, unknown amount) are never overridden.
 - **Screen:** shows the same sentence as the lead, with the claim/evidence
@@ -102,7 +102,7 @@ Hybrid retrieval (local bge-small, fused with BM25) was merged in PR #3. On the
 questions of 23 at recall@3. It also took production from about 60 MB to peaks
 of about 498 MB of Render's 512 MB. Since 2.0, the model loads only with about
 360 MB of headroom under the container limit, and it is dropped back to
-keyword retrieval above 90% of the limit (`dense.mjs`, `/healthz`). The voice
+keyword retrieval above 90% of the limit (`src/dense.mjs`, `/healthz`). The voice
 path answers from the claim graph and spoken routes first, so its correctness
 does not depend on the dense stage.
 
@@ -125,9 +125,9 @@ container limit, and the parse cache is byte-capped
 Spoken questions failed for notation and vocabulary reasons, not retrieval:
 number words, dropped "-ed", "go live", "retainer" instead of "fee", dates in
 months other than November, and authority carried by the document type.
-Fixes went into a notation-only normaliser (`spoken-normalize.mjs`) and a
-generic claim vocabulary (`claim-check.ts`). New question shapes are answered
-only from verbatim, span-validated sentences (`spoken-routes.mjs`): open
+Fixes went into a notation-only normaliser (`src/spoken-normalize.mjs`) and a
+generic claim vocabulary (`src/claim-check.ts`). New question shapes are answered
+only from verbatim, span-validated sentences (`src/spoken-routes.mjs`): open
 items, named-document asks, explicit rejections, documented reasons, an
 explicit "no price agreed" for a named subject, and pending-versus-rejected.
 Each corpus counted as held out only until its failures were seen
@@ -190,7 +190,7 @@ Parsing cost is zero marginal dollars (all local).
   for files that failed to parse.
 - Removing a document rebuilds the index and **retargets the fixed voice
   credential**; with no documents left, the credential answers 401
-  (`voice-adapter.mjs`: fail closed on an empty binding). Pinned demo mode
+  (`src/voice-adapter.mjs`: fail closed on an empty binding). Pinned demo mode
   is unchanged: uploads never retarget the Northstar credential.
 
 Not done: encryption at rest, durable storage, audit log, per-tenant

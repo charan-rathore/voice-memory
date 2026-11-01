@@ -2,7 +2,7 @@
 
 The roadmap item is "paraphrase-aware search with a dense retriever behind
 the same evidence gate, measured on held-out questions". The dense retriever
-(`dense.mjs`, `Xenova/bge-small-en-v1.5`, local, RRF-fused with BM25 in
+(`src/dense.mjs`, `Xenova/bge-small-en-v1.5`, local, RRF-fused with BM25 in
 `retrieveFromRows`) already exists. This note records what it actually does
 for paraphrased questions, measured, and what was decided.
 
@@ -55,7 +55,7 @@ Findings:
    re-tuned gate and is listed under next experiments. CI sets
    `VM_MEMORY_LIMIT_MB`, without which the guard refuses to load the model.
 
-## Shipped: sentence units + calibrated rescue (paraphrase.mjs)
+## Shipped: sentence units + calibrated rescue (src/paraphrase.mjs)
 
 What changed, each from published practice and none using a language model:
 
@@ -86,7 +86,7 @@ should say "I don't see that" rather than read the wrong line, so the rescue
 only fires when one sentence clearly stands out.
 
 Wired into both the voice call and typed answers after an abstention; it
-never replaces an answer the engine gives. Unit tests: `paraphrase.test.mjs`;
+never replaces an answer the engine gives. Unit tests: `tests/paraphrase.test.mjs`;
 numbers: the `bench` workflow posts them on every pull request that touches
 retrieval.
 

@@ -240,7 +240,7 @@ try {
   const { importBundle } = await import("../../dist/engine.mjs");
   const { extractReport } = await import("../../clinical/observations.mjs");
   const { clinicalReportsFor } = await import("../../clinical/answer.mjs");
-  const { createVoiceAdapter } = await import("../../voice-adapter.mjs");
+  const { createVoiceAdapter } = await import("../../src/voice-adapter.mjs");
   const dir = path.join(root, "clinical/fixtures/files");
   const entries = [];
   for (const f of readdirSync(dir)

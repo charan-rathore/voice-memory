@@ -3,7 +3,7 @@
 // engine through the public API, never written by hand.
 //   node scripts/build-snapshot.mjs
 import { writeFileSync } from "node:fs";
-import { createLocalServer } from "../server.mjs";
+import { createLocalServer } from "../src/server.mjs";
 
 const srv = createLocalServer({ port: 0 });
 await new Promise((r) => srv.listen(0, "127.0.0.1", r));

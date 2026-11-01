@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync, statSync } from "node:fs";
-import { createLocalServer } from "../server.mjs";
+import { createLocalServer } from "../src/server.mjs";
 
 const site = (p) => new URL(`../site/${p}`, import.meta.url);
 const html = readFileSync(site("index.html"), "utf8");

@@ -5,9 +5,9 @@
 // with approving content must still FAIL.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createVoiceAdapter } from "../voice-adapter.mjs";
+import { createVoiceAdapter } from "../src/voice-adapter.mjs";
 import { importBundle } from "../dist/engine.mjs";
-import { NORTHSTAR_DOCS } from "../corpus-northstar.mjs";
+import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 
 const speak = async (a, t, q) => {
   const r = await a.handle(

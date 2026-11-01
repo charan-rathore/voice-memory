@@ -4,9 +4,9 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { importBundle, answer } from "../dist/engine.mjs";
 
-const base = readdirSync("corpus-md")
+const base = readdirSync("examples/corpus-md")
   .filter((f) => f.endsWith(".md"))
-  .map((f) => ({ title: f, text: readFileSync("corpus-md/" + f, "utf8") }));
+  .map((f) => ({ title: f, text: readFileSync("examples/corpus-md/" + f, "utf8") }));
 
 let pass = 0,
   fail = 0;

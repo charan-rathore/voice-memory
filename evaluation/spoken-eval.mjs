@@ -14,7 +14,7 @@ import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { importBundle, answer } from "../dist/engine.mjs";
-import { createVoiceAdapter } from "../voice-adapter.mjs";
+import { createVoiceAdapter } from "../src/voice-adapter.mjs";
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const root = path.join(here, "..");
@@ -23,7 +23,7 @@ export const SETS = [
   {
     name: "northstar-dev",
     heldOut: false,
-    dir: path.join(root, "corpus-md"),
+    dir: path.join(root, "examples/corpus-md"),
     gold: path.join(here, "fixtures/northstar-spoken.json"),
   },
   {

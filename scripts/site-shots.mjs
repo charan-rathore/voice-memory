@@ -53,7 +53,8 @@ try {
         getComputedStyle(d5).opacity === "1"
       );
     });
-    if (!landed) errors.push(`${name}: the 5 never landed in the amended value`);
+    if (!landed)
+      errors.push(`${name}: the 5 never landed in the amended value`);
     await page.locator(".pipe").scrollIntoViewIfNeeded();
     await page.waitForTimeout(1600);
     await page.screenshot({ path: `${out}/${name}-pipeline.png` });

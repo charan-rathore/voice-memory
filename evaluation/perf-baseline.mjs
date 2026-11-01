@@ -4,9 +4,9 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { importBundle, answer } from "../dist/engine.mjs";
-const docs = readdirSync("corpus-md")
+const docs = readdirSync("examples/corpus-md")
   .filter((f) => f.endsWith(".md"))
-  .map((f) => ({ title: f, text: readFileSync("corpus-md/" + f, "utf8") }));
+  .map((f) => ({ title: f, text: readFileSync("examples/corpus-md/" + f, "utf8") }));
 const probes = [
   "Which regions are in scope for the first phase?",
   "Is weekly progress reporting confirmed?",

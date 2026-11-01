@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createLocalServer } from "../server.mjs";
-import { NORTHSTAR_DOCS } from "../corpus-northstar.mjs";
+import { createLocalServer } from "../src/server.mjs";
+import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { raw } from "./http-raw.mjs";
 
 const FIXED = "f".repeat(48);
@@ -13,7 +13,7 @@ async function start(env = {}) {
     saved[k] = process.env[k];
     process.env[k] = v;
   }
-  const { createLocalServer: cls } = await import("../server.mjs");
+  const { createLocalServer: cls } = await import("../src/server.mjs");
   const server = cls({ port: 0 });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${server.address().port}`;

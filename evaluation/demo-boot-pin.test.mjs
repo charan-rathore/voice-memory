@@ -28,7 +28,7 @@ async function start(env) {
   }
   let server;
   try {
-    const { createLocalServer } = await import("../server.mjs");
+    const { createLocalServer } = await import("../src/server.mjs");
     server = createLocalServer({ port: 0 });
   } finally {
     for (const [k, v] of Object.entries(saved)) {

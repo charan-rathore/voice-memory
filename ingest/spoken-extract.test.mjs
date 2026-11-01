@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { importBundle, answer } from "../dist/engine.mjs";
 import { ingestFile } from "./index.mjs";
-import { extractiveSpoken, isQuestion } from "../spoken-extract.mjs";
-import { spokenTurn } from "../spoken.mjs";
+import { extractiveSpoken, isQuestion } from "../src/spoken-extract.mjs";
+import { spokenTurn } from "../src/spoken.mjs";
 
 const fx = (f) =>
   readFileSync(new URL("./fixtures/files/" + f, import.meta.url));

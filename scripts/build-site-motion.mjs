@@ -7,7 +7,29 @@
 //   node scripts/build-site-motion.mjs
 import { build } from "esbuild";
 
-const common = { bundle: true, format: "esm", minify: true, target: "es2022", legalComments: "eof", logLevel: "info" };
-await build({ ...common, entryPoints: { "motion.bundle": "site/src/entry.mjs" }, outdir: "site", outExtension: { ".js": ".mjs" } });
-await build({ ...common, entryPoints: { "graph3d.bundle": "site/src/graph3d.mjs" }, outdir: "site", outExtension: { ".js": ".mjs" } });
-await build({ ...common, entryPoints: { "tune.bundle": "site/src/tune.mjs" }, outdir: "site", outExtension: { ".js": ".mjs" } });
+const common = {
+  bundle: true,
+  format: "esm",
+  minify: true,
+  target: "es2022",
+  legalComments: "eof",
+  logLevel: "info",
+};
+await build({
+  ...common,
+  entryPoints: { "motion.bundle": "site/src/entry.mjs" },
+  outdir: "site",
+  outExtension: { ".js": ".mjs" },
+});
+await build({
+  ...common,
+  entryPoints: { "graph3d.bundle": "site/src/graph3d.mjs" },
+  outdir: "site",
+  outExtension: { ".js": ".mjs" },
+});
+await build({
+  ...common,
+  entryPoints: { "tune.bundle": "site/src/tune.mjs" },
+  outdir: "site",
+  outExtension: { ".js": ".mjs" },
+});

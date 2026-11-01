@@ -4,7 +4,7 @@
 import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { createLocalServer } from "../server.mjs";
+import { createLocalServer } from "../src/server.mjs";
 
 const engine = createLocalServer({ port: 0 });
 await new Promise((r) => engine.listen(0, "127.0.0.1", r));

@@ -5,11 +5,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { importBundle, validateEvidence } from "../dist/engine.mjs";
-import { spokenTurn } from "../spoken.mjs";
+import { spokenTurn } from "../src/spoken.mjs";
 import { createMemory, recordTurn } from "../memory/memory.mjs";
 import { buildGraph } from "../memory/graph.mjs";
 
-const dir = new URL("../corpus-md/", import.meta.url).pathname;
+const dir = new URL("../examples/corpus-md/", import.meta.url).pathname;
 const DOCS = readdirSync(dir)
   .filter((f) => f.endsWith(".md"))
   .sort()

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { importBundle, answer, draft } from "../dist/engine.mjs";
-import { NORTHSTAR_DOCS } from "../corpus-northstar.mjs";
+import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 
 const doc = (title, date, lines) => ({
   title,

@@ -26,7 +26,7 @@ import {
   denseAvailableFor,
   embedQueryReady,
   warmDense,
-} from "../dense.mjs";
+} from "../src/dense.mjs";
 import { buildCorpus } from "./retrieval-bench.mjs";
 
 const spec = JSON.parse(
