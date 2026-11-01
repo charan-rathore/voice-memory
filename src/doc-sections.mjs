@@ -368,3 +368,71 @@ export function sectionAnswer(question, bundle) {
     spoken += S.noDx;
   return { spoken, verdict: "QUOTED", kind: wants[0], citations };
 }
+
+// ------------------------------------------------------------ form fields
+// "Who is the doctor?" in a form-shaped document: the line "Full name of
+// doctor: Tan Ah Moi". Labels are matched by the question's words (who ->
+// name, when -> date), the value is read verbatim.
+const ASK_FOR = [
+  [/\bwho\b/i, /\bname\b/i],
+  [/\bwhen\b|\bdate\b/i, /\bdate\b/i],
+  [/\bwhere\b|\baddress\b/i, /\b(address|hospital|clinic|location)\b/i],
+  [/\bhow old\b|\bage\b/i, /\bage\b/i],
+];
+const FIELD_STOP = new Set(
+  "the a an is was what who when where how of his her their this that patient's patients for in on did does do".split(
+    " ",
+  ),
+);
+export function fieldAnswer(question, bundle) {
+  const want = ASK_FOR.filter(([q]) => q.test(question)).map(([, l]) => l);
+  if (!want.length) return null;
+  const qw = (question.toLowerCase().match(/[a-z]+/g) ?? []).filter(
+    (w) =>
+      !FIELD_STOP.has(w) &&
+      w.length > 2 &&
+      !/^(who|when|where|name|date|old)$/.test(w),
+  );
+  if (!qw.length) return null;
+  let best = null;
+  for (const src of bundle?.sources ?? []) {
+    let pos = 0;
+    for (const line of src.text.split("\n")) {
+      const start = pos;
+      pos += line.length + 1;
+      const m =
+        /^\s*([A-Z][A-Za-z/’'(). ]{2,60}?)\s*:\s*(\S[^\n]{0,120})$/.exec(line);
+      if (!m || !want.some((re) => re.test(m[1]))) continue;
+      const label = m[1].toLowerCase();
+      const hits = qw.filter((w) =>
+        label.includes(w.slice(0, Math.max(4, w.length - 3))),
+      ).length;
+      if (!hits) continue;
+      if (/^\[|^\s*$/.test(m[2]) || /^(to set out|please)/i.test(m[2]))
+        continue;
+      const score = hits * 10 - label.length / 20;
+      if (!best || score > best.score)
+        best = {
+          src,
+          start: start + line.indexOf(m[1]),
+          end: start + line.indexOf(m[2]) + m[2].trimEnd().length,
+          label: m[1],
+          value: m[2].trim(),
+          score,
+        };
+    }
+  }
+  if (!best) return null;
+  try {
+    const c = cite(best.src, { start: best.start, end: best.end });
+    const lead =
+      (bundle.sources.length === 1 ? "The report" : cap(docLabelOf(best.src))) +
+      " gives";
+    return {
+      spoken: `${lead} ${best.label.trim()}: ${best.value}`,
+      citations: [c],
+    };
+  } catch {
+    return null;
+  }
+}

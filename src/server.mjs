@@ -36,7 +36,7 @@ import {
   observationEvidence,
 } from "../clinical/answer.mjs";
 import { extractReport } from "../clinical/observations.mjs";
-import { sectionAnswer } from "./doc-sections.mjs";
+import { sectionAnswer, fieldAnswer } from "./doc-sections.mjs";
 import { detectLang } from "../clinical/explain.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { createMemory, recordTurn, liveEpisodes } from "../memory/memory.mjs";
@@ -563,7 +563,28 @@ export function createLocalServer({
           };
         }
       }
-      if (!sectioned && weakLead(shown.lead)) {
+      if (
+        !sectioned &&
+        (weakLead(shown.lead) || shown.lead?.verdict === "QUOTED")
+      ) {
+        const f = fieldAnswer(question, bundle);
+        if (f) {
+          sectioned = true;
+          shown.lead = {
+            text: f.spoken,
+            verdict: "QUOTED",
+            field: null,
+            citations: f.citations,
+          };
+        }
+      }
+      // On a visitor's own documents the hybrid sentence search (meaning +
+      // words, lay terms expanded) outranks the keyword-only extract.
+      const ownDocs = String(s.sid ?? "").startsWith("ws:");
+      if (
+        !sectioned &&
+        (weakLead(shown.lead) || (ownDocs && shown.lead?.verdict === "QUOTED"))
+      ) {
         const p = await paraphraseLookup(question, bundle).catch(() => null);
         if (p)
           shown.lead = {
