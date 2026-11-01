@@ -5,6 +5,10 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createLocalServer } from "../src/server.mjs";
 
+// The suites exercise the non-durable file backend and injected fakes:
+// explicit local dev/test opt-in required by the fail-closed selector.
+process.env.VM_COUNTERS_ALLOW_FILE = "on";
+
 const srv = createLocalServer({ port: 0 });
 let base;
 before(async () => {
@@ -212,6 +216,10 @@ test("VM_PUBLIC_VOICE=on mints through the factory (mock mint, no network)", asy
     process.env.BOLNA_API_KEY = "test-dummy";
     process.env.BOLNA_AGENT_ID = "test-dummy";
     process.env.VM_PUBLIC_VOICE = "on";
+    process.env.VM_PUBLIC_COUNTER_FILE = path.join(
+      mkdtempSync(path.join(tmpdir(), "vm-counters-")),
+      "c.json",
+    );
     let mints = 0;
     const api = createPublicApi({
       cases: {},
@@ -236,7 +244,10 @@ test("VM_PUBLIC_VOICE=on mints through the factory (mock mint, no network)", asy
     assert.equal(mint.status, 200);
     const body = await mint.json();
     assert.equal(body.fake_session, true);
-    assert.deepEqual(body.user_data, { page: "landing" });
+    // The mint payload carries the caller's user_data plus the reconcile
+    // correlation tag (this call's reservation id).
+    assert.equal(body.user_data.page, "landing");
+    assert.match(body.user_data.vm_res, /^r_/);
     assert.equal(mints, 1);
     const st = await (await fetch(b + "/api/public/status")).json();
     assert.deepEqual(st.voice, { configured: true, ready: true });
@@ -419,4 +430,622 @@ test("bring-your-own answers complete wrapped sentences and keep one supporting 
   assert.ok(occurrences <= 2, `deadline repeated ${occurrences} times`);
   // Continuation must not swallow the following unrelated block.
   assert.doesNotMatch(a.body.answer.split("[Source 1]")[0], /Allergens/);
+});
+
+// ---- Public-call counters: visitor allowance, ceilings, cutoff, fail-closed
+// Each factory test gets its own counter file; nothing touches the network
+// (mintVoice is a mock) and nothing spends.
+
+import { mkdtempSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { createServer } from "node:http";
+import { createCallCounters } from "../src/public-call-counters.mjs";
+
+const VOICE_ENV = [
+  "BOLNA_API_KEY",
+  "BOLNA_AGENT_ID",
+  "VM_PUBLIC_VOICE",
+  "VM_PUBLIC_COUNTER_FILE",
+  "VM_PUBLIC_CALLS_PER_IP_DAY",
+  "VM_PUBLIC_CALLS_PER_DAY",
+  "VM_PUBLIC_CALLS_LIFETIME_MAX",
+  "VM_PUBLIC_CALL_MAX_MS",
+  "VM_PUBLIC_CALL_GAP_MS",
+];
+const saveEnv = () => {
+  const saved = Object.fromEntries(VOICE_ENV.map((k) => [k, process.env[k]]));
+  return () => {
+    for (const k of VOICE_ENV)
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+  };
+};
+
+async function voiceFactory({ env = {}, mintVoice } = {}) {
+  const { createPublicApi } = await import("../src/public-api.mjs");
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  process.env.BOLNA_API_KEY = "test-dummy";
+  process.env.BOLNA_AGENT_ID = "test-dummy";
+  process.env.VM_PUBLIC_VOICE = "on";
+  process.env.VM_PUBLIC_COUNTER_FILE = path.join(dir, "counters.json");
+  process.env.VM_PUBLIC_CALL_GAP_MS = "1";
+  for (const [k, v] of Object.entries(env)) process.env[k] = v;
+  let stops = 0;
+  const api = createPublicApi({
+    cases: {},
+    resolve: async () => {
+      throw new Error("not exercised");
+    },
+    mintVoice:
+      mintVoice ?? (async () => ({ fake_session: true, run_id: "run-test-1" })),
+    stopVoice: async () => {
+      stops += 1;
+    },
+    voiceTurns: () => [],
+    voiceState: () => ({ configured: true, ready: true }),
+  });
+  const srv = createServer((req, res) => api(req, res));
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  const b = `http://127.0.0.1:${srv.address().port}`;
+  const mint = (ip) =>
+    fetch(b + "/api/public/voice/session", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": ip },
+      body: "{}",
+    });
+  return {
+    b,
+    mint,
+    stops: () => stops,
+    close: () => new Promise((r) => srv.close(() => r())),
+  };
+}
+
+test("visitor allowance: 3 per visitor per day, per-visitor isolation", async () => {
+  const restore = saveEnv();
+  const f = await voiceFactory({ env: { VM_PUBLIC_CALLS_PER_IP_DAY: "2" } });
+  try {
+    assert.equal((await f.mint("10.0.0.1")).status, 200);
+    assert.equal((await f.mint("10.0.0.1")).status, 200);
+    const third = await f.mint("10.0.0.1");
+    assert.equal(third.status, 429);
+    const body = await third.json();
+    assert.equal(body.scope, "customer");
+    assert.match(body.error, /today's demo calls/i);
+    // A different visitor still gets their own allowance.
+    assert.equal((await f.mint("10.0.0.2")).status, 200);
+  } finally {
+    await f.close();
+    restore();
+  }
+});
+
+test("global day allowance holds across visitors", async () => {
+  const restore = saveEnv();
+  const f = await voiceFactory({
+    env: { VM_PUBLIC_CALLS_PER_IP_DAY: "9", VM_PUBLIC_CALLS_PER_DAY: "2" },
+  });
+  try {
+    assert.equal((await f.mint("10.0.1.1")).status, 200);
+    assert.equal((await f.mint("10.0.1.2")).status, 200);
+    const third = await f.mint("10.0.1.3");
+    assert.equal(third.status, 429);
+    assert.equal((await third.json()).scope, "global");
+  } finally {
+    await f.close();
+    restore();
+  }
+});
+
+test("lifetime count caps total mints", async () => {
+  const restore = saveEnv();
+  const f = await voiceFactory({
+    env: {
+      VM_PUBLIC_CALLS_PER_IP_DAY: "9",
+      VM_PUBLIC_CALLS_PER_DAY: "9",
+      VM_PUBLIC_CALLS_LIFETIME_MAX: "2",
+    },
+  });
+  try {
+    assert.equal((await f.mint("10.0.2.1")).status, 200);
+    assert.equal((await f.mint("10.0.2.2")).status, 200);
+    assert.equal((await f.mint("10.0.2.3")).status, 429);
+  } finally {
+    await f.close();
+    restore();
+  }
+});
+
+test("counter store failure fails closed (no mint, 503)", async () => {
+  const restore = saveEnv();
+  // Point the store at an existing DIRECTORY: reads fail non-ENOENT.
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const { createPublicApi } = await import("../src/public-api.mjs");
+  process.env.BOLNA_API_KEY = "test-dummy";
+  process.env.BOLNA_AGENT_ID = "test-dummy";
+  process.env.VM_PUBLIC_VOICE = "on";
+  process.env.VM_PUBLIC_COUNTER_FILE = dir;
+  const api = createPublicApi({
+    cases: {},
+    resolve: async () => {
+      throw new Error("not exercised");
+    },
+    mintVoice: async () => ({ fake_session: true }),
+    voiceTurns: () => [],
+    voiceState: () => ({ configured: true, ready: true }),
+  });
+  const srv = createServer((req, res) => api(req, res));
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  try {
+    const r = await fetch(
+      `http://127.0.0.1:${srv.address().port}/api/public/voice/session`,
+      { method: "POST" },
+    );
+    assert.equal(r.status, 503);
+  } finally {
+    await new Promise((r) => srv.close(() => r()));
+    restore();
+  }
+});
+
+test("per-call max duration: ticket dies and vendor stop is attempted", async () => {
+  const restore = saveEnv();
+  const f = await voiceFactory({ env: { VM_PUBLIC_CALL_MAX_MS: "60" } });
+  try {
+    const mint = await f.mint("10.0.3.1");
+    assert.equal(mint.status, 200);
+    const { vm_ticket } = await mint.json();
+    const ok = await fetch(f.b + `/api/public/voice/turns?ticket=${vm_ticket}`);
+    assert.equal(ok.status, 200);
+    await new Promise((r) => setTimeout(r, 150));
+    const gone = await fetch(
+      f.b + `/api/public/voice/turns?ticket=${vm_ticket}`,
+    );
+    assert.equal(gone.status, 403);
+    assert.equal(f.stops(), 1);
+  } finally {
+    await f.close();
+    restore();
+  }
+});
+
+test("a failed mint hands the allowance back", async () => {
+  const restore = saveEnv();
+  let calls = 0;
+  const f = await voiceFactory({
+    env: { VM_PUBLIC_CALLS_PER_IP_DAY: "1" },
+    mintVoice: async () => {
+      calls += 1;
+      if (calls === 1) {
+        const e = new Error("vendor busy");
+        e.status = 502;
+        e.preSession = true; // definitive: vendor created nothing
+        throw e;
+      }
+      return { fake_session: true };
+    },
+  });
+  try {
+    assert.equal((await f.mint("10.0.4.1")).status, 502);
+    assert.equal((await f.mint("10.0.4.1")).status, 200);
+  } finally {
+    await f.close();
+    restore();
+  }
+});
+
+test("counter module: day rollover resets allowances, visitor lifetime persists, owner counted SEPARATELY", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  let t = Date.parse("2026-11-01T10:00:00Z");
+  const c = createCallCounters({
+    file: path.join(dir, "c.json"),
+    now: () => t,
+  });
+  const lim = { perIpDay: 1, globalDay: 5, lifetimeMax: 3 };
+  assert.equal((await c.admitVisitor("1.1.1.1", lim)).ok, true);
+  assert.equal((await c.admitVisitor("1.1.1.1", lim)).scope, "visitor-day");
+  // Next UTC day: the per-visitor allowance resets...
+  t = Date.parse("2026-11-02T10:00:00Z");
+  assert.equal((await c.admitVisitor("1.1.1.1", lim)).ok, true);
+  // ...the visitor lifetime count persists, and the owner is counted in a
+  // SEPARATE counter that never consumes visitor admission budget.
+  assert.equal((await c.admitOwner()).ok, true);
+  assert.equal((await c.admitVisitor("2.2.2.2", lim)).ok, true);
+  assert.equal((await c.admitVisitor("3.3.3.3", lim)).scope, "lifetime");
+  const p = await c.peek();
+  assert.equal(p.lifetime, 3);
+  assert.equal(p.ownerLifetime, 1);
+});
+
+test("owner mints are counted but never capped by the visitor abuse budget", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const c = createCallCounters({ file: path.join(dir, "c.json") });
+  const lim = { perIpDay: 1, globalDay: 1, lifetimeMax: 1 };
+  // Visitor budget exhausted (lifetime 1 of 1)...
+  assert.equal((await c.admitVisitor("1.1.1.1", lim)).ok, true);
+  assert.equal((await c.admitVisitor("2.2.2.2", lim)).scope, "lifetime");
+  // ...the owner still mints (unlimited count), counted SEPARATELY.
+  const own = await c.admitOwner();
+  assert.equal(own.ok, true);
+  let p = await c.peek();
+  assert.equal(p.lifetime, 1); // visitor budget untouched by owner mints
+  assert.equal(p.ownerLifetime, 1);
+  // Owner reservation lifecycle: settle is exactly-once, refund after
+  // settle is a no-op, and an owner refund never touches day buckets.
+  await c.settleReservation(own.reservation);
+  await c.refundReservation(own.reservation);
+  p = await c.peek();
+  assert.equal(p.lifetime, 1);
+  assert.equal(p.ownerLifetime, 1);
+  assert.equal(p.today.perIp["1.1.1.1"], 1);
+  // A pre-settle owner refund releases ONLY the owner counter.
+  const own2 = await c.admitOwner();
+  await c.refundReservation(own2.reservation);
+  p = await c.peek();
+  assert.equal(p.lifetime, 1);
+  assert.equal(p.ownerLifetime, 1);
+});
+
+test("adversarial: 10 concurrent mints, one visitor, allowance 3 - exactly 3 pass", async () => {
+  const restore = saveEnv();
+  const f = await voiceFactory({ env: { VM_PUBLIC_CALLS_PER_IP_DAY: "3" } });
+  try {
+    const rs = await Promise.all(
+      Array.from({ length: 10 }, () => f.mint("10.0.9.1")),
+    );
+    const oks = rs.filter((r) => r.status === 200).length;
+    const refused = rs.filter((r) => r.status === 429).length;
+    assert.equal(oks, 3);
+    assert.equal(refused, 7);
+  } finally {
+    await f.close();
+    restore();
+  }
+});
+
+test("adversarial: refund is exactly-once per reservation, never releases another call's capacity", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const c = createCallCounters({ file: path.join(dir, "c.json") });
+  const lim = { perIpDay: 5, globalDay: 5, lifetimeMax: 5 };
+  // Three active reservations from the same visitor.
+  const a = await c.admitVisitor("1.1.1.1", lim);
+  const b = await c.admitVisitor("1.1.1.1", lim);
+  const d = await c.admitVisitor("1.1.1.1", lim);
+  assert.equal((await c.peek()).today.perIp["1.1.1.1"], 3);
+  // Refund A twice (duplicate callback): only A's slot is released.
+  await c.refundReservation(a.reservation);
+  await c.refundReservation(a.reservation);
+  let p = await c.peek();
+  assert.equal(p.today.perIp["1.1.1.1"], 2);
+  assert.equal(p.lifetime, 2);
+  // Unknown id: no-op.
+  await c.refundReservation("r_forged");
+  // Settle B (mint succeeded), then a late refund for B: no-op, B stays counted.
+  await c.settleReservation(b.reservation);
+  await c.refundReservation(b.reservation);
+  p = await c.peek();
+  assert.equal(p.today.perIp["1.1.1.1"], 2);
+  assert.equal(p.lifetime, 2);
+  // Refund D once: exactly one more slot released.
+  await c.refundReservation(d.reservation);
+  p = await c.peek();
+  assert.equal(p.today.perIp["1.1.1.1"], 1);
+  assert.equal(p.lifetime, 1);
+});
+
+test("adversarial: crash recovery - a fresh instance on the same file keeps the counts", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const file = path.join(dir, "c.json");
+  const lim = { perIpDay: 2, globalDay: 9, lifetimeMax: 9 };
+  const c1 = createCallCounters({ file });
+  assert.equal((await c1.admitVisitor("1.1.1.1", lim)).ok, true);
+  // Simulate a process restart: brand-new instance, same file.
+  const c2 = createCallCounters({ file });
+  assert.equal((await c2.peek()).lifetime, 1);
+  assert.equal((await c2.admitVisitor("1.1.1.1", lim)).ok, true);
+  assert.equal((await c2.admitVisitor("1.1.1.1", lim)).scope, "visitor-day");
+});
+
+test("adversarial: deleted store file reinitializes (documented reset, no durability pretense)", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const file = path.join(dir, "c.json");
+  const c = createCallCounters({ file });
+  const lim = { perIpDay: 1, globalDay: 9, lifetimeMax: 9 };
+  assert.equal((await c.admitVisitor("1.1.1.1", lim)).ok, true);
+  const { rmSync } = await import("node:fs");
+  rmSync(file);
+  // A brand-new process would see NO file: counters start over. This is the
+  // documented reset behavior - the store is rate smoothing, not a ceiling.
+  const c2 = createCallCounters({ file });
+  assert.equal((await c2.peek()).lifetime, 0);
+  assert.equal((await c2.admitVisitor("1.1.1.1", lim)).ok, true);
+});
+
+test("adversarial: corrupt store file fails closed with 503", async () => {
+  const restore = saveEnv();
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const file = path.join(dir, "c.json");
+  const { writeFileSync } = await import("node:fs");
+  writeFileSync(file, "{not json");
+  const { createPublicApi } = await import("../src/public-api.mjs");
+  process.env.BOLNA_API_KEY = "test-dummy";
+  process.env.BOLNA_AGENT_ID = "test-dummy";
+  process.env.VM_PUBLIC_VOICE = "on";
+  process.env.VM_PUBLIC_COUNTER_FILE = file;
+  const api = createPublicApi({
+    cases: {},
+    resolve: async () => {
+      throw new Error("not exercised");
+    },
+    mintVoice: async () => ({ fake_session: true }),
+    voiceTurns: () => [],
+    voiceState: () => ({ configured: true, ready: true }),
+  });
+  const srv3 = createServer((req, res) => api(req, res));
+  await new Promise((r) => srv3.listen(0, "127.0.0.1", r));
+  try {
+    const r = await fetch(
+      `http://127.0.0.1:${srv3.address().port}/api/public/voice/session`,
+      { method: "POST" },
+    );
+    assert.equal(r.status, 503);
+  } finally {
+    await new Promise((r) => srv3.close(() => r()));
+    restore();
+  }
+});
+
+test("lifecycle: settle failure after a live session - no ended claim, cleanup retained until cutoff retries", async () => {
+  const restore = saveEnv();
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const counterFile = path.join(dir, "c.json");
+  let stops = 0;
+  let refunds = 0;
+  const realCounters = createCallCounters({ file: counterFile });
+  const failingSettle = {
+    admitVisitor: (ip, lim) => realCounters.admitVisitor(ip, lim),
+    refundReservation: async (r) => {
+      refunds += 1;
+      return realCounters.refundReservation(r);
+    },
+    settleReservation: async () => {
+      const e = new Error("store write failed");
+      e.status = 503;
+      throw e;
+    },
+  };
+  const { createPublicApi } = await import("../src/public-api.mjs");
+  process.env.BOLNA_API_KEY = "test-dummy";
+  process.env.BOLNA_AGENT_ID = "test-dummy";
+  process.env.VM_PUBLIC_VOICE = "on";
+  process.env.VM_PUBLIC_COUNTER_FILE = counterFile;
+  process.env.VM_PUBLIC_CALL_GAP_MS = "1";
+  process.env.VM_PUBLIC_CALL_MAX_MS = "40";
+  const api = createPublicApi({
+    cases: {},
+    resolve: async () => {
+      throw new Error("not exercised");
+    },
+    mintVoice: async () => ({ fake_session: true, run_id: "run-live-1" }),
+    // Vendor stop that FAILS: cleanup must NOT be abandoned after one try.
+    stopVoice: async () => {
+      stops += 1;
+      throw new Error("vendor stop failed");
+    },
+    counters: failingSettle,
+    voiceTurns: () => [],
+    voiceState: () => ({ configured: true, ready: true }),
+  });
+  const srv4 = createServer((req, res) => api(req, res));
+  await new Promise((r) => srv4.listen(0, "127.0.0.1", r));
+  try {
+    const r = await fetch(
+      `http://127.0.0.1:${srv4.address().port}/api/public/voice/session`,
+      { method: "POST" },
+    );
+    assert.equal(r.status, 503);
+    const body = await r.text();
+    // No "the call was ended" claim on an unconfirmed stop attempt.
+    assert.ok(!/was ended|is ended/.test(body), body);
+    assert.equal(stops, 1);
+    // Reservation NOT refunded: the call stays charged.
+    const p = await realCounters.peek();
+    assert.equal(p.lifetime, 1);
+    assert.equal(refunds, 0);
+    // The cutoff timer was RETAINED: past the 40ms cutoff it retries the stop.
+    await new Promise((r2) => setTimeout(r2, 120));
+    assert.ok(stops >= 2, `expected cutoff retry, stops=${stops}`);
+    assert.equal(refunds, 0);
+  } finally {
+    await new Promise((r) => srv4.close(() => r()));
+    restore();
+  }
+});
+
+test("lifecycle: settle failure with vendor-CONFIRMED stop tears down cleanly", async () => {
+  const restore = saveEnv();
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const counterFile = path.join(dir, "c.json");
+  let stops = 0;
+  const realCounters = createCallCounters({ file: counterFile });
+  const failingSettle = {
+    admitVisitor: (ip, lim) => realCounters.admitVisitor(ip, lim),
+    refundReservation: (r) => realCounters.refundReservation(r),
+    settleReservation: async () => {
+      const e = new Error("store write failed");
+      e.status = 503;
+      throw e;
+    },
+  };
+  const { createPublicApi } = await import("../src/public-api.mjs");
+  process.env.BOLNA_API_KEY = "test-dummy";
+  process.env.BOLNA_AGENT_ID = "test-dummy";
+  process.env.VM_PUBLIC_VOICE = "on";
+  process.env.VM_PUBLIC_COUNTER_FILE = counterFile;
+  process.env.VM_PUBLIC_CALL_GAP_MS = "1";
+  process.env.VM_PUBLIC_CALL_MAX_MS = "40";
+  const api = createPublicApi({
+    cases: {},
+    resolve: async () => {
+      throw new Error("not exercised");
+    },
+    mintVoice: async () => ({ fake_session: true, run_id: "run-gone" }),
+    // Vendor CONFIRMS terminal (adapter contract: resolves true).
+    stopVoice: async () => {
+      stops += 1;
+      return true;
+    },
+    counters: failingSettle,
+    voiceTurns: () => [],
+    voiceState: () => ({ configured: true, ready: true }),
+  });
+  const srv4b = createServer((req, res) => api(req, res));
+  await new Promise((r) => srv4b.listen(0, "127.0.0.1", r));
+  try {
+    const r = await fetch(
+      `http://127.0.0.1:${srv4b.address().port}/api/public/voice/session`,
+      { method: "POST" },
+    );
+    assert.equal(r.status, 503);
+    const body = await r.text();
+    assert.ok(/confirmed ended/.test(body), body);
+    assert.equal(stops, 1);
+    // Confirmed terminal: no cutoff retry later.
+    await new Promise((r2) => setTimeout(r2, 120));
+    assert.equal(stops, 1);
+    const p = await realCounters.peek();
+    assert.equal(p.lifetime, 1); // still charged - never refunded
+  } finally {
+    await new Promise((r) => srv4b.close(() => r()));
+    restore();
+  }
+});
+
+test("gap: two concurrent session requests cannot both mint (async counter race)", async () => {
+  const restore = saveEnv();
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const counterFile = path.join(dir, "c.json");
+  process.env.BOLNA_API_KEY = "test-dummy";
+  process.env.BOLNA_AGENT_ID = "test-dummy";
+  process.env.VM_PUBLIC_VOICE = "on";
+  process.env.VM_PUBLIC_COUNTER_FILE = counterFile;
+  process.env.VM_PUBLIC_CALL_GAP_MS = "45000";
+  let admits = 0;
+  let mints = 0;
+  const gatedCounters = {
+    admitVisitor: async () => {
+      admits += 1;
+      // Slow ASYNC admission: without the synchronous gap claim the second
+      // request would pass the gap check while this one is in flight.
+      await new Promise((r) => setTimeout(r, 60));
+      return { ok: true, reservation: "r" + admits };
+    },
+    settleReservation: async () => {},
+    refundReservation: async () => {},
+  };
+  const { createPublicApi } = await import("../src/public-api.mjs");
+  const api = createPublicApi({
+    cases: {},
+    resolve: async () => {
+      throw new Error("not exercised");
+    },
+    mintVoice: async () => {
+      mints += 1;
+      return { fake_session: true, run_id: "x" };
+    },
+    stopVoice: async () => true,
+    counters: gatedCounters,
+    voiceTurns: () => [],
+    voiceState: () => ({ configured: true, ready: true }),
+  });
+  const srv6 = createServer((req, res) => api(req, res));
+  await new Promise((r) => srv6.listen(0, "127.0.0.1", r));
+  try {
+    const statuses = await Promise.all(
+      [1, 2].map(async () => {
+        const r = await fetch(
+          `http://127.0.0.1:${srv6.address().port}/api/public/voice/session`,
+          { method: "POST" },
+        );
+        await r.text();
+        return r.status;
+      }),
+    );
+    // The gap slot is claimed synchronously before any await: exactly one
+    // request mints, the other gets the 429 gap response.
+    assert.deepEqual(statuses.sort(), [200, 429]);
+    assert.equal(mints, 1);
+    assert.equal(admits, 1); // the second request never reached admission
+  } finally {
+    await new Promise((r) => srv6.close(() => r()));
+    restore();
+  }
+});
+
+test("bolna mint classification: 429/4xx definitive pre-session, 5xx ambiguous", async () => {
+  const { classifyBolnaMintFailure } = await import("../src/server.mjs");
+  assert.equal(classifyBolnaMintFailure(429), "preSession");
+  assert.equal(classifyBolnaMintFailure(400), "preSession");
+  assert.equal(classifyBolnaMintFailure(401), "preSession");
+  assert.equal(classifyBolnaMintFailure(422), "preSession");
+  // 5xx: the vendor may have created the session - stays charged.
+  assert.equal(classifyBolnaMintFailure(500), "ambiguous");
+  assert.equal(classifyBolnaMintFailure(502), "ambiguous");
+  assert.equal(classifyBolnaMintFailure(503), "ambiguous");
+});
+
+test("lifecycle: ambiguous vendor timeout stays charged (no auto-refund)", async () => {
+  const restore = saveEnv();
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const counterFile = path.join(dir, "c.json");
+  const realCounters = createCallCounters({ file: counterFile });
+  const { createPublicApi } = await import("../src/public-api.mjs");
+  process.env.BOLNA_API_KEY = "test-dummy";
+  process.env.BOLNA_AGENT_ID = "test-dummy";
+  process.env.VM_PUBLIC_VOICE = "on";
+  process.env.VM_PUBLIC_COUNTER_FILE = counterFile;
+  process.env.VM_PUBLIC_CALL_GAP_MS = "1";
+  const api = createPublicApi({
+    cases: {},
+    resolve: async () => {
+      throw new Error("not exercised");
+    },
+    mintVoice: async () => {
+      const e = new Error("The operation timed out"); // NO preSession mark
+      e.status = 504;
+      throw e;
+    },
+    counters: realCounters,
+    voiceTurns: () => [],
+    voiceState: () => ({ configured: true, ready: true }),
+  });
+  const srv5 = createServer((req, res) => api(req, res));
+  await new Promise((r) => srv5.listen(0, "127.0.0.1", r));
+  try {
+    const r = await fetch(
+      `http://127.0.0.1:${srv5.address().port}/api/public/voice/session`,
+      { method: "POST" },
+    );
+    assert.equal(r.status, 504);
+    // Ambiguous outcome: allowance stays consumed until reconciled.
+    const p = await realCounters.peek();
+    assert.equal(p.lifetime, 1);
+  } finally {
+    await new Promise((r) => srv5.close(() => r()));
+    restore();
+  }
+});
+
+test("file backend: parseable but invalid counter shape fails closed", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
+  const file = path.join(dir, "c.json");
+  const { writeFileSync } = await import("node:fs");
+  writeFileSync(file, JSON.stringify({ days: {}, lifetime: "not-a-number" }));
+  const c = createCallCounters({ file });
+  await assert.rejects(
+    () =>
+      c.admitVisitor("1.1.1.1", { perIpDay: 1, globalDay: 1, lifetimeMax: 1 }),
+    (e) => e.status === 503 && /invalid shape/.test(e.message),
+  );
 });

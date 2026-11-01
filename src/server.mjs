@@ -1,4 +1,7 @@
 import http from "node:http";
+import path from "node:path";
+import { createCallCounters } from "./public-call-counters.mjs";
+import { selectCallCounters } from "./public-call-counters-upstash.mjs";
 import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { paraphraseLookup, warmUnits } from "./paraphrase.mjs";
@@ -195,6 +198,68 @@ const lapseText = (ms) => {
     ? `about ${m / 60} hours`
     : `about ${m} minutes`;
 };
+// Source-grounded mint-failure classification: Bolna creates a web-call
+// session only on a 2xx from its mint routes. A 429 or other 4xx is a
+// definitive refusal BEFORE creation (pre-session: refundable). A 5xx or a
+// network/timeout failure is AMBIGUOUS - the session may exist - so it must
+// stay charged until reconciled; never auto-refunded.
+// Read-only vendor execution reader for reconciliation. GETs ONLY - never
+// mints, never stops, never writes. Maps the documented Bolna read
+// contract (GET /executions/{id}; GET /v2/agent/{agent_id}/executions)
+// onto the reconcile module's result kinds. Injected in tests; the real
+// thing is only wired when reconciliation actually runs post-activation.
+export function createBolnaExecutionReader({ vendorFetchImpl, apiKey }) {
+  return async (op, args) => {
+    try {
+      if (op === "get") {
+        const r = await vendorFetchImpl(
+          `https://api.bolna.ai/executions/${encodeURIComponent(args.executionId)}`,
+          {
+            headers: { authorization: "Bearer " + apiKey },
+            signal: AbortSignal.timeout(10000),
+          },
+        );
+        if (r.status === 404) return { kind: "not-found" };
+        if (!r.ok) return { kind: "error", status: r.status };
+        const body = await r.json();
+        if (body && body.id) return { kind: "found", execution: body };
+        // A 200 with no execution (e.g. {message}) is UNKNOWN, not
+        // "not found" - labels stay truthful; reconcile treats both
+        // conservatively (stays charged) regardless.
+        return { kind: "unknown" };
+      }
+      if (op === "list") {
+        const q = new URLSearchParams({
+          page_size: "50",
+          page_number: "1",
+          provider: "web-call",
+          from: args.from,
+          to: args.to,
+        });
+        const r = await vendorFetchImpl(
+          `https://api.bolna.ai/v2/agent/${encodeURIComponent(args.agentId)}/executions?${q}`,
+          {
+            headers: { authorization: "Bearer " + apiKey },
+            signal: AbortSignal.timeout(10000),
+          },
+        );
+        if (!r.ok) return { kind: "error", status: r.status };
+        const body = await r.json();
+        return { kind: "ok", executions: body?.data ?? [] };
+      }
+      return { kind: "error" };
+    } catch {
+      return { kind: "error" };
+    }
+  };
+}
+
+export function classifyBolnaMintFailure(status) {
+  return status === 429 || (status >= 400 && status < 500)
+    ? "preSession"
+    : "ambiguous";
+}
+
 export function createLocalServer({
   voice = createVoiceAdapter({
     ttlMs: voiceTtlMs(),
@@ -210,6 +275,8 @@ export function createLocalServer({
   watchdog = createRssWatchdog({
     disabled: process.env.VM_RSS_WATCHDOG !== "on",
   }),
+  // Vendor transport, injectable so tests never reach the real Bolna API.
+  vendorFetch = fetch,
 } = {}) {
   // Deployment configuration (all optional; unset = local-only behavior):
   // VM_PUBLIC_HOST / VM_PUBLIC_ORIGIN: the one public hostname/origin the UI
@@ -697,6 +764,74 @@ export function createLocalServer({
       });
     return casesReady;
   };
+  // Shared call counters (visitor + owner): rate smoothing for issuance.
+  // NOT a money ceiling - the JSON file can reset on redeploy; see
+  // public-call-counters.mjs for exactly what is and is not guaranteed.
+  // Durable-by-default: without a configured durable store the selector
+  // throws and voice mints fail closed (503) - production safety must not
+  // depend on remembering an opt-in env var. The non-durable file backend
+  // requires the explicit VM_COUNTERS_ALLOW_FILE=on opt-in (local dev/test
+  // only; single writer; NOT multi-instance safe; NOT a money ceiling).
+  let callCounters;
+  try {
+    callCounters =
+      selectCallCounters() ??
+      createCallCounters({
+        file:
+          process.env.VM_PUBLIC_COUNTER_FILE ||
+          path.join(
+            process.env.VM_DATA_DIR || process.cwd(),
+            "public-call-counters.json",
+          ),
+      });
+  } catch (e) {
+    console.warn("public voice counters fail closed:", e.message);
+    callCounters = null;
+  }
+  // Boot-time reachability proof for the durable store. Note the store
+  // fails closed on every admission anyway (any store error -> 503, no
+  // mint); this surfaces the misconfiguration at boot instead of at the
+  // first call.
+  if (typeof callCounters?.verify === "function")
+    Promise.resolve()
+      .then(() => callCounters.verify())
+      .catch((e) =>
+        console.warn(
+          "durable call-counter store UNREACHABLE at boot; admissions fail closed:",
+          e.message,
+        ),
+      );
+  // Best-effort vendor stop behind the server ticket cutoff and the landing
+  // client's own hangup. Bolna documents POST /call/{execution_id}/stop for
+  // queued/scheduled calls; whether it ends an in-progress web call is
+  // unverified, so this never stands in for the ticket cutoff.
+  // Best-effort stop ATTEMPT. Never returns confirmation: no /stop status
+  // code proves an in-progress web call ended - Bolna documents the route
+  // for queued/scheduled calls only, and a 404 can mean an unsupported
+  // route or an id shape the vendor does not recognize, not a dead call.
+  // Until the vendor owns documented terminal-state semantics (or a status
+  // read we have verified), callers treat every outcome as UNKNOWN and keep
+  // their own cleanup (ticket cutoff + landing hangup) to the end.
+  async function stopBolna(session) {
+    if (!bolnaKey || !session || typeof session !== "object") return false;
+    const id =
+      session.execution_id ?? session.call_id ?? session.run_id ?? null;
+    if (!id) return false;
+    try {
+      const r = await vendorFetch(
+        `https://api.bolna.ai/call/${encodeURIComponent(id)}/stop`,
+        {
+          method: "POST",
+          headers: { authorization: "Bearer " + bolnaKey },
+          signal: AbortSignal.timeout(5000),
+        },
+      );
+      if (!r.ok) console.warn("bolna stop returned", r.status);
+    } catch (e) {
+      console.warn("bolna stop failed:", e.message);
+    }
+    return false; // attempt only - terminal state never claimed
+  }
   // Bolna web-call session mint. SDK v3.0.1 expects the FreeSWITCH session
   // shape ({run_id, wss_url, sip_username, ...}); the older /web-call/session
   // route is only a fallback for accounts that do not have it.
@@ -708,7 +843,7 @@ export function createLocalServer({
     }
     let last = null;
     for (const route of ["/web-call/freeswitch-session", "/web-call/session"]) {
-      const r = await fetch("https://api.bolna.ai" + route, {
+      const r = await vendorFetch("https://api.bolna.ai" + route, {
         method: "POST",
         headers: {
           authorization: "Bearer " + bolnaKey,
@@ -727,12 +862,26 @@ export function createLocalServer({
         continue;
       }
       if (r.status === 429) {
+        // Definitive pre-session failure: the vendor created nothing.
         const e = Error("All voice lines are busy. Try again shortly.");
         e.status = 429;
+        e.preSession = true;
+        throw e;
+      }
+      if (classifyBolnaMintFailure(r.status) === "preSession") {
+        // Definitive pre-session failure: the vendor rejected the mint
+        // before creating anything (4xx). Safe to hand the allowance back.
+        console.warn("bolna mint rejected:", route, r.status);
+        const e = Error("Bolna session request failed.");
+        e.status = 502;
+        e.preSession = true;
         throw e;
       }
       if (!r.ok) {
-        console.warn("bolna mint failed:", route, r.status);
+        // 5xx: AMBIGUOUS - the vendor may have created the session and then
+        // failed the response. NOT marked preSession: the reservation stays
+        // charged until reconciled against the vendor's call list.
+        console.warn("bolna mint outcome ambiguous:", route, r.status);
         const e = Error("Bolna session request failed.");
         e.status = 502;
         throw e;
@@ -742,6 +891,8 @@ export function createLocalServer({
     console.warn("bolna mint: no session route", last);
     const e = Error("Bolna session request failed.");
     e.status = 502;
+    // Both documented routes answered 404/405: no session was created.
+    e.preSession = true;
     throw e;
   }
   // Visitor workspaces: anyone can upload their own documents from the
@@ -867,6 +1018,8 @@ export function createLocalServer({
       return { ...JSON.parse(json).shown, question };
     },
     mintVoice: mintBolna,
+    stopVoice: stopBolna,
+    counters: callCounters,
     voiceTurns: (since) =>
       publicTurns
         .filter((t) => t.at >= since)
@@ -1432,7 +1585,84 @@ export function createLocalServer({
           e.status = 400;
           throw e;
         }
-        out = await mintBolna(data?.user_data);
+        // Owner calls are unlimited in COUNT and are not capped by the
+        // visitor abuse budget; they are still COUNTED (shared lifetime
+        // count, the observability point an eventual authorized spend
+        // brake binds) and follow the same reservation lifecycle: refund
+        // only on definitive pre-session failure, stay charged on
+        // ambiguous outcomes, settle on success. Owner-call duration
+        // enforcement relies on the vendor-side hard duration cap, which
+        // is an activation gate, not yet verified.
+        if (!callCounters) {
+          const e = Error(
+            "Voice calls are unavailable: no durable call-counter store is configured.",
+          );
+          e.status = 503;
+          throw e;
+        }
+        const adm = await callCounters.admitOwner();
+        if (!adm.ok) {
+          const e = Error(
+            "Voice calls are temporarily unavailable (outcome journal full).",
+          );
+          e.status = 503;
+          throw e;
+        }
+        try {
+          out = await mintBolna({
+            ...(data?.user_data && typeof data.user_data === "object"
+              ? data.user_data
+              : {}),
+            vm_res: adm.reservation, // reconcile correlation tag
+          });
+        } catch (e) {
+          if (e.preSession) {
+            await callCounters.refundReservation(adm.reservation);
+          } else {
+            console.warn(
+              "owner mint outcome ambiguous; reservation retained for reconcile:",
+              e.message,
+            );
+            await callCounters.recordAmbiguous?.({
+              reservation: adm.reservation,
+              sessionId: null,
+              errorClass: e.status ? `http-${e.status}` : "network",
+            });
+          }
+          throw e;
+        }
+        try {
+          await callCounters.settleReservation(adm.reservation);
+        } catch (e) {
+          // Accounting failed with a possibly-live owner call: the
+          // reservation stays charged, stop is attempted, and the outcome
+          // is logged for reconcile. No ended claim on an attempt.
+          await callCounters
+            .recordAmbiguous?.({
+              reservation: adm.reservation,
+              sessionId:
+                out?.execution_id ?? out?.call_id ?? out?.run_id ?? null,
+              errorClass: "settle-failed",
+              settleFailed: true,
+            })
+            .catch((re) =>
+              console.warn("owner ambiguous-record write failed:", re.message),
+            );
+          const stopped = await stopBolna(out);
+          console.warn(
+            stopped
+              ? "owner reservation settle failed; vendor confirms the call is gone; retained:"
+              : "owner reservation settle failed; stop attempted but NOT confirmed terminal; retained for reconcile:",
+            e.message,
+          );
+          const err = Error(
+            stopped
+              ? "Call accounting failed. The call is confirmed ended."
+              : "Call accounting failed. The call may still be live; it was NOT confirmed ended.",
+          );
+          err.status = 503;
+          throw err;
+        }
       } else if (req.url === "/api/voice/start") {
         if (!s.bundle && !demoBundle) throw Error("Add documents first.");
         if (fixedCap && demoBundle) {

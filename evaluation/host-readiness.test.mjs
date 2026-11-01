@@ -9,6 +9,9 @@ const OWNER = "owner-secret-for-tests-only";
 
 async function start(env = {}) {
   const saved = {};
+  // Test-local opt into the non-durable file counter backend (the selector
+  // fails closed without durable config by default).
+  env = { VM_COUNTERS_ALLOW_FILE: "on", ...env };
   for (const [k, v] of Object.entries(env)) {
     saved[k] = process.env[k];
     process.env[k] = v;
