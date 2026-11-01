@@ -3,7 +3,8 @@
 //   - llms.txt points at endpoints that exist;
 //   - every local asset the page references exists, and nothing loads from a
 //     third-party host (the CSP is 'self' only);
-//   - the hero's tether code only reads answers that the snapshot holds.
+//   - first load stays inside its weight budget, and the motion bundle is
+//     rebuilt from the committed sources.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync, statSync } from "node:fs";

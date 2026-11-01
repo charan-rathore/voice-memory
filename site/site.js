@@ -427,8 +427,14 @@
     renderThread();
   }
 
+  // The motion module listens for these (sound, print and stamp effects).
+  const emit = (name, detail) =>
+    document.dispatchEvent(new CustomEvent(name, { detail }));
   function renderAnswer(r, { via, source, question, caseId }) {
     state.current = r;
+    queueMicrotask(() =>
+      emit("vm:answer", { verdict: r.lead?.verdict ?? null, via, source }),
+    );
     const lead = r.lead;
     const [cls, label] = lead
       ? verdictOf(lead.verdict)
@@ -605,6 +611,7 @@
       }</span>${primary ? esc(prettyQuote(primary.quote)) : "Original page, rendered from the PDF"}</p>`;
   }
   async function openDoc(title, cites = [], primary = null) {
+    emit("vm:source", { title, cited: cites.length > 0 });
     $$("#doc-rail button").forEach((b) =>
       b.classList.toggle("on", b.dataset.doc === title),
     );
@@ -820,6 +827,7 @@
     });
     call.on("media-permission", () => callState("Microphone on · connecting…"));
     call.on("call-start", () => {
+      emit("vm:call", "start");
       callbar.classList.remove("busy");
       callbar.classList.add("live");
       $("#call-label").textContent = "Hang up";
@@ -858,6 +866,7 @@
   }
 
   function endUi(reason) {
+    emit("vm:call", "end");
     document.dispatchEvent(new CustomEvent("vm:level", { detail: -1 }));
     callbar.classList.remove("live", "busy");
     $("#call-label").textContent = "Call Voice Memory";

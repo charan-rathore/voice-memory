@@ -150,3 +150,29 @@ test("travel along a multi-segment path is continuous and ends at the end", asyn
     last = p;
   }
 });
+
+test("value noise is smooth, bounded and deterministic", async () => {
+  const { noise2 } = await import("./site/motion-math.mjs");
+  let prev = noise2(0, 0.3, 4);
+  for (let i = 1; i <= 400; i++) {
+    const v = noise2(i / 100, 0.3, 4);
+    assert.ok(v >= -1 && v <= 1);
+    assert.ok(Math.abs(v - prev) < 0.06, "continuous");
+    prev = v;
+  }
+  assert.equal(noise2(3.7, 1.2, 9), noise2(3.7, 1.2, 9));
+});
+
+test("phyllotaxis fills the unit disc evenly", async () => {
+  const { phyllotaxis } = await import("./site/motion-math.mjs");
+  const n = 1000;
+  let inner = 0;
+  for (let i = 0; i < n; i++) {
+    const [x, y] = phyllotaxis(i, n);
+    const r = Math.hypot(x, y);
+    assert.ok(r <= 1);
+    if (r < Math.SQRT1_2) inner++;
+  }
+  // half the area inside r = 1/sqrt(2) holds half the points
+  assert.ok(Math.abs(inner - n / 2) <= 2, String(inner));
+});
