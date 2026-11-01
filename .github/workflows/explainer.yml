@@ -9,6 +9,7 @@ on:
       - ".github/workflows/explainer.yml"
 permissions:
   contents: write
+  pull-requests: write
 jobs:
   render:
     runs-on: ubuntu-latest
@@ -39,8 +40,21 @@ jobs:
           fc-cache -f
       - run: pip install -q "manim==0.19.*"
       - name: Render
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          manim -qm --disable_caching docs/explainer/units.py Units
+          set +e
+          manim -qm --disable_caching docs/explainer/units.py Units > render.log 2>&1
+          code=$?
+          set -e
+          if [ $code -ne 0 ]; then
+            if [ -n "${{ github.event.pull_request.number }}" ]; then
+              { echo "### Manim render failed"; echo '```'; tail -60 render.log; echo '```'; } > fail.md
+              gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -F body=@fail.md >/dev/null
+            fi
+            tail -60 render.log
+            exit 1
+          fi
           mkdir -p docs/media
           cp media/videos/units/720p30/Units.mp4 docs/media/units.mp4
           ffmpeg -y -loglevel error -i docs/media/units.mp4 -vf "fps=15,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=48[p];[b][p]paletteuse" docs/media/units.gif
