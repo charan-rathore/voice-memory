@@ -809,12 +809,19 @@ test("privacy: a name-shaped TERM never reaches grounded search, consent or not"
 // semantics on the built-in synthetic cases only. The decision is
 // server-side; a visitor's opt-in cannot widen it.
 test("privacy: demo trial scope gates paid semantics off for visitor uploads, consent flag or not", async () => {
-  assert.equal(semanticConsentFor("case:voice", false, {}), true, "demo cases may use the model");
-  assert.equal(semanticConsentFor("case:voice", true, { VM_SEMANTIC_AUDIENCE: "demo" }), true, "demo cases unaffected by trial scope");
+  // Outside trial scope: pre-existing rule preserved exactly.
+  assert.equal(semanticConsentFor("case:voice", false, {}), true, "internal fictional cases keep old behavior");
   assert.equal(semanticConsentFor("ws:visitor1", false, {}), false, "no consent, no model");
   assert.equal(semanticConsentFor("ws:visitor1", true, {}), true, "outside trial scope, opt-in allows");
+  // Under demo scope: exact two-case allowlist; everything else fails closed.
+  const demoEnv = { VM_SEMANTIC_AUDIENCE: "demo" };
+  assert.equal(semanticConsentFor("case:deal", false, demoEnv), true, "demo case: deal");
+  assert.equal(semanticConsentFor("case:health", false, demoEnv), true, "demo case: health");
+  assert.equal(semanticConsentFor("case:voice", false, demoEnv), false, "voice session is NOT in the trial allowlist");
+  assert.equal(semanticConsentFor("case:unknown", false, demoEnv), false, "unknown case sid fails closed");
+  assert.equal(semanticConsentFor("", false, demoEnv), false, "empty sid fails closed");
   assert.equal(
-    semanticConsentFor("ws:visitor1", true, { VM_SEMANTIC_AUDIENCE: "demo" }),
+    semanticConsentFor("ws:visitor1", true, demoEnv),
     false,
     "trial scope: a client opt-in cannot widen the server gate",
   );
