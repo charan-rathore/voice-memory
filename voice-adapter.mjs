@@ -30,6 +30,7 @@ import {
   isFragment,
   FRAGMENT_REPLY,
 } from "./spoken-repair.mjs";
+import { paraphraseLookup } from "./paraphrase.mjs";
 import {
   callLanguage,
   isHindi,
@@ -656,6 +657,28 @@ export function createVoiceAdapter({
       // A broad question about the deal ("what exactly changed in the
       // Northstar deal?"): the fee change and what is still open, from the
       // same renderers, rather than an abstention.
+      // Reworded beyond keyword reach: one verbatim sentence, only when the
+      // calibrated paraphrase gate is unambiguous (paraphrase.mjs).
+      if (!social && refusal(spoken) && !isFragment(transcript)) {
+        let p = null;
+        try {
+          p = await paraphraseLookup(asked, bundle);
+        } catch {
+          p = null;
+        }
+        if (p) {
+          spoken = p.spoken;
+          turn = {
+            ...turn,
+            spokenTurn: {
+              intent: "LOOKUP",
+              verdict: "QUOTED",
+              spoken,
+              citations: [p.citation],
+            },
+          };
+        }
+      }
       // Only for a broad question that names this deal: an abstention about
       // anything else (another company, an unknown amount) must stand.
       const broadDeal =

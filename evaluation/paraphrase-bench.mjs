@@ -235,12 +235,12 @@ for (const mode of ["instructed", "plain"]) {
 const shipped = {
   gate: GATE,
   development: {
-    ...rescue(dev, "instructed", GATE),
-    recall1WithRescue: combined(dev, "instructed", GATE),
+    ...rescue(dev, "plain", GATE),
+    recall1WithRescue: combined(dev, "plain", GATE),
   },
   heldout: {
-    ...rescue(held, "instructed", GATE),
-    recall1WithRescue: combined(held, "instructed", GATE),
+    ...rescue(held, "plain", GATE),
+    recall1WithRescue: combined(held, "plain", GATE),
   },
 };
 const unitRecall = (set, mode, key) => {

@@ -1,6 +1,7 @@
 import http from "node:http";
 import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
+import { paraphraseLookup } from "./paraphrase.mjs";
 import {
   repairDealTerms,
   stripPreamble,
@@ -523,6 +524,18 @@ export function createLocalServer({
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
       shown.lead = leadFor(question, raw, bundle, ctx || null);
+      // Reworded beyond keyword reach: one verbatim sentence with its
+      // citation, only when the calibrated paraphrase gate is unambiguous.
+      if (!shown.lead || shown.lead.verdict === "UNKNOWN") {
+        const p = await paraphraseLookup(question, bundle).catch(() => null);
+        if (p)
+          shown.lead = {
+            text: p.spoken,
+            verdict: "QUOTED",
+            field: null,
+            citations: [p.citation],
+          };
+      }
       if (gloss && shown.lead?.text) shown.lead.text = toHindi(shown.lead.text);
       if (shown.lead)
         shown.lead.citations = decorateResult(

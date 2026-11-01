@@ -13,9 +13,10 @@
 //  - Hybrid ranking with reciprocal-rank fusion (Cormack, Clarke & Büttcher,
 //    SIGIR 2009; k = 60), weighted 0.8 semantic / 0.2 lexical as in
 //    Anthropic's contextual-embeddings cookbook.
-//  - Query instruction for BGE models ("Represent this sentence for
-//    searching relevant passages: "), from the bge-small-en-v1.5 model card;
-//    passages are embedded without it.
+//  - The BGE query instruction ("Represent this sentence for searching
+//    relevant passages: ", bge-small-en-v1.5 model card) was measured both
+//    ways: with it the gate served a wrong passage on held-out, without it
+//    none, so queries are embedded plain (QUERY_PREFIX).
 //  - A calibrated gate: serve only when the top unit's cosine clears an
 //    absolute floor AND beats the best unit of any other document by a
 //    margin. Both thresholds are tuned on the development split of
@@ -132,7 +133,7 @@ const ranks = (scores) => {
 
 /**
  * Ranked units for a question with every signal exposed (for the bench and
- * for the gate). `queryVector` must be embedded with QUERY_INSTRUCTION.
+ * for the gate). `queryVector` must be embedded with QUERY_PREFIX.
  */
 export function rankUnits(question, bundle, queryVector) {
   const idx = unitsOf(bundle);
@@ -180,7 +181,7 @@ export async function paraphraseLookup(
     warmUnits(bundle);
     return null;
   }
-  const [qv] = (await embedTextsReady([QUERY_INSTRUCTION + question])) ?? [];
+  const [qv] = (await embedTextsReady([QUERY_PREFIX + question])) ?? [];
   if (!qv) return null;
   const hit = gate(rankUnits(question, bundle, qv), thresholds);
   if (!hit) return null;
