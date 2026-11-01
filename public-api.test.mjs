@@ -360,3 +360,181 @@ test("visitors upload their own documents and ask them anything", async () => {
     400,
   );
 });
+test("bring-your-own answers complete wrapped sentences and keep one supporting passage", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ws = await (
+    await fetch(base + "/api/public/workspace", { method: "POST" })
+  ).json();
+  // PDF text layers often carry one visual line per blank-line block; this
+  // markdown fixture has the same shape, so the excerpt builder faces the
+  // same wrapped sentence and the same clipped duplicate line.
+  const wrapped = [
+    "# Harbor & Fig Catering Services Agreement",
+    "",
+    "2. Menu deadline. Final menu selections and headcount must be confirmed in",
+    "",
+    "writing no later than 27 March 2027. Changes after that date incur a",
+    "",
+    "replanning fee of Rs 18,000.",
+    "",
+    "5. Allergens. The Caterer will label all dishes containing nuts, dairy and",
+    "",
+    "gluten, and will provide a nut-free preparation line on request.",
+  ].join("\n");
+  const r = await fetch(`${base}/api/public/workspace/${ws.id}/upload`, {
+    method: "POST",
+    headers: {
+      "x-file-name": "harbor-fig-catering.md",
+      "content-type": "application/octet-stream",
+    },
+    body: wrapped,
+  });
+  assert.equal(r.status, 202);
+  let st;
+  for (let i = 0; i < 200; i++) {
+    st = await (await fetch(`${base}/api/public/workspace/${ws.id}`)).json();
+    if (st.documents?.length && st.documents.every((d) => d.status === "ready"))
+      break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.ok(st.ready);
+  const a = await ask(
+    ws.id,
+    "What is the menu deadline and what fee applies if it changes after that?",
+  );
+  assert.equal(a.status, 200);
+  // The excerpt must complete the wrapped sentence: the deadline AND the fee,
+  // not a cut-off "...incur a".
+  assert.match(a.body.answer, /27 March 2027/);
+  assert.match(a.body.answer, /Rs 18,000/);
+  assert.doesNotMatch(a.body.answer, /incur a\n\[Source/);
+  // The clipped duplicate line must not appear beside the completed passage.
+  const occurrences = a.body.answer.split("27 March 2027").length - 1;
+  assert.ok(occurrences <= 2, `deadline repeated ${occurrences} times`);
+  // Continuation must not swallow the following unrelated block.
+  assert.doesNotMatch(a.body.answer.split("[Source 1]")[0], /Allergens/);
+});
+
+test("visitor daily turn budget: one reserved call per address per day; failed mint releases it", async () => {
+  const saved = {
+    BOLNA_API_KEY: process.env.BOLNA_API_KEY,
+    BOLNA_AGENT_ID: process.env.BOLNA_AGENT_ID,
+    VM_PUBLIC_VOICE: process.env.VM_PUBLIC_VOICE,
+    VM_PUBLIC_CALL_GAP_MS: process.env.VM_PUBLIC_CALL_GAP_MS,
+  };
+  const restore = () => {
+    for (const [k, v] of Object.entries(saved))
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+  };
+  const { createPublicApi } = await import("./public-api.mjs");
+  const { createServer } = await import("node:http");
+  try {
+    process.env.BOLNA_API_KEY = "test-dummy";
+    process.env.BOLNA_AGENT_ID = "test-dummy";
+    process.env.VM_PUBLIC_VOICE = "on";
+    process.env.VM_PUBLIC_CALL_GAP_MS = "1";
+    let fail = true;
+    const api = createPublicApi({
+      cases: {},
+      resolve: async () => {
+        throw new Error("not exercised");
+      },
+      mintVoice: async () => {
+        if (fail) {
+          fail = false;
+          throw new Error("vendor down");
+        }
+        return { fake_session: true };
+      },
+      voiceTurns: () => [],
+      voiceState: () => ({ configured: true, ready: true }),
+    });
+    const srv = createServer((req, res) => api(req, res));
+    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+    const b = `http://127.0.0.1:${srv.address().port}`;
+    const mint = (addr) =>
+      fetch(b + "/api/public/voice/session", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-for": addr,
+        },
+        body: "{}",
+      });
+    const ip = "203.0.113.7";
+    // A failed vendor mint must not burn the visitor's daily budget.
+    assert.notEqual((await mint(ip)).status, 200);
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal((await mint(ip)).status, 200);
+    // The day's turn budget is now reserved: a second call is denied.
+    await new Promise((r) => setTimeout(r, 5));
+    const again = await mint(ip);
+    assert.equal(again.status, 429);
+    const body = await again.json();
+    assert.match(body.error, /today's demo turns/);
+    assert.equal(body.scope, "customer");
+    // Another visitor is unaffected.
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal((await mint("203.0.113.8")).status, 200);
+    await new Promise((r) => srv.close(r));
+  } finally {
+    restore();
+  }
+});
+test("global daily call ceiling caps the shared wallet", async () => {
+  const saved = {
+    BOLNA_API_KEY: process.env.BOLNA_API_KEY,
+    BOLNA_AGENT_ID: process.env.BOLNA_AGENT_ID,
+    VM_PUBLIC_VOICE: process.env.VM_PUBLIC_VOICE,
+    VM_PUBLIC_CALL_GAP_MS: process.env.VM_PUBLIC_CALL_GAP_MS,
+    VM_PUBLIC_CALLS_PER_DAY: process.env.VM_PUBLIC_CALLS_PER_DAY,
+  };
+  const restore = () => {
+    for (const [k, v] of Object.entries(saved))
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+  };
+  const { createPublicApi } = await import("./public-api.mjs");
+  const { createServer } = await import("node:http");
+  try {
+    process.env.BOLNA_API_KEY = "test-dummy";
+    process.env.BOLNA_AGENT_ID = "test-dummy";
+    process.env.VM_PUBLIC_VOICE = "on";
+    process.env.VM_PUBLIC_CALL_GAP_MS = "1";
+    process.env.VM_PUBLIC_CALLS_PER_DAY = "2";
+    const api = createPublicApi({
+      cases: {},
+      resolve: async () => {
+        throw new Error("not exercised");
+      },
+      mintVoice: async () => ({ fake_session: true }),
+      voiceTurns: () => [],
+      voiceState: () => ({ configured: true, ready: true }),
+    });
+    const srv = createServer((req, res) => api(req, res));
+    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+    const b = `http://127.0.0.1:${srv.address().port}`;
+    const mint = (addr) =>
+      fetch(b + "/api/public/voice/session", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-for": addr,
+        },
+        body: "{}",
+      });
+    assert.equal((await mint("203.0.113.10")).status, 200);
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal((await mint("203.0.113.11")).status, 200);
+    await new Promise((r) => setTimeout(r, 5));
+    const capped = await mint("203.0.113.12");
+    assert.equal(capped.status, 429);
+    const body = await capped.json();
+    assert.match(body.error, /used up/);
+    assert.equal(body.scope, "global");
+    await new Promise((r) => srv.close(r));
+  } finally {
+    restore();
+  }
+});
