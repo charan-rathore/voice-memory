@@ -55,7 +55,10 @@
 
   async function connect() {
     note("Connecting to the live engine…");
-    for (let i = 0; i < 40; i++) {
+    // Never give up: a cold free-tier boot plus first-ingest can take several
+    // minutes, so after the fast phase keep polling slowly in the background.
+    // A page that stops retrying strands every visitor who arrived early.
+    for (let i = 0; ; i++) {
       try {
         const s = await api("/status", {}, 8000);
         if (s.cases.health && s.cases.deal) {
@@ -70,10 +73,13 @@
       } catch {
         /* free host cold start */
       }
-      note("Waking the live engine (free hosting can take up to a minute). Suggested questions answer from a saved run of the same engine meanwhile.");
-      await new Promise((r) => setTimeout(r, 3000));
+      note(
+        i < 40
+          ? "Waking the live engine (free hosting can take up to a minute). Suggested questions answer from a saved run of the same engine meanwhile."
+          : "Still waking the live engine — retrying in the background. Uploads and questions work the moment it is up."
+      );
+      await new Promise((r) => setTimeout(r, i < 40 ? 3000 : 15000));
     }
-    note("The live engine isn't reachable right now. Suggested questions still answer from a saved run of the same engine.");
   }
 
   // ------------------------------------------------------------ verdicts
@@ -135,16 +141,22 @@
   async function uploadFiles(list) {
     const files = [...list].slice(0, 5);
     if (!files.length) return;
-    if (!state.live) {
-      $("#upl-list").innerHTML = `<li><b>The live engine is still waking up. Try again in a few seconds.</b></li>`;
-      return;
-    }
-    let id;
-    try {
-      id = await ensureWorkspace();
-    } catch (e) {
-      $("#upl-list").innerHTML = `<li><b>${esc(e.message)}</b></li>`;
-      return;
+    // Uploads must not wait for the demo cases to finish loading: visitor
+    // workspaces are independent of them, so on a cold boot we retry the
+    // workspace create instead of turning the visitor away. (This gate was
+    // the reported "isn't taking a doc upload" failure.)
+    let id = null;
+    for (let attempt = 0; attempt < 6 && !id; attempt++) {
+      try {
+        id = await ensureWorkspace();
+      } catch (e) {
+        if (attempt === 5) {
+          $("#upl-list").innerHTML = `<li><b>The live engine is still waking up and the upload did not go through. Try again in a few seconds.</b></li>`;
+          return;
+        }
+        $("#upl-list").innerHTML = `<li><b>The live engine is still waking up. Retrying your upload…</b></li>`;
+        await new Promise((r) => setTimeout(r, 4000));
+      }
     }
     for (const f of files) {
       try {
