@@ -83,3 +83,8 @@ test("without the model resident it abstains instead of waiting", async () => {
   ]);
   assert.equal(await paraphraseLookup("how much does it cost", fresh), null);
 });
+
+test("the lookup's query prefix exists (a missing constant silently disabled every rescue)", async () => {
+  const P = await import("../src/paraphrase.mjs");
+  assert.equal(typeof P.QUERY_PREFIX, "string");
+});

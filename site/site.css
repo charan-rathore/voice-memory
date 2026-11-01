@@ -743,3 +743,101 @@ html:not(.voice-on) .callbar {
    keeps voice off; hidden automatically once voice.ready returns. */
 .voice-off { display: none; margin: 14px 0 0; font-size: 13.5px; color: var(--ink-2); }
 html:not(.voice-on) .voice-off { display: block; }
+
+/* ---------------------------------------------------------------- case documents */
+.files-btn {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center; text-align: left;
+  width: 100%; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(236, 234, 224, 0.18); color: var(--ink);
+  transition: background 200ms, border-color 200ms;
+}
+.files-btn[hidden] { display: none; }
+.files-btn svg { grid-row: span 2; width: 22px; height: 22px; fill: none; stroke: var(--mark); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.files-btn b { font-size: 13.5px; font-weight: 500; }
+.files-btn span { font-size: 12px; color: var(--ink-3); }
+.files-btn:hover { background: rgba(244, 220, 74, 0.06); border-color: rgba(244, 220, 74, 0.45); }
+.case-files { max-width: 620px; margin: 0 auto; }
+.case-files-intro { font: 400 16px/1.5 var(--serif); color: var(--ink-2); margin: 4px 2px 16px; }
+.case-files-intro b { color: var(--ink); font-weight: 500; }
+.viewer-note { max-width: 620px; margin: 0 auto 14px; font: italic 400 15px/1.4 var(--serif); color: var(--ink-3); }
+.file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.file-card {
+  position: relative; display: grid; gap: 4px; align-content: start; text-align: left; min-height: 108px; padding: 14px 14px 30px; cursor: pointer;
+  border-radius: 10px; border: 1px solid rgba(236, 234, 224, 0.1); color: var(--ink);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  animation: rise 420ms var(--ease) both; animation-delay: calc(var(--i, 0) * 50ms);
+  transition: border-color 200ms, transform 300ms var(--spring), background 200ms;
+}
+.file-card b { font-size: 13.5px; font-weight: 500; line-height: 1.3; }
+.file-card span:not(.file-kind) { font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+.file-kind { justify-self: start; font: 600 10px/1 var(--sans); letter-spacing: 0.06em; padding: 4px 6px; border-radius: 4px; background: rgba(244, 220, 74, 0.12); color: var(--mark); margin-bottom: 4px; }
+.file-card i { position: absolute; left: 14px; bottom: 10px; font-style: normal; font-size: 12px; color: var(--ink-3); transition: color 200ms; }
+.file-card:hover, .file-card:focus-visible { border-color: rgba(244, 220, 74, 0.5); transform: translateY(-2px); background: rgba(255, 255, 255, 0.06); }
+.file-card:hover i { color: var(--mark); }
+@media (max-width: 620px) { .file-grid { grid-template-columns: 1fr; } .file-card { min-height: 0; } }
+
+/* ---------------------------------------------------------------- hero replay (data-step states) */
+.hc-loop .hc-val.amended { animation: none; opacity: 0; transform: translateX(-8px); transition: opacity 420ms var(--ease), transform 600ms var(--spring); }
+.hc-loop[data-step="fix"] .hc-val.amended, .hc-loop[data-step="landed"] .hc-val.amended, .hc-loop[data-step="answer"] .hc-val.amended { opacity: 1; transform: none; }
+.hc-loop .hc-val.prelim s::after { animation: none; transform: scaleX(0); transition: transform 420ms var(--ease); }
+.hc-loop:is([data-step="fix"], [data-step="landed"], [data-step="answer"]) .hc-val.prelim s::after { transform: scaleX(1); }
+.hc-loop .hc-source mark { animation: none; transition: background-size 700ms var(--ease); }
+.hc-loop:is([data-step="scan"], [data-step="fix"], [data-step="landed"], [data-step="answer"]) .hc-source mark { background-size: 100% 100%; }
+.hc-loop .hc-source { position: relative; overflow: hidden; transition: border-color 300ms, background 300ms; }
+.hc-loop .hc-source::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -30%; width: 30%; pointer-events: none; opacity: 0;
+  background: linear-gradient(90deg, rgba(244, 220, 74, 0), rgba(244, 220, 74, 0.35), rgba(244, 220, 74, 0));
+}
+.hc-loop[data-step="scan"] .hc-source { border-color: #e7cf46; background: #fffdf2; }
+.hc-loop[data-step="scan"] .hc-source::after { opacity: 1; animation: hc-scan 1000ms var(--ease) both; }
+@keyframes hc-scan { from { left: -30%; } to { left: 100%; } }
+.hc-loop .hc-val.amended { position: relative; }
+.hc-loop .hc-val.amended::after { content: ""; position: absolute; inset: -1px; border-radius: 16px; border: 2px solid var(--teal); opacity: 0; pointer-events: none; }
+.hc-loop[data-step="landed"] .hc-val.amended::after { animation: hc-ring 700ms var(--ease) both; }
+@keyframes hc-ring { from { opacity: 0.8; transform: scale(1); } to { opacity: 0; transform: scale(1.08); } }
+.hc-loop .hc-answer .verdict-chip { transform: scale(0.6); opacity: 0; transition: transform var(--spring-ms) var(--spring), opacity 200ms; }
+.hc-loop[data-step="answer"] .hc-answer .verdict-chip { transform: none; opacity: 1; }
+.hc-loop .hc-w { opacity: 0.3; filter: blur(0.6px); transition: opacity 260ms var(--ease), filter 260ms var(--ease); transition-delay: 0ms; }
+.hc-loop[data-step="answer"] .hc-w { opacity: 1; filter: none; transition-delay: calc(140ms + var(--w) * 70ms); }
+.hc-loop[data-step="rest"] .hc-w, .hc-loop[data-step="rest"] .hc-val.amended, .hc-loop[data-step="rest"] .hc-answer .verdict-chip { opacity: 0.35; transition-delay: 0ms; }
+.hc-head { align-items: center; }
+.hc-wave { width: 46px; height: 18px; margin-left: auto; margin-right: -4px; }
+.hc-loop .hc-q { transition: color 300ms; }
+.hc-loop[data-step="ask"] .hc-q { color: var(--ink); }
+.hc-loop[data-step="ask"] .hc-q::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--live); vertical-align: 2px; animation: blink 0.9s steps(1) infinite; }
+@media (prefers-reduced-motion: reduce) { .hc-wave { display: none; } }
+
+/* ---------------------------------------------------------------- desk colour: each case has its own hue */
+.desk { --accent: 98 213 195; }
+.desk:has(.case-tab[data-case="deal"][aria-selected="true"]) { --accent: 156 176 255; }
+.desk:has(.case-tab[data-case="own"][aria-selected="true"]) { --accent: 240 194 94; }
+.desk {
+  background:
+    radial-gradient(900px 440px at 12% -14%, rgb(var(--accent) / 0.11), rgb(var(--accent) / 0) 62%),
+    radial-gradient(700px 420px at 105% 105%, rgb(var(--accent) / 0.06), rgb(var(--accent) / 0) 60%),
+    #10152a;
+}
+.case-tab::before { content: ""; position: absolute; left: 12px; top: 13px; width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--tab-accent)); opacity: 0.55; transition: opacity 200ms; }
+.case-tab { padding-left: 26px; }
+.case-tab[data-case="health"] { --tab-accent: 98 213 195; }
+.case-tab[data-case="deal"] { --tab-accent: 156 176 255; }
+.case-tab[data-case="own"] { --tab-accent: 240 194 94; }
+.case-own b::before { content: none; }
+.case-tab[aria-selected="true"]::before { opacity: 1; box-shadow: 0 0 0 3px rgb(var(--tab-accent) / 0.18); }
+.case-ind { background: rgb(var(--accent) / 0.13); box-shadow: inset 0 0 0 1px rgb(var(--accent) / 0.3), 0 2px 8px -2px rgb(0 0 0 / 0.5); }
+.askbar:focus-within { border-color: rgb(var(--accent) / 0.6); box-shadow: 0 0 0 4px rgb(var(--accent) / 0.12); }
+.chip { --k: var(--accent); }
+.chip[data-kind="change"] { --k: 240 194 94; }
+.chip[data-kind="who"] { --k: 156 176 255; }
+.chip[data-kind="check"] { --k: 255 143 124; }
+.chip::before { background-color: rgb(var(--k) / 0.12); border-color: rgb(var(--k) / 0.3); }
+.chip:hover, .chip:focus-visible { background: rgb(var(--k) / 0.08); }
+.chip:hover::after { border-color: rgb(var(--k) / 0.4); color: rgb(var(--k)); }
+.files-btn svg { stroke: rgb(var(--accent)); }
+.files-btn:hover { background: rgb(var(--accent) / 0.07); border-color: rgb(var(--accent) / 0.5); }
+.file-kind { background: rgb(var(--accent) / 0.14); color: rgb(var(--accent)); }
+.file-card:hover, .file-card:focus-visible { border-color: rgb(var(--accent) / 0.55); }
+.file-card:hover i { color: rgb(var(--accent)); }
+.answer { border-top: 2px solid rgb(var(--accent) / 0.45); }
+.a-q .via { background: rgb(var(--accent) / 0.14); color: rgb(var(--accent)); }
+@media (max-width: 620px) { .case-tab { padding-left: 20px; } .case-tab::before { left: 8px; } }

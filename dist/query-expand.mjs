@@ -1,4 +1,4 @@
-// query-expand.ts
+// src/query-expand.ts
 var NEGATIONS = /* @__PURE__ */ new Set([
   "not",
   "no",

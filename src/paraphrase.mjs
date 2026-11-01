@@ -23,11 +23,14 @@
 //    evaluation/paraphrase-questions.json and reported on held-out.
 import { sentencesOf, cite, docLabelOf } from "./spoken-routes.mjs";
 import { embedTextsReady } from "./dense.mjs";
+import { layExpand } from "./lay-terms.mjs";
 
 export const QUERY_INSTRUCTION =
   "Represent this sentence for searching relevant passages: ";
+// Measured both ways (see above): queries are embedded plain.
+export const QUERY_PREFIX = "";
 // Tuned on the development split only (evaluation/paraphrase-bench.mjs).
-export const GATE = { minCosine: 0.72, minMargin: 0.02 };
+export const GATE = { minCosine: 0.72, minMargin: 0.02, agree: 0.5 };
 const RRF_K = 60;
 const W_SEMANTIC = 0.8;
 const W_LEXICAL = 0.2;
@@ -68,7 +71,10 @@ export function unitsOf(bundle) {
   for (const src of bundle?.sources ?? []) {
     const ctx = contextOf(src);
     for (const sent of sentencesOf(src)) {
-      if (sent.text.split(/\s+/).length < 4) continue;
+      // headings and fragments are not claims ("IMPRESSION", "CONTRAST"),
+      // but short findings are ("Moderate hiatal hernia.")
+      const n = sent.text.split(/\s+/).length;
+      if (n < 2 || (n < 4 && !/[a-z]/.test(sent.text))) continue;
       units.push({
         src,
         sent,
@@ -104,15 +110,24 @@ function bm25(idx, q) {
   const N = idx.units.length,
     k1 = 1.2,
     b = 0.75;
-  const qt = tokens(q);
+  // lay words also search for the clinical words reports use (lay-terms.mjs)
+  const own = new Set(tokens(q));
+  const extra = new Set(
+    tokens(layExpand(q).join(" ")).filter((t) => !own.has(t)),
+  );
+  const qt = [...own, ...extra];
   return idx.units.map((u) => {
     let s = 0;
     for (const t of qt) {
+      // a clinical word the question's lay word stands for is the specific
+      // evidence; weight it above the lay context words ("lungs")
+      const w = extra.has(t) ? 1.5 : 1;
       const f = u.terms.filter((x) => x === t).length;
       if (!f) continue;
       const n = idx.df.get(t) ?? 0;
       const idf = Math.log(1 + (N - n + 0.5) / (n + 0.5));
       s +=
+        w *
         idf *
         ((f * (k1 + 1)) / (f + k1 * (1 - b + (b * u.terms.length) / idx.avg)));
     }
@@ -159,12 +174,33 @@ export function rankUnits(question, bundle, queryVector) {
  * lead the best unit from any OTHER document by the margin (two documents
  * saying similar things is exactly when a paraphrase is ambiguous).
  */
-export function gate(ranked, { minCosine, minMargin } = GATE) {
+export function gate(ranked, { minCosine, minMargin, agree = null } = GATE) {
   const top = ranked[0];
-  if (!top || top.cosine < minCosine) return null;
+  if (!top) return null;
   const rival = ranked.find((r) => r.unit.src !== top.unit.src);
   const margin = top.cosine - (rival?.cosine ?? 0);
-  return margin >= minMargin ? { ...top, margin } : null;
+  if (top.cosine >= minCosine && margin >= minMargin) return { ...top, margin };
+  // Agreement: two independent signals pick the same sentence. It is the
+  // best lexical match (lay words expanded) AND semantically close. Lexical
+  // agreement is what the cosine floor alone cannot see for short clinical
+  // sentences ("Moderate hiatal hernia.").
+  if (agree != null) {
+    const maxLex = Math.max(0, ...ranked.map((r) => r.lexical));
+    const topCos = Math.max(...ranked.map((r) => r.cosine));
+    // among the lexical leaders (near-ties count), the semantically closest
+    const lex = ranked
+      .filter((r) => maxLex > 0 && r.lexical >= 0.9 * maxLex)
+      .sort((a, b) => b.cosine - a.cosine)[0];
+    if (lex && lex.cosine >= agree && lex.cosine >= topCos - 0.08) {
+      const other = ranked.find((r) => r.unit.src !== lex.unit.src);
+      return {
+        ...lex,
+        margin: lex.cosine - (other?.cosine ?? 0),
+        agreed: true,
+      };
+    }
+  }
+  return null;
 }
 
 /**
@@ -178,15 +214,20 @@ export async function paraphraseLookup(
 ) {
   const idx = unitsOf(bundle);
   if (!idx.vectors) {
-    warmUnits(bundle);
-    return null;
+    // A fresh upload: embed its sentences now if the model is resident
+    // (a few hundred short units take about a second), else stay out.
+    const ready = await Promise.race([
+      warmUnits(bundle),
+      new Promise((r) => setTimeout(() => r(false), 4000)),
+    ]);
+    if (!ready || !idx.vectors) return null;
   }
   const [qv] = (await embedTextsReady([QUERY_PREFIX + question])) ?? [];
   if (!qv) return null;
   const hit = gate(rankUnits(question, bundle, qv), thresholds);
   if (!hit) return null;
   const { src, sent } = hit.unit;
-  const label = docLabelOf(src);
+  const label = bundle.sources.length === 1 ? "the report" : docLabelOf(src);
   return {
     spoken: `${label[0].toUpperCase()}${label.slice(1)} says: ${sent.text}`,
     citation: cite(src, sent),

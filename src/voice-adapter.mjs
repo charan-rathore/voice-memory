@@ -20,8 +20,8 @@ import { spokenTurn, historyField } from "./spoken.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import {
-  clinicalTurn,
   clinicalOverview,
+  clinicalAnswer,
   observationEvidence,
 } from "../clinical/answer.mjs";
 import { aliasesFor } from "../clinical/explain.mjs";
@@ -31,6 +31,7 @@ import {
   FRAGMENT_REPLY,
 } from "./spoken-repair.mjs";
 import { paraphraseLookup } from "./paraphrase.mjs";
+import { sectionAnswer } from "./doc-sections.mjs";
 import {
   callLanguage,
   isHindi,
@@ -408,7 +409,7 @@ export function createVoiceAdapter({
       if (reports.length && !deal) {
         const hit = candidates.find((q) => {
           try {
-            return clinicalTurn(q, reports);
+            return clinicalAnswer(q, reports);
           } catch {
             return false;
           }
@@ -542,7 +543,7 @@ export function createVoiceAdapter({
         // uploaded lab tables) answer first; absent for Northstar.
         const clinical =
           bundle.clinical?.length && !deal
-            ? (clinicalTurn(asked, bundle.clinical) ??
+            ? (clinicalAnswer(asked, bundle.clinical) ??
               candidates
                 .map((q) => clinicalOverview(q, bundle.clinical))
                 .find(Boolean) ??
@@ -637,7 +638,7 @@ export function createVoiceAdapter({
         try {
           second =
             (bundle.clinical?.length && !deal
-              ? clinicalTurn(secondQ, bundle.clinical)
+              ? clinicalAnswer(secondQ, bundle.clinical)
               : null) ??
             spokenTurn(secondQ, bundle, turn?.spokenTurn?.field ?? null);
         } catch {
@@ -662,7 +663,14 @@ export function createVoiceAdapter({
       if (!social && refusal(spoken) && !isFragment(transcript)) {
         let p = null;
         try {
-          p = await paraphraseLookup(asked, bundle);
+          p = sectionAnswer(asked, bundle);
+          if (p)
+            p = {
+              spoken: p.spoken,
+              citation: p.citations[0],
+              citations: p.citations,
+            };
+          else p = await paraphraseLookup(asked, bundle);
         } catch {
           p = null;
         }
@@ -674,7 +682,7 @@ export function createVoiceAdapter({
               intent: "LOOKUP",
               verdict: "QUOTED",
               spoken,
-              citations: [p.citation],
+              citations: p.citations ?? [p.citation],
             },
           };
         }

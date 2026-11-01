@@ -188,6 +188,23 @@ function imageToPng(obj) {
   return null;
 }
 
+// Some fonts (Calibri via Word "Save as PDF") map their ligature glyphs to
+// unrelated code points in the ToUnicode table: "Patient" arrives as
+// "PaƟent", "after" as "aŌer". Restore the letters so search and lab-name
+// matching see the words that are printed.
+const LIGATURES = {
+  "\u019f": "ti",
+  "\u014c": "ft",
+  "\u01a9": "tt",
+  "\ufb00": "ff",
+  "\ufb01": "fi",
+  "\ufb02": "fl",
+  "\ufb03": "ffi",
+  "\ufb04": "ffl",
+};
+export const fixLigatures = (s) =>
+  s.replace(/[\u019f\u014c\u01a9\ufb00-\ufb04]/g, (c) => LIGATURES[c]);
+
 export async function parsePdf(buf) {
   let doc;
   try {
@@ -253,7 +270,13 @@ export async function parsePdf(buf) {
       .map((i) => {
         const [a, b, c, d, e, f] = i.transform;
         const size = Math.hypot(c, d) || Math.hypot(a, b) || i.height || 10;
-        return { str: i.str, x0: e - vx0, x1: e - vx0 + i.width, y: f, size };
+        return {
+          str: fixLigatures(i.str),
+          x0: e - vx0,
+          x1: e - vx0 + i.width,
+          y: f,
+          size,
+        };
       });
     const info = {
       number: n,
