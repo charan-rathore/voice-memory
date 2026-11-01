@@ -809,6 +809,9 @@
   }
 
   // ------------------------------------------------------------ graph preview
+  // A small force layout. Integrated with dt so it runs the same at 60 Hz
+  // and 144 Hz (the old per-frame `v *= 0.82` ran 2.4x faster on 144 Hz
+  // screens), and the loop stops entirely while the canvas is off screen.
   function miniGraph() {
     const cv = $("#graph-mini");
     if (!cv) return;
@@ -822,10 +825,10 @@
     const load = async () =>
       snap.graphs?.health ?? (await api("/graph/health").catch(() => null));
     const COLORS = {
-      patient: "#f4dc4a",
-      document: "#8fa3ff",
-      topic: "#eceae0",
-      value: "#4fd1bd",
+      patient: "#f5e27a",
+      document: "#aab6ff",
+      topic: "#e9ecf3",
+      value: "#7f95ff",
     };
     load().then((g) => {
       if (!g) return;
@@ -840,16 +843,12 @@
       const edges = g.edges
         .map((e) => ({ ...e, a: by.get(e.from), b: by.get(e.to) }))
         .filter((e) => e.a && e.b);
-      let t = 0;
-      let visible = true;
-      new IntersectionObserver(([en]) => (visible = en.isIntersecting)).observe(
-        cv,
-      );
-      const tick = () => {
-        requestAnimationFrame(tick);
-        if (!visible) return;
-        t += 1;
-        // tiny force layout
+      let t = 0,
+        raf = 0,
+        last = 0,
+        visible = false;
+      // Constants were tuned per 60 Hz frame; k = dt * 60 rescales them.
+      const step = (k) => {
         for (const a of nodes) {
           for (const b of nodes) {
             if (a === b) continue;
@@ -857,42 +856,45 @@
               dy = a.y - b.y;
             const d2 = dx * dx + dy * dy + 0.01;
             if (d2 < 9000) {
-              const f = 60 / d2;
+              const f = (60 / d2) * k;
               a.vx += dx * f;
               a.vy += dy * f;
             }
           }
-          a.vx += (W / 2 - a.x) * 0.0016;
-          a.vy += (H / 2 - a.y) * 0.0024;
+          a.vx += (W / 2 - a.x) * 0.0016 * k;
+          a.vy += (H / 2 - a.y) * 0.0024 * k;
         }
         for (const e of edges) {
           const dx = e.b.x - e.a.x,
             dy = e.b.y - e.a.y;
           const d = Math.hypot(dx, dy) || 1;
-          const f = (d - (e.kind === "corrects" ? 40 : 62)) * 0.006;
+          const f = (d - (e.kind === "corrects" ? 40 : 62)) * 0.006 * k;
           e.a.vx += (dx / d) * f;
           e.a.vy += (dy / d) * f;
           e.b.vx -= (dx / d) * f;
           e.b.vy -= (dy / d) * f;
         }
+        const damp = Math.pow(0.82, k); // exponential decay, frame-rate independent
         for (const n of nodes) {
-          n.vx *= 0.82;
-          n.vy *= 0.82;
-          n.x += n.vx + Math.sin(t / 90 + n.x) * 0.06;
-          n.y += n.vy + Math.cos(t / 110 + n.y) * 0.06;
+          n.vx *= damp;
+          n.vy *= damp;
+          n.x += (n.vx + Math.sin(t / 1.5 + n.x) * 0.06) * k;
+          n.y += (n.vy + Math.cos(t / 1.8 + n.y) * 0.06) * k;
         }
+      };
+      const draw = () => {
         ctx.clearRect(0, 0, W, H);
         for (const e of edges) {
           const special = e.kind === "corrects" || e.kind === "not comparable";
           ctx.strokeStyle =
             e.kind === "corrects"
-              ? "rgba(244,220,74,0.9)"
+              ? "rgba(245,226,122,0.9)"
               : e.kind === "not comparable"
-                ? "rgba(232,115,90,0.9)"
-                : "rgba(160,170,200,0.22)";
+                ? "rgba(255,122,131,0.9)"
+                : "rgba(170,182,255,0.22)";
           ctx.lineWidth = special ? 2 : 1;
           ctx.setLineDash(special ? [5, 5] : []);
-          ctx.lineDashOffset = -t / 2;
+          ctx.lineDashOffset = -t * 30;
           ctx.beginPath();
           ctx.moveTo(e.a.x, e.a.y);
           ctx.lineTo(e.b.x, e.b.y);
@@ -909,27 +911,45 @@
                   ? 4.5
                   : 5.5;
           const col =
-            n.status === "superseded" ? "#e8735a" : (COLORS[n.kind] ?? "#ccc");
+            n.status === "superseded" ? "#f4c3cf" : (COLORS[n.kind] ?? "#ccc");
           ctx.fillStyle = col;
-          ctx.shadowColor = col;
-          ctx.shadowBlur =
-            n.kind === "patient" || n.status === "superseded" ? 16 : 6;
           ctx.beginPath();
           ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
           ctx.fill();
-          ctx.shadowBlur = 0;
           if (
             n.kind === "patient" ||
             (n.kind === "topic" && /ferritin|creatinine/i.test(n.label)) ||
             /^(5|50) ng/.test(n.label)
           ) {
-            ctx.fillStyle = "rgba(236,234,224,0.85)";
-            ctx.font = "500 12px Plex, system-ui, sans-serif";
+            ctx.fillStyle = "rgba(233,236,243,0.88)";
+            ctx.font = "500 12px 'Public Sans', system-ui, sans-serif";
             ctx.fillText(n.label, n.x + r + 5, n.y + 4);
           }
         }
       };
-      tick();
+      const tick = (now) => {
+        const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
+        last = now;
+        t += dt;
+        step(dt * 60);
+        draw();
+        raf = visible && !document.hidden ? requestAnimationFrame(tick) : 0;
+        if (!raf) last = 0;
+      };
+      const wake = () => {
+        if (!raf && visible && !document.hidden)
+          raf = requestAnimationFrame(tick);
+      };
+      // Settle the layout before the first paint, so the band never shows an
+      // empty canvas (or a burst of motion) when it scrolls into view.
+      for (let i = 0; i < 240; i++) step(1);
+      draw();
+      if (reduced) return;
+      new IntersectionObserver(([en]) => {
+        visible = en.isIntersecting;
+        wake();
+      }).observe(cv);
+      document.addEventListener("visibilitychange", wake);
     });
   }
 
@@ -968,32 +988,10 @@
     ),
   );
 
-  // reveal + count-up
-  const io = new IntersectionObserver(
-    (entries) =>
-      entries.forEach((en) => {
-        if (!en.isIntersecting) return;
-        en.target.classList.add("on");
-        io.unobserve(en.target);
-        const num = $(".stat-num", en.target);
-        if (num && !reduced) {
-          const to = Number(num.dataset.count),
-            pre = num.dataset.prefix ?? "",
-            suf = num.dataset.suffix ?? "";
-          const dec = String(to).includes(".") ? 1 : 0;
-          const t0 = performance.now();
-          const step = (now) => {
-            const k = Math.min(1, (now - t0) / 1100);
-            const v = to * (1 - Math.pow(1 - k, 3));
-            num.textContent = pre + v.toFixed(dec) + suf;
-            if (k < 1) requestAnimationFrame(step);
-          };
-          requestAnimationFrame(step);
-        }
-      }),
-    { threshold: 0.18 },
-  );
-  $$("[data-reveal]").forEach((el) => io.observe(el));
+  const nav = $(".nav");
+  const onScroll = () => nav?.classList.toggle("scrolled", scrollY > 8);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
 
   setCase("health");
   miniGraph();

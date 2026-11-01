@@ -1,0 +1,29 @@
+# Voice Memory
+
+> A voice agent on Bolna that answers questions about records that change (lab reports, contracts, meeting notes) only from what the documents support. Before it answers it checks whether a value was amended, preliminary, proposed, approved or superseded, which patient it belongs to, and which unit it is in, and it cites the exact line on the original page. No language model writes the answers: every sentence is built from the record and passes an exact-span evidence gate. All data on the public site is fictional.
+
+Use it when you need an answer about a document that must not guess: it refuses to compare values in different units, asks which patient when two people's reports match, and says "proposed, not approved" or "not on record" instead of inventing a final value.
+
+## Ask the public engine (no key)
+
+- [OpenAPI description](https://voice-memory-beige.vercel.app/openapi.json): every public endpoint with request and response shapes
+- `POST https://voice-memory-beige.vercel.app/api/public/ask` with JSON `{"case": "health" | "deal" | "<workspace id>", "question": "..."}` (question up to 400 characters). Returns `lead.text` (the one sentence to say), `lead.verdict` (a fixed label such as LATEST, NOT_COMPARABLE, AMBIGUOUS_PATIENT, PROPOSED, OPEN, NO-RECORD, UNKNOWN) and `lead.citations[]` with the verbatim `quote`, document `title` and page `location`.
+- `GET /api/public/cases`: the two fictional document sets and their documents. `health` is synthetic lab reports for SYN-0001 and SYN-0003 (one corrected result, one unit change); `deal` is a fictional consulting deal (proposal, revision, meeting notes, action log).
+- `POST /api/public/workspace` then `POST /api/public/workspace/{id}/upload` (raw bytes, header `x-file-name`): a private workspace for up to 5 of your own files (PDF, DOCX, PNG/JPEG, TXT, MD; 4 MB each), deleted after 30 idle minutes. Ask it with `"case": "{id}"`. Do not upload real medical or personal records.
+- Rate limits: about 40 questions a minute per visitor. A 429 or 503 carries `Retry-After`; wait that many seconds and retry once. The free host can take up to a minute to wake.
+
+## How to use the answer
+
+- Repeat `lead.text` and its citations as given. The sentence is what the evidence gate checked; rewording it can reintroduce the errors it avoids.
+- Only state a number when the verdict is LATEST or COMPARED. For NOT_COMPARABLE, AMBIGUOUS_PATIENT, PROPOSED, OPEN, NO-RECORD and UNKNOWN, report the verdict instead of a value.
+- It is a research prototype, not a diagnostic or clinically validated product.
+
+## Source
+
+- [Repository](https://github.com/charan-rathore/voice-memory): engine, tests and benchmarks
+- [Architecture](https://github.com/charan-rathore/voice-memory/blob/main/docs/ARCHITECTURE.md): pipeline stages and the contract each one is tested against
+- [Memory graph](https://voice-memory-beige.vercel.app/graph): the documents, values and sentences the engine answers from
+
+## Optional
+
+- [Landing page](https://voice-memory-beige.vercel.app/): try it typed or on a live Bolna call

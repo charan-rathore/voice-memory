@@ -13,6 +13,8 @@ const ENGINE = engine.address().port;
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".txt": "text/plain; charset=utf-8",
   ".css": "text/css",
   ".svg": "image/svg+xml",
   ".png": "image/png",
