@@ -15,6 +15,8 @@
 // Rate limits are per client address and global; voice minting has its own
 // tighter caps because each call spends the operator's Bolna credits.
 import { randomBytes } from "node:crypto";
+import path from "node:path";
+import { createCallCounters } from "./public-call-counters.mjs";
 import { documentView } from "./library.mjs";
 import { buildGraph } from "../memory/graph.mjs";
 import { createMemory } from "../memory/memory.mjs";
@@ -85,6 +87,9 @@ export function createPublicApi({
   mintVoice,
   voiceState,
   voiceTurns = () => [],
+  stopVoice = null,
+  counters = null,
+  now = () => Date.now(),
 }) {
   const tickets = new Map(); // ticket -> mint time (call evidence feed)
   const askLimit = limiter(num(process.env.VM_PUBLIC_ASK_PER_MIN, 40), 60000);
@@ -92,14 +97,35 @@ export function createPublicApi({
     num(process.env.VM_PUBLIC_ASK_GLOBAL_PER_MIN, 600),
     60000,
   );
-  const voicePerIp = limiter(
-    num(process.env.VM_PUBLIC_CALLS_PER_IP_HOUR, 4),
-    3600000,
-  );
-  const voiceDaily = limiter(
-    num(process.env.VM_PUBLIC_CALLS_PER_DAY, 80),
-    86400000,
-  );
+  // Visitor allowance: 3 calls per visitor per UTC day (owner's stated
+  // intent), a global day allowance, and a shared lifetime count that owner
+  // mints also consume. These live in the counter store (rate smoothing,
+  // NOT a money ceiling - see public-call-counters.mjs).
+  const voicePerIpDay = num(process.env.VM_PUBLIC_CALLS_PER_IP_DAY, 3);
+  const voiceGlobalDay = num(process.env.VM_PUBLIC_CALLS_PER_DAY, 80);
+  const voiceLifetimeMax = num(process.env.VM_PUBLIC_CALLS_LIFETIME_MAX, 100);
+  // Per-call duration cutoff: the ticket dies, the landing hangs up on the
+  // next poll, and a best-effort vendor stop goes out behind it. This is
+  // NORMAL-PATH enforcement, not a verified billing cutoff: a hard minutes
+  // bound requires the vendor's own call_terminate cap, verified on the
+  // account's agent config before activation.
+  const voiceMaxCallMs = num(process.env.VM_PUBLIC_CALL_MAX_MS, 300000);
+  // Counter wiring is fail-closed by default: only an injected store, or
+  // the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in, yields a
+  // backend. No silent file-backend fallback in production. A null store
+  // 503s the visitor mint below.
+  const callCounters =
+    counters ??
+    (process.env.VM_COUNTERS_ALLOW_FILE === "on"
+      ? createCallCounters({
+          file:
+            process.env.VM_PUBLIC_COUNTER_FILE ||
+            path.join(
+              process.env.VM_DATA_DIR || process.cwd(),
+              "public-call-counters.json",
+            ),
+        })
+      : null);
   const voiceGapMs = num(process.env.VM_PUBLIC_CALL_GAP_MS, 45000);
   // Visitor call minting is deny-by-default: only VM_PUBLIC_VOICE=on
   // (exact, lowercase) enables it. Unset, empty, or any other value keeps
@@ -434,8 +460,7 @@ export function createPublicApi({
             ),
             true
           );
-        const now = Date.now();
-        if (now - lastMint < voiceGapMs)
+        if (now() - lastMint < voiceGapMs)
           return (
             send(
               res,
@@ -447,49 +472,179 @@ export function createPublicApi({
               },
               {
                 "Retry-After": String(
-                  Math.ceil((voiceGapMs - (now - lastMint)) / 1000),
+                  Math.ceil((voiceGapMs - (now() - lastMint)) / 1000),
                 ),
               },
             ),
             true
           );
-        if (!voicePerIp(ip))
+        if (!callCounters)
+          return (
+            send(res, 503, {
+              error: "Voice calls are not available on this server.",
+            }),
+            true
+          );
+        // Claim the gap slot SYNCHRONOUSLY, before any await: with an async
+        // (network) counter backend, two concurrent requests would otherwise
+        // both pass the gap check. Rolled back below if admission or the
+        // mint fails. The durable Redis backend additionally enforces the
+        // gap cross-instance inside the atomic admission script.
+        lastMint = now();
+        const adm = await callCounters.admitVisitor(ip, {
+          perIpDay: voicePerIpDay,
+          globalDay: voiceGlobalDay,
+          lifetimeMax: voiceLifetimeMax,
+          gapMs: voiceGapMs,
+        });
+        if (!adm.ok) {
+          lastMint = 0;
+          if (adm.scope === "journal-full")
+            return (
+              send(res, 503, {
+                error:
+                  "Voice calls are temporarily unavailable. Try again later.",
+              }),
+              true
+            );
+          if (adm.scope === "gap")
+            return (
+              send(
+                res,
+                429,
+                {
+                  error:
+                    "Someone is on a call right now. Try again in under a minute.",
+                  scope: "global",
+                },
+                { "Retry-After": String(Math.ceil(voiceGapMs / 1000)) },
+              ),
+              true
+            );
           return (
             send(res, 429, {
               error:
-                "You've used this hour's demo calls. Type a question instead, or come back later.",
-              scope: "customer",
+                adm.scope === "visitor-day"
+                  ? "You've used today's demo calls. Type a question instead, or come back tomorrow."
+                  : "Today's demo calls are used up. Type a question instead.",
+              scope: adm.scope === "visitor-day" ? "customer" : "global",
             }),
             true
           );
-        if (!voiceDaily("*"))
-          return (
-            send(res, 429, {
-              error: "Today's demo calls are used up. Type a question instead.",
-              scope: "global",
-            }),
-            true
-          );
-        lastMint = now;
+        }
         const data = await readJson(req).catch(() => ({}));
+        // Vendor-supported request correlation: the reservation id rides in
+        // user_data so a later reconcile can attribute the vendor's own
+        // execution record to THIS reservation (requires the vendor record
+        // to echo user_data - unverified until activation; without the echo
+        // every recovery stays manual, never guessed).
+        // Lifecycle: admission -> vendor mint -> post-mint management. A
+        // refund happens ONLY for a definitive pre-session failure (the
+        // vendor said no session was created; mintVoice marks such errors
+        // preSession). An ambiguous failure (e.g. a timeout after possible
+        // creation) STAYS CHARGED until reconciled - never auto-refunded.
+        let session;
         try {
-          const session = await mintVoice(data?.user_data);
-          // A ticket lets this caller (and only this caller) read the
-          // verified turns of the call it just started.
-          const ticket = randomBytes(16).toString("hex");
-          tickets.set(ticket, now);
-          for (const [t, at] of tickets)
-            if (now - at > 15 * 60000) tickets.delete(t);
-          send(res, 200, { ...session, vm_ticket: ticket });
+          session = await mintVoice({
+            ...(data?.user_data && typeof data.user_data === "object"
+              ? data.user_data
+              : {}),
+            vm_res: adm.reservation,
+          });
         } catch (e) {
           lastMint = 0;
+          if (e.preSession) {
+            await callCounters.refundReservation(adm.reservation);
+          } else {
+            // Ambiguous: the session may exist. Stay charged AND record
+            // durably for reconciliation against the vendor read API.
+            console.warn(
+              "vendor mint outcome ambiguous; reservation retained for reconcile:",
+              e.message,
+            );
+            await callCounters.recordAmbiguous?.({
+              reservation: adm.reservation,
+              sessionId: null, // the mint threw before any session body
+              errorClass: e.status ? `http-${e.status}` : "network",
+            });
+          }
           throw e;
         }
+        // Session exists. Install cleanup BEFORE the fallible settlement so
+        // the call is managed even if accounting fails next. The ticket
+        // lets this caller (and only this caller) read the verified turns
+        // of the call it just started; at the cutoff the ticket dies, the
+        // landing hangs up on the next poll, and a best-effort vendor stop
+        // goes out behind it (normal-path enforcement, not a verified
+        // billing cutoff).
+        const ticket = randomBytes(16).toString("hex");
+        tickets.set(ticket, now());
+        for (const [t, at] of tickets)
+          if (now() - at > voiceMaxCallMs) tickets.delete(t);
+        const cutoff = setTimeout(() => {
+          tickets.delete(ticket);
+          if (stopVoice)
+            Promise.resolve(stopVoice(session)).catch((e) =>
+              console.warn("public call stop failed:", e.message),
+            );
+        }, voiceMaxCallMs);
+        cutoff.unref?.();
+        try {
+          await callCounters.settleReservation(adm.reservation);
+        } catch (e) {
+          // Accounting failed with a possibly-live session: the reservation
+          // STAYS CHARGED (no refund) and cleanup is retained until the
+          // call is confirmed terminal. stopVoice resolves true only on
+          // vendor-confirmed termination; an accepted-but-unverified stop
+          // attempt keeps the ticket and the cutoff timer, which retries
+          // the stop when it fires. Never claim the call ended on an
+          // attempt.
+          const confirmed = stopVoice
+            ? await Promise.resolve(stopVoice(session)).then(
+                (v) => v === true,
+                () => false,
+              )
+            : false;
+          if (confirmed) {
+            tickets.delete(ticket);
+            clearTimeout(cutoff);
+          }
+          console.warn(
+            confirmed
+              ? "reservation settle failed; vendor confirms the call is gone; retained:"
+              : "reservation settle failed; stop attempted but NOT confirmed terminal; cutoff timer retained; reservation stays charged:",
+            e.message,
+          );
+          // The session id IS known here: durable record so reconciliation
+          // can close the accounting against the vendor read API.
+          await callCounters
+            .recordAmbiguous?.({
+              reservation: adm.reservation,
+              sessionId:
+                session?.execution_id ??
+                session?.call_id ??
+                session?.run_id ??
+                null,
+              errorClass: "settle-failed",
+              settleFailed: true,
+            })
+            .catch((re) =>
+              console.warn("ambiguous-record write failed:", re.message),
+            );
+          const err = Error(
+            confirmed
+              ? "Call accounting failed. The call is confirmed ended."
+              : "Call accounting failed. The call may still be live; the automatic cutoff still applies.",
+          );
+          err.status = 503;
+          throw err;
+        }
+        send(res, 200, { ...session, vm_ticket: ticket });
         return true;
       }
       if (req.method === "GET" && path === "/voice/turns") {
         const at = tickets.get(url.searchParams.get("ticket") ?? "");
-        if (!at || Date.now() - at > 15 * 60000)
+        if (!at || now() - at > Math.min(15 * 60000, voiceMaxCallMs))
           return (send(res, 403, { error: "This call has ended." }), true);
         send(res, 200, { turns: voiceTurns(at - 5000) });
         return true;

@@ -22,6 +22,9 @@ const DEMO_ENV = () => ({
 
 async function start(env) {
   const saved = {};
+  // Test-local opt into the non-durable file counter backend (the selector
+  // fails closed without durable config by default).
+  env = { VM_COUNTERS_ALLOW_FILE: "on", ...env };
   for (const [k, v] of Object.entries(env)) {
     saved[k] = process.env[k];
     process.env[k] = v;
@@ -63,7 +66,10 @@ async function bearer(base, q, token = FIXED) {
 async function ownerSession(base) {
   const signin = await raw(base, "/owner-signin", {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      host: HOST,
+    },
     body: "key=" + encodeURIComponent(OWNER),
   });
   const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
@@ -98,12 +104,16 @@ test("demo boot pin: fresh process serves voice turns with no owner import", asy
     assert.match(turn.text, /not approved/);
     const signin = await raw(base, "/owner-signin", {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        host: HOST,
+      },
       body: "key=" + encodeURIComponent(OWNER),
     });
     const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
     const ready = JSON.parse(
-      (await raw(base, "/api/readiness", { headers: { host: HOST, cookie } })).body,
+      (await raw(base, "/api/readiness", { headers: { host: HOST, cookie } }))
+        .body,
     );
     assert.equal(ready.demo, true);
   } finally {
@@ -141,7 +151,10 @@ test("demo boot pin: explicit owner reset retires terminally, no silent revive",
   const { server, base } = await start(DEMO_ENV());
   try {
     const owner = await ownerSession(base);
-    assert.equal((await bearer(base, "What is the engagement fee?")).status, 200);
+    assert.equal(
+      (await bearer(base, "What is the engagement fee?")).status,
+      200,
+    );
     const reset = await owner.post("/api/reset", {});
     assert.equal(reset.status, 200);
     // Bearer is dead now...
@@ -169,12 +182,16 @@ test("demo boot pin: expired credential at boot keeps the server alive, voice st
     // Owner UI and readiness stay up and report the inactive voice state.
     const signin = await raw(base, "/owner-signin", {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        host: HOST,
+      },
       body: "key=" + encodeURIComponent(OWNER),
     });
     const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
     const ready = JSON.parse(
-      (await raw(base, "/api/readiness", { headers: { host: HOST, cookie } })).body,
+      (await raw(base, "/api/readiness", { headers: { host: HOST, cookie } }))
+        .body,
     );
     assert.equal(ready.demo, true);
     assert.equal(ready.voice.bound, false);
@@ -187,24 +204,32 @@ test("demo owner evidence feed: plain GET with owner cookie, 403 without, wrong 
   const { server, base } = await start(DEMO_ENV());
   try {
     // No session cookie: refused (production owner gate).
-    const noauth = await raw(base, "/api/voice/last", { headers: { host: HOST } });
+    const noauth = await raw(base, "/api/voice/last", {
+      headers: { host: HOST },
+    });
     assert.equal(noauth.status, 403);
     // Owner sign-in, then a real voice turn through the pinned credential.
     const signin = await raw(base, "/owner-signin", {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        host: HOST,
+      },
       body: "key=" + encodeURIComponent(OWNER),
     });
     const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
     assert.ok(cookie);
     const before = JSON.parse(
-      (await raw(base, "/api/voice/last", { headers: { host: HOST, cookie } })).body,
+      (await raw(base, "/api/voice/last", { headers: { host: HOST, cookie } }))
+        .body,
     );
     assert.equal(before.turn, null);
     const t = await bearer(base, "Was the $42,000 revision finalized?");
     assert.equal(t.status, 200);
     // The app's actual contract: plain GET, cookie only - no Origin, no CSRF.
-    const feedRes = await raw(base, "/api/voice/last", { headers: { host: HOST, cookie } });
+    const feedRes = await raw(base, "/api/voice/last", {
+      headers: { host: HOST, cookie },
+    });
     assert.equal(feedRes.status, 200);
     const feed = JSON.parse(feedRes.body).turn;
     assert.match(feed.spokenTurn.spoken, /\$42,000/);
@@ -213,7 +238,8 @@ test("demo owner evidence feed: plain GET with owner cookie, 403 without, wrong 
     assert.ok(feed.spokenTurn.citations.length > 0);
     // Wrong method is refused and does not mutate the feed.
     const sess = JSON.parse(
-      (await raw(base, "/api/session", { headers: { cookie, host: HOST } })).body,
+      (await raw(base, "/api/session", { headers: { cookie, host: HOST } }))
+        .body,
     );
     const wrong = await raw(base, "/api/voice/last", {
       method: "POST",
@@ -228,7 +254,8 @@ test("demo owner evidence feed: plain GET with owner cookie, 403 without, wrong 
     });
     assert.match(String(wrong.status), /^40[34]$/);
     const after = JSON.parse(
-      (await raw(base, "/api/voice/last", { headers: { host: HOST, cookie } })).body,
+      (await raw(base, "/api/voice/last", { headers: { host: HOST, cookie } }))
+        .body,
     );
     assert.equal(after.turn.spokenTurn.at, feed.spokenTurn.at);
   } finally {
@@ -263,12 +290,16 @@ test("demo pin: mint route mirrors pinned admission, gates still hold", async ()
   try {
     const signin = await raw(base, "/owner-signin", {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        host: HOST,
+      },
       body: "key=" + encodeURIComponent(OWNER),
     });
     const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
     const sess = JSON.parse(
-      (await raw(base, "/api/session", { headers: { cookie, host: HOST } })).body,
+      (await raw(base, "/api/session", { headers: { cookie, host: HOST } }))
+        .body,
     );
     const authed = (path, data) =>
       raw(base, path, {
@@ -284,19 +315,23 @@ test("demo pin: mint route mirrors pinned admission, gates still hold", async ()
       });
     // Anonymous and CSRF-less mints stay closed and never reach Bolna.
     assert.equal(
-      (await raw(base, "/api/bolna-session", {
-        method: "POST",
-        headers: { "content-type": "application/json", host: HOST },
-        body: "{}",
-      })).status,
+      (
+        await raw(base, "/api/bolna-session", {
+          method: "POST",
+          headers: { "content-type": "application/json", host: HOST },
+          body: "{}",
+        })
+      ).status,
       403,
     );
     assert.equal(
-      (await raw(base, "/api/bolna-session", {
-        method: "POST",
-        headers: { "content-type": "application/json", cookie, host: HOST },
-        body: "{}",
-      })).status,
+      (
+        await raw(base, "/api/bolna-session", {
+          method: "POST",
+          headers: { "content-type": "application/json", cookie, host: HOST },
+          body: "{}",
+        })
+      ).status,
       403,
     );
     assert.equal(mintCalls.length, 0);
@@ -335,12 +370,19 @@ test("demo pin: expired or retired credential never mints a Bolna session", asyn
     try {
       const signin = await raw(expired.base, "/owner-signin", {
         method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          host: HOST,
+        },
         body: "key=" + encodeURIComponent(OWNER),
       });
       const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
       const sess = JSON.parse(
-        (await raw(expired.base, "/api/session", { headers: { cookie, host: HOST } })).body,
+        (
+          await raw(expired.base, "/api/session", {
+            headers: { cookie, host: HOST },
+          })
+        ).body,
       );
       const authed = (path) =>
         raw(expired.base, path, {
@@ -370,12 +412,19 @@ test("demo pin: expired or retired credential never mints a Bolna session", asyn
     try {
       const signin = await raw(live.base, "/owner-signin", {
         method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded", host: HOST },
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          host: HOST,
+        },
         body: "key=" + encodeURIComponent(OWNER),
       });
       const cookie = signin.headers["set-cookie"]?.[0]?.split(";")[0];
       const sess = JSON.parse(
-        (await raw(live.base, "/api/session", { headers: { cookie, host: HOST } })).body,
+        (
+          await raw(live.base, "/api/session", {
+            headers: { cookie, host: HOST },
+          })
+        ).body,
       );
       const authed = (path) =>
         raw(live.base, path, {

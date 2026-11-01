@@ -995,7 +995,15 @@
             { via: "call", source: "live", question: t.question, caseId },
           );
         }
-      } catch {
+      } catch (e) {
+        // The server cuts the ticket at the per-call max duration (and a
+        // restart drops all tickets): end the call so the audio actually
+        // stops, not just the evidence feed.
+        if (e?.status === 403) {
+          state.ticket = null;
+          if (state.call) stopCall();
+          else endUi("ended");
+        }
         /* keep polling while the call lasts */
       }
       await new Promise((r) => setTimeout(r, 1200));
