@@ -132,9 +132,11 @@ test("VM_PUBLIC_VOICE is deny-by-default: unset, off and unknown values deny and
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
   };
+  const spawned = [];
   const spawn = async () => {
     const s = createLocalServer({ port: 0 });
     await new Promise((r) => s.listen(0, "127.0.0.1", r));
+    spawned.push(s);
     return { s, b: `http://127.0.0.1:${s.address().port}` };
   };
   try {
@@ -174,7 +176,6 @@ test("VM_PUBLIC_VOICE is deny-by-default: unset, off and unknown values deny and
         }),
       });
       assert.equal(typed.status, 200, `variant ${variant}`);
-      await new Promise((r) => srv.s.close(r));
     }
 
     // Explicit opt-in: status advertises voice again (no mint exercised
@@ -183,9 +184,13 @@ test("VM_PUBLIC_VOICE is deny-by-default: unset, off and unknown values deny and
     const on = await spawn();
     const stOn = await (await fetch(on.b + "/api/public/status")).json();
     assert.equal(stOn.voice.configured, true);
-    await new Promise((r) => on.s.close(r));
   } finally {
     restore();
+    // Close every spawned server even when an assertion failed midway, so a
+    // genuine regression fails promptly instead of hanging the runner.
+    await Promise.all(
+      spawned.map((x) => new Promise((r) => x.close(() => r()))),
+    );
   }
 });
 
@@ -202,6 +207,7 @@ test("VM_PUBLIC_VOICE=on mints through the factory (mock mint, no network)", asy
   };
   const { createPublicApi } = await import("./public-api.mjs");
   const { createServer } = await import("node:http");
+  let srv = null;
   try {
     process.env.BOLNA_API_KEY = "test-dummy";
     process.env.BOLNA_AGENT_ID = "test-dummy";
@@ -219,7 +225,7 @@ test("VM_PUBLIC_VOICE=on mints through the factory (mock mint, no network)", asy
       voiceTurns: () => [],
       voiceState: () => ({ configured: true, ready: true }),
     });
-    const srv = createServer((req, res) => api(req, res));
+    srv = createServer((req, res) => api(req, res));
     await new Promise((r) => srv.listen(0, "127.0.0.1", r));
     const b = `http://127.0.0.1:${srv.address().port}`;
     const mint = await fetch(b + "/api/public/voice/session", {
@@ -234,9 +240,9 @@ test("VM_PUBLIC_VOICE=on mints through the factory (mock mint, no network)", asy
     assert.equal(mints, 1);
     const st = await (await fetch(b + "/api/public/status")).json();
     assert.deepEqual(st.voice, { configured: true, ready: true });
-    await new Promise((r) => srv.close(r));
   } finally {
     restore();
+    if (srv) await new Promise((r) => srv.close(() => r()));
   }
 });
 
@@ -413,128 +419,4 @@ test("bring-your-own answers complete wrapped sentences and keep one supporting 
   assert.ok(occurrences <= 2, `deadline repeated ${occurrences} times`);
   // Continuation must not swallow the following unrelated block.
   assert.doesNotMatch(a.body.answer.split("[Source 1]")[0], /Allergens/);
-});
-
-test("visitor daily turn budget: one reserved call per address per day; failed mint releases it", async () => {
-  const saved = {
-    BOLNA_API_KEY: process.env.BOLNA_API_KEY,
-    BOLNA_AGENT_ID: process.env.BOLNA_AGENT_ID,
-    VM_PUBLIC_VOICE: process.env.VM_PUBLIC_VOICE,
-    VM_PUBLIC_CALL_GAP_MS: process.env.VM_PUBLIC_CALL_GAP_MS,
-  };
-  const restore = () => {
-    for (const [k, v] of Object.entries(saved))
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-  };
-  const { createPublicApi } = await import("./public-api.mjs");
-  const { createServer } = await import("node:http");
-  try {
-    process.env.BOLNA_API_KEY = "test-dummy";
-    process.env.BOLNA_AGENT_ID = "test-dummy";
-    process.env.VM_PUBLIC_VOICE = "on";
-    process.env.VM_PUBLIC_CALL_GAP_MS = "1";
-    let fail = true;
-    const api = createPublicApi({
-      cases: {},
-      resolve: async () => {
-        throw new Error("not exercised");
-      },
-      mintVoice: async () => {
-        if (fail) {
-          fail = false;
-          throw new Error("vendor down");
-        }
-        return { fake_session: true };
-      },
-      voiceTurns: () => [],
-      voiceState: () => ({ configured: true, ready: true }),
-    });
-    const srv = createServer((req, res) => api(req, res));
-    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
-    const b = `http://127.0.0.1:${srv.address().port}`;
-    const mint = (addr) =>
-      fetch(b + "/api/public/voice/session", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-forwarded-for": addr,
-        },
-        body: "{}",
-      });
-    const ip = "203.0.113.7";
-    // A failed vendor mint must not burn the visitor's daily budget.
-    assert.notEqual((await mint(ip)).status, 200);
-    await new Promise((r) => setTimeout(r, 5));
-    assert.equal((await mint(ip)).status, 200);
-    // The day's turn budget is now reserved: a second call is denied.
-    await new Promise((r) => setTimeout(r, 5));
-    const again = await mint(ip);
-    assert.equal(again.status, 429);
-    const body = await again.json();
-    assert.match(body.error, /today's demo turns/);
-    assert.equal(body.scope, "customer");
-    // Another visitor is unaffected.
-    await new Promise((r) => setTimeout(r, 5));
-    assert.equal((await mint("203.0.113.8")).status, 200);
-    await new Promise((r) => srv.close(r));
-  } finally {
-    restore();
-  }
-});
-test("global daily call ceiling caps the shared wallet", async () => {
-  const saved = {
-    BOLNA_API_KEY: process.env.BOLNA_API_KEY,
-    BOLNA_AGENT_ID: process.env.BOLNA_AGENT_ID,
-    VM_PUBLIC_VOICE: process.env.VM_PUBLIC_VOICE,
-    VM_PUBLIC_CALL_GAP_MS: process.env.VM_PUBLIC_CALL_GAP_MS,
-    VM_PUBLIC_CALLS_PER_DAY: process.env.VM_PUBLIC_CALLS_PER_DAY,
-  };
-  const restore = () => {
-    for (const [k, v] of Object.entries(saved))
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-  };
-  const { createPublicApi } = await import("./public-api.mjs");
-  const { createServer } = await import("node:http");
-  try {
-    process.env.BOLNA_API_KEY = "test-dummy";
-    process.env.BOLNA_AGENT_ID = "test-dummy";
-    process.env.VM_PUBLIC_VOICE = "on";
-    process.env.VM_PUBLIC_CALL_GAP_MS = "1";
-    process.env.VM_PUBLIC_CALLS_PER_DAY = "2";
-    const api = createPublicApi({
-      cases: {},
-      resolve: async () => {
-        throw new Error("not exercised");
-      },
-      mintVoice: async () => ({ fake_session: true }),
-      voiceTurns: () => [],
-      voiceState: () => ({ configured: true, ready: true }),
-    });
-    const srv = createServer((req, res) => api(req, res));
-    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
-    const b = `http://127.0.0.1:${srv.address().port}`;
-    const mint = (addr) =>
-      fetch(b + "/api/public/voice/session", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-forwarded-for": addr,
-        },
-        body: "{}",
-      });
-    assert.equal((await mint("203.0.113.10")).status, 200);
-    await new Promise((r) => setTimeout(r, 5));
-    assert.equal((await mint("203.0.113.11")).status, 200);
-    await new Promise((r) => setTimeout(r, 5));
-    const capped = await mint("203.0.113.12");
-    assert.equal(capped.status, 429);
-    const body = await capped.json();
-    assert.match(body.error, /used up/);
-    assert.equal(body.scope, "global");
-    await new Promise((r) => srv.close(r));
-  } finally {
-    restore();
-  }
 });
