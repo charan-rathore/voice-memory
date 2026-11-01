@@ -49,6 +49,32 @@ test("speech-misrecognised analyte: 'ferrite in' routes to ferritin, not a gener
   );
 });
 
+test("unmatched analyte in a test-shaped question clarifies, never a generic overview", async () => {
+  const { status, body } = await ask("health", "what is my heritage level");
+  assert.equal(status, 200);
+  assert.equal(body.lead.verdict, "CLARIFY");
+  assert.match(body.lead.text, /couldn't find a "heritage" test/i);
+  assert.match(body.lead.text, /Ferritin/);
+});
+
+test("a known test these reports lack still says not-in-report", async () => {
+  const { status, body } = await ask("health", "what is my vitamin d level");
+  assert.equal(status, 200);
+  assert.equal(body.lead.verdict, "NOT_IN_REPORT");
+});
+
+test("an intentional overview request stays an overview", async () => {
+  const { status, body } = await ask("health", "how am i doing");
+  assert.equal(status, 200);
+  assert.equal(body.lead.verdict, "OVERVIEW");
+});
+
+test("a generic 'my blood levels' phrasing still gets the overview", async () => {
+  const { status, body } = await ask("health", "what are my blood levels");
+  assert.equal(status, 200);
+  assert.equal(body.lead.verdict, "OVERVIEW");
+});
+
 test("ferritin: the amended 50 is used and the preliminary 5 is cited", async () => {
   const { status, body } = await ask(
     "health",

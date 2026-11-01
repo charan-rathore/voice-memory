@@ -834,11 +834,57 @@ function findGroup(question, reports) {
  * system or section, then the whole-report summary, then the longitudinal
  * overview across reports. Null leaves the question to the document engine.
  */
+
+/**
+ * A test-shaped question names something before a measure noun ("my X
+ * level/result/reading/value/count"). When X is no test these reports hold
+ * and not a generic word ("my blood levels", "my latest result"), the safe
+ * answer is to name the confusion and list what IS here - never a generic
+ * overview or summary that silently answers a different question. Genuine
+ * overview requests ("how am I doing", "summarize my results") carry no
+ * test-shaped candidate and are untouched.
+ */
+const TEST_SHAPED_RE =
+  /\b(?:my|the)\s+([a-z][a-z' -]{1,28}?)\s+(?:level|levels|result|results|reading|readings|value|values|count|counts)\b/i;
+const GENERIC_MEASURE = new Set([
+  "blood", "test", "tests", "lab", "labs", "report", "reports", "health",
+  "body", "overall", "final", "latest", "new", "old", "first", "last",
+  "recent", "current", "full", "complete",
+]);
+function unmatchedTestCandidate(question, reports) {
+  const m = TEST_SHAPED_RE.exec(question);
+  if (!m) return null;
+  const cand = m[1].trim().replace(/\s+/g, " ").toLowerCase();
+  if (!cand || GENERIC_MEASURE.has(cand)) return null;
+  if (findTest(question, reports) || findTest(cand, reports)) return null;
+  return cand;
+}
+
 export function clinicalAnswer(question, reports) {
   if (!reports?.length) return null;
   const t = clinicalTurn(question, reports);
   if (t) return t;
   const lang = detectLang(question);
+  // A test-shaped question whose test none of these reports holds ("what is
+  // my heritage level"): say which tests ARE here and ask, instead of a
+  // generic overview or summary that answers a different question.
+  const unmatched = unmatchedTestCandidate(question, reports);
+  if (unmatched) {
+    const names = [
+      ...new Set(reports.flatMap((r) => r.observations.map((o) => o.test))),
+    ];
+    return {
+      spoken: {
+        en: `I couldn't find a "${unmatched}" test in these reports. They have: ${names.join(", ")}. Which one did you mean?`,
+        hi: `इन रिपोर्ट्स में "${unmatched}" नाम की कोई जांच नहीं है। इनमें हैं: ${names.join(", ")}। आप किस जांच के बारे में पूछ रहे हैं?`,
+        hinglish: `In reports mein "${unmatched}" naam ki koi test nahi hai. Inmein hain: ${names.join(", ")}. Aap kis test ke baare mein pooch rahe hain?`,
+      }[lang],
+      verdict: "CLARIFY",
+      field: null,
+      lang,
+      used: [],
+    };
+  }
   const change = CHANGE_RE.test(question);
   const g = findGroup(question, reports);
   if (g && !(change && multiReport(question, reports)))
