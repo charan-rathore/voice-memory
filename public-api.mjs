@@ -195,22 +195,37 @@ export function createPublicApi({
         return true;
       }
       if (req.method === "GET" && path === "/cases") {
-        send(res, 200, {
-          cases: Object.entries(CASES).map(([id, c]) => ({
-            id,
-            ...c,
-            ready: !!cases[id]?.bundle,
-            documents: (cases[id]?.library ?? [])
-              .filter((e) => e.doc)
-              .map((e) => ({
-                id: e.id,
-                title: e.title,
-                filename: e.filename,
-                kind: e.doc.kind,
-                pages: e.doc.pages?.length ?? null,
-              })),
-          })),
-        });
+        const allReady = Object.keys(CASES).every((k) => cases[k]?.bundle);
+        send(
+          res,
+          200,
+          {
+            cases: Object.entries(CASES).map(([id, c]) => ({
+              id,
+              ...c,
+              ready: !!cases[id]?.bundle,
+              documents: (cases[id]?.library ?? [])
+                .filter((e) => e.doc)
+                .map((e) => ({
+                  id: e.id,
+                  title: e.title,
+                  filename: e.filename,
+                  kind: e.doc.kind,
+                  pages: e.doc.pages?.length ?? null,
+                })),
+            })),
+          },
+          // Cache only the warm answer: a cold-boot "not ready" list must not
+          // be pinned at the edge.
+          allReady
+            ? {
+                "Cache-Control": "public, max-age=60",
+                "CDN-Cache-Control":
+                  "public, s-maxage=60, stale-while-revalidate=600",
+                "Vercel-Cache-Tag": "vm-cases",
+              }
+            : {},
+        );
         return true;
       }
       if (req.method === "POST" && path === "/workspace") {
@@ -257,7 +272,13 @@ export function createPublicApi({
           return true;
         }
       }
-      if (req.method === "POST" && path === "/ask") {
+      // GET /answer is the cacheable twin of POST /ask, for the fixed demo
+      // cases only. The engine is deterministic (same documents, question and
+      // context -> same answer), so Vercel's CDN can serve repeats without
+      // waking the free host, and serve a stale answer while it revalidates
+      // (RFC 5861). Visitor workspaces are private and never use this route.
+      const cacheable = req.method === "GET" && path === "/answer";
+      if (cacheable || (req.method === "POST" && path === "/ask")) {
         if (!globalAsk("*") || !askLimit(ip)) {
           send(
             res,
@@ -267,7 +288,18 @@ export function createPublicApi({
           );
           return true;
         }
-        const data = await readJson(req);
+        const data = cacheable
+          ? {
+              case: url.searchParams.get("case"),
+              question: url.searchParams.get("q"),
+              context: url.searchParams.get("context") ?? "",
+            }
+          : await readJson(req);
+        if (cacheable && !Object.hasOwn(CASES, data.case))
+          return (
+            send(res, 400, { error: "GET /answer is for the demo cases." }),
+            true
+          );
         const s = caseOf(data.case);
         if (!s) return (send(res, 400, { error: "Pick a case." }), true);
         if (!s.bundle)
@@ -297,7 +329,19 @@ export function createPublicApi({
             ? data.context
             : "";
         const shown = await resolve(s, q, ctx);
-        send(res, 200, publicAnswer(shown));
+        send(
+          res,
+          200,
+          publicAnswer(shown),
+          cacheable
+            ? {
+                "Cache-Control": "public, max-age=300",
+                "CDN-Cache-Control":
+                  "public, s-maxage=3600, stale-while-revalidate=86400",
+                "Vercel-Cache-Tag": "vm-answers",
+              }
+            : {},
+        );
         return true;
       }
       const doc = /^\/doc\/(\w+)\/([0-9a-f-]{36})(\/original)?$/.exec(path);

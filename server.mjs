@@ -537,6 +537,12 @@ export function createLocalServer({
     target.bundle = bundle;
     return target;
   };
+  const stableDocId = (sid, filename) => {
+    const h = createHash("sha256")
+      .update(`vm-demo:${sid}:${filename}`)
+      .digest("hex");
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+  };
   async function loadCase(target, files, docs = null) {
     if (docs) replaceWithText(target, docs);
     for (const f of files ?? []) {
@@ -553,8 +559,14 @@ export function createLocalServer({
         break;
       await new Promise((r) => setTimeout(r, 100));
     }
-    for (const e of libraryOf(target))
+    for (const e of libraryOf(target)) {
       if (e.status === "needs_review") e.included = true;
+      // Demo documents get ids derived from the case and file name, so they
+      // are the same on every boot. Answers and case lists can then be cached
+      // at the CDN across free-tier restarts without pointing at documents
+      // that no longer exist. Visitor uploads keep random, unguessable ids.
+      e.id = stableDocId(target.sid, e.filename);
+    }
     return bundleFor(target, indexable(target));
   }
   // Loaded on first use (tests that never touch /api/public pay nothing);
@@ -1451,7 +1463,13 @@ export function createLocalServer({
   return server;
 }
 export const server = createLocalServer();
-if (process.argv[1] === new URL(import.meta.url).pathname)
+if (process.argv[1] === new URL(import.meta.url).pathname) {
+  // Slow-client protection: a request must send its headers within 15 s and
+  // finish within 90 s (uploads included). Keep-alive outlives the proxy's
+  // idle timeout so the proxy never reuses a socket we already closed.
+  server.headersTimeout = 15_000;
+  server.requestTimeout = 90_000;
+  server.keepAliveTimeout = 65_000;
   server.listen(
     Number(process.env.PORT || 4317),
     process.env.VM_BIND_HOST || "127.0.0.1",
@@ -1460,3 +1478,18 @@ if (process.argv[1] === new URL(import.meta.url).pathname)
       server.loadPublicCases({ bindVoice: true });
     },
   );
+  // Render sends SIGTERM before replacing the instance on a deploy: stop
+  // accepting connections, let in-flight answers finish, then exit. A hard
+  // deadline keeps a stuck request from holding the old instance forever.
+  let stopping = false;
+  const stop = (sig) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`${sig}: draining`);
+    server.close(() => process.exit(0));
+    server.closeIdleConnections?.();
+    setTimeout(() => process.exit(0), 10_000).unref();
+  };
+  process.on("SIGTERM", () => stop("SIGTERM"));
+  process.on("SIGINT", () => stop("SIGINT"));
+}

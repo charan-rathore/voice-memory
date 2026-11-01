@@ -6,7 +6,7 @@
 //   - the hero's tether code only reads answers that the snapshot holds.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync } from "node:fs";
 import { createLocalServer } from "../server.mjs";
 
 const site = (p) => new URL(`../site/${p}`, import.meta.url);
@@ -108,4 +108,103 @@ test("the hero's questions are all in the saved snapshot", () => {
   assert.equal(keys.length, 3);
   for (const k of keys)
     assert.ok(snap.includes(JSON.stringify(k)), `snapshot lacks ${k}`);
+});
+
+test("GET /answer is the cacheable twin of POST /ask, for demo cases only", async () => {
+  const srv = createLocalServer({ port: 0 });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  await srv.loadPublicCases();
+  const base = `http://127.0.0.1:${srv.address().port}/api/public`;
+  try {
+    for (const [c, q] of [
+      ["health", "What is SYN-0001's ferritin result?"],
+      ["deal", "Was the $42,000 revision finalized?"],
+    ]) {
+      const g = await fetch(
+        `${base}/answer?${new URLSearchParams({ case: c, q })}`,
+      );
+      assert.equal(g.status, 200);
+      assert.match(g.headers.get("cdn-cache-control"), /s-maxage=\d+/);
+      assert.match(
+        g.headers.get("cdn-cache-control"),
+        /stale-while-revalidate/,
+      );
+      const p = await fetch(base + "/ask", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ case: c, question: q }),
+      });
+      assert.equal(p.headers.get("cache-control"), "no-store");
+      assert.deepEqual(await g.json(), await p.json());
+    }
+    const ws = await (
+      await fetch(base + "/workspace", { method: "POST" })
+    ).json();
+    const priv = await fetch(`${base}/answer?case=${ws.id}&q=anything`);
+    assert.equal(priv.status, 400, "a private workspace is never edge-cached");
+    assert.equal(priv.headers.get("cache-control"), "no-store");
+    const bad = await fetch(`${base}/answer?case=health`);
+    assert.equal(bad.status, 400);
+    assert.equal(
+      bad.headers.get("cache-control"),
+      "no-store",
+      "errors are never cached",
+    );
+    const cases = await fetch(base + "/cases");
+    assert.match(cases.headers.get("cdn-cache-control") ?? "", /s-maxage/);
+  } finally {
+    srv.close();
+  }
+});
+
+test("demo document ids are identical across boots, so cached answers stay valid", async () => {
+  const ids = [];
+  for (let i = 0; i < 2; i++) {
+    const srv = createLocalServer({ port: 0 });
+    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+    await srv.loadPublicCases();
+    const base = `http://127.0.0.1:${srv.address().port}/api/public`;
+    const { cases } = await (await fetch(base + "/cases")).json();
+    ids.push(
+      cases
+        .flatMap((c) => c.documents.map((d) => `${c.id}/${d.title}=${d.id}`))
+        .sort(),
+    );
+    const a = await (
+      await fetch(
+        `${base}/answer?case=health&q=${encodeURIComponent("What is SYN-0001's ferritin result?")}`,
+      )
+    ).json();
+    const id = a.lead.citations[0].documentId;
+    assert.equal((await fetch(`${base}/doc/health/${id}`)).status, 200);
+    srv.close();
+  }
+  assert.ok(ids[0].length >= 11);
+  assert.deepEqual(ids[0], ids[1]);
+});
+
+test("first load stays inside its weight budget (call library and film are deferred)", () => {
+  const eager = [
+    "index.html",
+    ...[
+      ...html.matchAll(
+        /<(?:script|link)[^>]+(?:src|href)="([^"]+\.(?:js|mjs|css|woff2))"/g,
+      ),
+    ].map((m) => m[1]),
+    "motion-math.mjs",
+    "motion-loop.mjs",
+    "pages/a-2026-10-amended.png",
+    "pages/a-2026-10-prelim.png",
+  ];
+  const bytes = [...new Set(eager)].reduce(
+    (n, f) => n + statSync(site(f)).size,
+    0,
+  );
+  assert.doesNotMatch(
+    html,
+    /bolna-web-call/,
+    "the call library loads on intent, not on page load",
+  );
+  assert.match(html, /<video[^>]*preload="none"/);
+  assert.ok(bytes < 520_000, `first load is ${bytes} bytes`);
 });

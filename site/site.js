@@ -68,6 +68,7 @@
               : "Request failed."),
         );
         e.status = r.status;
+        e.retryAfter = Number(r.headers.get("retry-after")) || 0;
         throw e;
       }
       return body;
@@ -76,12 +77,35 @@
     }
   }
 
+  // Capped exponential backoff with full jitter (AWS Architecture Blog,
+  // "Exponential Backoff And Jitter"): wait a random time in [0, min(cap,
+  // base * 2^attempt)], so many visitors arriving during one cold boot spread
+  // their probes out instead of hitting the waking host in lockstep. A
+  // server's Retry-After is honoured as a floor.
+  const backoff = (attempt, { base = 1000, cap = 30000, floor = 0 } = {}) =>
+    Math.max(floor, Math.random() * Math.min(cap, base * 2 ** attempt));
+  // Hidden tabs don't probe: a forgotten background tab would otherwise keep
+  // the free host awake (and spend its monthly hours) indefinitely.
+  const whenVisible = () =>
+    document.hidden
+      ? new Promise((r) =>
+          document.addEventListener("visibilitychange", function on() {
+            if (document.hidden) return;
+            document.removeEventListener("visibilitychange", on);
+            r();
+          }),
+        )
+      : Promise.resolve();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   async function connect() {
     note("Connecting to the live engine…");
     // Never give up: a cold free-tier boot plus first-ingest can take several
-    // minutes, so after the fast phase keep polling slowly in the background.
-    // A page that stops retrying strands every visitor who arrived early.
+    // minutes, so keep probing (with backoff) while the page is visible. A
+    // page that stops retrying strands every visitor who arrived early.
+    const t0 = Date.now();
     for (let i = 0; ; i++) {
+      let floor = 0;
       try {
         const s = await api("/status", {}, 8000);
         if (s.cases.health && s.cases.deal) {
@@ -90,20 +114,21 @@
           state.live = true;
           state.voice = s.voice;
           note(
-            "Live engine connected · every answer is computed now from the fictional records.",
+            "Live engine connected. Every answer is computed now from the fictional records.",
           );
           renderRail();
           return;
         }
-      } catch {
-        /* free host cold start */
+      } catch (e) {
+        floor = (e.retryAfter || 0) * 1000; /* free host cold start */
       }
       note(
-        i < 40
+        Date.now() - t0 < 120000
           ? "Waking the live engine (free hosting can take up to a minute). Suggested questions answer from a saved run of the same engine meanwhile."
-          : "Still waking the live engine — retrying in the background. Uploads and questions work the moment it is up.",
+          : "Still waking the live engine, retrying in the background. Uploads and questions work the moment it is up.",
       );
-      await new Promise((r) => setTimeout(r, i < 40 ? 3000 : 15000));
+      await sleep(backoff(Math.min(i, 5), { base: 1500, cap: 20000, floor }));
+      await whenVisible();
     }
   }
 
@@ -330,6 +355,32 @@
     }
   }
 
+  // Demo cases ask with a cacheable GET (repeats are served by the CDN, not
+  // the free host); visitor workspaces always POST. If the engine predates
+  // GET /answer (the site deploys before the engine does), fall back to POST.
+  let getAnswers = true;
+  async function askEngine(caseId, question, context) {
+    if (caseId !== "own" && getAnswers) {
+      const qs = new URLSearchParams({ case: caseId, q: question });
+      if (context) qs.set("context", context);
+      try {
+        return await api("/answer?" + qs);
+      } catch (e) {
+        if (e.status !== 404 && e.status !== 405) throw e;
+        getAnswers = false;
+      }
+    }
+    return api("/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        case: apiCase(caseId),
+        question,
+        context: context || undefined,
+      }),
+    });
+  }
+
   async function ask(question, { via = "typed", caseId = state.case } = {}) {
     question = String(question ?? "").trim();
     if (!question) return;
@@ -351,15 +402,7 @@
         throw Object.assign(new Error("not live"), { offline: true });
       if (caseId === "own" && !state.cases.own?.ready)
         throw new Error("Upload a document first, then ask about it.");
-      result = await api("/ask", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          case: apiCase(caseId),
-          question,
-          context: state.context[caseId] || undefined,
-        }),
-      });
+      result = await askEngine(caseId, question, state.context[caseId]);
     } catch (e) {
       const saved = snap.answers?.[`${caseId}|${question}`];
       if (saved) {
@@ -651,12 +694,35 @@
   const callState = (html) => ($("#call-state").innerHTML = html);
   const meter = $$(".call-meter i");
 
+  // The Bolna call library is ~235 KB; most visitors never call, so it loads
+  // on the first sign of intent (hover, focus or touch on a call button), or
+  // at the latest when the call starts.
+  let bolnaP = null;
+  const loadBolna = () =>
+    (bolnaP ??= window.BolnaWebCall
+      ? Promise.resolve()
+      : new Promise((ok, bad) => {
+          const sc = document.createElement("script");
+          sc.src = "vendor/bolna-web-call.min.js";
+          sc.onload = ok;
+          sc.onerror = () => ((bolnaP = null), bad(Error("load failed")));
+          document.head.appendChild(sc);
+        }));
+  for (const ev of ["pointerenter", "focusin", "touchstart"])
+    document.addEventListener(
+      ev,
+      (e) =>
+        e.target.closest?.("[data-start-call],[data-call-link]") && loadBolna(),
+      { capture: true, passive: true },
+    );
+
   async function startCall() {
     $("#try").scrollIntoView({
       behavior: reduced ? "auto" : "smooth",
       block: "start",
     });
     if (state.call) return stopCall();
+    await loadBolna().catch(() => {});
     if (!window.BolnaWebCall) {
       callState(
         "The call library didn't load. Refresh the page and try again.",

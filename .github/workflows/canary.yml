@@ -1,0 +1,22 @@
+# Production canary: asks the live site the hero's questions and fails if the
+# answers drift from the shipped snapshot or the engine doesn't come up.
+# It runs every 14 minutes from 08:00 to 24:00 IST only. That keeps the free
+# Render instance warm through the day (it sleeps after 15 idle minutes) while
+# spending about 16 h/day, roughly 500 of the workspace's 750 free hours a
+# month, which leaves room for the other free service. GitHub may delay or
+# skip scheduled runs under load, so this is best-effort warming, not an SLA.
+name: canary
+on:
+  schedule:
+    - cron: "*/14 2-18 * * *"
+  workflow_dispatch:
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/canary.mjs https://voice-memory-beige.vercel.app
