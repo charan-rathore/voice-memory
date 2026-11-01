@@ -122,7 +122,8 @@
             "Live engine connected. Every answer is computed now from the fictional records.",
           );
           renderRail();
-          if (!$("#viewer-body .page, #viewer-body .vw-text")) showEmptyViewer();
+          if (!$("#viewer-body .page, #viewer-body .vw-text"))
+            showEmptyViewer();
           if ($("#answer .overview")) renderOverview();
           return;
         }
@@ -414,6 +415,7 @@
   const loadVisual = () =>
     (visualP ??= Promise.all([
       window.VMVisual ? null : loadScript("visual.js"),
+      window.VM_SNAPSHOT_VISUALS ? null : loadScript("snapshot-visuals.js"),
       new Promise((ok) => {
         const l = document.createElement("link");
         l.rel = "stylesheet";
@@ -437,15 +439,23 @@
     if (state.live || id === "own") {
       try {
         if (id === "own" && !state.ws) throw 0;
-        v = (await api(`/visual/${apiCase(id)}?lang=${lang}`, {}, 15000)).visual;
+        v = (await api(`/visual/${apiCase(id)}?lang=${lang}`, {}, 15000))
+          .visual;
       } catch {
         v = null;
       }
     }
-    const saved = snap.visuals?.[id];
-    v ??= saved?.visual
-      ? { ...saved.visual, lang, narration: saved.narration?.[lang] ?? saved.visual.narration }
-      : null;
+    if (!v) {
+      await loadVisual(); // brings snapshot-visuals.js (memoized)
+      const saved = (window.VM_SNAPSHOT_VISUALS ?? snap.visuals)?.[id];
+      v = saved?.visual
+        ? {
+            ...saved.visual,
+            lang,
+            narration: saved.narration?.[lang] ?? saved.visual.narration,
+          }
+        : null;
+    }
     if (v && id !== "own") state.visuals[k] = v;
     return v;
   }
@@ -679,28 +689,62 @@
       intro:
         "Four synthetic lab reports for two fictional people. One result was printed wrong and corrected; one test changed units between visits; a second person has their own TSH.",
       docs: {
-        "a-2026-09.pdf": ["SYN-0001 · 3 Sep 2026 · final", "Baseline: creatinine 1.2 mg/dL, ferritin 0.5 ng/mL"],
-        "a-2026-10-prelim.pdf": ["SYN-0001 · 12 Oct · preliminary", "Ferritin printed as 5; creatinine now in µmol/L"],
-        "a-2026-10-amended.pdf": ["SYN-0001 · 12 Oct · amended 15 Oct", "Ferritin corrected from 5 to 50 ng/mL"],
-        "c-2026-10.pdf": ["SYN-0003 · Oct 2026", "A second person, so “the TSH” is ambiguous"],
+        "a-2026-09.pdf": [
+          "SYN-0001 · 3 Sep 2026 · final",
+          "Baseline: creatinine 1.2 mg/dL, ferritin 0.5 ng/mL",
+        ],
+        "a-2026-10-prelim.pdf": [
+          "SYN-0001 · 12 Oct · preliminary",
+          "Ferritin printed as 5; creatinine now in µmol/L",
+        ],
+        "a-2026-10-amended.pdf": [
+          "SYN-0001 · 12 Oct · amended 15 Oct",
+          "Ferritin corrected from 5 to 50 ng/mL",
+        ],
+        "c-2026-10.pdf": [
+          "SYN-0003 · Oct 2026",
+          "A second person, so “the TSH” is ambiguous",
+        ],
       },
     },
     deal: {
       intro:
         "Seven fictional records of one consulting deal. The fee was revised, the payment split was discussed two ways, and nothing was ever signed.",
       docs: {
-        "01_Northstar_Proposal_v1.md": ["Proposal v1 · 4 Sep", "$48,000, 50/50 billing; an offer, not an agreement"],
-        "02_Client_Kickoff_Notes.md": ["Kickoff notes · 11 Sep", "Scope narrowed to two regions; finance approval pending"],
-        "03_Commercial_Revision.md": ["Commercial revision · 18 Sep", "$42,000, 40% upfront / 60% after; subject to sign-off"],
-        "04_Steering_Committee_Notes.md": ["Steering notes · 25 Sep", "50/50 discussed; no vote taken"],
-        "05_Project_Delivery_Update.md": ["Delivery update · 2 Oct", "22 Nov is an internal target, not a deadline"],
-        "06_Client_Email_Extract.md": ["Client email · 6 Oct", "Client keeps the 15 Nov deadline"],
-        "07_Internal_Action_Log.md": ["Action log · 9 Oct", "Open decisions; no signed agreement exists"],
+        "01_Northstar_Proposal_v1.md": [
+          "Proposal v1 · 4 Sep",
+          "$48,000, 50/50 billing; an offer, not an agreement",
+        ],
+        "02_Client_Kickoff_Notes.md": [
+          "Kickoff notes · 11 Sep",
+          "Scope narrowed to two regions; finance approval pending",
+        ],
+        "03_Commercial_Revision.md": [
+          "Commercial revision · 18 Sep",
+          "$42,000, 40% upfront / 60% after; subject to sign-off",
+        ],
+        "04_Steering_Committee_Notes.md": [
+          "Steering notes · 25 Sep",
+          "50/50 discussed; no vote taken",
+        ],
+        "05_Project_Delivery_Update.md": [
+          "Delivery update · 2 Oct",
+          "22 Nov is an internal target, not a deadline",
+        ],
+        "06_Client_Email_Extract.md": [
+          "Client email · 6 Oct",
+          "Client keeps the 15 Nov deadline",
+        ],
+        "07_Internal_Action_Log.md": [
+          "Action log · 9 Oct",
+          "Open decisions; no signed agreement exists",
+        ],
       },
     },
   };
   function caseFilesHtml() {
-    const c = state.cases[state.case] ?? snap.cases?.find((x) => x.id === state.case);
+    const c =
+      state.cases[state.case] ?? snap.cases?.find((x) => x.id === state.case);
     const docs = c?.documents ?? [];
     if (!docs.length)
       return `<div class="viewer-empty">${
@@ -711,7 +755,12 @@
     const meta = CASE_FILES[state.case] ?? { intro: "", docs: {} };
     const cards = docs
       .map((d, i) => {
-        const [head, note] = meta.docs[d.title] ?? [shortTitle(d.title), d.kind === "pdf" ? `${d.pages ?? ""} page PDF`.trim() : "Text document"];
+        const [head, note] = meta.docs[d.title] ?? [
+          shortTitle(d.title),
+          d.kind === "pdf"
+            ? `${d.pages ?? ""} page PDF`.trim()
+            : "Text document",
+        ];
         return `<button type="button" class="file-card" data-doc="${esc(d.title)}" style="--i:${i}">
           <span class="file-kind">${esc((d.kind ?? "doc").replace("markdown", "md").toUpperCase())}</span>
           <b>${esc(head)}</b><span>${esc(note)}</span><i aria-hidden="true">Open</i>
@@ -740,7 +789,8 @@
     const btn = $("#files-btn");
     if (btn) {
       btn.hidden = !n;
-      btn.querySelector("b").textContent = `View the ${n} document${n === 1 ? "" : "s"}`;
+      btn.querySelector("b").textContent =
+        `View the ${n} document${n === 1 ? "" : "s"}`;
     }
   }
 
@@ -751,7 +801,8 @@
     const btn = $("#files-btn");
     if (btn) {
       btn.hidden = !docs.length;
-      btn.querySelector("b").textContent = `View the ${docs.length} document${docs.length === 1 ? "" : "s"}`;
+      btn.querySelector("b").textContent =
+        `View the ${docs.length} document${docs.length === 1 ? "" : "s"}`;
     }
     $("#doc-rail").innerHTML = docs
       .map(
@@ -840,7 +891,9 @@
         .filter((x) => x.length > 10);
       const needles = lines.length
         ? lines
-        : [esc(String(c.quote ?? "").trim())].filter((q) => q && q.length <= 600);
+        : [esc(String(c.quote ?? "").trim())].filter(
+            (q) => q && q.length <= 600,
+          );
       for (const q of needles)
         if (q && html.includes(q)) html = html.replace(q, `<mark>${q}</mark>`);
     }
@@ -850,7 +903,8 @@
   const textPages = (html) => {
     const lines = html.split("\n");
     const out = [];
-    for (let i = 0; i < lines.length; i += 42) out.push(lines.slice(i, i + 42).join("\n"));
+    for (let i = 0; i < lines.length; i += 42)
+      out.push(lines.slice(i, i + 42).join("\n"));
     return out.length ? out : [html];
   };
   function boxesHtml(cites) {
@@ -877,14 +931,21 @@
   async function renderPdfPages(holder, docId, cites) {
     try {
       const pdfjs = await loadPdfjs();
-      const r = await fetch(`/api/public/doc/${apiCase("own")}/${docId}/original`);
+      const r = await fetch(
+        `/api/public/doc/${apiCase("own")}/${docId}/original`,
+      );
       if (!r.ok) throw 0;
-      const pdf = await pdfjs.getDocument({ data: new Uint8Array(await r.arrayBuffer()), isEvalSupported: false }).promise;
+      const pdf = await pdfjs.getDocument({
+        data: new Uint8Array(await r.arrayBuffer()),
+        isEvalSupported: false,
+      }).promise;
       holder.innerHTML = "";
       for (let n = 1; n <= pdf.numPages; n++) {
         const page = await pdf.getPage(n);
         const vp = page.getViewport({ scale: 1 });
-        const scale = Math.min(2, (holder.clientWidth || 560) / vp.width) * (window.devicePixelRatio || 1);
+        const scale =
+          Math.min(2, (holder.clientWidth || 560) / vp.width) *
+          (window.devicePixelRatio || 1);
         const view = page.getViewport({ scale });
         const wrap = document.createElement("div");
         wrap.className = "rd-page rd-canvas";
@@ -909,7 +970,10 @@
               wrap.appendChild(box);
             }
         holder.appendChild(wrap);
-        await page.render({ canvasContext: cv.getContext("2d"), viewport: view }).promise;
+        await page.render({
+          canvasContext: cv.getContext("2d"),
+          viewport: view,
+        }).promise;
       }
     } catch {
       holder.innerHTML = `<p class="viewer-note">Couldn't render the pages of this PDF here; its text is below.</p>`;
@@ -921,13 +985,19 @@
   async function openDoc(title, cites = [], primary = null) {
     emit("vm:source", { title, cited: cites.length > 0 });
     loadVisual();
-    const c = state.cases[state.case] ?? snap.cases?.find((x) => x.id === state.case);
-    const docs = c?.documents?.length ? c.documents : [{ title, kind: /\.pdf$/i.test(title) ? "pdf" : "md", pages: 1 }];
-    $$("#doc-rail button").forEach((b) => b.classList.toggle("on", b.dataset.doc === title));
+    const c =
+      state.cases[state.case] ?? snap.cases?.find((x) => x.id === state.case);
+    const docs = c?.documents?.length
+      ? c.documents
+      : [{ title, kind: /\.pdf$/i.test(title) ? "pdf" : "md", pages: 1 }];
+    $$("#doc-rail button").forEach((b) =>
+      b.classList.toggle("on", b.dataset.doc === title),
+    );
     const pagesOf = (d) => Math.max(1, Number(d.pages) || 1);
     const total = docs.reduce((n, d) => n + pagesOf(d), 0);
     $("#viewer-title").textContent = shortTitle(title);
-    $("#viewer-meta").textContent = `${docs.length} document${docs.length === 1 ? "" : "s"}, ${total} page${total === 1 ? "" : "s"}`;
+    $("#viewer-meta").textContent =
+      `${docs.length} document${docs.length === 1 ? "" : "s"}, ${total} page${total === 1 ? "" : "s"}`;
     const strip = docs
       .map(
         (d, i) =>
@@ -947,11 +1017,16 @@
         const base = d.title.replace(/\.pdf$/i, "");
         for (let n = 1; n <= pagesOf(d); n++)
           pages += `<div class="page rd-page" style="animation-delay:${Math.min(i, 3) * 90}ms"><img src="pages/${esc(n === 1 ? base : `${base}-p${n}`)}.png" alt="Page ${n} of ${esc(d.title)}, a synthetic lab report" loading="lazy" />${n === 1 ? boxesHtml(mine) : ""}<span class="rd-pno">Page ${n} of ${pagesOf(d)}</span></div>`;
-      } else pages = `<div class="rd-pages" data-text="${i}"><div class="skeleton" style="width:80%"></div></div>`;
-      const note = primary && d.title === title ? `<p class="page-note">${esc(prettyQuote(primary.quote))}</p>` : "";
+      } else
+        pages = `<div class="rd-pages" data-text="${i}"><div class="skeleton" style="width:80%"></div></div>`;
+      const note =
+        primary && d.title === title
+          ? `<p class="page-note">${esc(prettyQuote(primary.quote))}</p>`
+          : "";
       return `<section class="rd-doc${d.title === title ? " focus" : ""}" data-doc-i="${i}">${head}${pages}${note}</section>`;
     });
-    $("#viewer-body").innerHTML = `<div class="reader"><nav class="rd-strip" aria-label="Pages in this case">${strip}</nav>${sections.join("")}</div>`;
+    $("#viewer-body").innerHTML =
+      `<div class="reader"><nav class="rd-strip" aria-label="Pages in this case">${strip}</nav>${sections.join("")}</div>`;
     // Text documents (and visitor PDFs) fill in as they load.
     await Promise.all(
       docs.map(async (d, i) => {
@@ -975,19 +1050,33 @@
         }
         const pages = textPages(markText(text, mine));
         holder.innerHTML = pages
-          .map((h, n) => `<div class="vw-text rd-page">${h}${pages.length > 1 ? `<span class="rd-pno">Page ${n + 1} of ${pages.length}</span>` : ""}</div>`)
+          .map(
+            (h, n) =>
+              `<div class="vw-text rd-page">${h}${pages.length > 1 ? `<span class="rd-pno">Page ${n + 1} of ${pages.length}</span>` : ""}</div>`,
+          )
           .join("");
       }),
     );
     const target = $("#viewer-body mark") ?? $("#viewer-body .rd-doc.focus");
-    if (target && $("#viewer-body").scrollHeight > $("#viewer-body").clientHeight)
-      target.scrollIntoView({ block: target.tagName === "MARK" ? "center" : "start", behavior: reduced ? "auto" : "smooth" });
+    if (
+      target &&
+      $("#viewer-body").scrollHeight > $("#viewer-body").clientHeight
+    )
+      target.scrollIntoView({
+        block: target.tagName === "MARK" ? "center" : "start",
+        behavior: reduced ? "auto" : "smooth",
+      });
   }
   function jumpTo(i) {
     const sec = $(`#viewer-body [data-doc-i="${i}"]`);
     if (!sec) return;
-    $$("#viewer-body .rd-thumb").forEach((b) => b.classList.toggle("on", b.dataset.jump === String(i)));
-    sec.scrollIntoView({ block: "start", behavior: reduced ? "auto" : "smooth" });
+    $$("#viewer-body .rd-thumb").forEach((b) =>
+      b.classList.toggle("on", b.dataset.jump === String(i)),
+    );
+    sec.scrollIntoView({
+      block: "start",
+      behavior: reduced ? "auto" : "smooth",
+    });
   }
 
   async function docText(title) {
@@ -1426,12 +1515,23 @@
     if (t.matches("[data-files]")) {
       showEmptyViewer();
       if (matchMedia("(max-width: 1060px)").matches)
-        $("#viewer").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+        $("#viewer").scrollIntoView({
+          behavior: reduced ? "auto" : "smooth",
+          block: "start",
+        });
       return;
     }
     if (t.matches("[data-listen]")) {
       const text = state.current?.lead?.text ?? "";
-      if (window.VMVisual?.narrate(text, state.currentLang ?? state.lang, $("#a-visual"), t)) return;
+      if (
+        window.VMVisual?.narrate(
+          text,
+          state.currentLang ?? state.lang,
+          $("#a-visual"),
+          t,
+        )
+      )
+        return;
       return speak(text);
     }
   });
@@ -1462,29 +1562,28 @@
   // Dictation (dictate.js), loaded on the first sign of intent.
   let dictP = null;
   const loadDictate = () =>
-    (dictP ??= Promise.all([loadScript("dictate.js"), loadVisual()]).then(() =>
-      window.VMDictate?.init({
-        input: $("#q"),
-        button: $("#dict-btn"),
-        status: $("#dict-status"),
-        lang: () => state.lang,
-        caseId: () => (state.case === "own" ? (state.ws ?? "") : state.case),
-        serverTranscribe: () => !!state.semantic?.transcribe,
-        onText: (text) => ask(text, { via: "voice" }),
-      }),
-    ).catch(() => (dictP = null)));
+    (dictP ??= Promise.all([loadScript("dictate.js"), loadVisual()])
+      .then(() =>
+        window.VMDictate?.init({
+          input: $("#q"),
+          button: $("#dict-btn"),
+          status: $("#dict-status"),
+          lang: () => state.lang,
+          caseId: () => (state.case === "own" ? (state.ws ?? "") : state.case),
+          serverTranscribe: () => !!state.semantic?.transcribe,
+          onText: (text) => ask(text, { via: "voice" }),
+        }),
+      )
+      .catch(() => (dictP = null)));
   const dictBtn = $("#dict-btn");
   for (const ev of ["pointerenter", "focus", "touchstart"])
     dictBtn?.addEventListener(ev, loadDictate, { once: true, passive: true });
-  dictBtn?.addEventListener(
-    "click",
-    async (e) => {
-      if (window.VMDictate) return; // dictate.js handles clicks once loaded
-      e.preventDefault();
-      const ctl = await loadDictate();
-      ctl?.start();
-    },
-  );
+  dictBtn?.addEventListener("click", async (e) => {
+    if (window.VMDictate) return; // dictate.js handles clicks once loaded
+    e.preventDefault();
+    const ctl = await loadDictate();
+    ctl?.start();
+  });
 
   setCase("health");
   miniGraph();

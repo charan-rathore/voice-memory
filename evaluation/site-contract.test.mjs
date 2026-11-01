@@ -204,6 +204,11 @@ test("first load stays inside its weight budget (3D graph, call library and film
     "the tuning panel loads only with ?tune",
   );
   assert.match(html, /<video[^>]*preload="none"/);
+  assert.doesNotMatch(
+    html,
+    /snapshot-visuals/,
+    "narrated overviews load with the lazy visual chunk",
+  );
   // index.html + CSS + preloaded fonts + site.js + snapshot + motion bundle
   assert.ok(bytes < 560_000, `first load is ${bytes} bytes`);
 });
