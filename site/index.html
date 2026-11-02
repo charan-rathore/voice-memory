@@ -457,10 +457,13 @@
             <button type="button" role="tab" aria-selected="false" data-plug="bolna">Bolna</button>
             <button type="button" role="tab" aria-selected="false" data-plug="rest">REST</button>
           </div>
-          <pre class="tm-code" data-plug="mcp"><code>{ "mcpServers": { "voice-memory": {
-    "command": "node",
-    "args": ["voice-memory/mcp/server.mjs"] } } }
-<span>// tools: ask_records, list_cases, create_workspace, upload_document</span></code></pre>
+          <pre class="tm-code" data-plug="mcp"><code><span>// remote: add as a custom connector, nothing to install</span>
+https://voice-memory-beige.vercel.app/api/public/mcp
+
+<span>// or local, over stdio</span>
+{ "mcpServers": { "voice-memory": {
+    "command": "node", "args": ["voice-memory/mcp/server.mjs"] } } }
+<span>// tools: ask_records, list_cases, create_workspace, add_document_text</span></code></pre>
           <pre class="tm-code" data-plug="bolna" hidden><code>Agent → LLM → Custom LLM (OpenAI-compatible)
   URL:   https://&lt;your-deployment&gt;/v1
   Key:   your voice capability token

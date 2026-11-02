@@ -6,22 +6,38 @@
 //
 // Zero dependencies: newline-delimited JSON-RPC 2.0 on stdin/stdout, as the
 // MCP stdio transport specifies. It calls the key-free public API, so it
-// holds no secrets.
+// holds no secrets. The same handler also serves the Streamable HTTP
+// transport at /api/public/mcp (src/server.mjs), so a client can add it by
+// URL without cloning anything.
 //
 //   VM_API_BASE=https://voice-memory-beige.vercel.app/api/public node mcp/server.mjs
 //
 // Claude Desktop / Claude Code config:
 //   { "mcpServers": { "voice-memory": { "command": "node",
 //       "args": ["/path/to/voice-memory/mcp/server.mjs"] } } }
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
+// or, remote: https://voice-memory-beige.vercel.app/api/public/mcp
+//
+// upload_document reads a local file, so an agent tricked by a prompt could
+// try to send anything on disk. It only accepts the document types the
+// engine reads, under 4 MB, never inside a hidden directory, and, when
+// VM_MCP_UPLOAD_ROOTS is set (colon-separated), only under those folders.
+// The remote transport has no local files and does not offer it.
+import { readFile, realpath, stat } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { basename, isAbsolute, sep, delimiter } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 
 const BASE = (
   process.env.VM_API_BASE || "https://voice-memory-beige.vercel.app/api/public"
 ).replace(/\/$/, "");
-const PROTOCOL = "2025-06-18";
-const VERSION = "1.0.0";
+// Newest first. A client asking for one of these gets it back; anything
+// else gets the newest, and the client decides whether it can continue.
+export const SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
+export const negotiate = (v) => (SUPPORTED.includes(v) ? v : SUPPORTED[0]);
+const VERSION = "1.1.0";
+const MAX_UPLOAD = 4 * 1024 * 1024;
+const UPLOAD_EXT = /\.(pdf|docx|png|jpe?g|txt|md)$/i;
 
 const TOOLS = [
   {
@@ -88,6 +104,26 @@ const TOOLS = [
     },
   },
   {
+    name: "add_document_text",
+    title: "Add a text document",
+    description:
+      "Add a document by its text (notes, a contract clause, an email) to a workspace, as a .txt or .md file. Works on the remote server too.",
+    inputSchema: {
+      type: "object",
+      required: ["workspace", "name", "text"],
+      properties: {
+        workspace: { type: "string", pattern: "^w_[0-9a-f]{32}$" },
+        name: {
+          type: "string",
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 _.-]{0,78}\\.(txt|md)$",
+          description: "File name ending in .txt or .md",
+        },
+        text: { type: "string", maxLength: 200000 },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: "workspace_status",
     title: "Workspace status",
     description: "Each uploaded document's processing stage.",
@@ -103,9 +139,14 @@ const TOOLS = [
   },
 ];
 
-async function api(path, opts = {}) {
-  const r = await fetch(BASE + path, {
+async function api(path, opts = {}, ctx = {}) {
+  const headers = { ...(opts.headers ?? {}) };
+  // the remote transport calls the engine over loopback: keep the caller's
+  // address so per-visitor limits apply to them, not to everyone at once
+  if (ctx.clientIp) headers["x-forwarded-for"] = ctx.clientIp;
+  const r = await fetch((ctx.base ?? BASE) + path, {
     ...opts,
+    headers,
     signal: AbortSignal.timeout(45000),
   });
   const text = await r.text();
@@ -147,10 +188,37 @@ export function shapeAnswer(a) {
   };
 }
 
-async function call(name, args = {}) {
+/** Refuse anything that is not plainly a document the person meant to share. */
+export async function checkUploadPath(p, roots = process.env.VM_MCP_UPLOAD_ROOTS) {
+  if (typeof p !== "string" || !isAbsolute(p))
+    throw new Error("path must be an absolute file path");
+  const real = await realpath(p).catch(() => null);
+  if (!real) throw new Error("no such file");
+  if (!UPLOAD_EXT.test(real))
+    throw new Error("only PDF, DOCX, PNG, JPEG, TXT or MD files can be uploaded");
+  if (real.split(sep).some((seg) => seg.startsWith(".") && seg.length > 1))
+    throw new Error("files inside hidden folders are never uploaded");
+  if (roots) {
+    const allowed = await Promise.all(
+      roots
+        .split(delimiter)
+        .filter(Boolean)
+        .map((r) => realpath(r).catch(() => null)),
+    );
+    if (!allowed.some((r) => r && (real === r || real.startsWith(r + sep))))
+      throw new Error("file is outside the folders allowed for upload");
+  }
+  const st = await stat(real);
+  if (!st.isFile()) throw new Error("not a regular file");
+  if (st.size > MAX_UPLOAD) throw new Error("file is over 4 MB");
+  return real;
+}
+
+async function call(name, args = {}, ctx = {}) {
+  const a = (path, opts) => api(path, opts, ctx);
   switch (name) {
     case "list_cases": {
-      const c = await api("/cases");
+      const c = await a("/cases");
       return (c.cases ?? c).map((x) => ({
         id: x.id,
         title: x.title,
@@ -158,7 +226,7 @@ async function call(name, args = {}) {
       }));
     }
     case "ask_records": {
-      const a = await api("/ask", {
+      const ans = await a("/ask", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -167,33 +235,61 @@ async function call(name, args = {}) {
           ...(args.context ? { context: args.context } : {}),
         }),
       });
-      return shapeAnswer(a);
+      return shapeAnswer(ans);
     }
     case "create_workspace":
-      return api("/workspace", { method: "POST" });
+      return a("/workspace", { method: "POST" });
     case "upload_document": {
-      const bytes = await readFile(args.path);
-      return api(`/workspace/${args.workspace}/upload`, {
+      if (ctx.remote)
+        throw Object.assign(new Error(`unknown tool ${name}`), {
+          code: -32602,
+        });
+      if (!/^w_[0-9a-f]{32}$/.test(String(args.workspace)))
+        throw new Error("workspace must be an id from create_workspace");
+      const file = await checkUploadPath(args.path);
+      const bytes = await readFile(file);
+      return a(`/workspace/${args.workspace}/upload`, {
         method: "POST",
         headers: {
           "content-type": "application/octet-stream",
-          "x-file-name": encodeURIComponent(basename(args.path)),
+          "x-file-name": encodeURIComponent(basename(file)),
         },
         body: bytes,
       });
     }
+    case "add_document_text": {
+      if (!/^w_[0-9a-f]{32}$/.test(String(args.workspace)))
+        throw new Error("workspace must be an id from create_workspace");
+      if (!/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,78}\.(txt|md)$/.test(String(args.name)))
+        throw new Error("name must be a short file name ending in .txt or .md");
+      const text = String(args.text ?? "");
+      if (!text.trim()) throw new Error("text is empty");
+      if (text.length > 200000) throw new Error("text is over 200,000 characters");
+      return a(`/workspace/${args.workspace}/upload`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/octet-stream",
+          "x-file-name": encodeURIComponent(args.name),
+        },
+        body: Buffer.from(text, "utf8"),
+      });
+    }
     case "workspace_status":
-      return api(`/workspace/${args.workspace}`);
+      if (!/^w_[0-9a-f]{32}$/.test(String(args.workspace)))
+        throw new Error("workspace must be an id from create_workspace");
+      return a(`/workspace/${args.workspace}`);
     default:
       throw Object.assign(new Error(`unknown tool ${name}`), { code: -32602 });
   }
 }
 
-async function handle(msg) {
-  const { id, method, params } = msg;
+export async function handle(msg, ctx = {}) {
+  const { id, method, params } = msg ?? {};
+  if (typeof method !== "string")
+    throw Object.assign(new Error("invalid request"), { code: -32600 });
   if (method === "initialize")
     return {
-      protocolVersion: params?.protocolVersion || PROTOCOL,
+      protocolVersion: negotiate(params?.protocolVersion),
       capabilities: { tools: { listChanged: false } },
       serverInfo: {
         name: "voice-memory",
@@ -204,10 +300,15 @@ async function handle(msg) {
         "Evidence engine over changing records. Relay `answer` and `citations` as given; a `closest` line is a pointer, not an answer. Demo cases are fictional; not a diagnostic product.",
     };
   if (method === "ping") return {};
-  if (method === "tools/list") return { tools: TOOLS };
+  if (method === "tools/list")
+    return {
+      tools: ctx.remote
+        ? TOOLS.filter((t) => t.name !== "upload_document")
+        : TOOLS,
+    };
   if (method === "tools/call") {
     try {
-      const out = await call(params?.name, params?.arguments ?? {});
+      const out = await call(params?.name, params?.arguments ?? {}, ctx);
       return {
         content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
         structuredContent: Array.isArray(out) ? { items: out } : out,
@@ -227,8 +328,87 @@ async function handle(msg) {
   });
 }
 
+/**
+ * One JSON-RPC message in, the response object (or undefined for a
+ * notification) out. Shared by both transports.
+ */
+export async function respond(msg, ctx = {}) {
+  const isReq = msg && typeof msg === "object" && msg.id !== undefined && msg.id !== null;
+  try {
+    const result = await handle(msg, ctx);
+    if (!isReq || result === undefined) return undefined;
+    return { jsonrpc: "2.0", id: msg.id, result };
+  } catch (e) {
+    if (!isReq) return undefined;
+    return {
+      jsonrpc: "2.0",
+      id: msg.id,
+      error: { code: e.code ?? -32603, message: e.message },
+    };
+  }
+}
+
+/**
+ * Streamable HTTP transport (MCP 2025-06-18), stateless: every POST carries
+ * JSON-RPC and gets JSON back; no session, no server-initiated stream.
+ * ctx: { base, clientIp, allowedOrigins }.
+ */
+export async function mcpHttp(req, res, ctx = {}) {
+  const json = (code, body, extra = {}) => {
+    res.writeHead(code, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      ...extra,
+    });
+    res.end(body === undefined ? "" : JSON.stringify(body));
+  };
+  // A browser page must not drive this endpoint from another site (DNS
+  // rebinding / cross-site calls); agents and connectors send no Origin.
+  const origin = req.headers.origin;
+  if (origin && !(ctx.allowedOrigins ?? []).includes(origin))
+    return json(403, { jsonrpc: "2.0", id: null, error: { code: -32000, message: "origin not allowed" } });
+  if (req.method !== "POST")
+    return json(405, { jsonrpc: "2.0", id: null, error: { code: -32000, message: "use POST" } }, { Allow: "POST" });
+  const pv = req.headers["mcp-protocol-version"];
+  if (pv && !SUPPORTED.includes(pv))
+    return json(400, { jsonrpc: "2.0", id: null, error: { code: -32000, message: `unsupported MCP-Protocol-Version ${pv}` } });
+  let raw = "";
+  for await (const chunk of req) {
+    raw += chunk;
+    if (raw.length > 1_000_000)
+      return json(413, { jsonrpc: "2.0", id: null, error: { code: -32000, message: "request too large" } });
+  }
+  let msg;
+  try {
+    msg = JSON.parse(raw);
+  } catch {
+    return json(400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } });
+  }
+  const c = { ...ctx, remote: true };
+  if (Array.isArray(msg)) {
+    // batches (2025-03-26 clients)
+    const out = (await Promise.all(msg.slice(0, 20).map((m) => respond(m, c)))).filter(Boolean);
+    return out.length ? json(200, out) : json(202);
+  }
+  const out = await respond(msg, c);
+  return out ? json(200, out) : json(202);
+}
+
+// Started as a program (also through a symlink, npx, or on Windows), not
+// when imported by the engine or the tests.
+const isMain = (() => {
+  try {
+    return (
+      !!process.argv[1] &&
+      realpathSync(fileURLToPath(import.meta.url)) ===
+        realpathSync(process.argv[1])
+    );
+  } catch {
+    return false;
+  }
+})();
 const send = (o) => process.stdout.write(JSON.stringify(o) + "\n");
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain) {
   const rl = createInterface({ input: process.stdin });
   rl.on("line", async (line) => {
     if (!line.trim()) return;
@@ -242,17 +422,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         error: { code: -32700, message: "parse error" },
       });
     }
-    try {
-      const result = await handle(msg);
-      if (msg.id !== undefined && result !== undefined)
-        send({ jsonrpc: "2.0", id: msg.id, result });
-    } catch (e) {
-      if (msg.id !== undefined)
-        send({
-          jsonrpc: "2.0",
-          id: msg.id,
-          error: { code: e.code ?? -32603, message: e.message },
-        });
-    }
+    const out = await respond(msg);
+    if (out) send(out);
   });
 }

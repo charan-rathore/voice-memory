@@ -12,6 +12,10 @@ Use it when you need an answer about a document that must not guess: it refuses 
 - `POST /api/public/workspace` then `POST /api/public/workspace/{id}/upload` (raw bytes, header `x-file-name`): a private workspace for up to 5 of your own files (PDF, DOCX, PNG/JPEG, TXT, MD; 4 MB each), deleted after 30 idle minutes. Ask it with `"case": "{id}"`. Do not upload real medical or personal records.
 - Rate limits: about 40 questions a minute per visitor. A 429 or 503 carries `Retry-After`; wait that many seconds and retry once. The free host can take up to a minute to wake.
 
+## As an MCP tool
+
+- Remote MCP endpoint (Streamable HTTP, stateless JSON): `https://voice-memory-beige.vercel.app/api/public/mcp`. Tools: `ask_records`, `list_cases`, `create_workspace`, `add_document_text`, `workspace_status`.
+
 ## How to use the answer
 
 - Repeat `lead.text` and its citations as given. The sentence is what the evidence gate checked; rewording it can reintroduce the errors it avoids.

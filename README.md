@@ -167,10 +167,17 @@ pointer, never the answer. It stays off because on outside data it is right
 
 ### As an MCP server
 
-`mcp/server.mjs` is a zero-dependency MCP server (stdio) over the same public
-API, so Claude, ChatGPT connectors and IDE agents can call the engine as a
-tool: `ask_records`, `list_cases`, `create_workspace`, `upload_document`,
-`workspace_status`. It holds no keys.
+Two transports, the same tools (`ask_records`, `list_cases`,
+`create_workspace`, `add_document_text`, `workspace_status`, and, locally,
+`upload_document`). No keys.
+
+**Remote (nothing to install):** add
+`https://voice-memory-beige.vercel.app/api/public/mcp` as a custom connector
+(Streamable HTTP, MCP 2025-06-18, stateless JSON). It calls the engine's own
+public API, so the same rate limits and refusals apply. It does not offer
+`upload_document`: a remote server has no files of yours to read.
+
+**Local (stdio):** `mcp/server.mjs`, zero dependencies.
 
 ```json
 {
@@ -183,7 +190,15 @@ tool: `ask_records`, `list_cases`, `create_workspace`, `upload_document`,
 }
 ```
 
-`VM_API_BASE` points it at another deployment. Tested in `tests/mcp.test.mjs`.
+`upload_document` reads a local file, so an agent misled by a prompt could
+try to send anything on disk. It only accepts PDF, DOCX, PNG, JPEG, TXT and MD
+files under 4 MB, never from a hidden folder (`.ssh`, `.aws`, ...), judged by
+the real path after symlinks; set `VM_MCP_UPLOAD_ROOTS=/path/a:/path/b` to
+allow only those folders. `VM_API_BASE` points it at another deployment.
+
+Checked with the official MCP SDK client over stdio (direct and through a
+symlink) and Streamable HTTP, and with Claude Code (`claude mcp list`:
+Connected). Regression tests: `tests/mcp.test.mjs`.
 
 ## Staying up on a free host
 
@@ -251,7 +266,7 @@ shown while the free host wakes up; a test keeps it equal to the live engine).
 | `site/`                               | Landing page, memory graph page, engine snapshot (Vercel)                    |
 | `public/`                             | Local owner workspace (uploads, voice notes, voice lab)                      |
 | `film/`                               | The submission film (Remotion source)                                        |
-| `mcp/server.mjs`                      | MCP server (stdio, zero dependencies) over the public API                    |
+| `mcp/server.mjs`                      | MCP server (stdio and Streamable HTTP, zero dependencies) over the public API |
 | `src/paraphrase.mjs`                  | Sentence units, dense + BM25 fusion, calibrated gate, closest-line discovery |
 | `evaluation/`, `tests/`               | Tests and benchmarks (`evaluation/outside-bench.mjs`: QMSum + CUAD)          |
 | `docs/MARKET.md`                      | Market, position, pricing hypothesis and 90-day falsifiable plan             |
