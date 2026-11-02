@@ -274,7 +274,44 @@ button { font: inherit; color: inherit; }
 .pipe li:first-child { background: var(--card); color: var(--card-ink); border-color: var(--card); }
 .pipe li:first-child p, .pipe li:first-child .pipe-n { color: var(--card-ink-2); }
 .pipe li:last-child { background: var(--mark); border-color: #e5cb33; }
-.pipe-wire { display: none; }
+/* pipeline mockups: each step shows the surface it happens on */
+.pipe li { display: grid; align-content: start; }
+.pipe-fig { display: grid; gap: 8px; align-content: center; min-height: 132px; margin-bottom: 16px; border-radius: 14px; padding: 14px; font-size: 12.5px; line-height: 1.35; }
+.pf-call { background: rgba(255, 255, 251, 0.07); border: 1px solid rgba(236, 234, 224, 0.18); }
+.pf-live { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--live); }
+.pf-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--live); animation: pf-blink 1.6s ease-in-out infinite; }
+@keyframes pf-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.pf-wave { display: flex; align-items: center; gap: 4px; height: 34px; }
+.pf-wave b { flex: 1; max-width: 9px; border-radius: 4px; background: var(--mark); height: 30%; animation: pf-eq 1.1s ease-in-out infinite; }
+.pf-wave b:nth-child(2n) { animation-delay: 0.15s; }
+.pf-wave b:nth-child(3n) { animation-delay: 0.3s; }
+.pf-wave b:nth-child(4n) { animation-delay: 0.45s; }
+@keyframes pf-eq { 0%, 100% { height: 22%; } 50% { height: 95%; } }
+.pf-heard { color: var(--card-ink); font-style: italic; }
+.pf-resolve { background: var(--paper-2); border: 1px dashed var(--rule); justify-items: start; }
+.pf-q { background: #fffffb; border: 1px solid var(--rule); border-radius: 12px 12px 12px 3px; padding: 6px 10px; font-style: italic; color: var(--ink-2); }
+.pf-arrow { color: var(--ink-3); padding-left: 4px; }
+.pf-norm { font-family: var(--mono); font-size: 11px; background: var(--ink); color: var(--mark); border-radius: 8px; padding: 6px 10px; }
+.pf-doc { background: var(--paper-2); border: 1px solid var(--rule); position: relative; }
+.pf-page { display: grid; gap: 7px; background: #fffffb; border: 1px solid var(--rule); border-radius: 8px; padding: 12px; box-shadow: 0 2px 0 var(--rule); }
+.pf-line { height: 7px; border-radius: 4px; background: var(--rule); }
+.pf-line:nth-child(1) { width: 55%; }
+.pf-line:nth-child(2) { width: 85%; }
+.pf-line:nth-child(4) { width: 70%; }
+.pf-line.pf-hit { height: auto; background: none; display: grid; gap: 3px; }
+.pf-line.pf-hit mark { background: var(--mark-soft); border-radius: 5px; padding: 3px 6px; font-family: var(--mono); font-size: 11px; color: var(--ink); }
+.pf-line.pf-hit mark s { color: var(--red); }
+.pf-line.pf-hit em { font-style: normal; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #13786c; }
+.pf-pageno { position: absolute; right: 10px; bottom: 8px; font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+.pf-answer { background: rgba(18, 23, 42, 0.08); border: 1px solid rgba(18, 23, 42, 0.14); }
+.pf-say { background: #fffffb; border-radius: 12px 12px 3px 12px; padding: 8px 11px; color: var(--ink); box-shadow: 0 1px 0 var(--rule); }
+.pf-cite { font-family: var(--mono); font-size: 10.5px; color: var(--ink); opacity: 0.75; }
+@media (prefers-reduced-motion: reduce) {
+  .pf-live i, .pf-wave b { animation: none; }
+}
+@media (max-width: 720px) {
+  .pipe-fig { min-height: 0; }
+}
 
 /* ---------------------------------------------------------------- catches */
 .catches { max-width: 1180px; margin: 0 auto; padding: 120px 32px 40px; }
@@ -454,6 +491,7 @@ kbd { font: 500 11px/1 var(--sans); min-width: 22px; height: 22px; padding: 0 6p
 .stat + .stat { border-left: 1px solid var(--rule); }
 .stat:hover { transform: none; box-shadow: none; }
 .stat-fig { display: block; height: 168px; margin-bottom: 14px; position: relative; }
+.fig-cap { position: absolute; left: 2px; bottom: 2px; font-size: 11px; line-height: 1.35; color: var(--ink-3); max-width: 70%; }
 .stat-art { display: block; width: 100%; height: 100%; }
 .stat-num { color: var(--ink); font-size: 60px; font-variant-numeric: lining-nums tabular-nums; }
 .stat-text { font-size: 15.5px; color: var(--ink-2); }

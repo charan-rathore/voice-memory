@@ -204,3 +204,21 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
 .dict-consent [data-yes] { background: #1d2a44; color: #f3f6f4; }
 .dict-consent [data-no] { background: transparent; color: #1d2a44; }
 @media (prefers-reduced-motion: reduce) { .dict-dot, .dict-btn[data-state="working"] svg { animation: none; } }
+
+/* ---------------------------------------------------- readability upgrade */
+.vz-changes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 2px; }
+.vz-changes-k { font: 600 10.5px/1 var(--sans); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-c2); margin-right: 2px; }
+.vz-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 500; padding: 4px 10px; border-radius: 999px; border: 1px solid; }
+.vz-chip i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.vz-chip.fix { color: var(--indigo); border-color: rgba(60, 79, 168, 0.4); background: rgba(60, 79, 168, 0.08); }
+.vz-chip.fix i { background: var(--indigo); }
+.vz-chip.unit { color: var(--ochre); border-color: rgba(181, 121, 26, 0.4); background: rgba(181, 121, 26, 0.08); }
+.vz-chip.unit i { background: var(--ochre); }
+.vz-howto { margin: 6px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--ink-c2); max-width: 62ch; }
+.vz-status { font: 600 9.5px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; padding: 2.5px 7px; border-radius: 999px; margin-left: 7px; vertical-align: 1px; }
+.vz-status.st-amended { color: var(--indigo); background: rgba(60, 79, 168, 0.12); }
+.vz-status.st-preliminary { color: var(--ochre); background: rgba(181, 121, 26, 0.14); }
+.vz-status.st-final { color: var(--pine); background: rgba(46, 125, 91, 0.12); }
+.vz-row { background: rgba(255, 255, 255, 0.65); border: 1px solid rgba(29, 42, 68, 0.1); border-bottom: 1px solid rgba(29, 42, 68, 0.14); border-radius: 10px; padding: 10px 12px 8px; margin-bottom: 8px; box-shadow: 0 2px 0 rgba(29, 42, 68, 0.06); }
+.vz-row:last-child { border-bottom: 1px solid rgba(29, 42, 68, 0.14); }
+.vz-row.speaking { background: rgba(244, 220, 74, 0.35); }

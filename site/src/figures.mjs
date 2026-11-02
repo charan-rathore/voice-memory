@@ -123,14 +123,10 @@ function waffle(cv) {
 function scramble(root) {
   const els = $$("[data-scramble]", root).map((el) => ({ el, text: el.textContent }));
   if (!els.length) return;
-  const LOW = "abcdefghijklmnopqrstuvwxyz",
-    DIG = "0123456789";
-  const swap = (ch, k) => {
-    if (/[0-9]/.test(ch)) return DIG[k % 10];
-    if (/[a-z]/.test(ch)) return LOW[k % 26];
-    if (/[A-Z]/.test(ch)) return LOW[k % 26].toUpperCase();
-    return ch;
-  };
+  // abstract redaction blocks, never fake medical-looking glyphs: the real
+  // fixture values resolve every 6 s, unreadable the rest of the time
+  const BLOCKS = "\u2592\u2591\u2593\u2592\u2591\u2592";
+  const swap = (ch, k) => (/\s/.test(ch) ? ch : BLOCKS[k % BLOCKS.length]);
   let acc = 0;
   whileVisible(root, (dt, t) => {
     if (still) return;
