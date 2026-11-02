@@ -148,7 +148,9 @@
   // ------------------------------------------------------------ verdicts
   const VERDICT = {
     LATEST: ["v-latest", "Latest value"],
+    VALUE: ["v-latest", "From the named report"],
     COMPARED: ["v-ok", "Compared"],
+    SINGLE: ["v-latest", "Only one result"],
     OVERVIEW: ["v-ok", "Summary"],
     NOT_COMPARABLE: ["v-no", "Won't compare"],
     AMBIGUOUS_PATIENT: ["v-ask", "Which patient?"],

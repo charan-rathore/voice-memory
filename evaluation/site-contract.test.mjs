@@ -242,3 +242,30 @@ test("the motion bundle is built from the committed sources", async () => {
     "run node scripts/build-site-motion.mjs",
   );
 });
+
+test("every clinical lead verdict has a curated landing chip label", () => {
+  const js = readFileSync(site("site.js"), "utf8");
+  for (const v of [
+    "LATEST",
+    "VALUE",
+    "SINGLE",
+    "COMPARED",
+    "NOT_COMPARABLE",
+    "NOT_IN_REPORT",
+    "FLAGGED",
+  ])
+    assert.match(
+      js,
+      new RegExp(`${v}:\\s*\\["v-[a-z]+",\\s*"[^"]+"\\]`),
+      `${v} chip label`,
+    );
+});
+
+test("the range-assessment tile names the reading it judges", () => {
+  const js = readFileSync(site("visual.js"), "utf8");
+  assert.match(
+    js,
+    /toRange\)\} · \$\{esc\(shortDate\(t\.latest\.date, lang\)\)\}/,
+    "the 'To the printed range' tile must say which reading it assesses",
+  );
+});

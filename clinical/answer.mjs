@@ -2,7 +2,13 @@
 // Safety decisions (units, patients, amendments, bounds) are made here and in
 // observations.mjs; every sentence is rendered by explain.mjs in the language
 // the question was asked in, in plain, supportive words. No diagnosis.
-import { seriesFor, compare, testKey, subjectOf } from "./observations.mjs";
+import {
+  seriesFor,
+  compare,
+  testKey,
+  subjectOf,
+  MONTHS,
+} from "./observations.mjs";
 import {
   detectLang,
   explainOne,
@@ -135,6 +141,63 @@ export function subjectsFor(question, reports) {
 /**
  * @returns {null | {spoken, verdict, field:null, intent, lang, direction?, used}}
  */
+
+// A question can anchor a report by its date ("the September report", "3
+// September 2026"). An anchored question must be answered from that report,
+// never silently with the latest value: the anchor IS the question.
+const MONTH_NAME = Object.keys(MONTHS)
+  .sort((a, b) => b.length - a.length)
+  .join("|");
+const ANCHOR_ISO = /(\d{4})-(\d{2})-(\d{2})/;
+const ANCHOR_DMY = new RegExp(
+  `(?:^|[^\d])(\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(${MONTH_NAME})\\s*,?\\s*(\\d{4})`,
+  "i",
+);
+const ANCHOR_MDY = new RegExp(
+  `(?<![\\p{L}])(${MONTH_NAME})\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s*,?\\s*(\\d{4})`,
+  "iu",
+);
+const ANCHOR_MY = new RegExp(
+  `(?<![\\p{L}])(${MONTH_NAME})\\s*,?\\s*(\\d{4})(?![\\p{L}\\d])`,
+  "iu",
+);
+const ANCHOR_M = new RegExp(`(?<![\\p{L}])(${MONTH_NAME})(?![\\p{L}])`, "iu");
+// "may"/"march" (and the bare Hindi "मई"/"मार्च") are ordinary words; only
+// with a day or year beside them do they anchor a report.
+const BARE_MONTH_BLOCK = new Set(["may", "march", "मई", "मार्च"]);
+
+function dateAnchor(question) {
+  let m = ANCHOR_ISO.exec(question);
+  if (m) return { y: +m[1], mo: +m[2], d: +m[3], said: m[0] };
+  m = ANCHOR_DMY.exec(question);
+  if (m)
+    return { y: +m[3], mo: MONTHS[m[2].toLowerCase()], d: +m[1], said: m[0] };
+  m = ANCHOR_MDY.exec(question);
+  if (m)
+    return { y: +m[3], mo: MONTHS[m[1].toLowerCase()], d: +m[2], said: m[0] };
+  m = ANCHOR_MY.exec(question);
+  if (m) return { y: +m[2], mo: MONTHS[m[1].toLowerCase()], said: m[0] };
+  m = ANCHOR_M.exec(question);
+  if (m && !BARE_MONTH_BLOCK.has(m[1].toLowerCase()))
+    return { mo: MONTHS[m[1].toLowerCase()], said: m[0] };
+  return null;
+}
+
+function anchorEntry(series, anchor) {
+  const iso = series.filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s.date));
+  if (anchor.d != null && anchor.y != null) {
+    const want = `${anchor.y}-${String(anchor.mo).padStart(2, "0")}-${String(anchor.d).padStart(2, "0")}`;
+    return iso.find((s) => s.date === want) ?? null;
+  }
+  const inMonth = iso.filter(
+    (s) =>
+      Number(s.date.slice(5, 7)) === anchor.mo &&
+      (anchor.y == null || Number(s.date.slice(0, 4)) === anchor.y),
+  );
+  // a bare month names the most recent matching report
+  return inMonth[inMonth.length - 1] ?? null;
+}
+
 export function clinicalTurn(question, reports) {
   if (!reports?.length) return null;
   const hit = findTest(question, reports);
@@ -198,6 +261,33 @@ export function clinicalTurn(question, reports) {
     : null;
 
   if (intent === "LOOKUP" || series.length === 1) {
+    const anchor = intent === "LOOKUP" ? dateAnchor(question) : null;
+    if (anchor) {
+      const entry = anchorEntry(series, anchor);
+      if (!entry)
+        return {
+          ...base,
+          spoken: t.notInPeriod(nameOf(hit), anchor.said),
+          verdict: "NOT_IN_REPORT",
+          used: [],
+        };
+      const o = entry.current;
+      let spoken = explainOne(o, entry.date, lang);
+      if (entry.superseded.length)
+        spoken +=
+          " " +
+          t.amended(
+            sayDate(entry.date, lang),
+            entry.superseded[0].raw,
+            entry.current.raw,
+          );
+      return {
+        ...base,
+        spoken,
+        verdict: "VALUE",
+        used: [o, ...entry.superseded],
+      };
+    }
     const o = latest.current;
     const single = series.length === 1 && intent === "COMPARE";
     let spoken =
@@ -859,9 +949,26 @@ function findGroup(question, reports) {
 const TEST_SHAPED_RE =
   /\b(?:my|the)\s+([a-z][a-z' -]{1,28}?)\s+(?:level|levels|result|results|reading|readings|value|values|count|counts)\b/i;
 const GENERIC_MEASURE = new Set([
-  "blood", "test", "tests", "lab", "labs", "report", "reports", "health",
-  "body", "overall", "final", "latest", "new", "old", "first", "last",
-  "recent", "current", "full", "complete",
+  "blood",
+  "test",
+  "tests",
+  "lab",
+  "labs",
+  "report",
+  "reports",
+  "health",
+  "body",
+  "overall",
+  "final",
+  "latest",
+  "new",
+  "old",
+  "first",
+  "last",
+  "recent",
+  "current",
+  "full",
+  "complete",
 ]);
 function unmatchedTestCandidate(question, reports) {
   const m = TEST_SHAPED_RE.exec(question);

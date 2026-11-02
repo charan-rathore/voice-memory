@@ -375,7 +375,7 @@
       tiles.push(`<div class="dd-tile nc"><span>${esc(w.ncK)}</span><b class="dd-nc">${esc(w.nc[ins.notCompared] ?? w.nc.test)}</b></div>`);
     }
     if (t.latest.range)
-      tiles.push(`<div class="dd-tile"><span>${esc(w.toRange)}</span><b${ins.distance ? "" : ' class="txt"'}>${esc(ins.distance ? w.by(fmt(ins.distance.by), ins.distance.side, ins.distance.bound) : t.latest.position === "within" ? w.inRange : w.noRange)}</b><em>${esc(`${t.latest.range.low}–${t.latest.range.high}${t.unit ? " " + t.unit : ""}`)}</em></div>`);
+      tiles.push(`<div class="dd-tile"><span>${esc(w.toRange)} · ${esc(shortDate(t.latest.date, lang))}</span><b${ins.distance ? "" : ' class="txt"'}>${esc(ins.distance ? w.by(fmt(ins.distance.by), ins.distance.side, ins.distance.bound) : t.latest.position === "within" ? w.inRange : w.noRange)}</b><em>${esc(`${t.latest.range.low}–${t.latest.range.high}${t.unit ? " " + t.unit : ""}`)}</em></div>`);
     tiles.push(`<div class="dd-tile"><span>${esc(w.readingsK)}</span><b class="txt">${esc(w.readings(hs.length, Math.max(reportsN, hs.length)))}</b></div>`);
     const points = hs
       .map((h) => `<li><button type="button" class="dd-src" data-doc="${esc(h.title ?? "")}"${h.title ? "" : " disabled"}><span class="dd-src-d">${esc(shortDate(h.date, lang))}</span><b>${esc(h.raw)}${h.unit ? ` <small>${esc(h.unit)}</small>` : ""}</b><span class="vz-status st-${esc(h.status)}">${esc(w["st_" + h.status] ?? h.status)}</span>${h.superseded.map((g) => `<s class="dd-was">${esc(w.replaced(g.raw))}</s>`).join("")}<span class="dd-go">${esc(w.open)} →</span></button></li>`)

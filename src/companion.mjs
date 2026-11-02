@@ -60,6 +60,7 @@ const O = {
 
 const KIND = {
   LATEST: "value",
+  VALUE: "value",
   COMPARED: "value",
   FLAGGED: "value",
   QUOTED: "found",

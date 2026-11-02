@@ -238,6 +238,242 @@ test("overview: one patient answers, several patients ask whose", async () => {
   assert.equal(multi?.verdict, "AMBIGUOUS_PATIENT");
   assert.match(multi?.spoken, /more than one person/);
   // Naming the patient resolves it.
-  const named = clinicalAnswer("what are SYN-0001's blood levels", [a09, a10, c10]);
+  const named = clinicalAnswer("what are SYN-0001's blood levels", [
+    a09,
+    a10,
+    c10,
+  ]);
   assert.equal(named?.verdict, "OVERVIEW");
+});
+
+// A question that anchors a report by date must be answered from THAT
+// report, never silently with the latest value. The public demo's teaching
+// case is exactly this: September printed creatinine in mg/dL, October
+// changed the unit - so "what did September say" must say 1.2 mg/dL.
+test("date-anchored question answers the anchored report, not the latest", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-prelim.pdf", "a-2026-10-amended.pdf"].map(
+      report,
+    ),
+  );
+  for (const q of [
+    "What was the creatinine value and unit in the September report?",
+    "In the 3 September 2026 report, what was the creatinine result?",
+    "What was my creatinine in September 2026? SYN-0001",
+  ]) {
+    const t = clinicalTurn(q, reports);
+    assert.ok(t, `answered: ${q}`);
+    assert.equal(t.verdict, "VALUE", `${q} -> ${t.verdict}`);
+    assert.equal(t.used[0].raw, "1.2", q);
+    assert.equal(t.used[0].unit, "mg/dL", q);
+    assert.equal(t.used[0].report.title, "a-2026-09.pdf", q);
+    assert.match(t.spoken, /1\.2 mg\/dL/, q);
+    assert.match(t.spoken, /3 September 2026/, q);
+    assert.doesNotMatch(t.spoken, /106|µmol/, q);
+  }
+});
+
+test("date-anchored question uses the anchored report's own unit and range", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf"].map(report),
+  );
+  const t = clinicalTurn("What was the ferritin result in September?", reports);
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "0.5");
+  assert.match(t.spoken, /0\.5 ng\/mL/);
+  assert.match(t.spoken, /3 September 2026/);
+  assert.doesNotMatch(
+    t.spoken,
+    /50 ng\/mL|corrected/,
+    "no October correction leaks into a September answer",
+  );
+});
+
+test("an October anchor uses the amended value, with the correction note", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-prelim.pdf", "a-2026-10-amended.pdf"].map(
+      report,
+    ),
+  );
+  const t = clinicalTurn("What was the ferritin result in October?", reports);
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "50");
+  assert.equal(t.used[0].report.title, "a-2026-10-amended.pdf");
+  assert.match(t.spoken, /corrected from 5 to 50/);
+});
+
+test("no date anchor keeps the latest-value behaviour", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf"].map(report),
+  );
+  const t = clinicalTurn("What was my creatinine result? SYN-0001", reports);
+  assert.equal(t.verdict, "LATEST");
+  assert.equal(t.used[0].raw, "106");
+});
+
+test("an anchor no report matches is an honest miss, never the latest value", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf"].map(report),
+  );
+  const t = clinicalTurn(
+    "What was the creatinine result in the August report?",
+    reports,
+  );
+  assert.ok(t, "answered");
+  assert.equal(t.verdict, "NOT_IN_REPORT");
+  assert.doesNotMatch(t.spoken, /106|1\.2/);
+});
+
+test("a person named with a date anchor still isolates that person", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf", "c-2026-10.pdf"].map(report),
+  );
+  const t = clinicalTurn(
+    "What was the creatinine in the September report for SYN-0001?",
+    reports,
+  );
+  assert.equal(t.verdict, "VALUE");
+  assert.ok(t.used.every((o) => o.report.meta.patient.id === "SYN-0001"));
+  assert.equal(t.used[0].raw, "1.2");
+});
+
+test("a compare question mentioning a month still compares, anchors don't hijack it", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf"].map(report),
+  );
+  const t = clinicalTurn(
+    "Did my creatinine change since the September report?",
+    reports,
+  );
+  assert.equal(t.verdict, "NOT_COMPARABLE", t.spoken);
+  assert.match(t.spoken, /don't convert between units/);
+});
+
+test("a month name inside an ordinary word is not an anchor", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf"].map(report),
+  );
+  for (const q of [
+    "What was the creatinine value marked on my report?",
+    "What was my creatinine result? Please remark on it.",
+  ]) {
+    const t = clinicalTurn(q, reports);
+    assert.ok(t, `answered: ${q}`);
+    assert.equal(t.verdict, "LATEST", `${q} -> ${t.verdict}`);
+    assert.equal(t.used[0].raw, "106", q);
+  }
+});
+
+test("Hindi month anchors resolve the same way, answered in Hindi", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-prelim.pdf", "a-2026-10-amended.pdf"].map(
+      report,
+    ),
+  );
+  const t = clinicalTurn(
+    "सितंबर की रिपोर्ट में मेरा क्रिएटिनिन क्या था?",
+    reports,
+  );
+  assert.ok(t, "answered");
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "1.2");
+  assert.equal(t.used[0].report.title, "a-2026-09.pdf");
+  assert.match(t.spoken, /3 सितंबर 2026/);
+  assert.doesNotMatch(t.spoken, /106/);
+  const t2 = clinicalTurn("मेरा फेरिटिन सितंबर 2026 में क्या था?", reports);
+  assert.equal(t2.verdict, "VALUE");
+  assert.equal(t2.used[0].raw, "0.5");
+});
+
+// Month-day-year order ("September 3, 2026") is an explicit date anchor: it
+// must resolve that exact report or be an honest miss - never silently
+// degrade to a bare month. Multi-September fixture makes the distinctions
+// observable: bare month lands on 2026-09-20, the explicit day on 2026-09-03.
+function mkLabReport(title, collected, rows) {
+  const doc = {
+    text: `Patient: Test Person A (synthetic), ID SYN-0001\nCollected: ${collected}  Reported: ${collected}\nReport status: FINAL`,
+    elements: [
+      { id: "t", type: "table" },
+      {
+        id: "h",
+        parent: "t",
+        type: "table-header",
+        cells: ["Test", "Result", "Unit", "Reference range", "Flag"],
+      },
+      ...rows.map((cells, i) => ({
+        id: "r" + i,
+        parent: "t",
+        type: "table-row",
+        cells,
+        start: 0,
+        end: 1,
+      })),
+    ],
+  };
+  return { title, sourceId: title, ...extractReport(doc) };
+}
+const MULTIYEAR = () => [
+  mkLabReport("s2025.pdf", "5 September 2025", [
+    ["Creatinine", "1.1", "mg/dL", "0.7-1.3", ""],
+  ]),
+  mkLabReport("s2026a.pdf", "3 September 2026", [
+    ["Creatinine", "1.2", "mg/dL", "0.7-1.3", ""],
+  ]),
+  mkLabReport("s2026b.pdf", "20 September 2026", [
+    ["Creatinine", "1.25", "mg/dL", "0.7-1.3", ""],
+  ]),
+  mkLabReport("o2026.pdf", "12 October 2026", [
+    ["Creatinine", "106", "µmol/L", "62-115", ""],
+  ]),
+];
+
+test("month-day-year anchors resolve the exact date, never degrade to bare month", () => {
+  const reports = MULTIYEAR();
+  const t = clinicalTurn(
+    "What was the creatinine on September 3, 2026?",
+    reports,
+  );
+  assert.ok(t, "answered");
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(
+    t.used[0].raw,
+    "1.2",
+    "the 3 September 2026 report, not the 20 September one",
+  );
+  assert.equal(t.used[0].report.title, "s2026a.pdf");
+  assert.match(t.spoken, /3 September 2026/);
+});
+
+test("an explicit date with no matching report is an honest miss", () => {
+  const reports = MULTIYEAR();
+  const t = clinicalTurn(
+    "What was the creatinine on September 9, 2026?",
+    reports,
+  );
+  assert.ok(t, "answered");
+  assert.equal(t.verdict, "NOT_IN_REPORT");
+  assert.doesNotMatch(t.spoken, /1\.25|106/);
+});
+
+test("a month-year anchor picks that year's report", () => {
+  const reports = MULTIYEAR();
+  const t = clinicalTurn(
+    "What was the creatinine in the September 2025 report?",
+    reports,
+  );
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "1.1");
+  assert.match(t.spoken, /5 September 2025/);
+});
+
+test("a bare month with several years names the most recent, and says which", () => {
+  const reports = MULTIYEAR();
+  const t = clinicalTurn("What was my creatinine in September?", reports);
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "1.25");
+  assert.match(
+    t.spoken,
+    /20 September 2026/,
+    "the date is disclosed in the answer",
+  );
 });

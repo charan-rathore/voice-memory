@@ -520,3 +520,23 @@ test("/transcribe uses the provider chain, repairs only what the case holds", as
     await t.close();
   }
 });
+
+test("a date-anchored VALUE lead gets an opener, corrected if it says so", () => {
+  assert.ok(
+    openerFor({
+      verdict: "VALUE",
+      text: "Your Creatinine result is 1.2 mg/dL, from 3 September 2026.",
+    }),
+    "value opener",
+  );
+  const o = openerFor({
+    verdict: "VALUE",
+    text: "Your Ferritin result is 50 ng/mL, from 12 October 2026. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value.",
+  });
+  assert.ok(o, "opener present");
+  assert.match(
+    o,
+    /corrected|सुधार/i,
+    "corrected opener kept for an anchored amended value",
+  );
+});
