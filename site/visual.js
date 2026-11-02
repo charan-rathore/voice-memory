@@ -51,6 +51,7 @@
       more: (n) => `Show ${n} more results`,
       noRanges: "No reference ranges printed",
       full: ["Show full text", "Show less"],
+      voiceOff: "Voice unavailable - tap to retry",
       changesLabel: "What changed",
       st_amended: "amended report",
       st_preliminary: "preliminary report",
@@ -85,6 +86,7 @@
       more: (n) => `${n} और नतीजे देखें`,
       noRanges: "कोई सीमा नहीं छपी",
       full: ["पूरा पढ़ें", "कम दिखाएं"],
+      voiceOff: "आवाज़ उपलब्ध नहीं - फिर कोशिश करें",
       changesLabel: "क्या बदला",
       st_amended: "संशोधित रिपोर्ट",
       st_preliminary: "प्रारंभिक रिपोर्ट",
@@ -119,6 +121,7 @@
       more: (n) => `${n} aur results dekhiye`,
       noRanges: "Koi range nahi chhapi",
       full: ["Poora padhiye", "Kam dikhaiye"],
+      voiceOff: "Voice available nahi - phir try karein",
       changesLabel: "Kya badla",
       st_amended: "amended report",
       st_preliminary: "preliminary report",
@@ -353,55 +356,86 @@
   }
 
   // ------------------------------------------------------------ narration
-  let speaking = null;
-  function pickVoice(lang) {
-    const voices = speechSynthesis.getVoices();
-    const want = lang === "hi" ? ["hi-IN"] : lang === "hinglish" ? ["en-IN", "hi-IN"] : ["en-IN", "en-GB", "en-US"];
-    // Prefer the natural/neural voices browsers ship (Google, Microsoft "Online").
-    const score = (v) =>
-      (/natural|online|neural|google/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1);
-    for (const tag of want) {
-      const m = voices.filter((v) => v.lang.replace("_", "-").startsWith(tag)).sort((a, b) => score(b) - score(a));
-      if (m.length) return m[0];
-    }
-    return null;
-  }
+  // narration-split: /.+?(?:[.!?।]+(?!\d)|$)\s*/g (decimals stay inline; MUST match the other side)
+  // the server speaks one indexed sentence; rows highlight by that index.)
+  const splitSentences = (text) =>
+    String(text).match(/.+?(?:[.!?।]+(?!\d)|$)\s*/g) ?? [text];
+  let speaking = null; // {audio, root, btn, lang}
   function stop() {
-    if ("speechSynthesis" in window) speechSynthesis.cancel();
-    speaking?.root?.querySelectorAll(".vz-row.speaking").forEach((r) => r.classList.remove("speaking"));
-    speaking?.btn?.classList.remove("on");
-    if (speaking?.btn) speaking.btn.querySelector("span").textContent = W(speaking.lang).listen;
+    if (!speaking) return;
+    speaking.resolve?.(); // release a mid-play await so narrate() can exit
+    speaking.audio?.pause();
+    speaking.root
+      ?.querySelectorAll(".vz-row.speaking")
+      .forEach((r) => r.classList.remove("speaking"));
+    speaking.btn?.classList.remove("on");
+    if (speaking.btn)
+      speaking.btn.querySelector("span").textContent = W(speaking.lang).listen;
     speaking = null;
   }
-  /** Read `text` aloud sentence by sentence, marking the strip each sentence is about. */
-  function narrate(text, lang, root, btn) {
-    if (!("speechSynthesis" in window) || !text) return false;
+  function voiceUnavailable(btn, lang) {
+    if (!btn) return;
+    btn.classList.remove("on");
+    btn.querySelector("span").textContent = W(lang).voiceOff;
+  }
+  /**
+   * Read the board's narration aloud, sentence by sentence, in the server's
+   * voice (Sarvam Bulbul). There is deliberately no browser-voice fallback:
+   * when the server voice is unavailable the button says so and the text
+   * stays on screen to read. Row highlighting follows the spoken sentence.
+   */
+  async function narrate(text, lang, root, btn, caseId, sentences) {
+    if (!text) return false;
     if (speaking) {
       const same = speaking.btn === btn;
       stop();
       if (same) return true;
     }
-    const sentences = String(text).match(/[^.!?।]+[.!?।]*\s*/g) ?? [text];
-    speaking = { root, btn, lang };
+    if (!caseId) return (voiceUnavailable(btn, lang), false);
+    const parts = sentences?.length ? sentences : splitSentences(text);
+    speaking = { root, btn, lang, audio: null };
     btn?.classList.add("on");
     if (btn) btn.querySelector("span").textContent = W(lang).stop;
-    const voice = pickVoice(lang);
     const rows = [...(root?.querySelectorAll(".vz-row") ?? [])];
-    sentences.forEach((s, i) => {
-      const u = new SpeechSynthesisUtterance(s.trim());
-      if (voice) u.voice = voice;
-      u.lang = voice?.lang ?? (lang === "hi" ? "hi-IN" : "en-IN");
-      u.rate = lang === "en" ? 0.98 : 0.95;
-      u.pitch = 1;
-      u.onstart = () => {
-        rows.forEach((r) => r.classList.toggle("speaking", s.toLowerCase().includes(r.dataset.test)));
-      };
-      if (i === sentences.length - 1) u.onend = u.onerror = () => speaking?.btn === btn && stop();
-      speechSynthesis.speak(u);
-    });
+    const alive = () => speaking && speaking.btn === btn;
+    const get = (i) =>
+      fetch(
+        `/api/public/narrate-audio/${caseId}/${i}?lang=${encodeURIComponent(lang)}`,
+      )
+        .then((r) => (r.ok ? r.blob() : null))
+        .catch(() => null);
+    let next = get(0);
+    for (let i = 0; i < parts.length; i++) {
+      const blob = await next;
+      if (!alive()) return true;
+      if (!blob) {
+        stop();
+        voiceUnavailable(btn, lang);
+        return false;
+      }
+      if (i + 1 < parts.length) next = get(i + 1);
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      speaking.audio = audio;
+      const s = parts[i];
+      rows.forEach((r) =>
+        r.classList.toggle(
+          "speaking",
+          s.toLowerCase().includes(r.dataset.test),
+        ),
+      );
+      await new Promise((res) => {
+        speaking.resolve = res;
+        audio.onended = res;
+        audio.onerror = res;
+        audio.play().catch(res);
+      });
+      speaking.resolve = null;
+      URL.revokeObjectURL(url);
+    }
+    if (alive()) stop();
     return true;
   }
-  if ("speechSynthesis" in window) speechSynthesis.getVoices();
 
   /**
    * @param {HTMLElement} el
@@ -419,7 +453,9 @@
       ${narration && opts.narrateButton !== false ? `<div class="vz-say"><button type="button" class="vz-listen"><i aria-hidden="true"></i><span>${esc(W(lang).listen)}</span></button><div><p class="vz-narr clamp">${esc(narration)}</p><button type="button" class="vz-more">${esc(W(lang).full[0])}</button></div></div>` : ""}
     </div>`;
     const btn = el.querySelector(".vz-listen");
-    btn?.addEventListener("click", () => narrate(narration, lang, el, btn));
+    btn?.addEventListener("click", () =>
+      narrate(narration, lang, el, btn, opts.caseId ?? null, v.sentences),
+    );
     el.querySelector(".vz-more")?.addEventListener("click", (e) => {
       const p = el.querySelector(".vz-narr");
       const open = p.classList.toggle("clamp");

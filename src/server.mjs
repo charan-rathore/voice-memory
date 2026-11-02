@@ -57,6 +57,7 @@ import { createAnswerCache } from "./cache.mjs";
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { createPublicApi, publicAnswer } from "./public-api.mjs";
+import { createSarvamTts } from "./sarvam-tts.mjs";
 import { createRssWatchdog } from "./rss-watchdog.mjs";
 import {
   addUpload,
@@ -1091,6 +1092,9 @@ export function createLocalServer({
     }
     return null;
   });
+  // Public narration voice (Sarvam Bulbul). Null without VM_SARVAM_API_KEY:
+  // the narrate-audio route then fails closed with 503, never a fallback.
+  const sarvamTts = createSarvamTts();
   const publicApi = createPublicApi({
     cases: caseSessions,
     workspaces: workspaceApi,
@@ -1101,6 +1105,7 @@ export function createLocalServer({
     },
     visual: (cs, lang) => caseVisual(cs.bundle, lang),
     gemini,
+    sarvam: sarvamTts,
     mintVoice: mintBolna,
     stopVoice: stopBolna,
     counters: callCounters,

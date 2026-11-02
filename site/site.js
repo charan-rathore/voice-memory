@@ -503,7 +503,10 @@
           : "";
       return;
     }
-    window.VMVisual.render($("#ov-body"), v, { lang: state.lang });
+    window.VMVisual.render($("#ov-body"), v, {
+      lang: state.lang,
+      caseId: id === "own" ? null : id,
+    });
   }
 
   // Demo cases ask with a cacheable GET (repeats are served by the CDN, not

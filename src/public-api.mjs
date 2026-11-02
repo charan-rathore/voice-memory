@@ -16,7 +16,7 @@
 //
 // Rate limits are per client address and global; voice minting has its own
 // tighter caps because each call spends the operator's Bolna credits.
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import path from "node:path";
 import { createCallCounters } from "./public-call-counters.mjs";
 import { documentView } from "./library.mjs";
@@ -94,6 +94,7 @@ export function createPublicApi({
   now = () => Date.now(),
   visual = () => null,
   gemini = null,
+  sarvam = null,
 }) {
   const tickets = new Map(); // ticket -> mint time (call evidence feed)
   const askLimit = limiter(num(process.env.VM_PUBLIC_ASK_PER_MIN, 40), 60000);
@@ -168,6 +169,43 @@ export function createPublicApi({
   );
   const AUDIO_BYTES = num(process.env.VM_TRANSCRIBE_KB, 1536) * 1024;
   const AUDIO_TYPES = /^audio\/(webm|ogg|mp4|mpeg|wav|x-wav|aac|m4a)(;.*)?$/i;
+
+  // Narration audio (Sarvam Bulbul) is prepaid and fail-closed: the caps
+  // below smooth visitor spend, they are NOT a money ceiling. Without a
+  // configured adapter the route 503s; a provider 402 503s with an explicit
+  // credits message. No client-supplied text is ever spoken: the server
+  // rebuilds the canonical narration for the case and speaks one indexed
+  // sentence of it.
+  // narration-split: /.+?(?:[.!?।]+(?!\d)|$)\s*/g (decimals stay inline; MUST match the other side)
+  // MUST match the client regex in site/visual.js (narration-split marker);
+  // the client maps highlight rows by sentence index against these chunks.
+  const splitSentences = (text) =>
+    String(text).match(/.+?(?:[.!?।]+(?!\d)|$)\s*/g) ?? [String(text)];
+  const narratePerIp = limiter(
+    num(process.env.VM_NARRATE_PER_IP_DAY, 12),
+    86400000,
+  );
+  const narrateGlobal = limiter(
+    num(process.env.VM_NARRATE_GLOBAL_PER_DAY, 120),
+    86400000,
+  );
+  const narrateConcurrent = num(process.env.VM_NARRATE_CONCURRENT, 4);
+  let narrateInFlight = 0;
+  const narrateCache = new Map(); // hash -> Buffer (LRU)
+  const narrateCacheMax = num(process.env.VM_NARRATE_CACHE_MAX, 150);
+  const narrateCacheGet = (k) => {
+    const e = narrateCache.get(k);
+    if (!e) return null;
+    narrateCache.delete(k);
+    narrateCache.set(k, e);
+    return e;
+  };
+  const narrateCacheSet = (k, buf) => {
+    narrateCache.delete(k);
+    narrateCache.set(k, buf);
+    while (narrateCache.size > narrateCacheMax)
+      narrateCache.delete(narrateCache.keys().next().value);
+  };
   async function readRaw(req, limit) {
     const declared = Number(req.headers["content-length"]);
     if (Number.isFinite(declared) && declared > limit)
@@ -604,6 +642,7 @@ export function createPublicApi({
           : "en";
         const v =
           visual(s, lang) ?? (await recordsVisual(s, lang).catch(() => null));
+        if (v?.narration) v.sentences = splitSentences(v.narration);
         send(
           res,
           200,
@@ -612,6 +651,91 @@ export function createPublicApi({
             "Cache-Control": isWs(vis[1]) ? "no-store" : "public, max-age=300",
           },
         );
+        return true;
+      }
+      const nav = /^\/narrate-audio\/(\w+)\/(\d+)$/.exec(path);
+      if (req.method === "GET" && nav) {
+        if (!sarvam)
+          return (
+            send(res, 503, {
+              error: "Voice narration is not configured on this server.",
+            }),
+            true
+          );
+        if (!Object.hasOwn(CASES, nav[1]))
+          return (send(res, 404, { error: "Not found." }), true);
+        const s = caseOf(nav[1]);
+        if (!s?.bundle) return (send(res, 503, { error: "Loading." }), true);
+        const navLang = ["en", "hi", "hinglish"].includes(
+          url.searchParams.get("lang"),
+        )
+          ? url.searchParams.get("lang")
+          : "en";
+        const nv =
+          visual(s, navLang) ??
+          (await recordsVisual(s, navLang).catch(() => null));
+        if (!nv?.narration)
+          return (
+            send(res, 503, {
+              error: "Narration is not ready for this case yet.",
+            }),
+            true
+          );
+        const sentences = splitSentences(nv.narration);
+        const idx = Number(nav[2]);
+        if (idx >= sentences.length)
+          return (
+            send(res, 400, {
+              error: "Sentence index out of range.",
+              sentences: sentences.length,
+            }),
+            true
+          );
+        const ckey = createHash("sha256")
+          .update(`${sarvam.key}|${navLang}|${sentences[idx].trim()}`)
+          .digest("hex");
+        let buf = narrateCacheGet(ckey);
+        if (!buf) {
+          // Only real syntheses count against the day's caps; cached audio
+          // costs nothing to serve again.
+          if (!narratePerIp(ip) || !narrateGlobal("all"))
+            return (
+              send(res, 429, {
+                error: "Voice narration limit reached for today.",
+              }),
+              true
+            );
+          if (narrateInFlight >= narrateConcurrent)
+            return (
+              send(res, 429, {
+                error: "Voice narration is busy. Retry in a moment.",
+              }),
+              true
+            );
+          narrateInFlight++;
+          try {
+            buf = await sarvam.synthesize(sentences[idx].trim(), navLang);
+            narrateCacheSet(ckey, buf);
+          } catch (e) {
+            const exhausted = e?.status === 402;
+            return (
+              send(res, exhausted ? 503 : (e?.status ?? 502), {
+                error: exhausted
+                  ? "Voice narration credits are exhausted on this server."
+                  : "Voice narration is unavailable right now. Retry in a moment.",
+              }),
+              true
+            );
+          } finally {
+            narrateInFlight--;
+          }
+        }
+        res.writeHead(200, {
+          "Content-Type": "audio/wav",
+          "Cache-Control": "public, max-age=86400",
+          "X-Vm-Sentences": String(sentences.length),
+        });
+        res.end(buf);
         return true;
       }
       if (req.method === "POST" && path === "/transcribe") {
