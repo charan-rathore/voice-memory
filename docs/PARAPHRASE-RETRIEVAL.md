@@ -55,7 +55,7 @@ Findings:
    re-tuned gate and is listed under next experiments. CI sets
    `VM_MEMORY_LIMIT_MB`, without which the guard refuses to load the model.
 
-## Shipped: sentence units + calibrated rescue (src/paraphrase.mjs)
+## Sentence units + calibrated rescue (src/paraphrase.mjs) - off in production since 2026-11-02
 
 What changed, each from published practice and none using a language model:
 
@@ -85,8 +85,16 @@ Sentence units alone (no gate) put the right sentence in the top 3 for 11 of
 should say "I don't see that" rather than read the wrong line, so the rescue
 only fires when one sentence clearly stands out.
 
-Wired into both the voice call and typed answers after an abstention; it
-never replaces an answer the engine gives. Unit tests: `tests/paraphrase.test.mjs`;
+Until 2026-11-02 this was wired into both the voice call and typed answers
+after an abstention, never replacing an answer the engine gives. Independent
+review on 2026-11-02 found promotion still unsafe beyond the bounded guards
+above: weak-status sentences answering strong-action questions ("discussed"
+promoted for "prescribed", "came up at the visit"), stale conflicting values
+promoted over current ones, and a preliminary result promoted over its
+correction. The rescue is now off in production: both answer paths abstain
+instead, and the machinery, guards and tests are preserved behind the
+developer opt-in `VM_PARAPHRASE_PROMOTE=1` for future gate work. Retrieval
+remains evidence discovery only. Unit tests: `tests/paraphrase.test.mjs`;
 numbers: the `bench` workflow posts them on every pull request that touches
 retrieval.
 

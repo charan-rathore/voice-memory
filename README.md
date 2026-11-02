@@ -11,8 +11,9 @@ original source before it speaks: which report was amended, which value is only
 proposed, which patient, which unit, and whether an approval was ever recorded.
 Every sentence is built from the record, and the cited line opens on the
 original page. An optional, capped Gemini layer can help read the question and
-explain general terms; anything it proposes about the documents is verified
-against the exact quoted span first (see [docs/SEMANTIC.md](docs/SEMANTIC.md)).
+explain general terms; anything it proposes about the documents is checked
+claim by claim - quote, values, units, status and subject - against the exact
+quoted span before it is used (see [docs/SEMANTIC.md](docs/SEMANTIC.md)).
 
 | | |
 | --- | --- |
