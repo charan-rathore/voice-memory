@@ -189,13 +189,18 @@ export function shapeAnswer(a) {
 }
 
 /** Refuse anything that is not plainly a document the person meant to share. */
-export async function checkUploadPath(p, roots = process.env.VM_MCP_UPLOAD_ROOTS) {
+export async function checkUploadPath(
+  p,
+  roots = process.env.VM_MCP_UPLOAD_ROOTS,
+) {
   if (typeof p !== "string" || !isAbsolute(p))
     throw new Error("path must be an absolute file path");
   const real = await realpath(p).catch(() => null);
   if (!real) throw new Error("no such file");
   if (!UPLOAD_EXT.test(real))
-    throw new Error("only PDF, DOCX, PNG, JPEG, TXT or MD files can be uploaded");
+    throw new Error(
+      "only PDF, DOCX, PNG, JPEG, TXT or MD files can be uploaded",
+    );
   if (real.split(sep).some((seg) => seg.startsWith(".") && seg.length > 1))
     throw new Error("files inside hidden folders are never uploaded");
   if (roots) {
@@ -260,11 +265,14 @@ async function call(name, args = {}, ctx = {}) {
     case "add_document_text": {
       if (!/^w_[0-9a-f]{32}$/.test(String(args.workspace)))
         throw new Error("workspace must be an id from create_workspace");
-      if (!/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,78}\.(txt|md)$/.test(String(args.name)))
+      if (
+        !/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,78}\.(txt|md)$/.test(String(args.name))
+      )
         throw new Error("name must be a short file name ending in .txt or .md");
       const text = String(args.text ?? "");
       if (!text.trim()) throw new Error("text is empty");
-      if (text.length > 200000) throw new Error("text is over 200,000 characters");
+      if (text.length > 200000)
+        throw new Error("text is over 200,000 characters");
       return a(`/workspace/${args.workspace}/upload`, {
         method: "POST",
         headers: {
@@ -333,7 +341,8 @@ export async function handle(msg, ctx = {}) {
  * notification) out. Shared by both transports.
  */
 export async function respond(msg, ctx = {}) {
-  const isReq = msg && typeof msg === "object" && msg.id !== undefined && msg.id !== null;
+  const isReq =
+    msg && typeof msg === "object" && msg.id !== undefined && msg.id !== null;
   try {
     const result = await handle(msg, ctx);
     if (!isReq || result === undefined) return undefined;
@@ -366,28 +375,57 @@ export async function mcpHttp(req, res, ctx = {}) {
   // rebinding / cross-site calls); agents and connectors send no Origin.
   const origin = req.headers.origin;
   if (origin && !(ctx.allowedOrigins ?? []).includes(origin))
-    return json(403, { jsonrpc: "2.0", id: null, error: { code: -32000, message: "origin not allowed" } });
+    return json(403, {
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32000, message: "origin not allowed" },
+    });
   if (req.method !== "POST")
-    return json(405, { jsonrpc: "2.0", id: null, error: { code: -32000, message: "use POST" } }, { Allow: "POST" });
+    return json(
+      405,
+      {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32000, message: "use POST" },
+      },
+      { Allow: "POST" },
+    );
   const pv = req.headers["mcp-protocol-version"];
   if (pv && !SUPPORTED.includes(pv))
-    return json(400, { jsonrpc: "2.0", id: null, error: { code: -32000, message: `unsupported MCP-Protocol-Version ${pv}` } });
+    return json(400, {
+      jsonrpc: "2.0",
+      id: null,
+      error: {
+        code: -32000,
+        message: `unsupported MCP-Protocol-Version ${pv}`,
+      },
+    });
   let raw = "";
   for await (const chunk of req) {
     raw += chunk;
     if (raw.length > 1_000_000)
-      return json(413, { jsonrpc: "2.0", id: null, error: { code: -32000, message: "request too large" } });
+      return json(413, {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32000, message: "request too large" },
+      });
   }
   let msg;
   try {
     msg = JSON.parse(raw);
   } catch {
-    return json(400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } });
+    return json(400, {
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32700, message: "parse error" },
+    });
   }
   const c = { ...ctx, remote: true };
   if (Array.isArray(msg)) {
     // batches (2025-03-26 clients)
-    const out = (await Promise.all(msg.slice(0, 20).map((m) => respond(m, c)))).filter(Boolean);
+    const out = (
+      await Promise.all(msg.slice(0, 20).map((m) => respond(m, c)))
+    ).filter(Boolean);
     return out.length ? json(200, out) : json(202);
   }
   const out = await respond(msg, c);

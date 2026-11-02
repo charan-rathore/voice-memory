@@ -63,11 +63,7 @@ import { createStore, snapshotOf, restoreInto } from "../memory/store.mjs";
 import { createAnswerCache } from "./cache.mjs";
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
-import {
-  createPublicApi,
-  publicAnswer,
-  clientAddress,
-} from "./public-api.mjs";
+import { createPublicApi, publicAnswer, clientAddress } from "./public-api.mjs";
 import { createSarvamTts } from "./sarvam-tts.mjs";
 import {
   createElevenTts,
@@ -1430,7 +1426,9 @@ export function createLocalServer({
     if (req.url.split("?")[0] === "/api/public/mcp") {
       const { mcpHttp } = await import("../mcp/server.mjs");
       const port = server.address()?.port;
-      const site = process.env.VM_PUBLIC_SITE_ORIGIN || "https://voice-memory-beige.vercel.app";
+      const site =
+        process.env.VM_PUBLIC_SITE_ORIGIN ||
+        "https://voice-memory-beige.vercel.app";
       await mcpHttp(req, res, {
         base: `http://127.0.0.1:${port}/api/public`,
         clientIp: clientAddress(req),

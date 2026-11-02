@@ -87,7 +87,12 @@ try {
           ).length,
         };
       });
-      if (dd.key !== "test:hemoglobin" || !dd.line || dd.readings < 2 || dd.selected < 1)
+      if (
+        dd.key !== "test:hemoglobin" ||
+        !dd.line ||
+        dd.readings < 2 ||
+        dd.selected < 1
+      )
         errors.push(`${name}: report scene did not open ${JSON.stringify(dd)}`);
       const brace = page.locator(".m-brace").first();
       if (await brace.count()) {

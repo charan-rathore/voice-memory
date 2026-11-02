@@ -124,7 +124,9 @@ test("MCP: upload_document only reads documents a person meant to share", async 
   ])
     await assert.rejects(checkUploadPath(p), undefined, p);
   // with roots set, only files under them
-  await assert.rejects(checkUploadPath(join(d, "report.pdf"), tmpdir() + "-nope"));
+  await assert.rejects(
+    checkUploadPath(join(d, "report.pdf"), tmpdir() + "-nope"),
+  );
   assert.ok(await checkUploadPath(join(d, "report.pdf"), d));
 });
 
@@ -156,7 +158,10 @@ test("MCP over Streamable HTTP: the engine serves the same tools at /api/public/
     });
     assert.equal(init.status, 200);
     assert.equal((await init.json()).result.serverInfo.name, "voice-memory");
-    const note = await post({ jsonrpc: "2.0", method: "notifications/initialized" });
+    const note = await post({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+    });
     assert.equal(note.status, 202);
     const list = await (
       await post({ jsonrpc: "2.0", id: 2, method: "tools/list" })
