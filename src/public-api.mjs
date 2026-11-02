@@ -12,7 +12,9 @@
 //   GET  /api/public/graph/:case            evidence graph (documents, values, sentences)
 //   POST /api/public/voice/session          mints one Bolna web-call session (capped)
 //   GET  /api/public/visual/:case?lang=     visual summary (ranges, series, statuses) + narration
-//   POST /api/public/transcribe             dictated audio -> text (Gemini, consented, capped)
+//   POST /api/public/transcribe             dictated audio -> text (Sarvam / ElevenLabs / Gemini, consented, capped)
+//   POST /api/public/speak                  one sentence of an answer, spoken by the neural voice
+//   GET  /api/public/narrate-audio/:case/:i one sentence of the overview narration, spoken
 //
 // Rate limits are per client address and global; voice minting has its own
 // tighter caps because each call spends the operator's Bolna credits.
@@ -23,6 +25,9 @@ import { documentView } from "./library.mjs";
 import { buildGraph } from "../memory/graph.mjs";
 import { createMemory } from "../memory/memory.mjs";
 import { seriesFor, compare } from "../clinical/observations.mjs";
+import { spokenText, splitSentences as splitSpoken } from "./companion.mjs";
+import { repairTestNames } from "./spoken-repair.mjs";
+import { spokenIds } from "./vernacular.mjs";
 
 export const CASES = {
   health: {
@@ -95,7 +100,13 @@ export function createPublicApi({
   visual = () => null,
   gemini = null,
   sarvam = null,
+  voice = null,
+  voiceIn = null,
 }) {
+  // Neural voice out: a provider chain (voice-providers.mjs) or, for older
+  // callers, the bare Sarvam adapter. Either way null means "not configured"
+  // and every voice route fails closed.
+  const tts = voice ?? sarvam;
   const tickets = new Map(); // ticket -> mint time (call evidence feed)
   const askLimit = limiter(num(process.env.VM_PUBLIC_ASK_PER_MIN, 40), 60000);
   const globalAsk = limiter(
@@ -190,6 +201,20 @@ export function createPublicApi({
     86400000,
   );
   const narrateConcurrent = num(process.env.VM_NARRATE_CONCURRENT, 4);
+  // Answers are spoken one sentence at a time; each real synthesis counts.
+  const speakPerIp = limiter(
+    num(process.env.VM_SPEAK_PER_IP_DAY, 80),
+    86400000,
+  );
+  const speakGlobal = limiter(
+    num(process.env.VM_SPEAK_GLOBAL_PER_DAY, 800),
+    86400000,
+  );
+  // Providers return a WAV Buffer (Sarvam adapter) or {audio, mime, words}.
+  const audioOf = (out) =>
+    Buffer.isBuffer(out)
+      ? { audio: out, mime: "audio/wav", words: null, provider: "sarvam" }
+      : out;
   let narrateInFlight = 0;
   const narrateCache = new Map(); // hash -> Buffer (LRU)
   const narrateCacheMax = num(process.env.VM_NARRATE_CACHE_MAX, 150);
@@ -405,10 +430,17 @@ export function createPublicApi({
             enabled: !!gemini?.enabled(),
             search: !!gemini?.searchEnabled?.(),
             transcribe:
-              !!gemini?.enabled() &&
+              !!(voiceIn?.enabled() ?? gemini?.enabled()) &&
               process.env.VM_SEMANTIC_AUDIENCE !== "demo",
+            transcribeProviders:
+              voiceIn?.providers ?? (gemini?.enabled() ? ["gemini"] : []),
             model: gemini?.enabled() ? gemini.model : null,
           },
+          // Neural voice for Listen (never the browser's): which providers
+          // are configured, in the order they are tried.
+          voiceOut: tts
+            ? { enabled: true, providers: tts.providers ?? ["sarvam"] }
+            : { enabled: false, providers: [] },
         });
         return true;
       }
@@ -655,7 +687,7 @@ export function createPublicApi({
       }
       const nav = /^\/narrate-audio\/(\w+)\/(\d+)$/.exec(path);
       if (req.method === "GET" && nav) {
-        if (!sarvam)
+        if (!tts)
           return (
             send(res, 503, {
               error: "Voice narration is not configured on this server.",
@@ -692,7 +724,7 @@ export function createPublicApi({
             true
           );
         const ckey = createHash("sha256")
-          .update(`${sarvam.key}|${navLang}|${sentences[idx].trim()}`)
+          .update(`${tts.key}|${navLang}|${sentences[idx].trim()}`)
           .digest("hex");
         let buf = narrateCacheGet(ckey);
         if (!buf) {
@@ -714,7 +746,7 @@ export function createPublicApi({
             );
           narrateInFlight++;
           try {
-            buf = await sarvam.synthesize(sentences[idx].trim(), navLang);
+            buf = audioOf(await tts.synthesize(sentences[idx].trim(), navLang));
             narrateCacheSet(ckey, buf);
           } catch (e) {
             const exhausted = e?.status === 402;
@@ -731,11 +763,116 @@ export function createPublicApi({
           }
         }
         res.writeHead(200, {
-          "Content-Type": "audio/wav",
+          "Content-Type": buf.mime,
           "Cache-Control": "public, max-age=86400",
           "X-Vm-Sentences": String(sentences.length),
+          "X-Vm-Voice": buf.provider ?? "neural",
         });
-        res.end(buf);
+        res.end(buf.audio);
+        return true;
+      }
+      if (req.method === "POST" && path === "/speak") {
+        // One sentence of an answer in the neural voice. The client sends
+        // the question, never the text: the server re-resolves the answer
+        // (an answer-cache hit) and speaks its own opener + sentence, so
+        // this can never become a free text-to-speech proxy.
+        if (!tts)
+          return (
+            send(res, 503, {
+              error: "Voice is not configured on this server.",
+            }),
+            true
+          );
+        const data = await readJson(req);
+        const s = caseOf(data.case);
+        if (!s) return (send(res, 400, { error: "Pick a case." }), true);
+        if (!s.bundle) return (send(res, 503, { error: "Loading." }), true);
+        // A visitor's own documents go to the voice provider only on their
+        // explicit say-so, per request (the demo cases are fictional).
+        if (isWs(data.case) && data.consent !== true)
+          return (
+            send(res, 403, {
+              error:
+                "Consent required to send this answer to the voice provider.",
+              needsConsent: true,
+            }),
+            true
+          );
+        const q = typeof data.question === "string" ? data.question.trim() : "";
+        if (!q || q.length > 400)
+          return (send(res, 400, { error: "Ask a question first." }), true);
+        const ctx =
+          typeof data.context === "string" &&
+          /^[A-Za-z]{1,40}$/.test(data.context)
+            ? data.context
+            : "";
+        const shown = await resolve(s, q, ctx, {
+          consent: data.semantic === true,
+          ip,
+        });
+        const lead = shown?.lead;
+        if (!lead?.text)
+          return (send(res, 404, { error: "Nothing to speak." }), true);
+        const lang = ["en", "hi", "hinglish"].includes(shown.semantic?.lang)
+          ? shown.semantic.lang
+          : "en";
+        const sentences = splitSpoken(spokenText(lead, lang));
+        const idx = Number.isInteger(data.index) ? data.index : 0;
+        if (idx < 0 || idx >= sentences.length)
+          return (
+            send(res, 400, {
+              error: "Sentence index out of range.",
+              sentences: sentences.length,
+            }),
+            true
+          );
+        const text = sentences[idx].trim();
+        const ckey = createHash("sha256")
+          .update(`${tts.key}|${lang}|${text}`)
+          .digest("hex");
+        let out = narrateCacheGet(ckey);
+        if (!out) {
+          if (!speakPerIp(ip) || !speakGlobal("all"))
+            return (
+              send(res, 429, {
+                error:
+                  "Voice limit reached for today. The answer stays on screen.",
+              }),
+              true
+            );
+          if (narrateInFlight >= narrateConcurrent)
+            return (
+              send(res, 429, { error: "Voice is busy. Retry in a moment." }),
+              true
+            );
+          narrateInFlight++;
+          try {
+            out = audioOf(await tts.synthesize(text, lang));
+            narrateCacheSet(ckey, out);
+          } catch (e) {
+            const exhausted = e?.status === 402;
+            return (
+              send(res, 503, {
+                error: exhausted
+                  ? "Voice credits are exhausted on this server."
+                  : "Voice is unavailable right now. Retry in a moment.",
+              }),
+              true
+            );
+          } finally {
+            narrateInFlight--;
+          }
+        }
+        send(res, 200, {
+          index: idx,
+          sentences: sentences.map((x) => x.trim()),
+          text,
+          lang,
+          mime: out.mime,
+          audio: out.audio.toString("base64"),
+          words: out.words ?? null,
+          provider: out.provider ?? "neural",
+        });
         return true;
       }
       if (req.method === "POST" && path === "/transcribe") {
@@ -753,7 +890,18 @@ export function createPublicApi({
             }),
             true
           );
-        if (!gemini?.enabled())
+        const stt =
+          voiceIn ??
+          (gemini?.enabled()
+            ? {
+                enabled: () => true,
+                transcribe: async (...a) => {
+                  const text = await gemini.transcribe(...a);
+                  return text == null ? null : { text, provider: "gemini" };
+                },
+              }
+            : null);
+        if (!stt?.enabled())
           return (
             send(res, 503, {
               error: "Server transcription is off; using the browser's.",
@@ -762,7 +910,8 @@ export function createPublicApi({
             true
           );
         // Explicit, per-request consent: the browser sends this header only
-        // after the person agreed to send their voice clip to Google Gemini.
+        // after the person agreed to send their voice clip to the named
+        // speech provider.
         if (req.headers["x-vm-consent"] !== "audio")
           return (send(res, 403, { error: "Consent required." }), true);
         if (!AUDIO_TYPES.test(String(req.headers["content-type"] ?? "")))
@@ -780,14 +929,14 @@ export function createPublicApi({
         const hint = ["en", "hi", "hinglish"].includes(req.headers["x-vm-lang"])
           ? req.headers["x-vm-lang"]
           : "auto";
-        const text = await gemini.transcribe(
+        const heard = await stt.transcribe(
           audio,
           String(req.headers["content-type"]).split(";")[0],
           vocab,
           hint,
           { ip },
         );
-        if (text == null)
+        if (!heard?.text)
           return (
             send(res, 503, {
               error: "Transcription is busy; using the browser's.",
@@ -795,7 +944,22 @@ export function createPublicApi({
             }),
             true
           );
-        send(res, 200, { text });
+        // The recogniser's words, repaired only where the case itself says
+        // so: spoken IDs ("syn zero zero zero three") and test names the
+        // reports actually hold ("ferrite in" -> Ferritin). The raw words
+        // travel too, so the client can show what was changed.
+        const labs = new Map();
+        for (const r of cs?.bundle?.clinical ?? [])
+          for (const o of r.observations) {
+            const n = String(o.test).toLowerCase();
+            if (!n.includes(" ")) labs.set(n, o.test);
+          }
+        const text = repairTestNames(spokenIds(heard.text), labs);
+        send(res, 200, {
+          text,
+          raw: heard.text,
+          provider: heard.provider ?? null,
+        });
         return true;
       }
       if (req.method === "POST" && path === "/voice/session") {
@@ -1076,6 +1240,8 @@ export function publicAnswer(shown) {
             : null,
           interpretedAs: shown.lead.interpretedAs ?? null,
           origin: shown.lead.origin ?? "engine",
+          // Spoken and shown before the answer (companion.mjs): no facts.
+          opener: shown.lead.opener ?? null,
         }
       : null,
     visual: shown.visual ?? null,

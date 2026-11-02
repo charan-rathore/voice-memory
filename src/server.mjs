@@ -62,6 +62,15 @@ import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { createPublicApi, publicAnswer } from "./public-api.mjs";
 import { createSarvamTts } from "./sarvam-tts.mjs";
+import {
+  createElevenTts,
+  createVoiceOut,
+  createSarvamStt,
+  createElevenStt,
+  createVoiceIn,
+  createFakeTts,
+} from "./voice-providers.mjs";
+import { openerFor } from "./companion.mjs";
 import { createRssWatchdog } from "./rss-watchdog.mjs";
 import {
   addUpload,
@@ -1131,6 +1140,19 @@ export function createLocalServer({
   // Public narration voice (Sarvam Bulbul). Null without VM_SARVAM_API_KEY:
   // the narrate-audio route then fails closed with 503, never a fallback.
   const sarvamTts = createSarvamTts();
+  // Voice out: Sarvam Bulbul first (Hindi, Hinglish and Indian English in
+  // one pass), ElevenLabs next (word timestamps), in VM_TTS_ORDER. Voice in:
+  // Sarvam Saaras / ElevenLabs Scribe, then Gemini. Each is null without its
+  // key, and every public voice route fails closed without any.
+  const voiceOut = createVoiceOut({
+    sarvam: sarvamTts,
+    eleven: createElevenTts() ?? createFakeTts(),
+  });
+  const voiceIn = createVoiceIn({
+    sarvam: createSarvamStt(),
+    eleven: createElevenStt(),
+    fallback: gemini,
+  });
   const publicApi = createPublicApi({
     cases: caseSessions,
     workspaces: workspaceApi,
@@ -1140,11 +1162,16 @@ export function createLocalServer({
         normalizeSpoken(question) ||
         question;
       const { json } = await resolveAnswer(cs, q, ctx, opts);
-      return { ...JSON.parse(json).shown, question };
+      const shown = JSON.parse(json).shown;
+      if (shown.lead)
+        shown.lead.opener = openerFor(shown.lead, shown.semantic?.lang ?? "en");
+      return { ...shown, question };
     },
     visual: (cs, lang) => caseVisual(cs.bundle, lang),
     gemini,
     sarvam: sarvamTts,
+    voice: voiceOut,
+    voiceIn,
     mintVoice: mintBolna,
     stopVoice: stopBolna,
     counters: callCounters,
