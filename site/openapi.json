@@ -352,6 +352,170 @@
           }
         }
       }
+    },
+    "/mcp": {
+      "post": {
+        "summary": "Model Context Protocol, Streamable HTTP (2025-06-18), stateless JSON-RPC. Tools: ask_records, list_cases, create_workspace, add_document_text, workspace_status.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Notification accepted"
+          },
+          "400": {
+            "description": "Parse error or unsupported MCP-Protocol-Version"
+          },
+          "403": {
+            "description": "Cross-site Origin refused"
+          },
+          "405": {
+            "description": "Only POST"
+          }
+        }
+      }
+    },
+    "/llm/key": {
+      "post": {
+        "summary": "Issue a custom-LLM key for your own voice platform (Bolna, Vapi, Retell, ElevenLabs Agents), bound to one case or your workspace, valid 24 hours",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "case": {
+                    "type": "string",
+                    "description": "health, deal, demo, or a workspace id"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "baseUrl, apiKey, model, expiresAt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown case"
+          },
+          "404": {
+            "description": "Workspace has no documents or expired"
+          },
+          "429": {
+            "$ref": "#/components/responses/Retry"
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions": {
+      "post": {
+        "summary": "OpenAI-compatible chat completions answered by the engine for the key's case (Authorization: Bearer <apiKey>)",
+        "responses": {
+          "200": {
+            "description": "Completion or SSE stream"
+          },
+          "401": {
+            "description": "Invalid or expired key"
+          },
+          "429": {
+            "$ref": "#/components/responses/Retry"
+          }
+        }
+      }
+    },
+    "/llm/v1/models": {
+      "get": {
+        "summary": "Model list for a custom-LLM key (Authorization: Bearer <apiKey>)",
+        "responses": {
+          "200": {
+            "description": "Model list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or expired key"
+          }
+        }
+      }
+    },
+    "/voice/byo/session": {
+      "post": {
+        "summary": "Start a Bolna web call on your own Bolna account (x-bolna-key header, agent_id in the body). The key is used once and never stored.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "agent_id"
+                ],
+                "properties": {
+                  "agent_id": {
+                    "type": "string"
+                  },
+                  "user_data": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bolna web-call session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing key or agent id"
+          },
+          "429": {
+            "$ref": "#/components/responses/Retry"
+          },
+          "502": {
+            "description": "Bolna did not start the call"
+          }
+        }
+      }
     }
   },
   "components": {
