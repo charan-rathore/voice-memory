@@ -5,6 +5,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { passageText } from "../src/dense.mjs";
 
+// Off by default (it measured worse on the hybrid bench; see dense.mjs).
+process.env.VM_DENSE_CONTEXT = "on";
+
 test("chunks are embedded with their document title and heading path", () => {
   const row = {
     title: "03_commercial_revision.md",
@@ -28,16 +31,14 @@ test("a heading already at the start of the chunk is not repeated", () => {
   assert.equal(passageText(row), "Lab report\nResults\nFerritin 50");
 });
 
-test("VM_DENSE_CONTEXT=off embeds the bare chunk", () => {
-  const saved = process.env.VM_DENSE_CONTEXT;
-  process.env.VM_DENSE_CONTEXT = "off";
+test("default (unset) embeds the bare chunk", () => {
+  delete process.env.VM_DENSE_CONTEXT;
   try {
     assert.equal(
       passageText({ title: "T", chunk: { text: "x", heading: "H" } }),
       "x",
     );
   } finally {
-    if (saved === undefined) delete process.env.VM_DENSE_CONTEXT;
-    else process.env.VM_DENSE_CONTEXT = saved;
+    process.env.VM_DENSE_CONTEXT = "on";
   }
 });

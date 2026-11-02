@@ -37,20 +37,20 @@ jobs:
         env:
           VM_DENSE_CACHE: .cache/models
           VM_MEMORY_LIMIT_MB: "4096"
-      # A/B: the same bench with bare chunk embeddings (VM_DENSE_CONTEXT=off)
-      # and with contextual chunk headers (default), so a retrieval change is
-      # always judged against its own baseline on the same runner.
+      # A/B: the same bench with bare chunk embeddings (the default) and with
+      # contextual chunk headers (VM_DENSE_CONTEXT=on, an experiment), so a
+      # retrieval change is always judged against its baseline on one runner.
       - name: Hybrid retrieval bench, bare chunk embeddings (baseline)
         run: node evaluation/retrieval-bench-hybrid.mjs | tail -40 | tee ab-bare.txt | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           VM_DENSE_CACHE: .cache/models
           VM_MEMORY_LIMIT_MB: "4096"
-          VM_DENSE_CONTEXT: "off"
-      - name: Hybrid retrieval bench, contextual chunk headers
+      - name: Hybrid retrieval bench, contextual chunk headers (experiment)
         run: node evaluation/retrieval-bench-hybrid.mjs | tail -40 | tee ab-context.txt | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           VM_DENSE_CACHE: .cache/models
           VM_MEMORY_LIMIT_MB: "4096"
+          VM_DENSE_CONTEXT: "on"
       - uses: actions/upload-artifact@v4
         with:
           name: retrieval-results
