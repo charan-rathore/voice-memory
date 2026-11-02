@@ -260,3 +260,12 @@ test("every clinical lead verdict has a curated landing chip label", () => {
       `${v} chip label`,
     );
 });
+
+test("the range-assessment tile names the reading it judges", () => {
+  const js = readFileSync(site("visual.js"), "utf8");
+  assert.match(
+    js,
+    /toRange\)\} · \$\{esc\(shortDate\(t\.latest\.date, lang\)\)\}/,
+    "the 'To the printed range' tile must say which reading it assesses",
+  );
+});
