@@ -264,6 +264,11 @@ test("opener follows the verdict and language; declines open in their own words"
     /corrected/,
   );
   assert.equal(openerFor(lead("DECLINE_ADVICE"), "en"), null);
+  // a quoted line from someone's own document is a line, not "the number"
+  assert.match(
+    openerFor(lead("QUOTED", "The report says: menu due 27 March."), "en"),
+    /found/,
+  );
   assert.equal(openerFor(lead("SOMETHING_NEW"), "en"), null);
   // stable: the same answer always opens the same way (cacheable audio)
   const l = lead("LATEST");

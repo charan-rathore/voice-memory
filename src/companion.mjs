@@ -21,6 +21,11 @@ const O = {
     hi: ["देखिए, रिपोर्ट में यह लिखा है।", "ठीक है, मिल गया।"],
     hinglish: ["Dekhiye, report mein yeh likha hai.", "Theek hai, mil gaya."],
   },
+  found: {
+    en: ["Here's the line I found.", "Okay, I found it."],
+    hi: ["यह लाइन मिली।", "ठीक है, मिल गया।"],
+    hinglish: ["Yeh line mili.", "Theek hai, mil gaya."],
+  },
   corrected: {
     en: ["One thing worth knowing first: this result was corrected."],
     hi: ["पहले एक ज़रूरी बात: यह नतीजा बाद में सुधारा गया था।"],
@@ -57,7 +62,7 @@ const KIND = {
   LATEST: "value",
   COMPARED: "value",
   FLAGGED: "value",
-  QUOTED: "value",
+  QUOTED: "found",
   CONFIRMED: "status",
   NOT_COMPARABLE: "refuse",
   AMBIGUOUS_PATIENT: "clarify",
