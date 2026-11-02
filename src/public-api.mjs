@@ -382,6 +382,16 @@ export function createPublicApi({
         verdict: a.lead.verdict,
         text: a.lead.text,
         citations: (a.lead.citations ?? []).length,
+        // the lines behind the row, for the chart's drill-down: which
+        // document said what, in the order the records were written
+        sources: [
+          ...new Map(
+            (a.lead.citations ?? []).map((c) => [
+              c.title + "|" + c.quote,
+              { title: c.title, quote: String(c.quote ?? "").slice(0, 400) },
+            ]),
+          ).values(),
+        ].slice(0, 6),
       });
     }
     const docs = (s.library ?? [])
@@ -1242,9 +1252,20 @@ export function publicAnswer(shown) {
           origin: shown.lead.origin ?? "engine",
           // Spoken and shown before the answer (companion.mjs): no facts.
           opener: shown.lead.opener ?? null,
+          // A page action the answer asks for: show the upload panel, or
+          // switch to the case the question is about.
+          action: shown.lead.action ?? null,
         }
       : null,
     visual: shown.visual ?? null,
+    // Halves of a question about the other demo case, answered there.
+    also: (shown.also ?? []).map((a) => ({
+      case: a.case,
+      question: a.question,
+      text: a.lead?.text ?? null,
+      verdict: a.lead?.verdict ?? null,
+      opener: a.lead?.opener ?? null,
+    })),
     semantic: shown.semantic
       ? {
           intent: shown.semantic.intent,

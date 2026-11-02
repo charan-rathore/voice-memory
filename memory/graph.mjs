@@ -215,7 +215,9 @@ export function buildGraph(bundle, mem, focus = "overview") {
       node({
         id: tid,
         kind: "topic",
-        label: who ? `Lab results - ${who}` : "Lab results (identity unverified)",
+        label: who
+          ? `Lab results - ${who}`
+          : "Lab results (identity unverified)",
       });
       docNode(src);
       edge({ from: `doc:${src.id}`, to: tid, kind: "records" });

@@ -166,6 +166,10 @@
     CLARIFY: ["v-ask", "Which one?"],
     FLAGGED: ["v-warn", "Outside range"],
     DECLINE_ADVICE: ["v-ask", "Not mine to decide"],
+    HELP: ["v-ask", "What I can do"],
+    HOW_TO: ["v-ask", "How to"],
+    SWITCH: ["v-ask", "Other case"],
+    MIXED: ["v-ok", "Two answers"],
   };
   const verdictOf = (v) =>
     VERDICT[v] ??
@@ -512,6 +516,9 @@
     window.VMVisual.render($("#ov-body"), v, {
       lang: state.lang,
       caseId: id === "own" ? null : id,
+      // Listen is offered only when the server has a neural voice; the
+      // narration text is always on screen either way.
+      narrateButton: !!state.voiceOut?.enabled,
     });
   }
 
@@ -646,6 +653,7 @@
           : ""
       }
       ${backgroundHtml(r.lead?.background)}
+      ${alsoHtml(r.also)}
       <div class="a-visual" id="a-visual"></div>
       <div class="a-tools">
         ${
@@ -690,10 +698,66 @@
       });
     else $("#a-visual")?.remove();
     if (cites.length) openCitation(0);
-    else
+    else if (!lead?.action)
       showEmptyViewer(
         "No passage supports an answer, so nothing is highlighted.",
       );
+    runAction(lead?.action);
+  }
+
+  // Answers can move the page: show where your own documents go, or take
+  // a question to the case it is about. Every action is visible and undone
+  // by the next click; nothing is uploaded or asked without the visitor.
+  function coach(el, text) {
+    if (!el) return;
+    el.classList.remove("coach");
+    void el.offsetWidth;
+    el.classList.add("coach");
+    if (text) {
+      $$(".coach-tip").forEach((x) => x.remove());
+      const tip = document.createElement("span");
+      tip.className = "coach-tip";
+      tip.setAttribute("role", "status");
+      tip.textContent = text;
+      el.after(tip);
+      setTimeout(() => tip.remove(), 9000);
+    }
+    setTimeout(() => el.classList.remove("coach"), 9000);
+  }
+  function runAction(a) {
+    if (!a?.type) return;
+    if (a.type === "upload") {
+      if (a.soft) {
+        coach($('.case-tab[data-case="own"]'), "Your own files go here");
+        return;
+      }
+      setCase("own", { quiet: true });
+      showEmptyViewer();
+      const drop = $("#drop");
+      drop?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+      coach(drop, "Drop PDFs, Word files or photos here, or click to choose");
+      coach($('.case-tab[data-case="own"]'));
+    } else if (a.type === "switch" && a.case && a.question) {
+      setTimeout(() => {
+        setCase(a.case, { quiet: true });
+        coach($(`.case-tab[data-case="${a.case}"]`));
+        ask(a.question);
+      }, reduced ? 0 : 900);
+    }
+  }
+  // The half of a question that belongs to the other demo case.
+  function alsoHtml(also) {
+    if (!also?.length) return "";
+    const name = { deal: "the Northstar deal", health: "the lab reports" };
+    return also
+      .map(
+        (a) => `<div class="a-also">
+          <span class="a-also-k">From ${esc(name[a.case] ?? a.case)}</span>
+          <p>${a.opener ? `<span class="a-opener">${esc(a.opener)}</span> ` : ""}${esc(a.text ?? "")}</p>
+          <button type="button" class="tool" data-switch-case="${esc(a.case)}" data-switch-q="${esc(a.question)}">Open it there, with the source →</button>
+        </div>`,
+      )
+      .join("");
   }
 
   // General knowledge, kept apart from the documents, with its sources.
@@ -928,21 +992,57 @@
   // Opening any document opens the whole case as one reader: every page of
   // every document, in order, with a page strip to jump between them. The
   // chosen document scrolls into view; a cited line is marked on its page.
+  // The cited line itself is marked, never the whole document: a small
+  // document is one retrieval chunk, so its "focus" can be every line. The
+  // quote the answer rests on is found in the text (whitespace-tolerant);
+  // focus lines are used only when they overlap that quote.
+  const words = (x) =>
+    String(x ?? "")
+      .toLowerCase()
+      .match(/[\p{L}\p{N}$%.,/-]+/gu) ?? [];
+  const overlap = (a, b) => {
+    const B = new Set(words(b));
+    const A = words(a);
+    return A.length ? A.filter((w) => B.has(w)).length / A.length : 0;
+  };
+  const findSpan = (html, quote) => {
+    const q = esc(String(quote ?? "").trim().replace(/^\d+\.\s*/, ""));
+    if (q.length < 8 || q.length > 600) return null;
+    const re = new RegExp(
+      q
+        .split(/\s+/)
+        .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("\\s+"),
+    );
+    const m = re.exec(html);
+    return m ? [m.index, m.index + m[0].length] : null;
+  };
   const markText = (text, cites) => {
     let html = esc(text);
+    const spans = [];
     for (const c of cites) {
-      // Prefer the focused lines: a small document is one chunk, so the raw
-      // quote can span the whole file and marking it highlights everything.
+      const quote = prettyQuote(c.quote);
+      const exact = findSpan(html, quote) ?? findSpan(html, c.quote);
+      if (exact) {
+        spans.push(exact);
+        continue;
+      }
       const lines = (c.location?.focus?.text ?? [])
-        .map((x) => esc(String(x).trim()))
-        .filter((x) => x.length > 10);
-      const needles = lines.length
-        ? lines
-        : [esc(String(c.quote ?? "").trim())].filter(
-            (q) => q && q.length <= 600,
-          );
-      for (const q of needles)
-        if (q && html.includes(q)) html = html.replace(q, `<mark>${q}</mark>`);
+        .map((x) => String(x).trim())
+        .filter((x) => x.length > 10)
+        .filter((x, _, all) => all.length <= 2 || overlap(x, quote) >= 0.5);
+      for (const l of lines) {
+        const sp = findSpan(html, l);
+        if (sp) spans.push(sp);
+      }
+    }
+    // apply from the end so earlier offsets stay valid; skip overlaps
+    spans.sort((a, b) => b[0] - a[0]);
+    let last = Infinity;
+    for (const [a, b] of spans) {
+      if (b > last) continue;
+      html = `${html.slice(0, a)}<mark>${html.slice(a, b)}</mark>${html.slice(b)}`;
+      last = a;
     }
     return html.replace(/^# (.*)$/m, '<span class="h">$1</span>');
   };
@@ -1546,7 +1646,7 @@
   // ------------------------------------------------------------ wiring
   document.addEventListener("click", (e) => {
     const t = e.target.closest(
-      "[data-q],[data-ask],[data-cite],[data-doc],[data-files],[data-listen],[data-start-call],[data-lang],[data-jump],.case-tab",
+      "[data-q],[data-ask],[data-cite],[data-doc],[data-files],[data-listen],[data-start-call],[data-lang],[data-jump],[data-switch-case],.case-tab",
     );
     if (!t) return;
     if (t.matches(".case-tab")) return setCase(t.dataset.case);
@@ -1569,6 +1669,12 @@
       return ask(t.dataset.q, { caseId: t.dataset.case || state.case });
     if (t.matches("[data-cite]")) return openCitation(Number(t.dataset.cite));
     if (t.matches("[data-doc]")) return openDoc(t.dataset.doc);
+    if (t.matches("[data-switch-case]"))
+      return runAction({
+        type: "switch",
+        case: t.dataset.switchCase,
+        question: t.dataset.switchQ,
+      });
     if (t.matches("[data-jump]")) return jumpTo(Number(t.dataset.jump));
     if (t.matches("[data-files]")) {
       showEmptyViewer();

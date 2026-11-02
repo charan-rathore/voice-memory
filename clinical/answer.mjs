@@ -295,7 +295,7 @@ export function clinicalReportsFor(bundle, entries, extract) {
 }
 
 const OVERVIEW_RE =
-  /\b(results?|reports?|tests?|labs?|blood|levels?|values?|numbers?|gone up|go up|went up|changed?|since|mean|means|meaning|explain|summary|summari[sz]e|overview|how am i|everything)\b/i;
+  /\b(results?|reports?|post|tests?|labs?|blood|levels?|values?|numbers?|gone up|go up|went up|changed?|since|mean|means|meaning|explain|summary|summari[sz]e|overview|how am i|everything|critical|important|serious|concerning|abnormal|flagged|gambhir|zaroori)\b|रिपोर्ट|क्रिटिकल|ज़रूरी|जरूरी|गंभीर|सब\s+ठीक/i;
 
 /**
  * A question about a patient's results as a whole ("what does SYN-0001's

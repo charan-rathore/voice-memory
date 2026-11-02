@@ -451,7 +451,12 @@ kbd { font: 500 11px/1 var(--sans); min-width: 22px; height: 22px; padding: 0 6p
 .rr b { font-weight: 600; color: var(--ink); text-align: right; }
 .rr > :last-child { text-align: right; color: var(--ink-3); }
 .rr-lost, .rr-lost b, .rr-lost > :last-child { color: var(--red); }
-.rr-lost [data-scramble] { filter: blur(0.5px); }
+.rr-lost [data-scramble] { filter: blur(3px); opacity: 0.45; transition: filter 1100ms cubic-bezier(0.22, 1, 0.36, 1), opacity 1100ms cubic-bezier(0.22, 1, 0.36, 1); }
+.rr-lost [data-scramble]:nth-child(2) { transition-delay: 90ms; }
+.rr-lost [data-scramble]:nth-child(3) { transition-delay: 180ms; }
+.rr-lost [data-scramble]:nth-child(4) { transition-delay: 270ms; }
+.rr-lost.clear [data-scramble] { filter: none; opacity: 1; }
+.rr-lost > :nth-child(3), .rr-lost > :nth-child(4) { text-decoration: underline wavy rgba(194, 65, 47, 0.55); text-decoration-thickness: 1px; text-underline-offset: 4px; }
 
 /* ---------------------------------------------------------------- catches: live product figures */
 .catch-grid { gap: 0; margin-top: 48px; border-top: 1px solid var(--rule); }
@@ -916,3 +921,12 @@ html:not(.voice-on) .voice-off { display: block; }
   .hc-ask .hc-q { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { .hc-scene { transition: none; } .hc-tab i { display: none; } }
+
+/* ------------------------------------------------------------ answers that guide the page */
+.coach { position: relative; z-index: 2; animation: coach 1.6s var(--ease) 0s 4; box-shadow: 0 0 0 2px var(--mark), 0 0 0 8px rgba(244, 220, 74, 0.18) !important; border-radius: 12px; }
+@keyframes coach { 0%, 100% { box-shadow: 0 0 0 2px var(--mark), 0 0 0 6px rgba(244, 220, 74, 0.25); } 50% { box-shadow: 0 0 0 2px var(--mark), 0 0 0 14px rgba(244, 220, 74, 0); } }
+.coach-tip { display: block; width: max-content; max-width: 100%; margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--mark); color: #10152a; font: 600 12.5px/1.3 var(--sans); animation: chip-in 400ms var(--ease) both; }
+.a-also { margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--rule); border-radius: 12px; display: grid; gap: 8px; justify-items: start; }
+.a-also-k { font: 600 11px var(--sans); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.a-also p { font-family: var(--serif); font-size: 17px; line-height: 1.45; color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .coach { animation: none; } }
