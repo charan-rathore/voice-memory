@@ -97,7 +97,9 @@ export function verifyClaims(claims, passages) {
     // Polarity: "no effusion" cannot back "there is an effusion".
     const quoteNeg = NEG_RE.test(exact);
     const stmtNeg = NEG_RE.test(statement) || c.polarity === "negated";
-    if (quoteNeg !== stmtNeg && !WEAK_STATUS.test(statement)) {
+    // Polarity is unconditional: a weak-status word ("pending", "proposed")
+    // in the statement cannot launder a flipped negation.
+    if (quoteNeg !== stmtNeg) {
       rejected.push({ claim: c, reason: "polarity_mismatch" });
       continue;
     }

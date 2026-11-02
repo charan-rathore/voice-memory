@@ -22,6 +22,7 @@
 //    margin. Both thresholds are tuned on the development split of
 //    evaluation/paraphrase-questions.json and reported on held-out.
 import { sentencesOf, cite, docLabelOf } from "./spoken-routes.mjs";
+import { extractClaims, resolveClaims } from "../dist/engine.mjs";
 import { embedTextsReady } from "./dense.mjs";
 import { bridgeToEnglish } from "./vernacular.mjs";
 import { layExpand } from "./lay-terms.mjs";
@@ -214,6 +215,21 @@ export function gate(ranked, { minCosine, minMargin, agree = null } = GATE) {
  * The verbatim sentence a reworded question asks about, with a validated
  * citation, or null. Needs the dense model resident; never waits for it.
  */
+// Promotion of a retrieved sentence into a spoken answer is UNPROVEN
+// (independent review 2026-11-02: weak-status answers to strong-action
+// questions, stale conflicting values, preliminary results promoted over
+// corrections). It stays OFF in production: both public call sites go
+// through promotedAnswer, which abstains unless a developer explicitly
+// opts in for gate work. paraphraseLookup itself is preserved, tested,
+// and reachable only through that opt-in.
+export const paraphrasePromoteEnabled = () =>
+  process.env.VM_PARAPHRASE_PROMOTE === "1";
+
+export async function promotedAnswer(question, bundle) {
+  if (!paraphrasePromoteEnabled()) return null;
+  return paraphraseLookup(question, bundle);
+}
+
 export async function paraphraseLookup(
   question,
   bundle,
@@ -237,6 +253,22 @@ export async function paraphraseLookup(
   const hit = gate(rankUnits(searched, bundle, qv), thresholds);
   if (!hit) return null;
   const { src, sent } = hit.unit;
+  // Answerability, not just relevance. Two fail-closed checks stand between
+  // a top-ranked sentence and the speaker, because retrieval scores cannot
+  // see either one:
+  // 1. A strong-action question ("did the doctor prescribe...?") is never
+  //    answered by a weak-status sentence ("...was discussed pending
+  //    review"). Discussion is not a decision; speaking it as the answer
+  //    upgrades the record.
+  if (Q_STRONG_ACTION.test(question) && SENT_WEAK_STATUS.test(sent.text))
+    return null;
+  // 2. A sentence stating a value the bundle itself cannot stand behind is
+  //    never spoken: either the amendment chain superseded it while a newer
+  //    active value exists, or the field has several unresolved active
+  //    values and the sentence presents one side of the conflict as fact.
+  //    "The report says the fee is $42,000" is false in effect when the
+  //    current record says $48,000 - or when the record cannot say which.
+  if (statesUnresolvedValue(bundle, sent.text)) return null;
   const label = bundle.sources.length === 1 ? "the report" : docLabelOf(src);
   return {
     spoken: `${label[0].toUpperCase()}${label.slice(1)} says: ${sent.text}`,
@@ -244,4 +276,69 @@ export async function paraphraseLookup(
     cosine: hit.cosine,
     margin: hit.margin,
   };
+}
+
+const Q_STRONG_ACTION =
+  /\b(prescrib\w*|approv\w*|sign(?:ed|ed off)?|final(?:i[sz]ed)?|confirm\w*|decided|agreed|started?|taking|recommend\w*|order(?:ed)?|discharg\w*)\b/i;
+const SENT_WEAK_STATUS =
+  /\b(propos\w*|pending|draft|discuss\w*|prelim\w*|provisional|tentative|under review|subject to|awaiting|suggest\w*|consider\w*|talked about|plan(?:s|ned|ning)? (?:is|to|was|were))\b/i;
+
+const CLAIM_FIELDS = [
+  "fee",
+  "paymentSplit",
+  "deadline",
+  "scope",
+  "signoffWho",
+  "signedAgreement",
+  "launchApproval",
+  "reporting",
+];
+
+/** True when the sentence states a value the bundle cannot stand behind. */
+export function statesUnresolvedValue(bundle, sentence) {
+  let claims;
+  try {
+    claims = extractClaims(bundle, CLAIM_FIELDS).filter((c) => c.value);
+  } catch {
+    return false; // claims machinery unavailable: no basis to refuse here
+  }
+  if (!claims.length) return false;
+  const resolved = resolveClaims(claims);
+  const norm = (v) =>
+    String(v)
+      .toLowerCase()
+      .replace(/([.,;:!?])(?=\s|$)/g, " ")
+      .replace(/[^a-z0-9$,%/-]+/g, " ")
+      .trim();
+  const hay = ` ${norm(sentence)} `;
+  // Digit signatures survive formatting variants: "$42,000", "42000" and
+  // "$42k" all reduce to the token 42000. Signatures require a single
+  // 4+-digit run so years, ordinals and comma fragments never false-match.
+  const digitNorm = (v) =>
+    String(v)
+      .toLowerCase()
+      .replace(/(\d+(?:\.\d+)?)k\b/g, (_, n) => String(Number(n) * 1000))
+      .replace(/(?<=\d),(?=\d)/g, "");
+  const digitSig = (v) => {
+    const m = digitNorm(v).match(/\d{4,}/g);
+    return m && m.length === 1 ? m[0] : null;
+  };
+  const hayDigits = new Set(digitNorm(sentence).match(/\d+/g) ?? []);
+  const says = (v) => {
+    const needle = norm(v);
+    if (!!needle && hay.includes(` ${needle} `)) return true;
+    const sig = digitSig(v);
+    return !!sig && hayDigits.has(sig);
+  };
+  // Superseded while a newer active value exists.
+  for (const c of resolved.superseded) {
+    if ((resolved.active.get(c.field) ?? []).length > 0 && says(c.value))
+      return true;
+  }
+  // One side of an unresolved conflict presented as the fact.
+  for (const [field, list] of resolved.active) {
+    const distinct = new Set(list.map((c) => norm(c.value)));
+    if (distinct.size > 1 && list.some((c) => says(c.value))) return true;
+  }
+  return false;
 }

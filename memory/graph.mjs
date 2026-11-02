@@ -202,15 +202,20 @@ export function buildGraph(bundle, mem, focus = "overview") {
     for (const lab of bundle.clinical ?? []) {
       const src = docs.get(lab.sourceId);
       if (!src) continue;
-      // One topic per person: two people's reports never share a node.
-      const who = String(
-        lab.meta?.patient?.name || lab.meta?.patient?.id || "",
-      ).replace(/\s*\(synthetic\)/i, "");
-      const tid = who ? `topic:lab:${who}` : "topic:lab";
+      // One topic per person: two people's reports never share a node. The
+      // stable patient ID is the key (two people can share a name); a report
+      // with NO verified identity gets its own per-report topic, never a
+      // shared "unidentified" bucket that would imply one person.
+      const pid = String(lab.meta?.patient?.id || "").trim();
+      const who = String(lab.meta?.patient?.name || pid).replace(
+        /\s*\(synthetic\)/i,
+        "",
+      );
+      const tid = pid ? `topic:lab:${pid}` : `topic:lab:unverified:${src.id}`;
       node({
         id: tid,
         kind: "topic",
-        label: who ? `Lab results - ${who}` : "Lab results",
+        label: who ? `Lab results - ${who}` : "Lab results (identity unverified)",
       });
       docNode(src);
       edge({ from: `doc:${src.id}`, to: tid, kind: "records" });

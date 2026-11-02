@@ -30,7 +30,7 @@ import {
   isFragment,
   FRAGMENT_REPLY,
 } from "./spoken-repair.mjs";
-import { paraphraseLookup } from "./paraphrase.mjs";
+import { promotedAnswer } from "./paraphrase.mjs";
 import { sectionAnswer } from "./doc-sections.mjs";
 import {
   callLanguage,
@@ -670,7 +670,7 @@ export function createVoiceAdapter({
               citation: p.citations[0],
               citations: p.citations,
             };
-          else p = await paraphraseLookup(asked, bundle);
+          else p = await promotedAnswer(asked, bundle);
         } catch {
           p = null;
         }

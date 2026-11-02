@@ -69,5 +69,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .panel { left: 10px; right: 10px; width: auto; top: auto; bottom: 70px; max-height: 55vh; }
   .top { flex-wrap: wrap; }
   .story-cap { font-size: 17px; bottom: 66px; }
-  .dock .play { font-size: 12.5px; }
+  .dock { max-width: calc(100vw - 16px); }
+  .dock .play {
+    font-size: 12px;
+    padding: 0 8px;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }

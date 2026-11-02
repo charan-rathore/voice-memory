@@ -4,7 +4,7 @@ import { createCallCounters } from "./public-call-counters.mjs";
 import { selectCallCounters } from "./public-call-counters-upstash.mjs";
 import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
-import { paraphraseLookup, warmUnits } from "./paraphrase.mjs";
+import { promotedAnswer, warmUnits } from "./paraphrase.mjs";
 import {
   repairDealTerms,
   stripPreamble,
@@ -766,7 +766,7 @@ export function createLocalServer({
         !sectioned &&
         (weakLead(shown.lead) || (ownDocs && shown.lead?.verdict === "QUOTED"))
       ) {
-        const p = await paraphraseLookup(question, bundle).catch(() => null);
+        const p = await promotedAnswer(question, bundle).catch(() => null);
         if (p)
           shown.lead = {
             text: p.spoken,

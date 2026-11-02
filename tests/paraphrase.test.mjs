@@ -113,3 +113,93 @@ test("the agreement path enforces the cross-document margin (false-confidence re
   assert.equal(hit.agreed, true);
   assert.ok(hit.margin >= 0.02);
 });
+
+test("a sentence stating a superseded value is never promoted (stale-fee regression)", async () => {
+  const { statesUnresolvedValue } = await import("../src/paraphrase.mjs");
+  const two = importBundle([
+    {
+      title: "01_Proposal.md",
+      text: "# Northstar Pilot Proposal\nAuthor: P. Rao. Date: 2026-10-04. Type: proposal.\n1. The fixed engagement fee is $42,000 for three regions.",
+    },
+    {
+      title: "02_Revision.md",
+      text: "# Northstar Pilot Proposal - revised\nAuthor: P. Rao. Date: 2026-10-20. Type: revision.\n1. The fixed engagement fee is revised to $48,000, superseding the earlier $42,000.",
+    },
+  ]);
+  assert.equal(
+    statesUnresolvedValue(two, "The fixed engagement fee is $42,000 for three regions."),
+    true,
+    "the October 4 value is superseded by the October 20 revision",
+  );
+  assert.equal(
+    statesUnresolvedValue(two, "The fixed engagement fee is revised to $48,000."),
+    false,
+    "the current value is speakable",
+  );
+  const single = importBundle([
+    {
+      title: "x.md",
+      text: "# Note\nDate: 2026-10-04. Type: note.\n1. The fee is $42,000.",
+    },
+  ]);
+  assert.equal(
+    statesUnresolvedValue(single, "The fee is $42,000."),
+    false,
+    "no amendment chain, no refusal",
+  );
+});
+
+test("a sentence presenting one side of an unresolved conflict is never promoted (competing-fees regression)", async () => {
+  const { statesUnresolvedValue } = await import("../src/paraphrase.mjs");
+  // The reviewer's S2 fixture shape: generic titles, no established
+  // engagement identity, no amendment wording - the claims compete.
+  const conflict = importBundle([
+    {
+      title: "a-2026-10-proposal.pdf",
+      text: "Date: 2026-10-04\nType: Proposal\n# Proposal\nThe consulting fee is $42,000 for the full engagement.\nPayment is due within thirty days of invoice.",
+    },
+    {
+      title: "b-2026-10-revision.pdf",
+      text: "Date: 2026-10-20\nType: Revision\n# Revision\nThe consulting fee is $48,000 after the scope change.\nPayment is due within thirty days of invoice.",
+    },
+  ]);
+  assert.equal(
+    statesUnresolvedValue(conflict, "The consulting fee is $42,000 for the full engagement."),
+    true,
+    "the older side of an unresolved conflict abstains",
+  );
+  assert.equal(
+    statesUnresolvedValue(conflict, "The consulting fee is $48,000 after the scope change."),
+    true,
+    "the newer side abstains too - the engine's conflict answer speaks instead",
+  );
+  assert.equal(
+    statesUnresolvedValue(conflict, "Payment is due within thirty days of invoice."),
+    false,
+    "an uncontested fact stays speakable",
+  );
+});
+
+test("production boundary: promotedAnswer abstains unless a developer explicitly opts in", async () => {
+  const { promotedAnswer, paraphrasePromoteEnabled } = await import(
+    "../src/paraphrase.mjs"
+  );
+  const saved = process.env.VM_PARAPHRASE_PROMOTE;
+  try {
+    delete process.env.VM_PARAPHRASE_PROMOTE;
+    assert.equal(paraphrasePromoteEnabled(), false);
+    // A null bundle throws inside paraphraseLookup; a null result here
+    // proves the promotion machinery was never reached on the default
+    // (production) path - no gate, primary or agreement, is consulted.
+    assert.equal(await promotedAnswer("anything", null), null);
+    process.env.VM_PARAPHRASE_PROMOTE = "1";
+    assert.equal(paraphrasePromoteEnabled(), true);
+    await assert.rejects(
+      () => promotedAnswer("anything", null),
+      "with the opt-in set the preserved machinery is reached",
+    );
+  } finally {
+    if (saved === undefined) delete process.env.VM_PARAPHRASE_PROMOTE;
+    else process.env.VM_PARAPHRASE_PROMOTE = saved;
+  }
+});
