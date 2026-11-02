@@ -209,8 +209,13 @@ test("first load stays inside its weight budget (3D graph, call library and film
     /snapshot-visuals/,
     "narrated overviews load with the lazy visual chunk",
   );
-  // index.html + CSS + preloaded fonts + site.js + snapshot + motion bundle
-  assert.ok(bytes < 560_000, `first load is ${bytes} bytes`);
+  // index.html + CSS + preloaded fonts + site.js + snapshot + motion bundle.
+  // 560 KB -> 572 KB (2026-11-02): the hero tells three stories (correction,
+  // units in Hinglish, approval in Hindi) and the answer panel carries the
+  // neural-voice controls; the Listen player itself (listen.js), the
+  // drill-down and the how-it-works styles stay lazy. The largest eager file
+  // is snapshot.js (~117 KB of saved answers), the next lever if this grows.
+  assert.ok(bytes < 572_000, `first load is ${bytes} bytes`);
 });
 
 test("the motion bundle is built from the committed sources", async () => {

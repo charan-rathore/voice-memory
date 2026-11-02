@@ -74,3 +74,47 @@ test("the hero quotes the engine and the amended report verbatim", () => {
     /Amended 15 October 2026: ferritin result corrected from 5 to 50 \(transcription error\)\./,
   );
 });
+
+test("each hero story quotes the engine's own answer, in the language asked", async () => {
+  const html = readFileSync(
+    new URL("../site/index.html", import.meta.url),
+    "utf8",
+  );
+  const scenes = [
+    ...html.matchAll(
+      /<div class="hc-scene[^"]*" data-scene="(\w+)" data-case="(\w+)" data-q="([^"]+)"[\s\S]*?<p class="hc-answer">\s*<span[^>]*>[^<]*<\/span>\s*“([\s\S]*?)”\s*<\/p>/g,
+    ),
+  ].map(([, scene, c, q, said]) => ({
+    scene,
+    c,
+    q: q.replace(/&#39;/g, "'"),
+    said: said.replace(/\s+/g, " ").trim(),
+  }));
+  assert.deepEqual(
+    scenes.map((x) => x.scene),
+    ["fix", "units", "deal"],
+  );
+  const srv = createLocalServer({ port: 0 });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  await srv.loadPublicCases();
+  const base = `http://127.0.0.1:${srv.address().port}/api/public`;
+  try {
+    // "fix" is the condensed hero line checked above; the other stories are
+    // verbatim engine output (the first sentence where the answer is longer).
+    for (const x of scenes.filter((s) => s.scene !== "fix")) {
+      const live = await (
+        await fetch(base + "/ask", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ case: x.c, question: x.q }),
+        })
+      ).json();
+      assert.ok(
+        live.lead?.text?.startsWith(x.said),
+        `${x.scene}: hero says "${x.said}", engine says "${live.lead?.text}"`,
+      );
+    }
+  } finally {
+    srv.close();
+  }
+});

@@ -46,13 +46,23 @@ try {
     await page.screenshot({ path: `${out}/${name}-hero-flight.png` });
     await page.waitForTimeout(2300);
     await page.screenshot({ path: `${out}/${name}-hero.png` });
-    const landed = await page.evaluate(() => {
-      const d5 = document.querySelector(".hc-d5");
-      return (
-        !document.querySelector(".hc-ghost") &&
-        getComputedStyle(d5).opacity === "1"
-      );
-    });
+    // The 5 must land and its flying ghost must be gone: waited for (up to
+    // 8 s) rather than raced against a fixed delay, since a cold engine boot
+    // on the same machine can push the first story back by a few hundred ms.
+    const landed = await page
+      .waitForFunction(
+        () => {
+          const d5 = document.querySelector(".hc-d5");
+          return (
+            !document.querySelector(".hc-ghost") &&
+            getComputedStyle(d5).opacity === "1"
+          );
+        },
+        null,
+        { timeout: 8000 },
+      )
+      .then(() => true)
+      .catch(() => false);
     if (!landed)
       errors.push(`${name}: the 5 never landed in the amended value`);
     await page.locator(".pipe").scrollIntoViewIfNeeded();

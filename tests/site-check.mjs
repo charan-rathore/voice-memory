@@ -104,13 +104,31 @@ try {
   if (!leadText.includes("18,000"))
     fail(`answer missing the fee: ${leadText.slice(0, 200)}`);
   // The viewer must mark only the focused line(s), not the whole document.
-  await page.locator("#viewer-body mark").first().waitFor({ timeout: 30000 });
+  // A PDF with a text layer opens as its rendered page with a box over the
+  // cited line; a text document opens as text with <mark>. Either way the
+  // highlight must be the focused line(s), not the whole document.
+  await page
+    .locator("#viewer-body mark, #viewer-body .box")
+    .first()
+    .waitFor({ timeout: 30000 });
   const marks = await page.locator("#viewer-body mark").allInnerTexts();
-  if (marks.length > 2) fail(`whole-document highlight: ${marks.length} marks`);
-  if (!marks.some((m) => m.includes("27 March 2027")))
-    fail(
-      `focused highlight is not the deadline line: ${marks.join(" | ").slice(0, 200)}`,
-    );
+  const boxes = await page.locator("#viewer-body .box").count();
+  if (marks.length) {
+    if (marks.length > 2)
+      fail(`whole-document highlight: ${marks.length} marks`);
+    if (!marks.some((m) => m.includes("27 March 2027")))
+      fail(
+        `focused highlight is not the deadline line: ${marks.join(" | ").slice(0, 200)}`,
+      );
+  } else if (boxes > 2) fail(`whole-page highlight: ${boxes} boxes`);
+  else {
+    // the boxed line is the cited one: the first citation names the deadline
+    const cite = await page.locator(".cite .cite-q").first().innerText();
+    if (!cite.includes("27 March 2027"))
+      fail(
+        `the boxed citation is not the deadline line: ${cite.slice(0, 200)}`,
+      );
+  }
   await page.screenshot({ path: "/tmp/site-check-answer.png" });
 
   // Path B: fresh page, upload without touching the tab (drag/direct path);
