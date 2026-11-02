@@ -68,42 +68,47 @@ try {
     await page.locator(".pipe").scrollIntoViewIfNeeded();
     await page.waitForTimeout(1600);
     await page.screenshot({ path: `${out}/${name}-pipeline.png` });
-    // Report charts: clicking a range row, then a donut segment, fills the
-    // detail panel with that test's readings and source lines.
+    // Report charts: clicking a range row opens that test as a scene on
+    // the stage (right column on desktop, under the report on phones);
+    // a brace on the number line opens its group of results.
     const row = page.locator('.rr-row[data-sel="test:hemoglobin"]').first();
     if (await row.count()) {
       await row.scrollIntoViewIfNeeded();
       await row.click();
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(900);
       const dd = await page.evaluate(() => {
-        const p = document.querySelector(".rp-detail");
+        const sc = document.querySelector(".stage .st-scene:not(.leaving)");
         return {
-          picked: !p?.querySelector(".rp-pick"),
-          text: (p?.textContent ?? "").length,
+          key: sc?.dataset.key ?? "",
+          line: !!sc?.querySelector(".m-nl"),
+          readings: sc?.querySelectorAll(".m-pt").length ?? 0,
           selected: document.querySelectorAll(
-            '[data-sel="test:hemoglobin"].sel',
+            '.vz-report [data-sel="test:hemoglobin"].sel',
           ).length,
         };
       });
-      if (!dd.picked || dd.text < 40 || dd.selected < 1)
-        errors.push(
-          `${name}: report detail did not open ${JSON.stringify(dd)}`,
-        );
-      const seg = page.locator(".dn-leg:not([disabled])").first();
-      if (await seg.count()) {
-        await seg.click();
-        await page.waitForTimeout(400);
+      if (dd.key !== "test:hemoglobin" || !dd.line || dd.readings < 2 || dd.selected < 1)
+        errors.push(`${name}: report scene did not open ${JSON.stringify(dd)}`);
+      const brace = page.locator(".m-brace").first();
+      if (await brace.count()) {
+        await brace.dispatchEvent("click");
+        await page.waitForTimeout(700);
         const n = await page.evaluate(
           () =>
-            document.querySelectorAll(".rp-detail .dt-item, .rp-detail li")
+            document.querySelectorAll(".stage .st-scene:not(.leaving) .m-bar")
               .length,
         );
-        if (n < 1) errors.push(`${name}: donut segment opened no detail`);
-      } else errors.push(`${name}: no donut legend on the report`);
+        if (n < 1) errors.push(`${name}: brace opened no results`);
+      } else errors.push(`${name}: no braces on the result field`);
       await page
         .locator(".vz-report")
         .first()
         .screenshot({ path: `${out}/${name}-report.png` });
+      if (await page.locator(".stage").count())
+        await page
+          .locator(".stage")
+          .first()
+          .screenshot({ path: `${out}/${name}-stage.png` });
     } else errors.push(`${name}: no hemoglobin row on the report`);
     await page.locator(".graph-band").scrollIntoViewIfNeeded();
     await page.waitForTimeout(3500);

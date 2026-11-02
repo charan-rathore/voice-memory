@@ -608,6 +608,32 @@
       ask: "Ask about this",
       sources: "Lines on record, oldest first",
       also: "Others in these reports",
+      fieldK: "Where every result sits",
+      fieldHint: "Each dot is one test, placed on its own lab's printed range: the lit band runs from the low limit to the high limit. Select a dot or a brace.",
+      reg: { below: (n) => `${n} below the range`, in: (n) => `${n} inside the range`, above: (n) => `${n} above the range` },
+      regHint: { below: "Furthest below first, measured from the low limit.", in: "Where each sits inside its range, closest to a limit first.", above: "Furthest above first, measured from the high limit." },
+      margin: (p) => `${p}% of the range from the nearest limit`,
+      lowLim: "low limit",
+      highLim: "high limit",
+      noRangeList: "No printed range:",
+      trackK: "How far each decision got",
+      trackHint: "The marker stops at the furthest step the documents support. Select a decision for its versions.",
+      stages: ["Discussed", "Proposed", "Agreed", "Approved"],
+      fork: "2 versions on record",
+      lanesHint: "Each mark is a document that speaks to that topic. Drag the line to see what was on record on any day.",
+      scrub: "Date to read the record at",
+      asOf: (d) => `Latest line on record, as of ${d}`,
+      nothingYet: "nothing on record yet",
+      stageK: "Chart detail",
+      back: "Back",
+      hide: "Hide chart",
+      showChart: "Show chart",
+      trackerHint: "Move along the line to read any value against the printed range.",
+      trBelow: (x) => `below the range by ${x}`,
+      trAbove: (x) => `above the range by ${x}`,
+      trIn: "inside the range",
+      endK: { PROPOSED: "Approval", OPEN: "Agreement", "NO-RECORD": "Signed agreement", APPROVED: "Approved", AGREED: "Agreed" },
+      end: { PROPOSED: "Not on record in any document", OPEN: "No single version agreed", "NO-RECORD": "No document records one", APPROVED: "On record", AGREED: "On record" },
     },
     hi: {
       sev: { out: "सीमा से काफ़ी बाहर", near: "सीमा से थोड़ा बाहर", in: "सीमा के अंदर", none: "सीमा नहीं छपी" },
@@ -637,6 +663,32 @@
       ask: "इसके बारे में पूछें",
       sources: "रिकॉर्ड की लाइनें, पुराने से नए",
       also: "इन रिपोर्ट्स में और लोग",
+      fieldK: "हर नतीजा कहाँ है",
+      fieldHint: "हर बिंदु एक टेस्ट है, उसकी अपनी छपी सीमा पर: रोशन पट्टी निचली सीमा से ऊपरी सीमा तक है। कोई बिंदु या ब्रेस चुनें।",
+      reg: { below: (n) => `${n} सीमा से कम`, in: (n) => `${n} सीमा के अंदर`, above: (n) => `${n} सीमा से ज़्यादा` },
+      regHint: { below: "सबसे ज़्यादा कम पहले, निचली सीमा से नापा गया।", in: "हर नतीजा अपनी सीमा में कहाँ है, किनारे के सबसे पास पहले।", above: "सबसे ज़्यादा ऊपर पहले, ऊपरी सीमा से नापा गया।" },
+      margin: (p) => `नज़दीकी सीमा से सीमा का ${p}%`,
+      lowLim: "निचली सीमा",
+      highLim: "ऊपरी सीमा",
+      noRangeList: "कोई सीमा नहीं छपी:",
+      trackK: "हर फ़ैसला कहाँ तक पहुँचा",
+      trackHint: "निशान वहीं रुकता है जहाँ तक दस्तावेज़ साथ देते हैं। संस्करण देखने के लिए फ़ैसला चुनें।",
+      stages: ["चर्चा", "प्रस्ताव", "सहमति", "मंज़ूरी"],
+      fork: "2 संस्करण दर्ज",
+      lanesHint: "हर निशान एक दस्तावेज़ है। किसी भी दिन का रिकॉर्ड देखने के लिए लाइन खींचें।",
+      scrub: "किस तारीख़ का रिकॉर्ड पढ़ें",
+      asOf: (d) => `${d} तक रिकॉर्ड की आख़िरी लाइन`,
+      nothingYet: "अभी कुछ दर्ज नहीं",
+      stageK: "चार्ट विवरण",
+      back: "पीछे",
+      hide: "चार्ट छिपाएँ",
+      showChart: "चार्ट दिखाएँ",
+      trackerHint: "लाइन पर चलकर कोई भी मान छपी सीमा के मुक़ाबले पढ़ें।",
+      trBelow: (x) => `सीमा से ${x} कम`,
+      trAbove: (x) => `सीमा से ${x} ज़्यादा`,
+      trIn: "सीमा के अंदर",
+      endK: { PROPOSED: "मंज़ूरी", OPEN: "सहमति", "NO-RECORD": "हस्ताक्षरित समझौता", APPROVED: "मंज़ूर", AGREED: "तय" },
+      end: { PROPOSED: "किसी दस्तावेज़ में दर्ज नहीं", OPEN: "कोई एक संस्करण तय नहीं", "NO-RECORD": "किसी दस्तावेज़ में नहीं", APPROVED: "दर्ज है", AGREED: "दर्ज है" },
     },
   };
   RW.hinglish = {
@@ -656,6 +708,22 @@
     decC: (n, m) => [String(n), `${m} mein se`, "manzoor"],
     lanesK: "Har faisla kahan likha gaya, samay ke saath",
     ask: "Iske baare mein poochiye",
+    fieldK: "Har result kahan hai",
+    fieldHint: "Har dot ek test hai, apni lab ki printed range par: roshan patti low limit se high limit tak hai. Koi dot ya brace chuniye.",
+    reg: { below: (n) => `${n} range se kam`, in: (n) => `${n} range ke andar`, above: (n) => `${n} range se zyada` },
+    lowLim: "low limit",
+    highLim: "high limit",
+    trackK: "Har faisla kahan tak pahuncha",
+    trackHint: "Marker wahin rukta hai jahan tak documents saath dete hain. Versions ke liye faisla chuniye.",
+    lanesHint: "Har mark ek document hai. Kisi bhi din ka record dekhne ke liye line kheenchiye.",
+    asOf: (d) => `${d} tak record ki aakhri line`,
+    nothingYet: "abhi kuch record mein nahi",
+    hide: "Chart chhupaiye",
+    showChart: "Chart dikhaiye",
+    trackerHint: "Line par chal kar koi bhi value printed range ke saath padhiye.",
+    trBelow: (x) => `range se ${x} kam`,
+    trAbove: (x) => `range se ${x} zyada`,
+    trIn: "range ke andar",
   };
   const R = (lang) => RW[lang] ?? RW.en;
   const QS = {
@@ -666,31 +734,47 @@
     open: "What's still open?",
   };
 
+  // ------------------------------------------------------------ manim-style scenes
+  // The report is drawn the way Manim animates a scene: strokes are created
+  // along their length, text is written, marks grow out of the point they
+  // belong to, and every move follows Manim's `smooth` rate function (a
+  // normalised sigmoid), handed to CSS and WAAPI as a linear() easing.
+  // Deeper layers play in a stage beside the report (the right column of the
+  // desk on wide screens, under the report on phones); each layer is a new
+  // scene, and the mark you clicked flies across into it.
+  const sig = (x) => 1 / (1 + Math.exp(-x));
+  const smooth = (t) => {
+    const e = sig(-5);
+    return Math.min(1, Math.max(0, (sig(10 * (t - 0.5)) - e) / (1 - 2 * e)));
+  };
+  const SMOOTH = (() => {
+    try {
+      if (CSS.supports("animation-timing-function", "linear(0, 1)"))
+        return `linear(${Array.from({ length: 41 }, (_, i) => +smooth(i / 40).toFixed(4)).join(", ")})`;
+    } catch {}
+    return "cubic-bezier(0.45, 0, 0.55, 1)";
+  })();
+  document.documentElement.style.setProperty("--m-smooth", SMOOTH);
+  const n1 = (x) => (Math.round(x * 10) / 10).toString();
+  // Manim's Brace: a curly brace under (dir 1) or over (dir -1) a span
+  const bracePath = (x0, x1, y, dir = 1) => {
+    const a = 5 * dir, m = (x0 + x1) / 2, q = Math.min(8, Math.abs(x1 - x0) / 4);
+    return `M${n1(x0)} ${n1(y)} Q${n1(x0)} ${n1(y + a)} ${n1(x0 + q)} ${n1(y + a)} L${n1(m - q)} ${n1(y + a)} Q${n1(m)} ${n1(y + a)} ${n1(m)} ${n1(y + 2 * a)} Q${n1(m)} ${n1(y + a)} ${n1(m + q)} ${n1(y + a)} L${n1(x1 - q)} ${n1(y + a)} Q${n1(x1)} ${n1(y + a)} ${n1(x1)} ${n1(y)}`;
+  };
+  const niceStep = (span, n) => {
+    const raw = span / n, p = 10 ** Math.floor(Math.log10(raw)), k = raw / p;
+    return (k < 1.5 ? 1 : k < 3.5 ? 2 : k < 7.5 ? 5 : 10) * p;
+  };
+  const tickFmt = (v) => (Math.abs(v) >= 100 ? String(Math.round(v)) : String(Number(v.toPrecision(3))));
+  const shortDoc = (t) => String(t ?? "").replace(/^\d+_|\.(md|pdf|docx?)$/gi, "").replace(/_/g, " ");
+
   // position of a value against its printed range: 0 = low limit, 1 = high
   const posOf = (h, range) => {
     const r = range ?? h?.range;
     if (!r || !Number.isFinite(r.lowN) || !Number.isFinite(r.highN) || !Number.isFinite(h?.value)) return null;
     return (h.value - r.lowN) / (r.highN - r.lowN || 1);
   };
-
-  function donut(parts, center, label, sel) {
-    const total = parts.reduce((n, p) => n + p.n, 0) || 1;
-    const R0 = 52, C = 2 * Math.PI * R0, gap = parts.filter((p) => p.n).length > 1 ? 3 : 0;
-    let off = 0;
-    const arcs = parts
-      .filter((p) => p.n)
-      .map((p, i) => {
-        const len = Math.max(0.01, (p.n / total) * C - gap);
-        const a = `<circle class="dn-seg ${p.key}" cx="70" cy="70" r="${R0}" style="--len:${len.toFixed(2)};--C:${C.toFixed(2)};--off:${(-off).toFixed(2)};--d:${i * 140}ms" stroke-dasharray="${len.toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" data-sel="${esc(sel(p))}" tabindex="0" role="button" aria-label="${esc(`${p.label}: ${p.n}`)}"><title>${esc(`${p.label}: ${p.n}`)}</title></circle>`;
-        off += (p.n / total) * C;
-        return a;
-      })
-      .join("");
-    const legend = parts
-      .map((p) => `<button type="button" class="dn-leg ${p.key}" data-sel="${esc(sel(p))}"${p.n ? "" : " disabled"}><i></i><span>${esc(p.label)}</span><b>${p.n}</b></button>`)
-      .join("");
-    return `<div class="rp-donut"><svg viewBox="0 0 140 140" class="dn" role="group" aria-label="${esc(label)}"><circle class="dn-track" cx="70" cy="70" r="${R0}"/><g transform="rotate(-90 70 70)">${arcs}</g><g class="dn-c" data-sel="${esc(sel(parts.find((p) => p.n) ?? parts[0]))}"><text x="70" y="68" class="dn-n" text-anchor="middle">${esc(center[0])}</text><text x="70" y="85" class="dn-l" text-anchor="middle">${esc(center[1] ?? "")}</text><text x="70" y="97" class="dn-l" text-anchor="middle">${esc(center[2] ?? "")}</text></g></svg><div class="dn-legend">${legend}</div></div>`;
-  }
+  const regionOf = (p) => (p == null ? "none" : p < 0 ? "below" : p > 1 ? "above" : "in");
 
   function rangeRows(tests, w, rw, lang) {
     const D0 = -0.8, D1 = 1.8;
@@ -760,6 +844,251 @@
     return out;
   }
 
+
+  // 1. Every result on ONE normalised number line: the lab's printed range
+  //    is the lit interval (its left edge is the low limit, its right edge
+  //    the high limit), so results from different tests and units can sit
+  //    side by side without ever being compared to each other.
+  function rangeField(subject, rw, w) {
+    const L0 = 26, L1 = 474, D0 = -1, D1 = 2;
+    const X = (p) => L0 + ((Math.max(D0, Math.min(D1, p)) - D0) / (D1 - D0)) * (L1 - L0);
+    const pts = subject.tests
+      .map((t) => ({ t, p: posOf(t.latest, t.latest.range), sev: SEV[t.latest.position] ?? "none" }))
+      .filter((d) => d.p != null)
+      .sort((a, b) => a.p - b.p);
+    const none = subject.tests.filter((t) => posOf(t.latest, t.latest.range) == null);
+    const placed = [];
+    for (const d of pts) {
+      d.x = X(d.p);
+      let lv = 0;
+      while (placed.some((o) => o.lv === lv && Math.abs(o.x - d.x) < 92)) lv++;
+      d.lv = lv;
+      placed.push(d);
+    }
+    const maxLv = placed.reduce((m, d) => Math.max(m, d.lv), 0);
+    const AX = 56 + maxLv * 28;
+    const H = AX + 66;
+    const reg = { below: [], in: [], above: [] };
+    for (const d of pts) reg[regionOf(d.p)].push(d);
+    const x0 = X(0), x1 = X(1);
+    const ticks = [-1, -0.5, 0, 0.5, 1, 1.5, 2]
+      .map((p, i) => `<line class="m-tick${p === 0 || p === 1 ? " big" : ""}" pathLength="1" x1="${n1(X(p))}" y1="${AX - (p === 0 || p === 1 ? 7 : 4)}" x2="${n1(X(p))}" y2="${AX + (p === 0 || p === 1 ? 7 : 4)}" style="--d:${300 + i * 50}ms"/>`)
+      .join("");
+    const braces = [
+      ["below", L0, x0 - 5, rw.reg.below(reg.below.length)],
+      ["in", x0 + 3, x1 - 3, rw.reg.in(reg.in.length)],
+      ["above", x1 + 5, L1, rw.reg.above(reg.above.length)],
+    ]
+      .filter(([k]) => k === "in" || reg[k].length)
+      .map(([k, a, b, label], i) => `<g class="m-brace ${k}" data-sel="reg:${k}" tabindex="0" role="button" aria-label="${esc(label)}"><path class="m-create" pathLength="1" d="${bracePath(a, b, AX + 22, 1)}" style="--d:${900 + i * 160}ms"/><text class="m-write" x="${n1((a + b) / 2)}" y="${AX + 50}" text-anchor="middle" style="--d:${1050 + i * 160}ms">${esc(label)}</text></g>`)
+      .join("");
+    const dots = pts
+      .map((d, i) => {
+        const y = AX - 20 - d.lv * 28;
+        const right = d.x < L1 - 96;
+        const off = d.p < D0 || d.p > D1;
+        return `<g class="m-dot ${d.sev}" data-sel="test:${esc(d.t.key)}" tabindex="0" role="button" style="--d:${1300 + i * 110}ms;--fy:${AX - y}px" aria-label="${esc(`${d.t.name} ${d.t.latest.raw}${d.t.unit ? " " + d.t.unit : ""}, ${posWord(d.t.latest.position, w)}`)}">
+          <line class="m-stem" x1="${n1(d.x)}" y1="${AX}" x2="${n1(d.x)}" y2="${y}"/>
+          <circle class="m-hit" cx="${n1(d.x)}" cy="${y}" r="15"/>
+          <circle class="m-c" cx="${n1(d.x)}" cy="${y}" r="6.5"/>
+          ${off ? `<text class="m-off" x="${n1(d.x + (d.p < D0 ? -11 : 11))}" y="${y + 3.5}" text-anchor="middle">${d.p < D0 ? "◀" : "▶"}</text>` : ""}
+          <text class="m-lbl" x="${n1(d.x + (right ? 11 : -11))}" y="${y + 4}" text-anchor="${right ? "start" : "end"}">${esc(d.t.name)} <tspan>${esc(d.t.latest.raw)}</tspan></text>
+        </g>`;
+      })
+      .join("");
+    const svg = `<svg class="m-field" viewBox="0 0 500 ${H}" role="group" aria-label="${esc(rw.fieldK)}">
+      <rect class="m-band m-grow-y" x="${n1(x0)}" y="10" width="${n1(x1 - x0)}" height="${AX - 10}" style="--d:500ms"/>
+      <line class="m-edge m-create" pathLength="1" x1="${n1(x0)}" y1="10" x2="${n1(x0)}" y2="${AX}" style="--d:620ms"/>
+      <line class="m-edge m-create" pathLength="1" x1="${n1(x1)}" y1="10" x2="${n1(x1)}" y2="${AX}" style="--d:620ms"/>
+      <line class="m-axis m-create" pathLength="1" x1="${L0}" y1="${AX}" x2="${L1}" y2="${AX}" style="--d:0ms"/>
+      <g class="m-ticks">${ticks}</g>
+      <text class="m-lim m-write" x="${n1(x0)}" y="${AX + 17}" text-anchor="middle" style="--d:700ms">${esc(rw.lowLim)}</text>
+      <text class="m-lim m-write" x="${n1(x1)}" y="${AX + 17}" text-anchor="middle" style="--d:760ms">${esc(rw.highLim)}</text>
+      ${braces}${dots}
+    </svg>`;
+    return `<section class="rp-card m-card"><header class="rp-h"><h4>${esc(rw.fieldK)}</h4><p>${esc(rw.fieldHint)}</p></header>${svg}${none.length ? `<p class="m-none">${esc(rw.noRangeList)} ${none.map((t) => `<button type="button" class="m-chip" data-sel="test:${esc(t.key)}">${esc(t.name)}</button>`).join(" ")}</p>` : ""}</section>`;
+  }
+
+  // Records 1. How far each decision got: Discussed -> Proposed -> Agreed ->
+  // Approved. The marker travels to the furthest stage the record supports
+  // and stops there; what the record never says stays dashed.
+  const STAGE_OF = { "NO-RECORD": -1, OPEN: 0, PROPOSED: 1, AGREED: 2, APPROVED: 3 };
+  function decisionTrack(v, rw) {
+    const N0 = 170, N3 = 476, RH = 54, TOP = 34;
+    const NX = (k) => N0 + (k / 3) * (N3 - N0);
+    const H = TOP + v.rows.length * RH;
+    const head = rw.stages
+      .map((s, k) => `<text class="m-stage m-write" x="${n1(NX(k))}" y="16" text-anchor="middle" style="--d:${k * 90}ms">${esc(s)}</text>`)
+      .join("");
+    const rows = v.rows
+      .map((r, i) => {
+        const [tone] = STAMP[r.verdict] ?? ["warn"];
+        const k = STAGE_OF[r.verdict] ?? 0;
+        const y = TOP + i * RH + 18;
+        const fig = keyFigure(r.text).replace(/\s*<s-or>or<\/s-or>\s*/, " or ");
+        const nodes = [0, 1, 2, 3]
+          .map((j) => `<circle class="m-node${j <= k ? " on " + tone : ""}" cx="${n1(NX(j))}" cy="${y}" r="4.5" style="--d:${200 + i * 140 + j * 60}ms"/>`)
+          .join("");
+        const d0 = 200 + i * 140;
+        const reach = k >= 0
+          ? `<line class="m-reach ${tone} m-create" pathLength="1" x1="${N0}" y1="${y}" x2="${n1(NX(Math.max(k, 0)))}" y2="${y}" style="--d:${d0 + 250}ms"/>
+             <g class="m-marker ${tone}" style="--d:${d0 + 250}ms;--mx:${n1(NX(Math.max(k, 0)) - N0)}px"><circle cx="${N0}" cy="${y}" r="9"/><circle class="m-ring" cx="${N0}" cy="${y}" r="13"/></g>`
+          : `<g class="m-x m-write" style="--d:${d0 + 250}ms"><path d="M${N0 - 6} ${y - 6} l12 12 M${N0 + 6} ${y - 6} l-12 12"/></g>`;
+        const figX = k >= 0 ? NX(Math.max(k, 0)) : N0;
+        return `<g class="m-trow" data-sel="rec:${esc(r.id)}" tabindex="0" role="button" aria-label="${esc(`${r.label}: ${rw.dec[r.verdict] ?? r.verdict}`)}">
+          <rect class="m-hitrow" x="0" y="${y - 22}" width="500" height="${RH - 4}" rx="8"/>
+          <text class="m-rlabel m-write" x="8" y="${y - 2}" style="--d:${d0}ms">${esc(r.label)}</text>
+          <text class="m-rstat ${tone} m-write" x="8" y="${y + 14}" style="--d:${d0 + 80}ms">${esc(rw.dec[r.verdict] ?? r.verdict)}</text>
+          <line class="m-rail" x1="${N0}" y1="${y}" x2="${N3}" y2="${y}"/>
+          ${nodes}${reach}
+          ${fig && fig !== "None" ? `<text class="m-fig m-write" x="${n1(figX)}" y="${y - 15}" text-anchor="${figX > 430 ? "end" : "middle"}" style="--d:${d0 + 900}ms">${esc(fig)}</text>` : ""}
+          ${r.verdict === "OPEN" ? `<text class="m-fork m-write" x="${n1(NX(0) + 16)}" y="${y + 16}" style="--d:${d0 + 900}ms">${esc(rw.fork)}</text>` : ""}
+        </g>`;
+      })
+      .join("");
+    return `<section class="rp-card m-card"><header class="rp-h"><h4>${esc(rw.trackK)}</h4><p>${esc(rw.trackHint)}</p></header><svg class="m-track" viewBox="0 0 500 ${H}" role="group" aria-label="${esc(rw.trackK)}">${head}${rows}</svg></section>`;
+  }
+
+  // Figures inside a quoted line: money, splits, dates. Used to read the
+  // record "as of" a date, and to mark what changed between versions.
+  const MONTHS_RE = "January|February|March|April|May|June|July|August|September|October|November|December";
+  const kindOf = (fig) => (/\$\d/.test(fig) ? "money" : /\d+\/\d+/.test(fig) ? "split" : /\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/.test(fig) ? "date" : "");
+  const figOf = (q, kind = "") => {
+    const s = String(q ?? "");
+    const all = {
+      money: [...s.matchAll(/\$\d{1,3}(?:,\d{3})*(?:\.\d+)?/g)].map((m) => m[0]),
+      split: [...[...s.matchAll(/(\d{1,2})%[^.%;]{0,40}?(\d{1,2})%/g)].map((m) => `${m[1]}/${m[2]}`), ...[...s.matchAll(/\b(\d{1,2}\/\d{1,2})\b/g)].map((m) => m[1])],
+      date: [...s.matchAll(new RegExp(`\\b(\\d{1,2}) (${MONTHS_RE})`, "g"))].map((m) => `${m[1]} ${m[2].slice(0, 3)}`),
+    };
+    for (const k of kind ? [kind] : ["money", "split", "date"]) {
+      const xs = [...new Set(all[k])];
+      if (!xs.length) continue;
+      return xs.length > 1 && /\bvs\b|versus|\bor\b/i.test(s) ? xs.slice(0, 2).join(" vs ") : xs[0];
+    }
+    if (kind) return "";
+    const ex = s.replace(/^\d+\.\s*/, "").split(/[;:.(]/)[0].trim();
+    return ex.length > 38 ? ex.slice(0, 36).trimEnd() + "…" : ex;
+  };
+  const markFigs = (escaped) =>
+    escaped.replace(new RegExp(`(\\$\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?|\\d{1,2}%|\\b\\d{1,2}/\\d{1,2}\\b|\\b\\d{1,2} (?:${MONTHS_RE})(?: \\d{4})?)`, "g"), "<mark>$1</mark>");
+
+  // Records 2. Where each decision was written, with a playhead that sweeps
+  // the dates once and can then be dragged: the readout lists the latest
+  // line on record for every topic as of that day.
+  function lanes(v, rw, lang) {
+    const docs = (v.documents ?? []).filter((d) => d.date).sort((a, b) => a.date.localeCompare(b.date));
+    if (!docs.length) return "";
+    const t0 = Date.parse(docs[0].date), t1 = Date.parse(docs.at(-1).date);
+    const P = (d) => 3 + (t1 > t0 ? (Date.parse(d) - t0) / (t1 - t0) : 0.5) * 94;
+    const keys = v.rows
+      .map((r, i) => {
+        const [tone] = STAMP[r.verdict] ?? ["warn"];
+        return `<button type="button" class="ln-k" data-sel="rec:${esc(r.id)}" style="--i:${i}"><b>${esc(r.label)}</b><span class="vz-stamp ${tone}">${esc(rw.dec[r.verdict] ?? r.verdict)}</span></button>`;
+      })
+      .join("");
+    const tracks = v.rows
+      .map((r, i) => {
+        const [tone] = STAMP[r.verdict] ?? ["warn"];
+        const titles = [...new Set((r.sources ?? []).map((x) => x.title))];
+        const mine = docs.filter((d) => titles.includes(d.title));
+        const first = mine.length ? P(mine[0].date) : 3;
+        const marks = mine
+          .map((d) => `<button type="button" class="ln-mark ${tone}" style="left:${P(d.date).toFixed(1)}%" data-t="${Date.parse(d.date)}" data-sel="rec:${esc(r.id)}" title="${esc(`${shortDoc(d.title)} · ${shortDate(d.date, lang)}`)}" aria-label="${esc(`${r.label}: ${shortDoc(d.title)}, ${shortDate(d.date, lang)}`)}"></button>`)
+          .join("");
+        return `<div class="ln-track" style="--i:${i}"><span class="ln-line ${tone}" style="left:${first.toFixed(1)}%"></span>${marks}</div>`;
+      })
+      .join("");
+    const axis = docs.map((d, i) => `<span class="${i && P(d.date) - P(docs[i - 1].date) < 7 ? "tight" : ""}" style="left:${P(d.date).toFixed(1)}%">${esc(shortDate(d.date, lang))}</span>`).join("");
+    return `<section class="rp-card m-card"><header class="rp-h"><h4>${esc(rw.lanesK)}</h4><p>${esc(rw.lanesHint)}</p></header>
+      <div class="ln"><div class="ln-keys">${keys}</div><div class="ln-field" data-t0="${t0}" data-t1="${t1}">${tracks}<div class="ln-ticks">${axis}</div>
+        <div class="ln-play" role="slider" tabindex="0" aria-label="${esc(rw.scrub)}" aria-valuemin="${t0}" aria-valuemax="${t1}" aria-valuenow="${t1}"><i></i><b></b></div></div></div>
+      <div class="ln-asof" aria-live="polite"></div></section>`;
+  }
+  function asOf(board, t) {
+    const rep = REPORTS.get(board.dataset.rep);
+    if (!rep || rep.v.kind !== "records") return;
+    const v = rep.v, rw = R(rep.lang);
+    const docs = new Map((v.documents ?? []).map((d) => [d.title, d]));
+    const field = board.querySelector(".ln-field");
+    const t0 = Number(field.dataset.t0), t1 = Number(field.dataset.t1);
+    const k = t1 > t0 ? (t - t0) / (t1 - t0) : 1;
+    const play = field.querySelector(".ln-play");
+    play.style.left = `${(3 + Math.max(0, Math.min(1, k)) * 94).toFixed(2)}%`;
+    const day = new Date(t).toISOString().slice(0, 10);
+    play.querySelector("b").textContent = shortDate(day, rep.lang);
+    play.setAttribute("aria-valuenow", String(Math.round(t)));
+    play.setAttribute("aria-valuetext", shortDate(day, rep.lang));
+    field.querySelectorAll(".ln-mark").forEach((m) => m.classList.toggle("lit", Number(m.dataset.t) <= t + 1));
+    const lines = v.rows.map((r) => {
+      const seen = (r.sources ?? [])
+        .map((s) => ({ ...s, date: docs.get(s.title)?.date }))
+        .filter((s) => s.date && Date.parse(s.date) <= t + 1)
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const last = seen.at(-1);
+      const kind = kindOf(keyFigure(r.text));
+      const fig = last ? figOf(last.quote, kind) || figOf(last.quote.replace(/\$\d[\d,]*|\d{1,2}%/g, ""), "") : "";
+      return `<li data-sel="rec:${esc(r.id)}" role="button" tabindex="0"><b>${esc(r.label)}</b>${last ? `<span class="ao-fig${kind ? "" : " ao-txt"}">${esc(fig)}</span><em>${esc(shortDoc(last.title))} · ${esc(shortDate(last.date, rep.lang))}</em>` : `<span class="ao-none">${esc(rw.nothingYet)}</span>`}</li>`;
+    });
+    board.querySelector(".ln-asof").innerHTML = `<p>${esc(rw.asOf(shortDate(day, rep.lang)))}</p><ul>${lines.join("")}</ul>`;
+  }
+  function mountLanes(board) {
+    const field = board.querySelector(".ln-field");
+    if (!field) return;
+    const t0 = Number(field.dataset.t0), t1 = Number(field.dataset.t1);
+    const play = field.querySelector(".ln-play");
+    const marks = [...field.querySelectorAll(".ln-mark")].map((m) => Number(m.dataset.t));
+    const stops = [...new Set(marks)].sort((a, b) => a - b);
+    let raf = 0;
+    const at = (clientX) => {
+      const r = field.getBoundingClientRect();
+      const k = Math.max(0, Math.min(1, ((clientX - r.left) / r.width - 0.03) / 0.94));
+      return t0 + k * (t1 - t0);
+    };
+    const sweep = () => {
+      if (reduced) return asOf(board, t1);
+      const T = 2600, s0 = performance.now();
+      const step = (now) => {
+        if (!board.isConnected) return;
+        const k = Math.min(1, (now - s0) / T);
+        asOf(board, t0 + smooth(k) * (t1 - t0));
+        if (k < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    };
+    let drag = false;
+    field.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".ln-mark")) return;
+      cancelAnimationFrame(raf);
+      drag = true;
+      field.setPointerCapture?.(e.pointerId);
+      asOf(board, at(e.clientX));
+    });
+    field.addEventListener("pointermove", (e) => drag && asOf(board, at(e.clientX)));
+    field.addEventListener("pointerup", () => (drag = false));
+    field.addEventListener("pointercancel", () => (drag = false));
+    play.addEventListener("keydown", (e) => {
+      const now = Number(play.getAttribute("aria-valuenow"));
+      let t = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowUp") t = stops.find((s) => s > now + 1) ?? t1;
+      if (e.key === "ArrowLeft" || e.key === "ArrowDown") t = [...stops].reverse().find((s) => s < now - 1) ?? t0;
+      if (e.key === "Home") t = t0;
+      if (e.key === "End") t = t1;
+      if (t == null) return;
+      e.preventDefault();
+      cancelAnimationFrame(raf);
+      asOf(board, t);
+    });
+    // sweep once, when the chart is first on screen
+    const io = new IntersectionObserver((es) => {
+      if (!es.some((x) => x.isIntersecting)) return;
+      io.disconnect();
+      sweep();
+    }, { threshold: 0.35 });
+    asOf(board, t0);
+    io.observe(field);
+  }
+
+  // Labs 3. Report dates on a number line; each node lists what it changed.
   function timelineCard(subject, rw, lang, w) {
     const ev = reportEvents(subject, rw);
     if (ev.length < 2) return "";
@@ -773,53 +1102,388 @@
         </li>`,
       )
       .join("");
-    return `<section class="rp-card"><header class="rp-h"><h4>${esc(rw.tlK)}</h4></header><ol class="tl">${nodes}</ol></section>`;
+    return `<section class="rp-card m-card"><header class="rp-h"><h4>${esc(rw.tlK)}</h4></header><ol class="tl">${nodes}</ol></section>`;
   }
 
-  function detailFor(rep, key) {
-    const { v, lang } = rep;
-    const w = W(lang),
-      rw = R(lang);
-    const [kind, id] = key.split(":");
-    if (v.kind === "records") {
-      if (kind === "dec") {
-        const rows = v.rows.filter((r) => r.verdict === id);
-        return rows.map((r) => recDetail(r, rw, lang)).join("");
+  // ------------------------------------------------------------ the stage
+  // One deeper layer at a time. A test plays as a number line in its own
+  // units with the printed range braced, every reading placed on it, a
+  // correction transformed from the old figure into the new one, and a
+  // value tracker under the pointer. A decision plays as a version ladder.
+  function axisModel(items, range) {
+    const nums = items.map((h) => h.value).filter(Number.isFinite);
+    const ghosts = items.flatMap((h) => (h.superseded ?? []).map((g) => Number(g.raw))).filter(Number.isFinite);
+    const bounds = [...nums, ...ghosts, range?.lowN, range?.highN].filter(Number.isFinite);
+    if (!bounds.length) return null;
+    const minB = Math.min(...bounds), maxB = Math.max(...bounds);
+    const log = minB > 0 && maxB / minB >= 20;
+    const f = log ? Math.log10 : (x) => x;
+    let lo = f(minB), hi = f(maxB);
+    const pad = (hi - lo || Math.abs(hi) || 1) * 0.14;
+    lo -= pad;
+    hi += pad;
+    if (!log && minB >= 0 && lo < 0) lo = 0;
+    return { log, lo, hi, f, inv: log ? (u) => 10 ** u : (u) => u };
+  }
+  function numberLineScene(t, items, range, unit, lang, w, opts = {}) {
+    const m = axisModel(items, range);
+    if (!m) return "";
+    const L0 = 40, L1 = 540, AX = opts.compact ? 64 : 110, TOPB = opts.compact ? 26 : 50, BOTB = opts.compact ? 98 : 150;
+    const H = opts.compact ? 132 : 200;
+    const X = (v) => L0 + ((m.f(v) - m.lo) / (m.hi - m.lo || 1)) * (L1 - L0);
+    let ticks = [];
+    if (m.log) {
+      for (let e = Math.floor(m.lo); e <= Math.ceil(m.hi); e++) for (const k of [1, 2, 5]) { const val = k * 10 ** e; const u = Math.log10(val); if (u >= m.lo && u <= m.hi) ticks.push(val); }
+    } else {
+      const st = niceStep(m.hi - m.lo, 5);
+      for (let val = Math.ceil(m.lo / st) * st; val <= m.hi + 1e-9; val += st) ticks.push(Number(val.toPrecision(10)));
+    }
+    if (ticks.length > 9) ticks = ticks.filter((_, i) => i % 2 === 0);
+    const tk = ticks
+      .map((val, i) => `<line class="m-tick" pathLength="1" x1="${n1(X(val))}" y1="${AX - 4}" x2="${n1(X(val))}" y2="${AX + 4}" style="--d:${250 + i * 40}ms"/><text class="m-tl m-write" x="${n1(X(val))}" y="${AX + 20}" text-anchor="middle" style="--d:${300 + i * 40}ms">${esc(tickFmt(val))}</text>`)
+      .join("");
+    const hasR = range && Number.isFinite(range.lowN) && Number.isFinite(range.highN);
+    const rx0 = hasR ? X(range.lowN) : 0, rx1 = hasR ? X(range.highN) : 0;
+    const band = hasR
+      ? `<rect class="m-band m-grow-x" x="${n1(rx0)}" y="${TOPB}" width="${n1(Math.max(2, rx1 - rx0))}" height="${BOTB - TOPB}" style="--d:450ms"/>
+         <path class="m-brace-p m-create" pathLength="1" d="${bracePath(rx0, rx1, TOPB - 4, -1)}" style="--d:700ms"/>
+         <text class="m-blabel m-write" x="${n1(Math.min(L1, Math.max(L0, (rx0 + rx1) / 2)))}" y="${TOPB - 20}" text-anchor="middle" style="--d:820ms">${esc(`${w.range} ${range.low ?? tickFmt(range.lowN)}–${range.high ?? tickFmt(range.highN)}${unit ? " " + unit : ""}`)}</text>`
+      : "";
+    const pts = items.filter((h) => Number.isFinite(h.value)).map((h) => ({ h, x: X(h.value) }));
+    let prevDateX = -999, lvl = 0;
+    const dots = pts
+      .map((p, i) => {
+        const last = i === pts.length - 1;
+        if (Math.abs(p.x - prevDateX) < 56) lvl = 1 - lvl;
+        else lvl = 0;
+        prevDateX = p.x;
+        const dl = opts.compact ? "" : `<text class="m-date m-write" x="${n1(p.x)}" y="${BOTB + 18 + lvl * 15}" text-anchor="middle" style="--d:${1000 + i * 180}ms">${esc(shortDate(p.h.date, lang))}</text>`;
+        const bound = p.h.comparator ? `<path class="m-bound" d="M${n1(p.x - 9)} ${AX} h-14 m5 -4 l-5 4 l5 4"/>` : "";
+        return `<g class="m-pt st-${esc(p.h.status)}${last ? " now" : ""}" ${last ? "data-focus" : ""} tabindex="0" role="button" ${p.h.title ? `data-doc="${esc(p.h.title)}"` : ""} style="--d:${950 + i * 180}ms" aria-label="${esc(`${p.h.raw}${unit ? " " + unit : ""}, ${shortDate(p.h.date, lang)}, ${p.h.status}`)}">
+          ${last ? `<circle class="m-flash" cx="${n1(p.x)}" cy="${AX}" r="7"/>` : ""}
+          <circle class="m-c" cx="${n1(p.x)}" cy="${AX}" r="${last ? 7.5 : 6}"/>${bound}
+          <text class="m-v" x="${n1(p.x)}" y="${AX - 15}" text-anchor="middle">${esc(p.h.raw)}</text>${dl}
+        </g>`;
+      })
+      .join("");
+    // a correction: the struck figure is transformed into the corrected one
+    const fixes = pts
+      .flatMap((p) => (p.h.superseded ?? []).map((g) => ({ p, g, gx: X(Number(g.raw)) })))
+      .filter((o) => Number.isFinite(o.gx))
+      .map((o, i) => `<g class="m-ghost"><circle cx="${n1(o.gx)}" cy="${AX}" r="6"/><line x1="${n1(o.gx - 8)}" y1="${AX - 8}" x2="${n1(o.gx + 8)}" y2="${AX + 8}"/><text class="m-gv" x="${n1(o.gx)}" y="${AX - 15}" text-anchor="middle">${esc(o.g.raw)}</text></g>
+        <path class="m-arc fix m-create" pathLength="1" d="M${n1(o.gx)} ${AX - 26} Q${n1((o.gx + o.p.x) / 2)} ${AX - 62} ${n1(o.p.x)} ${AX - 28}" style="--d:${1500 + i * 200}ms"/>
+        <text class="m-xfer" x="${n1(o.gx)}" y="${AX - 15}" text-anchor="middle" style="--d:${1500 + i * 200}ms;--tx:${n1(o.p.x - o.gx)}px">${esc(o.g.raw)}</text>`)
+      .join("");
+    // movement since the previous comparable reading
+    let move = "";
+    if (!opts.noMove && pts.length > 1 && t.insight?.change) {
+      const a = pts[pts.length - 2], b = pts[pts.length - 1];
+      if (Math.abs(b.x - a.x) > 10) {
+        const c = t.insight.change;
+        const peak = AX - (opts.compact ? 40 : 58);
+        move = `<path class="m-arc m-create" pathLength="1" d="M${n1(a.x)} ${AX - 10} Q${n1((a.x + b.x) / 2)} ${peak} ${n1(b.x)} ${AX - 10}" style="--d:1350ms" marker-end="url(#m-tip)"/>
+          <text class="m-delta m-write" x="${n1((a.x + b.x) / 2)}" y="${peak + 18}" text-anchor="middle" style="--d:1600ms">${esc(signed(c.abs))}${c.pct != null && Math.abs(c.pct) < 300 ? ` (${esc(signed(c.pct))}%)` : ""}</text>`;
       }
+    }
+    const scale = m.log ? `<text class="m-scale" x="${L1}" y="${H - 4}" text-anchor="end">log scale</text>` : "";
+    return `<svg class="m-nl" viewBox="0 0 580 ${H}" role="img" tabindex="0" data-lo="${m.lo}" data-hi="${m.hi}" data-log="${m.log ? 1 : 0}" data-l0="${L0}" data-l1="${L1}" data-ax="${AX}" data-unit="${esc(unit ?? "")}" ${hasR ? `data-rlo="${range.lowN}" data-rhi="${range.highN}"` : ""} aria-label="${esc(`${t.name}: ${items.map((h) => h.raw).join(", ")}`)}">
+      <defs><marker id="m-tip" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L8 5 L0 9" class="m-tipp"/></marker></defs>
+      ${band}<line class="m-axis m-create" pathLength="1" x1="${L0 - 14}" y1="${AX}" x2="${L1 + 14}" y2="${AX}" style="--d:0ms"/>${tk}
+      ${fixes}${move}${dots}${scale}
+      <g class="m-tracker" aria-hidden="true"><line class="m-tr-l" x1="0" y1="${TOPB - 2}" x2="0" y2="${BOTB + 2}"/><circle class="m-tr-c" cx="0" cy="${AX}" r="4"/><rect class="m-tr-bg" x="-58" y="${BOTB + 4}" width="116" height="34" rx="6"/><text class="m-tr-v" x="0" y="${BOTB + 18}" text-anchor="middle"></text><text class="m-tr-p" x="0" y="${BOTB + 32}" text-anchor="middle"></text></g>
+    </svg>`;
+  }
+
+  function sceneTest(t, lang) {
+    const w = W(lang), rw = R(lang);
+    const hs = t.history ?? [];
+    const units = [...new Set(hs.map((h) => h.unit ?? t.unit ?? ""))];
+    let chart;
+    if (units.length > 1) {
+      const segs = units.map((u) => hs.filter((h) => (h.unit ?? t.unit ?? "") === u));
+      chart = segs
+        .map((items, i) => {
+          const last = items.at(-1);
+          const range = i === segs.length - 1 ? t.latest.range : last?.range ? { lowN: last.range.lowN, highN: last.range.highN } : null;
+          return `<div class="m-seg"><p class="m-unit">${esc(units[i])}</p>${numberLineScene(t, items, range, units[i], lang, w, { compact: true, noMove: true })}</div>`;
+        })
+        .join(`<p class="m-neq" aria-label="${esc(w.nc.unit)}"><b>≠</b><span>${esc(w.nc.unit)}</span></p>`);
+    } else chart = numberLineScene(t, hs.length ? hs : [t.latest], t.latest.range, t.unit, lang, w);
+    return {
+      label: t.name,
+      html: `<header class="st-h"><h3 class="st-title"><span class="m-tw">${esc(t.name)}</span></h3><p class="st-sub">${esc(posWord(t.latest.position, w))} · ${esc(t.latest.raw)}${t.unit ? " " + esc(t.unit) : ""} · ${esc(shortDate(t.latest.date, lang))}</p></header>
+        <div class="st-chart">${chart}</div><p class="st-tip">${esc(rw.trackerHint)}</p>
+        <div class="st-drill">${drill(t, lang)}</div>`,
+    };
+  }
+
+  function sceneRegion(subject, key, lang) {
+    const w = W(lang), rw = R(lang);
+    const ds = subject.tests
+      .map((t) => ({ t, p: posOf(t.latest, t.latest.range) }))
+      .filter((d) => regionOf(d.p) === key)
+      .map((d) => ({ ...d, by: key === "below" ? -d.p : key === "above" ? d.p - 1 : Math.min(d.p, 1 - d.p) }))
+      .sort((a, b) => (key === "in" ? a.by - b.by : b.by - a.by));
+    const max = Math.max(0.05, ...ds.map((d) => d.by));
+    const rows = ds
+      .map((d, i) => {
+        const len = key === "in" ? d.p * 100 : (d.by / max) * 100;
+        const txt = key === "in" ? rw.margin(Math.round(d.by * 100)) : d.t.insight?.distance ? w.by(fmt(d.t.insight.distance.by), d.t.insight.distance.side, d.t.insight.distance.bound) : "";
+        return `<button type="button" class="m-bar ${key}" data-sel="test:${esc(d.t.key)}" style="--i:${i}"><b>${esc(d.t.name)}</b><span class="m-bar-t"><i style="--w:${Math.max(2, len).toFixed(1)}%"></i>${key === "in" ? `<em style="left:${len.toFixed(1)}%"></em>` : ""}</span><span class="m-bar-v">${esc(d.t.latest.raw)} ${esc(d.t.unit ?? "")}<small>${esc(txt)}</small></span></button>`;
+      })
+      .join("");
+    return {
+      label: rw.reg[key](ds.length),
+      html: `<header class="st-h"><h3 class="st-title"><span class="m-tw">${esc(rw.reg[key](ds.length))}</span></h3><p class="st-sub">${esc(rw.regHint[key])}</p></header><div class="m-bars">${rows || `<p class="rp-pick">${esc(rw.pick)}</p>`}</div>`,
+    };
+  }
+
+  function sceneEvent(subject, i, lang) {
+    const rw = R(lang), w = W(lang);
+    const e = reportEvents(subject, rw)[i];
+    if (!e) return null;
+    const label = `${shortDate(e.report.reported ?? e.report.date, lang)} · ${w["st_" + e.report.status] ?? e.report.status}`;
+    const items = e.items
+      .map((x, k) => {
+        const t = x.key ? subject.tests.find((y) => y.key === x.key) : null;
+        let glyph = "";
+        if (x.kind === "fix" && t?.corrected) glyph = `<span class="m-xf"><s>${esc(t.corrected.from)}</s><i>→</i><b>${esc(t.corrected.to)}</b></span>`;
+        if (x.kind === "unit" && t) {
+          const hs = t.history ?? [];
+          const j = hs.findIndex((h, n) => n && h.unit !== hs[n - 1].unit);
+          if (j > 0) glyph = `<span class="m-xf unit"><b>${esc(hs[j - 1].unit)}</b><i>≠</i><b>${esc(hs[j].unit)}</b></span>`;
+        }
+        return `<li class="m-ev ${x.kind}" style="--i:${k}"${x.key ? ` data-sel="test:${esc(x.key)}" role="button" tabindex="0"` : ""}>${glyph}<span>${esc(x.text)}</span></li>`;
+      })
+      .join("");
+    return {
+      label,
+      html: `<header class="st-h"><h3 class="st-title"><span class="m-tw">${esc(label)}</span></h3><p class="st-sub">${esc(shortDoc(e.report.title))}</p></header><ol class="m-evs">${items}</ol><button type="button" class="dd-src" data-doc="${esc(e.report.title)}"><span class="dd-src-d">${esc(shortDate(e.report.date, lang))}</span><b>${esc(shortDoc(e.report.title))}</b><span class="dd-go">${esc(rw.openReport)} →</span></button>`,
+    };
+  }
+
+  function sceneDecision(v, r, lang) {
+    const rw = R(lang);
+    const [tone] = STAMP[r.verdict] ?? ["warn"];
+    const docs = new Map((v.documents ?? []).map((d) => [d.title, d]));
+    const byDoc = new Map();
+    for (const s of r.sources ?? []) {
+      const d = docs.get(s.title);
+      if (!byDoc.has(s.title)) byDoc.set(s.title, { title: s.title, date: d?.date ?? "", type: d?.type ?? "", quotes: [] });
+      const q = String(s.quote).replace(/^\d+\.\s*/, "");
+      if (!byDoc.get(s.title).quotes.includes(q)) byDoc.get(s.title).quotes.push(q);
+    }
+    const nodes = [...byDoc.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const kind = kindOf(keyFigure(r.text));
+    let prev = "";
+    const steps = nodes
+      .map((n, i) => {
+        const fig = kind ? (n.quotes.map((q) => figOf(q, kind)).find(Boolean) ?? "") : "";
+        // a later figure replaces an earlier one only when the topic was
+        // revised; for an open topic the two stand side by side
+        const xf = fig && prev && fig !== prev && !/ vs /.test(fig)
+          ? r.verdict === "OPEN"
+            ? `<span class="m-xf unit"><b>${esc(prev)}</b><i>≠</i><b>${esc(fig)}</b></span>`
+            : `<span class="m-xf"><s>${esc(prev)}</s><i>→</i><b>${esc(fig)}</b></span>`
+          : "";
+        if (fig && !/ vs /.test(fig)) prev = fig;
+        return `<li class="vl-n" style="--i:${i}" data-doc="${esc(n.title)}" role="button" tabindex="0" ${i === nodes.length - 1 ? "data-focus" : ""}>
+          <span class="vl-dot" aria-hidden="true"></span>
+          <span class="vl-meta"><b>${esc(n.date ? shortDate(n.date, lang) : "")}</b> ${esc(shortDoc(n.title))}${n.type ? ` · ${esc(n.type)}` : ""}</span>
+          ${xf}${n.quotes.map((q) => `<q class="vl-q">${markFigs(esc(q))}</q>`).join("")}
+        </li>`;
+      })
+      .join("");
+    const end = `<li class="vl-n end ${tone}" style="--i:${nodes.length}"><span class="vl-dot" aria-hidden="true"></span><span class="vl-meta"><b>${esc(rw.endK[r.verdict] ?? "")}</b></span><span class="vl-end">${esc(rw.end[r.verdict] ?? "")}</span></li>`;
+    return {
+      label: r.label,
+      html: `<header class="st-h"><h3 class="st-title"><span class="m-tw">${esc(r.label)}</span> <span class="vz-stamp ${tone}">${esc(rw.dec[r.verdict] ?? r.verdict)}</span></h3><p class="st-sub">${esc(r.text)}</p></header>
+        <ol class="vl">${steps}${end}</ol>
+        ${QS[r.id] ? `<p class="dd-k">${esc(rw.ask)}</p><div class="dd-asks"><button type="button" class="dd-ask" data-q="${esc(QS[r.id])}">${esc(QS[r.id])}</button></div>` : ""}`,
+    };
+  }
+
+  function sceneFor(rep, key) {
+    const [kind, id] = key.split(":");
+    const v = rep.v, lang = rep.lang;
+    if (v.kind === "records") {
       const r = v.rows.find((x) => x.id === id);
-      return r ? recDetail(r, rw, lang) : "";
+      return r ? sceneDecision(v, r, lang) : null;
     }
     const subject = v.subjects[rep.subject] ?? v.subjects[0];
     if (kind === "test") {
       const t = subject.tests.find((x) => x.key === id);
-      return t ? `<h5 class="dt-h">${esc(t.name)}</h5>${drill(t, lang)}` : "";
+      return t ? sceneTest(t, lang) : null;
     }
-    if (kind === "seg") {
-      const ts = subject.tests.filter((t) => (SEV[t.latest.position] ?? "none") === id);
-      return `<h5 class="dt-h">${esc(rw.inSeg(rw.sev[id], ts.length))}</h5><div class="dt-list">${ts
-        .map((t) => `<button type="button" class="dt-item ${id}" data-sel="test:${esc(t.key)}"><b>${esc(t.name)}</b><span>${esc(t.latest.raw)} ${esc(t.unit ?? "")}</span><em>${esc(t.latest.range?.low != null ? `${w.range} ${t.latest.range.low}–${t.latest.range.high}` : w.noRange)}</em><i>${esc(posWord(t.latest.position, w))}</i></button>`)
-        .join("")}</div>`;
-    }
-    if (kind === "ev") {
-      const e = reportEvents(subject, rw)[Number(id)];
-      if (!e) return "";
-      return `<h5 class="dt-h">${esc(shortDate(e.report.reported ?? e.report.date, lang))} · ${esc(w["st_" + e.report.status] ?? e.report.status)}</h5><ul class="dt-ev">${e.items
-        .map((x) => `<li class="tl-it ${x.kind}"${x.key ? ` data-sel="test:${esc(x.key)}" role="button" tabindex="0"` : ""}>${esc(x.text)}</li>`)
-        .join("")}</ul><button type="button" class="dd-src" data-doc="${esc(e.report.title)}"><span class="dd-src-d">${esc(shortDate(e.report.date, lang))}</span><b>${esc(e.report.title)}</b><span class="dd-go">${esc(rw.openReport)} →</span></button>`;
-    }
-    return "";
+    if (kind === "reg") return sceneRegion(subject, id, lang);
+    if (kind === "ev") return sceneEvent(subject, Number(id), lang);
+    return null;
+  }
+  const defaultKey = (rep) => {
+    if (rep.v.kind === "records") return rep.v.rows[0] ? `rec:${rep.v.rows[0].id}` : null;
+    const s = rep.v.subjects[rep.subject] ?? rep.v.subjects[0];
+    const order = (t) => ({ out: 0, near: 1, in: 2, none: 3 })[SEV[t.latest.position] ?? "none"];
+    const t = [...(s?.tests ?? [])].sort((a, b) => order(a) - order(b) || Number(!!b.corrected) - Number(!!a.corrected))[0];
+    return t ? `test:${t.key}` : null;
+  };
+
+  // The stage element lives beside the report on wide desks (stageHost),
+  // and in the report's own detail slot otherwise.
+  const narrow = matchMedia("(max-width: 900px)");
+  function placeStage(board) {
+    const rep = REPORTS.get(board.dataset.rep);
+    const st = rep?.stage;
+    if (!st) return;
+    const host = rep.opts.stageHost;
+    const slot = board.querySelector(".rp-detail");
+    const wide = host && !narrow.matches;
+    if (wide && st.parentElement !== host) host.prepend(st);
+    if (!wide && slot && st.parentElement !== slot) slot.replaceChildren(st);
+    host?.closest(".desk")?.classList.toggle("has-stage", !!wide);
+    if (slot) slot.hidden = !!wide;
+  }
+  function mountStage(board) {
+    const rep = REPORTS.get(board.dataset.rep);
+    if (!rep) return;
+    for (const old of document.querySelectorAll(".stage")) if (old !== rep.stage) old.remove();
+    const rw = R(rep.lang);
+    const st = document.createElement("aside");
+    st.className = `stage${reduced ? " still" : ""}`;
+    st.dataset.lang = rep.lang;
+    st.setAttribute("aria-label", rw.stageK);
+    st.innerHTML = `<header class="st-bar"><button type="button" class="st-back" aria-label="${esc(rw.back)}" disabled>←</button><nav class="st-crumbs" aria-label="${esc(rw.stageK)}"></nav><button type="button" class="st-min" aria-expanded="true">${esc(rw.hide)}</button></header><div class="st-body"></div>`;
+    rep.stage = st;
+    rep.stack = [];
+    st.querySelector(".st-back").addEventListener("click", () => {
+      if (rep.stack.length < 2) return;
+      rep.stack.pop();
+      show(board, rep.stack.pop(), null);
+    });
+    st.querySelector(".st-min").addEventListener("click", (e) => {
+      const min = st.classList.toggle("min");
+      e.currentTarget.setAttribute("aria-expanded", String(!min));
+      e.currentTarget.textContent = min ? rw.showChart : rw.hide;
+    });
+    // opening a source line folds the stage so the page has the column
+    st.addEventListener("click", (e) => {
+      const d = e.target.closest("[data-doc]");
+      if (d && rep.opts.stageHost && !narrow.matches) {
+        st.classList.add("min");
+        const b = st.querySelector(".st-min");
+        b.setAttribute("aria-expanded", "false");
+        b.textContent = rw.showChart;
+      }
+      const s = e.target.closest("[data-sel]");
+      if (s) select(board, s.dataset.sel, s);
+    });
+    mountTracker(st);
+    placeStage(board);
+    const k = defaultKey(rep);
+    if (k) show(board, k, null);
+    // the stage leaves with its report
+    const watch = new MutationObserver(() => {
+      if (board.isConnected) return;
+      watch.disconnect();
+      st.remove();
+      rep.opts.stageHost?.closest(".desk")?.classList.remove("has-stage");
+    });
+    watch.observe(document.body, { childList: true, subtree: true });
+  }
+  narrow.addEventListener?.("change", () => document.querySelectorAll(".vz[data-rep]").forEach(placeStage));
+
+  function show(board, key, from) {
+    const rep = REPORTS.get(board.dataset.rep);
+    const st = rep?.stage;
+    if (!st) return;
+    const sc = sceneFor(rep, key);
+    if (!sc) return;
+    rep.stack.push(key);
+    if (rep.stack.length > 6) rep.stack.shift();
+    board.querySelectorAll("[data-sel].sel").forEach((x) => x.classList.remove("sel"));
+    board.querySelectorAll(`[data-sel="${CSS.escape(key)}"]`).forEach((x) => x.classList.add("sel"));
+    const body = st.querySelector(".st-body");
+    const old = body.firstElementChild;
+    const scene = document.createElement("div");
+    scene.className = "st-scene play";
+    scene.dataset.key = key;
+    scene.innerHTML = sc.html;
+    if (old && !reduced) {
+      old.classList.add("leaving");
+      old.style.position = "absolute";
+      setTimeout(() => old.remove(), 260);
+    } else old?.remove();
+    body.append(scene);
+    // crumbs: the scenes on the stack
+    const labels = rep.stack.map((k) => sceneFor(rep, k)?.label ?? "");
+    st.querySelector(".st-crumbs").innerHTML = labels
+      .slice(-3)
+      .map((l, i, a) => `<span${i === a.length - 1 ? ' aria-current="true"' : ""}>${esc(l)}</span>`)
+      .join(`<i aria-hidden="true">›</i>`);
+    st.querySelector(".st-back").disabled = rep.stack.length < 2;
+    if (st.classList.contains("min") && from) st.querySelector(".st-min").click();
+    if (from) flyTo(from, scene.querySelector("[data-focus] .m-c, [data-focus] .vl-dot") ?? scene.querySelector(".st-title"));
+    const r = st.getBoundingClientRect();
+    if (from && (r.top > innerHeight - 120 || r.bottom < 60)) st.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest" });
   }
 
-  function recDetail(r, rw, lang) {
-    const [tone] = STAMP[r.verdict] ?? ["warn"];
-    const docs = new Map((REPORTS.get("__docs") ?? []).map((d) => [d.title, d]));
-    const src = (r.sources ?? [])
-      .map((x) => ({ ...x, date: docs.get(x.title)?.date ?? "" }))
-      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    return `<div class="dt-rec"><h5 class="dt-h">${esc(r.label)} <span class="vz-stamp ${tone}">${esc(rw.dec[r.verdict] ?? r.verdict)}</span></h5>
-      <p class="dt-say">${esc(r.text)}</p>
-      ${src.length ? `<p class="dd-k">${esc(rw.sources)}</p><ol class="dd-points">${src.map((x) => `<li><button type="button" class="dd-src" data-doc="${esc(x.title)}"><span class="dd-src-d">${esc(x.date ? shortDate(x.date, lang) : "")}</span><span class="dt-q">${esc(String(x.quote).replace(/^\d+\.\s*/, ""))}</span><span class="dd-go">${esc(x.title.replace(/^\d+_|\.md$/g, "").replace(/_/g, " "))} →</span></button></li>`).join("")}</ol>` : ""}
-      ${QS[r.id] ? `<p class="dd-k">${esc(rw.ask)}</p><div class="dd-asks"><button type="button" class="dd-ask" data-q="${esc(QS[r.id])}">${esc(QS[r.id])}</button></div>` : ""}</div>`;
+  // TransformFromCopy: a copy of the clicked mark travels an arc into the
+  // scene it opens, on Manim's smooth curve.
+  function flyTo(src, dst) {
+    if (reduced || !src || !dst) return;
+    const a = src.getBoundingClientRect(), b = dst.getBoundingClientRect();
+    if (!a.width || !b.width || a.bottom < 0 || a.top > innerHeight || b.bottom < 0 || b.top > innerHeight) return;
+    const ax = a.left + a.width / 2, ay = a.top + a.height / 2, bx = b.left + b.width / 2, by = b.top + b.height / 2;
+    const cx = (ax + bx) / 2, cy = Math.min(ay, by) - Math.min(160, Math.abs(bx - ax) * 0.35 + 40);
+    const dot = document.createElement("i");
+    const tone = ["out", "near", "in", "none", "warn", "no", "ok"].find((k) => src.classList?.contains(k) || src.closest?.(`.${k}`));
+    dot.className = `m-fly ${tone ?? ""}`;
+    document.body.append(dot);
+    const frames = Array.from({ length: 25 }, (_, i) => {
+      const k = smooth(i / 24), u = 1 - k;
+      const x = u * u * ax + 2 * u * k * cx + k * k * bx, y = u * u * ay + 2 * u * k * cy + k * k * by;
+      return { transform: `translate(${x - 7}px, ${y - 7}px) scale(${1 + Math.sin(Math.PI * k) * 0.5})`, opacity: i === 24 ? 0 : 1 };
+    });
+    dot.animate(frames, { duration: 720, easing: "linear" }).finished.finally(() => dot.remove());
+  }
+
+  // ValueTracker: a live reading under the pointer (or arrow keys), with
+  // where that value would sit against the printed range.
+  function mountTracker(st) {
+    const upd = (svg, x) => {
+      const L0 = Number(svg.dataset.l0), L1 = Number(svg.dataset.l1), lo = Number(svg.dataset.lo), hi = Number(svg.dataset.hi);
+      x = Math.max(L0, Math.min(L1, x));
+      const u = lo + ((x - L0) / (L1 - L0)) * (hi - lo);
+      const val = svg.dataset.log === "1" ? 10 ** u : u;
+      const g = svg.querySelector(".m-tracker");
+      g.setAttribute("transform", `translate(${n1(x)} 0)`);
+      g.classList.add("on");
+      svg.dataset.tx = String(x);
+      const rlo = Number(svg.dataset.rlo), rhi = Number(svg.dataset.rhi);
+      const rw = R(st.dataset.lang);
+      g.querySelector(".m-tr-v").textContent = `${tickFmt(val)} ${svg.dataset.unit}`;
+      g.querySelector(".m-tr-p").textContent = !Number.isFinite(rlo) ? "" : val < rlo ? rw.trBelow(tickFmt(rlo - val)) : val > rhi ? rw.trAbove(tickFmt(val - rhi)) : rw.trIn;
+    };
+    const toX = (svg, e) => {
+      const p = svg.createSVGPoint();
+      p.x = e.clientX;
+      p.y = e.clientY;
+      return p.matrixTransform(svg.getScreenCTM().inverse()).x;
+    };
+    st.addEventListener("pointermove", (e) => {
+      const svg = e.target.closest?.(".m-nl");
+      if (svg) upd(svg, toX(svg, e));
+    });
+    st.addEventListener("pointerout", (e) => {
+      const svg = e.target.closest?.(".m-nl");
+      if (svg && !svg.contains(e.relatedTarget)) svg.querySelector(".m-tracker")?.classList.remove("on");
+    });
+    st.addEventListener("keydown", (e) => {
+      const svg = e.target.closest?.(".m-nl");
+      if (!svg || !/^Arrow(Left|Right)$/.test(e.key)) return;
+      e.preventDefault();
+      const L0 = Number(svg.dataset.l0), L1 = Number(svg.dataset.l1);
+      upd(svg, Number(svg.dataset.tx ?? (L0 + L1) / 2) + (e.key === "ArrowRight" ? 1 : -1) * (L1 - L0) / 50);
+    });
   }
 
   function labReport(v, opts, subjectIndex = 0) {
@@ -828,18 +1492,13 @@
       rw = R(lang);
     const subject = v.subjects[subjectIndex] ?? v.subjects[0];
     if (!subject) return "";
-    const counts = Object.fromEntries(SEV_ORDER.map((k) => [k, 0]));
-    for (const t of subject.tests) counts[SEV[t.latest.position] ?? "none"]++;
-    const outside = counts.out + counts.near;
-    const ranged = subject.tests.length - counts.none;
-    const parts = SEV_ORDER.map((k) => ({ key: k, label: rw.sev[k], n: counts[k] }));
     const order = (t) => ({ out: 0, near: 1, in: 2, none: 3 })[SEV[t.latest.position] ?? "none"];
     const tests = [...subject.tests].sort((a, b) => order(a) - order(b) || Number(!!b.corrected) - Number(!!a.corrected));
     const who = v.subjects.length > 1
       ? `<div class="rp-who" role="tablist">${v.subjects.map((s, i) => `<button type="button" role="tab" class="rp-subj" data-subject="${i}" aria-selected="${i === subjectIndex}">${esc(s.label)}</button>`).join("")}</div>`
       : `<div class="rp-who"><b>${esc(subject.label)}</b></div>`;
     return `<div class="rp-top">${who}${reportTrail(subject, w, lang)}</div>
-      <section class="rp-card rp-kpi"><header class="rp-h"><h4>${esc(rw.donutK)}</h4></header>${donut(parts, outside ? rw.donutC(outside, ranged) : rw.donutC0(ranged), rw.donutK, (p) => `seg:${p.key}`)}</section>
+      ${rangeField(subject, rw, w)}
       ${rangeRows(tests, w, rw, lang)}
       ${timelineCard(subject, rw, lang, w)}
       <section class="rp-detail" aria-live="polite"><p class="rp-pick">${esc(rw.pick)}</p></section>`;
@@ -849,50 +1508,17 @@
     const lang = opts.lang ?? v.lang ?? "en";
     const rw = R(lang);
     REPORTS.set("__docs", v.documents ?? []);
-    const keys = ["APPROVED", "PROPOSED", "OPEN", "NO-RECORD"];
-    const parts = keys.map((k) => ({
-      key: { APPROVED: "in", PROPOSED: "near", OPEN: "open", "NO-RECORD": "out" }[k],
-      dec: k,
-      label: rw.dec[k],
-      n: v.rows.filter((r) => (k === "APPROVED" ? r.verdict === "APPROVED" || r.verdict === "AGREED" : r.verdict === k)).length,
-    }));
-    const approved = parts[0].n;
-    const docs = (v.documents ?? []).filter((d) => d.date).sort((a, b) => a.date.localeCompare(b.date));
-    const t0 = docs.length ? Date.parse(docs[0].date) : 0,
-      t1 = docs.length ? Date.parse(docs.at(-1).date) : 1;
-    const X = (d) => 4 + (t1 > t0 ? (Date.parse(d) - t0) / (t1 - t0) : 0.5) * 92;
-    const lanes = v.rows
-      .map((r, i) => {
-        const [tone] = STAMP[r.verdict] ?? ["warn"];
-        const titles = [...new Set((r.sources ?? []).map((x) => x.title))];
-        const marks = docs
-          .filter((d) => titles.includes(d.title))
-          .map((d, k) => `<button type="button" class="ln-mark ${tone}" style="left:${X(d.date).toFixed(1)}%;--d:${(i * 4 + k) * 60}ms" data-sel="rec:${esc(r.id)}" title="${esc(`${d.title.replace(/^\d+_|\.md$/g, "").replace(/_/g, " ")} · ${shortDate(d.date, lang)}`)}" aria-label="${esc(`${r.label}: ${d.title}`)}"></button>`)
-          .join("");
-        const firstX = marks ? Math.min(...docs.filter((d) => titles.includes(d.title)).map((d) => X(d.date))) : 4;
-        return `<div class="ln-row" style="--i:${i}"><button type="button" class="ln-k" data-sel="rec:${esc(r.id)}"><b>${esc(r.label)}</b><span class="vz-stamp ${tone}">${esc(rw.dec[r.verdict] ?? r.verdict)}</span></button><div class="ln-track"><span class="ln-line ${tone}" style="left:${firstX.toFixed(1)}%"></span>${marks}</div></div>`;
-      })
-      .join("");
-    const axis = docs
-      .map((d) => `<span style="left:${X(d.date).toFixed(1)}%">${esc(shortDate(d.date, lang))}</span>`)
-      .join("");
-    return `<section class="rp-card rp-kpi"><header class="rp-h"><h4>${esc(rw.decK)}</h4></header>${donut(parts, rw.decC(approved, v.rows.length), rw.decK, (p) => `dec:${p.dec}`)}</section>
-      <section class="rp-card"><header class="rp-h"><h4>${esc(rw.lanesK)}</h4><p>${esc(rw.lanesHint)}</p></header><div class="ln">${lanes}<div class="ln-axis"><span class="ln-k"></span><div class="ln-ticks">${axis}</div></div></div></section>
+    return `${decisionTrack(v, rw)}
+      ${lanes(v, rw, lang)}
       <section class="rp-detail" aria-live="polite"><p class="rp-pick">${esc(rw.pick)}</p></section>`;
   }
 
-  // one delegated handler: select a mark, show its detail, keep the mark lit
-  function select(board, key) {
+  // one delegated handler: a mark opens its scene on the stage
+  function select(board, key, from) {
     const rep = REPORTS.get(board.dataset.rep);
-    if (!rep) return;
-    board.querySelectorAll("[data-sel].sel").forEach((x) => x.classList.remove("sel"));
-    board.querySelectorAll(`[data-sel="${CSS.escape(key)}"]`).forEach((x) => x.classList.add("sel"));
-    const panel = board.querySelector(".rp-detail");
-    if (!panel) return;
-    panel.innerHTML = `<p class="dd-k">${esc(R(rep.lang).detailK)}</p>${detailFor(rep, key) || `<p class="rp-pick">${esc(R(rep.lang).pick)}</p>`}`;
-    if (!reduced) panel.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
-    const r = panel.getBoundingClientRect();
-    if (r.top > innerHeight - 80 || r.bottom < 0) panel.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest" });
+    if (!rep?.stage) return;
+    if (rep.stack.at(-1) === key && !rep.stage.classList.contains("min")) return;
+    show(board, key, from ?? null);
   }
   document.addEventListener("click", (e) => {
     const subj = e.target.closest?.(".rp-subj");
@@ -902,15 +1528,19 @@
       if (!rep) return;
       rep.subject = Number(subj.dataset.subject);
       board.querySelector(".rp-body").innerHTML = labReport(rep.v, rep.opts, rep.subject);
+      rep.stack = [];
+      placeStage(board);
+      const k = defaultKey(rep);
+      if (k) show(board, k, null);
       return;
     }
     const m = e.target.closest?.("[data-sel]");
-    if (!m || m.closest(".vz-dd")) return;
+    if (!m || m.closest(".vz-dd") || m.closest(".stage")) return;
     const board = m.closest(".vz[data-rep]");
-    if (board) select(board, m.dataset.sel);
+    if (board) select(board, m.dataset.sel, m);
   });
   document.addEventListener("keydown", (e) => {
-    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("[data-sel][tabindex]")) {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("[data-sel][tabindex], .vl-n[tabindex], .m-pt[tabindex]")) {
       e.preventDefault();
       e.target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     }
@@ -1078,6 +1708,11 @@
       ${focus ? body : `${DEFS}<div class="rp-body">${body}</div>`}
       ${narration && (opts.narrateButton !== false || !focus) ? `<div class="vz-say${opts.narrateButton === false ? " no-voice" : ""}">${opts.narrateButton === false ? "" : `<button type="button" class="vz-listen"><i aria-hidden="true"></i><span>${esc(W(lang).listen)}</span></button>`}<div><p class="vz-narr clamp">${esc(narration)}</p><button type="button" class="vz-more">${esc(W(lang).full[0])}</button></div></div>` : ""}
     </div>`;
+    const board = el.querySelector(".vz[data-rep]");
+    if (board) {
+      mountStage(board);
+      mountLanes(board);
+    }
     const btn = el.querySelector(".vz-listen");
     btn?.addEventListener("click", () =>
       narrate(narration, lang, el, btn, opts.caseId ?? null, v.sentences),

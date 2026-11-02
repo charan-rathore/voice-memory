@@ -518,6 +518,8 @@
     window.VMVisual.render($("#ov-body"), v, {
       lang: state.lang,
       caseId: id === "own" ? null : id,
+      // deeper chart layers play beside the report, in the desk's right column
+      stageHost: $("#desk .desk-right"),
       // Listen is offered only when the server has a neural voice; the
       // narration text is always on screen either way.
       narrateButton: !!state.voiceOut?.enabled,
