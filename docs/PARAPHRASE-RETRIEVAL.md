@@ -98,7 +98,7 @@ remains evidence discovery only. Unit tests: `tests/paraphrase.test.mjs`;
 numbers: the `bench` workflow posts them on every pull request that touches
 retrieval.
 
-## Shipped: discovery, not promotion (2026-11-02)
+## Discovery, not promotion (2026-11-02): built, measured, off by default
 
 What production does with a reworded question the engine cannot answer:
 
@@ -113,6 +113,10 @@ What production does with a reworded question the engine cannot answer:
    **"Closest line in <document> · not an answer"**, with a button that opens
    the document at that sentence. It is never the reply, never spoken on a
    call, and the verdict stays an abstention.
+
+**Status: off in production (`VM_CLOSEST_LINE=on` to enable).** The outside
+benchmark below showed the pointer is not yet reliable enough to show
+visitors; see "What the outside data decided".
 
 Why this shape: the 2026-11-02 review failures were all about *speaking* a
 retrieved sentence as the answer. A pointer the person opens and judges keeps
@@ -144,15 +148,40 @@ one meeting or one contract, as when a person uploads one file). Data is
 fetched at pinned commits by `evaluation/outside/fetch.sh`; the dense run is
 in the `bench` workflow and posted on pull requests.
 
-| Set | answerable / absent | chance top-1 | keyword top-1 / top-3 |
-| --- | --- | --- | --- |
-| QMSum meetings | 197 / 0 | 5.3% | 40.6% / 62.4% |
-| CUAD contracts | 184 / 236 | 1.2% | 44.0% / 65.2% |
+Results (CI, bge-small, 2026-11-02):
 
-Keyword numbers measured locally (2026-11-02). Hybrid, dense-only and the
-closest-line gate (how often a line is shown, how often it is the right one,
-how often one is shown when the clause is absent) need the model and come
-from CI; they are recorded here when the run lands, not estimated.
+| Set | answerable / absent | chance top-1 | keyword top-1 / top-3 | hybrid top-1 / top-3 | dense only top-1 / top-3 |
+| --- | --- | --- | --- | --- | --- |
+| QMSum meetings | 197 / 0 | 5.3% | 40.6% / 62.4% | 42.1% / 62.4% | 40.1% / 61.4% |
+| CUAD contracts | 184 / 236 | 1.2% | 44.0% / 65.2% | **50.0%** / 67.4% | 42.9% / 62.5% |
+
+### What the outside data decided
+
+1. **Fusion helps, dense alone does not.** Hybrid (dense + BM25, RRF) beats
+   keyword on both sets, most on contracts (+6 points top-1). Dense alone is
+   slightly worse than keyword: the lexical half carries clause vocabulary.
+2. **The promotion gate does not transfer to one file.** Its margin is
+   measured against another document; a single meeting or contract has none.
+   It showed a line for 87 to 92% of answerable questions, right only 47 to
+   48% of the time, and for **85.6% of absent CUAD clauses**.
+3. **A single-file discovery gate** (`discoveryGate`: cosine floor, lead over
+   the next-best line of any document, keyword agreement in the top 3) fixes
+   the absent-clause problem but not precision:
+
+   | Set | shown (answerable) | right when shown | shown when absent |
+   | --- | --- | --- | --- |
+   | QMSum | 21.8% | 65.1% | - |
+   | CUAD | 6.0% | 81.8% | 1.7% |
+
+4. **No rule reaches the bar.** Sweeping cosine floor, margin and keyword
+   agreement on the development half (even rows), no setting reaches 90%
+   right with at most 10% shown when the answer is absent. The bench prints
+   the best precision at each coverage level on dev and its held-out result,
+   so the next change (a cross-encoder reranker) is judged on the same curve.
+
+Decision: the closest-line pointer is **off by default**. A pointer that is
+wrong a third of the time on meetings undermines the one promise the product
+makes. Retrieval keeps the hybrid ranking; answers stay with the engine.
 
 ## Next experiments
 

@@ -253,6 +253,8 @@ test("closestLine abstains without the model and never claims to be an answer", 
   // no resident model in unit tests: no pointer, no wait beyond the cap
   const t0 = Date.now();
   assert.equal(await closestLine("when is the money meeting", fresh), null);
+  // and it is off unless explicitly enabled
+  assert.equal(process.env.VM_CLOSEST_LINE, undefined);
   assert.ok(Date.now() - t0 < 4000);
 });
 

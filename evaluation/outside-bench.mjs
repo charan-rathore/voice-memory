@@ -313,12 +313,43 @@ function calibrate(rows) {
         if (e.shown < 5 || prec < 0.9 || absent > 0.1) continue;
         if (!best || e.shown > best.dev.shown) best = { rule, dev: e };
       }
+  // the tradeoff, whatever the target: best precision on dev at each
+  // minimum coverage, with <= 10% absent shown, and its held-out result
+  const frontier = [0.05, 0.1, 0.2, 0.3].map((cov) => {
+    let pick = null;
+    for (let c = 0.5; c <= 0.92; c += 0.01)
+      for (let m = 0; m <= 0.1001; m += 0.005)
+        for (const lexTop of [1, 3, null]) {
+          const rule = {
+            minCosine: +c.toFixed(2),
+            minMargin: +m.toFixed(3),
+            lexTop,
+          };
+          const e = evalRule(dev, rule);
+          if (
+            e.shown < cov * e.answerable ||
+            (e.absent && e.absentShown / e.absent > 0.1)
+          )
+            continue;
+          const prec = e.right / e.shown;
+          if (!pick || prec > pick.prec) pick = { rule, prec, dev: e };
+        }
+    return pick
+      ? {
+          coverage: cov,
+          rule: pick.rule,
+          dev: pick.dev,
+          held: evalRule(held, pick.rule),
+        }
+      : { coverage: cov, rule: null };
+  });
   if (!best)
     return {
       rule: null,
       note: "no rule reaches 90% right with <= 10% absent shown on dev",
+      frontier,
     };
-  return { ...best, held: evalRule(held, best.rule) };
+  return { ...best, held: evalRule(held, best.rule), frontier };
 }
 const summary = {
   qmsum: summarize(rows.filter((r) => r.set === "qmsum")),
@@ -370,5 +401,14 @@ if (dense) {
       ? `\n**Calibrated on dev** ${JSON.stringify(c.rule)}: dev ${fmt(c.dev)}; held-out ${fmt(c.held)}`
       : `\n**Calibration:** ${c.note}`,
   );
+  console.log(
+    "\n| min coverage (dev) | best rule on dev | dev | held-out |\n| --- | --- | --- | --- |",
+  );
+  for (const f of c.frontier)
+    console.log(
+      f.rule
+        ? `| ${100 * f.coverage}% | ${JSON.stringify(f.rule)} | ${fmt(f.dev)} | ${fmt(f.held)} |`
+        : `| ${100 * f.coverage}% | none | - | - |`,
+    );
 }
 process.exit(0);

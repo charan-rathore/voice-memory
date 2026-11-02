@@ -60,8 +60,8 @@ verdict surviving a phone call in Hindi.
 | Version-aware answers (amended, preliminary, proposed, superseded, open) | Working on fictional cases; 152 evaluation tests and a vault of golden answers in CI |
 | Refusals (unit mismatch, patient mismatch, not in record) | Working; enforced by tests |
 | Hindi, Hinglish, mixed-domain questions | Working on typed and Bolna voice paths; real-call replay harness (`evaluation/call-replay.mjs`) |
-| Reworded questions | Shipped as discovery only ("closest line, not an answer"); speaking them stays off until a gate clears the outside benchmark with no wrong lines |
-| Outside-authored benchmark | QMSum meetings and CUAD contracts: keyword top-1 40.6% and 44.0% against chance 5.3% and 1.2%; dense and gate numbers run in CI |
+| Reworded questions | Hybrid ranking helps on outside contracts (top-1 44% → 50%); the closest-line pointer is built but off, at 65 to 82% right when shown against a 90% bar |
+| Outside-authored benchmark | QMSum meetings and CUAD contracts: hybrid top-1 42.1% and 50.0% against chance 5.3% and 1.2% |
 | Integration surfaces | Public REST API (OpenAPI, llms.txt), Bolna custom-LLM endpoint, **MCP server** (`mcp/server.mjs`) |
 | Not done | Real customer documents, SSO, audit log, retention controls, SLAs, clinician review, LOINC/UCUM |
 

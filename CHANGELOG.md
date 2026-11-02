@@ -20,11 +20,13 @@ Each entry says what changed, why, and how it was checked.
 ### Evidence on the page
 - The cited sentence, and only that sentence, is highlighted in the opened
   document (whitespace-tolerant span match; the whole-document highlight is gone).
-- **Reworded questions ship as discovery**: after "I don't see that", the
-  closest line is offered as "not an answer" with a button that opens it in
-  the document. Same calibrated gate and refusals as promotion, plus a new
-  rule: no line from a preliminary or draft report that the record amends.
-  Speaking a reworded answer stays off (`VM_PARAPHRASE_PROMOTE`).
+- **Reworded questions: built, measured, kept off.** A "closest line, not an
+  answer" pointer (opens the line in its document) with a single-file
+  discovery gate and the promotion refusals, plus a new rule: no line from a
+  preliminary or draft report the record amends. On outside data it was right
+  65% (meetings) and 82% (contracts) of the time when shown, below the 90%
+  bar, so it is off by default (`VM_CLOSEST_LINE=on`). The old gate's flaw it
+  exposed (it showed a line for 86% of absent clauses) is fixed.
 
 ### Charts
 - The overview became two or three report charts instead of many strips: a
@@ -50,7 +52,8 @@ Each entry says what changed, why, and how it was checked.
 - **MCP server** (`mcp/server.mjs`, zero dependencies, stdio), tested
   end to end against the engine.
 - **Outside-authored benchmark** (`evaluation/outside-bench.mjs`): QMSum and
-  CUAD at pinned commits; keyword numbers in the README, dense numbers in CI.
+  CUAD at pinned commits. Hybrid top-1 42.1% and 50.0% (keyword 40.6% and
+  44.0%; chance 5.3% and 1.2%), plus the discovery gate's calibration sweep.
 
 ### Known and not fixed here
 - Production Listen says "Voice unavailable": no `VM_SARVAM_API_KEY` or

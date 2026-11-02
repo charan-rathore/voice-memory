@@ -416,11 +416,19 @@ export function replacedSource(bundle, src) {
  * no superseded or conflicting value, and no line from a document the record
  * has replaced (a preliminary report beside its amendment).
  */
+// Off by default. On the outside benchmark (2026-11-02) no discovery rule
+// reached 90% right with <= 10% shown when the answer is absent; the
+// single-file gate measured 65% right on meetings and 82% on contracts when
+// shown. A pointer that is wrong a third of the time is not shown to
+// visitors; VM_CLOSEST_LINE=on enables it for gate work and pilots.
+export const closestLineEnabled = () => process.env.VM_CLOSEST_LINE === "on";
+
 export async function closestLine(
   question,
   bundle,
-  { thresholds = DISCOVERY } = {},
+  { thresholds = DISCOVERY, force = false } = {},
 ) {
+  if (!force && !closestLineEnabled()) return null;
   const idx = unitsOf(bundle);
   if (!idx.vectors) {
     const ready = await Promise.race([

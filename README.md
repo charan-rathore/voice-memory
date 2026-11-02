@@ -140,10 +140,10 @@ were written by the same author.
 **Outside-authored benchmark** (`npm run bench:outside`): records and questions
 written by people who never saw the engine. QMSum meeting transcripts (197
 queries) and CUAD SEC contracts (184 answerable clause questions, 236 absent),
-fetched at pinned commits. Sentence-level keyword retrieval puts the answering
-line first 40.6% and 44.0% of the time, against chance of 5.3% and 1.2%; the
-dense, hybrid and closest-line-gate numbers run in the `bench` workflow and are
-posted on pull requests. Real-call replay: `node evaluation/call-replay.mjs`.
+fetched at pinned commits. Top-1 (the answering line ranked first): keyword
+40.6% and 44.0%, hybrid dense + BM25 42.1% and 50.0%, against chance of 5.3% and
+1.2%. Run in the `bench` workflow and posted on pull requests, with the
+closest-line gate's precision-coverage curve. Real-call replay: `node evaluation/call-replay.mjs`.
 
 ## Ask it from code or an agent
 
@@ -160,9 +160,10 @@ Pass `lead.text` and its citations on as given; only `LATEST` and
 `COMPARED` state a value. Full contract: [`site/openapi.json`](site/openapi.json),
 summary for language models: [`site/llms.txt`](site/llms.txt).
 
-After an abstention the response may carry `closest`: the one sentence a
-reworded question most plausibly points at, labelled as a pointer to open,
-never the answer (see [docs/PARAPHRASE-RETRIEVAL.md](docs/PARAPHRASE-RETRIEVAL.md)).
+With `VM_CLOSEST_LINE=on` (off in production), an abstention may carry
+`closest`: the sentence a reworded question most plausibly points at, as a
+pointer, never the answer. It stays off because on outside data it is right
+65 to 82% of the time when shown (see [docs/PARAPHRASE-RETRIEVAL.md](docs/PARAPHRASE-RETRIEVAL.md)).
 
 ### As an MCP server
 
@@ -250,10 +251,10 @@ shown while the free host wakes up; a test keeps it equal to the live engine).
 
 ## Next
 
-- **Speaking reworded answers.** Today a reworded question the engine can't
-  answer gets the closest line as a pointer. Speaking it waits for a
-  cross-encoder reranker and a gate that shows no wrong line on the outside
-  benchmark: [docs/PARAPHRASE-RETRIEVAL.md](docs/PARAPHRASE-RETRIEVAL.md).
+- **Reworded questions.** A cross-encoder reranker over the top 10 lines,
+  judged on the outside benchmark's precision-coverage curve; the closest-line
+  pointer turns on only at 90% right:
+  [docs/PARAPHRASE-RETRIEVAL.md](docs/PARAPHRASE-RETRIEVAL.md).
 - **Design-partner pilots** behind teams' own agents (MCP, Bolna, REST), with
   the falsifiable milestones in [docs/MARKET.md](docs/MARKET.md).
 - Clinician review of lab explanations before any patient pilot
