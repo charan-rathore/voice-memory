@@ -975,3 +975,25 @@ html:not(.voice-on) .voice-off { display: block; }
 .a-closest-k { font: 600 11px/1 var(--sans); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
 .a-closest q { font: 15px/1.45 var(--serif); color: var(--ink-2); quotes: "“" "”"; }
 .a-closest .tool { justify-self: start; }
+
+/* for teams: uses, integration, pilot */
+.teams { max-width: 1120px; margin: 0 auto; padding: 120px 32px 0; }
+.teams .h2 { margin: 0 auto; text-align: center; }
+.teams .sub { text-align: center; margin-left: auto; margin-right: auto; max-width: 60ch; }
+.tm-uses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 40px; }
+.tm-uses article { padding: 20px 20px 18px; border-radius: 18px; background: #fff; box-shadow: 0 0 0 1px rgba(17, 19, 23, 0.07), 0 8px 24px -16px rgba(17, 19, 23, 0.18); }
+.tm-uses h3 { margin: 0 0 6px; font: 600 16px/1.3 var(--sans); color: var(--ink); }
+.tm-uses p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--ink-2); }
+.tm-plug { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 12px 28px; margin-top: 28px; padding: 22px; border-radius: 20px; background: #fff; box-shadow: 0 0 0 1px rgba(17, 19, 23, 0.07), 0 18px 40px -24px rgba(17, 19, 23, 0.22); }
+.tm-tabs { display: inline-flex; justify-self: start; gap: 2px; padding: 3px; border-radius: 10px; background: #f1f1ee; }
+.tm-tabs button { border: 0; background: none; padding: 6px 12px; border-radius: 7px; font: 500 12.5px/1 var(--sans); color: var(--ink-3); cursor: pointer; }
+.tm-tabs button[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 0 0 1px rgba(17, 19, 23, 0.06), 0 1px 3px rgba(17, 19, 23, 0.1); }
+.tm-code { grid-column: 1; margin: 0; padding: 16px 18px; border-radius: 14px; background: #111317; color: #e9e9e4; font: 12.5px/1.6 var(--mono); overflow-x: auto; }
+.tm-code span { color: #8b9099; }
+.tm-cta { grid-column: 2; grid-row: 1 / span 2; align-self: center; display: grid; gap: 12px; justify-items: start; }
+.tm-cta p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink-2); }
+@media (max-width: 860px) {
+  .tm-uses { grid-template-columns: 1fr; }
+  .tm-plug { grid-template-columns: 1fr; }
+  .tm-cta { grid-column: 1; grid-row: auto; }
+}

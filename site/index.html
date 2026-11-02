@@ -49,6 +49,7 @@
           <li><a href="#how">How it works</a></li>
           <li><a href="#catches">What it catches</a></li>
           <li><a href="graph.html">Memory graph</a></li>
+          <li><a href="#teams">For teams</a></li>
           <li><a href="https://github.com/charan-rathore/voice-memory">Code</a></li>
         </ul>
         <button class="nav-sound" type="button" data-sound aria-label="Sound effects" aria-pressed="true">
@@ -432,6 +433,49 @@
       </section>
 
       <!-- ============================================================ status -->
+      <section class="teams" id="teams" aria-labelledby="teams-title">
+        <h2 id="teams-title" class="h2 center">Put a verdict behind your agent's answers</h2>
+        <p class="sub">Your voice or chat agent already talks. Voice Memory decides which version of a fact is in force, refuses when the record can't say, and returns the line it rests on, in English, Hindi or Hinglish.</p>
+        <div class="tm-uses" data-reveal>
+          <article style="--i: 0">
+            <h3>Support lines on changing terms</h3>
+            <p>Rate cards, policy wordings and fee schedules are revised. The caller gets the current figure, never the draft, with the clause it comes from.</p>
+          </article>
+          <article style="--i: 1">
+            <h3>Report callbacks</h3>
+            <p>"Did my value change?" across amended reports, refusing when units differ. Health use waits for clinician review.</p>
+          </article>
+          <article style="--i: 2">
+            <h3>Deal desks and agencies</h3>
+            <p>"What did we last propose, and was it approved?" across proposals, minutes and email, with the open items listed.</p>
+          </article>
+        </div>
+        <div class="tm-plug" data-reveal>
+          <div class="tm-tabs" role="tablist" aria-label="Integration">
+            <button type="button" role="tab" aria-selected="true" data-plug="mcp">MCP</button>
+            <button type="button" role="tab" aria-selected="false" data-plug="bolna">Bolna</button>
+            <button type="button" role="tab" aria-selected="false" data-plug="rest">REST</button>
+          </div>
+          <pre class="tm-code" data-plug="mcp"><code>{ "mcpServers": { "voice-memory": {
+    "command": "node",
+    "args": ["voice-memory/mcp/server.mjs"] } } }
+<span>// tools: ask_records, list_cases, create_workspace, upload_document</span></code></pre>
+          <pre class="tm-code" data-plug="bolna" hidden><code>Agent → LLM → Custom LLM (OpenAI-compatible)
+  URL:   https://&lt;your-deployment&gt;/v1
+  Key:   your voice capability token
+<span>// the agent speaks the verdict; each turn keeps its citation</span></code></pre>
+          <pre class="tm-code" data-plug="rest" hidden><code>curl -X POST https://voice-memory-beige.vercel.app/api/public/ask \
+  -H 'content-type: application/json' \
+  -d '{"case":"deal","question":"Was the $42,000 revision finalized?"}'
+<span>// → { lead: { verdict, text, citations: [{ title, quote }] } }</span></code></pre>
+          <div class="tm-cta">
+            <p>Pilots: 30 days, up to 5 of your documents, your own agent. Priced per verified answer; abstentions are free.</p>
+            <a class="btn btn-mark" href="https://github.com/charan-rathore/voice-memory/issues/new?template=pilot.yml" target="_blank" rel="noopener">Request a pilot</a>
+            <a class="btn btn-line" href="https://github.com/charan-rathore/voice-memory/blob/main/docs/MARKET.md" target="_blank" rel="noopener">Why this, and the numbers</a>
+          </div>
+        </div>
+      </section>
+
       <section class="status" id="status" aria-labelledby="status-title">
         <h2 id="status-title" class="h2 center">Where it stands</h2>
         <p class="sub">Built for the Bolna Symphony Buildathon, running on fictional records.</p>

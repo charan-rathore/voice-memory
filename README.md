@@ -137,6 +137,14 @@ Spoken-answer evaluation (`npm run eval:spoken`): Northstar 23/23, Harbor 15/15,
 Lumen 14/14 after fixes; Lumen's first, unseen run was 12/14. All three corpora
 were written by the same author.
 
+**Outside-authored benchmark** (`npm run bench:outside`): records and questions
+written by people who never saw the engine. QMSum meeting transcripts (197
+queries) and CUAD SEC contracts (184 answerable clause questions, 236 absent),
+fetched at pinned commits. Sentence-level keyword retrieval puts the answering
+line first 40.6% and 44.0% of the time, against chance of 5.3% and 1.2%; the
+dense, hybrid and closest-line-gate numbers run in the `bench` workflow and are
+posted on pull requests. Real-call replay: `node evaluation/call-replay.mjs`.
+
 ## Ask it from code or an agent
 
 No key needed. Demo answers are cacheable at the edge (`GET`), your own
@@ -151,6 +159,23 @@ curl -s 'https://voice-memory-beige.vercel.app/api/public/answer?case=health&q=H
 Pass `lead.text` and its citations on as given; only `LATEST` and
 `COMPARED` state a value. Full contract: [`site/openapi.json`](site/openapi.json),
 summary for language models: [`site/llms.txt`](site/llms.txt).
+
+After an abstention the response may carry `closest`: the one sentence a
+reworded question most plausibly points at, labelled as a pointer to open,
+never the answer (see [docs/PARAPHRASE-RETRIEVAL.md](docs/PARAPHRASE-RETRIEVAL.md)).
+
+### As an MCP server
+
+`mcp/server.mjs` is a zero-dependency MCP server (stdio) over the same public
+API, so Claude, ChatGPT connectors and IDE agents can call the engine as a
+tool: `ask_records`, `list_cases`, `create_workspace`, `upload_document`,
+`workspace_status`. It holds no keys.
+
+```json
+{ "mcpServers": { "voice-memory": { "command": "node", "args": ["/path/to/voice-memory/mcp/server.mjs"] } } }
+```
+
+`VM_API_BASE` points it at another deployment. Tested in `tests/mcp.test.mjs`.
 
 ## Staying up on a free host
 
@@ -218,15 +243,18 @@ shown while the free host wakes up; a test keeps it equal to the live engine).
 | `site/` | Landing page, memory graph page, engine snapshot (Vercel) |
 | `public/` | Local owner workspace (uploads, voice notes, voice lab) |
 | `film/` | The submission film (Remotion source) |
-| `evaluation/`, `tests/` | Tests and benchmarks |
+| `mcp/server.mjs` | MCP server (stdio, zero dependencies) over the public API |
+| `src/paraphrase.mjs` | Sentence units, dense + BM25 fusion, calibrated gate, closest-line discovery |
+| `evaluation/`, `tests/` | Tests and benchmarks (`evaluation/outside-bench.mjs`: QMSum + CUAD) |
+| `docs/MARKET.md` | Market, position, pricing hypothesis and 90-day falsifiable plan |
 
 ## Next
 
-- **Paraphrase-aware search.** The dense retriever exists but is not yet a
-  win: on held-out paraphrases it ranks the right passage top-3 for 13 of 15,
-  while the lexical evidence gate keeps shipped recall@1 at keyword level
-  (0.33). Measured, and why the gate is unchanged:
-  [docs/PARAPHRASE-RETRIEVAL.md](docs/PARAPHRASE-RETRIEVAL.md).
-- A benchmark of real, messy records written by people outside the team
+- **Speaking reworded answers.** Today a reworded question the engine can't
+  answer gets the closest line as a pointer. Speaking it waits for a
+  cross-encoder reranker and a gate that shows no wrong line on the outside
+  benchmark: [docs/PARAPHRASE-RETRIEVAL.md](docs/PARAPHRASE-RETRIEVAL.md).
+- **Design-partner pilots** behind teams' own agents (MCP, Bolna, REST), with
+  the falsifiable milestones in [docs/MARKET.md](docs/MARKET.md).
 - Clinician review of lab explanations before any patient pilot
 - Phone-number calls and WhatsApp voice notes through Bolna

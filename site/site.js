@@ -1665,7 +1665,7 @@
   // ------------------------------------------------------------ wiring
   document.addEventListener("click", (e) => {
     const t = e.target.closest(
-      "[data-q],[data-ask],[data-cite],[data-closest],[data-doc],[data-files],[data-listen],[data-start-call],[data-lang],[data-jump],[data-switch-case],.case-tab",
+      "[data-q],[data-ask],[data-cite],[data-closest],.tm-tabs [data-plug],[data-doc],[data-files],[data-listen],[data-start-call],[data-lang],[data-jump],[data-switch-case],.case-tab",
     );
     if (!t) return;
     if (t.matches(".case-tab")) return setCase(t.dataset.case);
@@ -1687,6 +1687,11 @@
     if (t.matches("[data-q]"))
       return ask(t.dataset.q, { caseId: t.dataset.case || state.case });
     if (t.matches("[data-cite]")) return openCitation(Number(t.dataset.cite));
+    if (t.matches(".tm-tabs [data-plug]")) {
+      $$(".tm-tabs [data-plug]").forEach((b) => b.setAttribute("aria-selected", String(b === t)));
+      $$(".tm-code[data-plug]").forEach((c) => (c.hidden = c.dataset.plug !== t.dataset.plug));
+      return;
+    }
     if (t.matches("[data-closest]") && state.closest?.title)
       return openDoc(state.closest.title, [state.closest], state.closest);
     if (t.matches("[data-doc]")) return openDoc(t.dataset.doc);
