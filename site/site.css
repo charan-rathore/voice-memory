@@ -953,3 +953,7 @@ html:not(.voice-on) .voice-off { display: block; }
   .pipe.flow2 li:nth-child(odd) { border-right: 1px dashed var(--rule); }
   .pipe.flow2 li:nth-child(-n+2) { border-bottom: 1px dashed var(--rule); }
 }
+.flow-leg { position: absolute; top: -13px; left: calc(var(--n) * 33.333% + 16.666%); transform: translateX(-50%); font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
+@media (max-width: 1000px) { .flow-leg { display: none; } }
+.flow-rail { top: 24px; }
+.pipe.flow2 { padding-top: 44px; }
