@@ -897,3 +897,36 @@ html:not(.voice-on) .voice-off { display: block; }
 .dict-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
 .dict-btn:hover { color: var(--ink); border-color: rgba(255, 255, 255, 0.3); }
 .dict-btn:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+
+/* how-it-works flow: the payload visibly travels between stages */
+.pipe.flow li { position: relative; }
+.pf-case-note { font-size: 10.5px; line-height: 1.35; color: var(--ink-3); font-style: italic; }
+/* 4-col desktop: horizontal dashes + arrowhead between cards */
+@media (min-width: 1001px) {
+  .pipe.flow li:not(:last-child)::after {
+    content: ""; position: absolute; top: 66px; right: -17px; width: 18px; height: 2px; z-index: 2;
+    background: repeating-linear-gradient(90deg, var(--ink-3) 0 5px, transparent 5px 9px);
+    animation: flow-dash 1.2s linear infinite;
+  }
+  .pipe.flow li:not(:last-child)::before {
+    content: ""; position: absolute; top: 62px; right: -19px; z-index: 3;
+    border-left: 7px solid var(--ink-2); border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  }
+}
+@keyframes flow-dash { to { background-position: 9px 0; } }
+/* 1-col phones: vertical dashes + arrowhead between stacked cards */
+@media (max-width: 720px) {
+  .pipe.flow li:not(:last-child)::after {
+    content: ""; position: absolute; bottom: -17px; left: 50%; width: 2px; height: 18px; z-index: 2;
+    background: repeating-linear-gradient(180deg, var(--ink-3) 0 5px, transparent 5px 9px);
+    animation: flow-dash-v 1.2s linear infinite;
+  }
+  .pipe.flow li:not(:last-child)::before {
+    content: ""; position: absolute; bottom: -19px; left: calc(50% - 5px); z-index: 3;
+    border-top: 7px solid var(--ink-2); border-left: 5px solid transparent; border-right: 5px solid transparent;
+  }
+}
+@keyframes flow-dash-v { to { background-position: 0 9px; } }
+@media (prefers-reduced-motion: reduce) {
+  .pipe.flow li::after { animation: none; }
+}

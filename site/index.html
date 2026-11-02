@@ -122,7 +122,7 @@
         <h2 id="problem-title" class="h2 center">People read their records before anyone explains them.</h2>
         <div class="stats">
           <a class="stat" href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/10.1001/jamanetworkopen.2026.30698" data-reveal>
-            <span class="stat-fig" aria-hidden="true"><canvas class="stat-art" data-art="waffle"></canvas><span class="fig-cap">1,000 dots, one per person surveyed. The 686 who opened results first light up.</span></span>
+            <span class="stat-fig" aria-hidden="true"><canvas class="stat-art" data-art="waffle"></canvas><span class="fig-cap">1,000 dots = everyone surveyed. The 686 lit are the 68.6% who opened their results first.</span></span>
             <span class="stat-num" data-count="68.6" data-suffix="%">68.6%</span>
             <span class="stat-text">of US adults with online records opened their test results before hearing from a clinician.</span>
             <span class="stat-src">JAMA Network Open, Aug 2026. HINTS 2024, n = 4,982</span>
@@ -242,8 +242,8 @@
       <section class="how" id="how" aria-labelledby="how-title">
         <h2 id="how-title" class="h2 center">Bolna hears it. The record decides it.</h2>
         <p class="sub center">Speech in, a checked sentence out, and the source on screen while you listen.<span class="voice-state-off"> Voice calling is paused for now; typed asking above is fully live.</span></p>
-        <ol class="pipe" data-reveal>
-          <li style="--i: 0">
+        <ol class="pipe flow" data-reveal>
+          <li style="--i: 0" data-carry="your words, as text">
             <span class="pipe-fig pf-call" aria-hidden="true">
               <span class="pf-live"><i></i>Live</span>
               <span class="pf-wave"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></span>
@@ -253,17 +253,18 @@
             <h3>Bolna takes the call</h3>
             <p>Speech recognition, turn-taking and the voice you hear run on Bolna, Hindi or English.<span class="voice-state-off"> Calling is paused right now.</span> Your question arrives as text.</p>
           </li>
-          <li style="--i: 1">
+          <li style="--i: 1" data-carry="a pointed lookup: test, case, report">
             <span class="pipe-fig pf-resolve" aria-hidden="true">
               <span class="pf-q">"what's my ferritin?"</span>
               <span class="pf-arrow">→</span>
               <span class="pf-norm">ferritin · SYN-0001 · latest report</span>
+              <span class="pf-case-note">in this demo you picked the fictional case SYN-0001, so "my" means that case</span>
             </span>
             <span class="pipe-n">02</span>
             <h3>Voice Memory resolves it</h3>
             <p>"Forty two thousand" becomes $42,000. "It" becomes the fee you just asked about. "My" becomes SYN-0001.</p>
           </li>
-          <li style="--i: 2">
+          <li style="--i: 2" data-carry="the cited line + its status">
             <span class="pipe-fig pf-doc" aria-hidden="true">
               <span class="pf-page">
                 <span class="pf-line"></span>

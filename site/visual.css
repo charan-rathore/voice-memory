@@ -222,3 +222,16 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
 .vz-row { background: rgba(255, 255, 255, 0.65); border: 1px solid rgba(29, 42, 68, 0.1); border-bottom: 1px solid rgba(29, 42, 68, 0.14); border-radius: 10px; padding: 10px 12px 8px; margin-bottom: 8px; box-shadow: 0 2px 0 rgba(29, 42, 68, 0.06); }
 .vz-row:last-child { border-bottom: 1px solid rgba(29, 42, 68, 0.14); }
 .vz-row.speaking { background: rgba(244, 220, 74, 0.35); }
+
+/* mobile: stack name/status above the read line, legible labels */
+@media (max-width: 560px) {
+  .vz-row { grid-template-columns: 1fr; grid-template-areas: "name" "read" "strip" "hist"; gap: 4px; padding: 12px 12px 10px; }
+  .vz-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; }
+  .vz-name b { font-size: 14.5px; }
+  .vz-status { margin-left: 0; font-size: 9.5px; }
+  .vz-read { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; }
+  .vz-svg { width: 100%; height: auto; }
+  .vz-lim, .vz-num { font-size: 12px; }
+  .vz-howto { font-size: 12px; }
+  .vz-chip { font-size: 11px; }
+}
