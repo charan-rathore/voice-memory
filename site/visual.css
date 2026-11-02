@@ -235,3 +235,9 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
   .vz-howto { font-size: 12px; }
   .vz-chip { font-size: 11px; }
 }
+.vz-val { font-size: 12.5px; color: var(--ink-c); }
+.vz-val b { font-size: 13.5px; }
+@media (max-width: 560px) {
+  .vz-val { font-size: 13px; }
+  .vz-val b { font-size: 14.5px; }
+}

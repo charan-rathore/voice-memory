@@ -233,7 +233,7 @@
     return `<li class="vz-row ${tone}" data-test="${esc(t.name.toLowerCase())}" style="--i:${i}">
       <div class="vz-name"><b>${esc(t.name)}</b><span class="vz-unit">${esc(t.unit ?? "")}</span>${L.status ? `<span class="vz-status st-${esc(L.status)}" title="status of the report this value comes from">${esc(w["st_" + L.status] ?? L.status)}</span>` : ""}</div>
       <div class="vz-strip">${strip(t, w)}</div>
-      <div class="vz-read"><span class="vz-pos ${tone}">${esc(posWord(L.position, w))}</span>${notes.join("")}</div>
+      <div class="vz-read"><span class="vz-val"><b>${esc(L.raw)}</b>${t.unit ? ` ${esc(t.unit)}` : ""}${L.range && L.range.low != null ? ` · range ${esc(L.range.low)}\u2013${esc(L.range.high)}` : ""}</span><span class="vz-pos ${tone}">${esc(posWord(L.position, w))}</span>${notes.join("")}</div>
       ${withHistory ? history(t, lang) : ""}
     </li>`;
   }
