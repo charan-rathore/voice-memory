@@ -15,13 +15,13 @@ explain general terms; anything it proposes about the documents is checked
 claim by claim - quote, values, units, status and subject - against the exact
 quoted span before it is used (see [docs/SEMANTIC.md](docs/SEMANTIC.md)).
 
-| | |
-| --- | --- |
-| **Try it** | https://voice-memory-beige.vercel.app — ask by typing (voice calling is paused for now) |
-| **Memory graph** | https://voice-memory-beige.vercel.app/graph |
-| Engine / API | https://voice-memory.onrender.com (Render, free tier) |
-| For agents | [`llms.txt`](https://voice-memory-beige.vercel.app/llms.txt) · [OpenAPI](https://voice-memory-beige.vercel.app/openapi.json) |
-| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+|                          |                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Try it**               | https://voice-memory-beige.vercel.app — ask by typing (voice calling is paused for now)                                                           |
+| **Memory graph**         | https://voice-memory-beige.vercel.app/graph                                                                                                       |
+| Engine / API             | https://voice-memory.onrender.com (Render, free tier)                                                                                             |
+| For agents               | [`llms.txt`](https://voice-memory-beige.vercel.app/llms.txt) · [OpenAPI](https://voice-memory-beige.vercel.app/openapi.json)                      |
+| Architecture             | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                                                                                                      |
 | Voice, languages, charts | [docs/COMPANION.md](docs/COMPANION.md): neural Listen (Sarvam / ElevenLabs), Hindi and Hinglish understanding, advice declines, drill-down charts |
 
 All patients, values and companies are fictional or synthetic. It is a research
@@ -31,7 +31,7 @@ prototype, not a diagnostic or clinically validated product.
 
 - **68.6%** of US adults with online records opened their test results before
   hearing from a clinician, and about **1 in 3** of them understood those results
-  only fairly well or poorly ([Bather et al., *JAMA Network Open*, Aug 2026](https://jamanetwork.com/journals/jamanetworkopen/fullarticle/10.1001/jamanetworkopen.2026.30698),
+  only fairly well or poorly ([Bather et al., _JAMA Network Open_, Aug 2026](https://jamanetwork.com/journals/jamanetworkopen/fullarticle/10.1001/jamanetworkopen.2026.30698),
   HINTS 2024, n = 4,982; see also the [ASTP/ONC analysis](https://healthit.gov/blog/ai-ml/from-immediate-access-to-meaningful-delivery-a-patient-centered-approach-to-delivering-test-results/)).
 - **40M+** people a day ask ChatGPT health questions, and ECRI ranks misuse of AI
   chatbots the **#1 health-technology hazard of 2026**
@@ -47,14 +47,14 @@ prototype, not a diagnostic or clinically validated product.
 <sub>Rendered with [Manim](https://github.com/ManimCommunity/manim) from
 [`docs/explainer/units.py`](docs/explainer/units.py) in CI.</sub>
 
-| Case | Question | Answer the engine gives |
-| --- | --- | --- |
-| Correction | "What is SYN-0001's ferritin result?" | 50 ng/mL — the 12 Oct result was corrected from 5 to 50 (amended report), cites both rows |
-| Units | "Has creatinine gone up since September?" | Won't compare: 1.2 mg/dL vs 106 µmol/L, no unit conversion |
-| Patients | "What is the TSH?" | Asks which patient: SYN-0001 or SYN-0003 |
-| Contract | "Was the $42,000 revision finalized?" | $42,000 is the latest proposal, and it is not approved ($48,000 superseded) |
-| Meeting | "Did they agree on the payment split?" | Still open: 40/60 proposed vs 50/50 discussed, not approved |
-| Absence | "Is there a signed contract?" | No — the action log says no signed agreement exists |
+| Case       | Question                                  | Answer the engine gives                                                                   |
+| ---------- | ----------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Correction | "What is SYN-0001's ferritin result?"     | 50 ng/mL — the 12 Oct result was corrected from 5 to 50 (amended report), cites both rows |
+| Units      | "Has creatinine gone up since September?" | Won't compare: 1.2 mg/dL vs 106 µmol/L, no unit conversion                                |
+| Patients   | "What is the TSH?"                        | Asks which patient: SYN-0001 or SYN-0003                                                  |
+| Contract   | "Was the $42,000 revision finalized?"     | $42,000 is the latest proposal, and it is not approved ($48,000 superseded)               |
+| Meeting    | "Did they agree on the payment split?"    | Still open: 40/60 proposed vs 50/50 discussed, not approved                               |
+| Absence    | "Is there a signed contract?"             | No — the action log says no signed agreement exists                                       |
 
 ## Bring your own documents
 
@@ -124,14 +124,14 @@ derived from the current documents, not recorded as stored amendment events.
 `npm run verify` (set `CHROME_PATH` for the browser steps). The pre-push gate
 `npm run verify:fast` runs format, typecheck, unit, boundary and evaluation suites.
 
-| Suite | Covers |
-| --- | --- |
-| `npm test` | unit, normaliser, retrieval core, memory guard |
-| `npm run test:boundaries` | HTTP/session/voice boundaries, **public API** (`tests/public-api.test.mjs`) |
-| `npm run test:evaluation` | spoken answers on 3 corpora, call isolation, longitudinal memory, **landing snapshot equals the live engine** |
-| `npm run test:ingest` / `test:clinical` | PDF/DOCX/OCR ingestion; lab comparisons incl. Hindi and Hinglish |
-| `npm run test:vault` | Bolna-shaped calls over HTTP |
-| `evaluation/vernacular.test.mjs` | English, Hindi and Hinglish asks, recogniser noise, advice declines (dev set complete, held-out at least 20/22) |
+| Suite                                   | Covers                                                                                                          |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `npm test`                              | unit, normaliser, retrieval core, memory guard                                                                  |
+| `npm run test:boundaries`               | HTTP/session/voice boundaries, **public API** (`tests/public-api.test.mjs`)                                     |
+| `npm run test:evaluation`               | spoken answers on 3 corpora, call isolation, longitudinal memory, **landing snapshot equals the live engine**   |
+| `npm run test:ingest` / `test:clinical` | PDF/DOCX/OCR ingestion; lab comparisons incl. Hindi and Hinglish                                                |
+| `npm run test:vault`                    | Bolna-shaped calls over HTTP                                                                                    |
+| `evaluation/vernacular.test.mjs`        | English, Hindi and Hinglish asks, recogniser noise, advice declines (dev set complete, held-out at least 20/22) |
 
 Spoken-answer evaluation (`npm run eval:spoken`): Northstar 23/23, Harbor 15/15,
 Lumen 14/14 after fixes; Lumen's first, unseen run was 12/14. All three corpora
@@ -193,32 +193,32 @@ shown while the free host wakes up; a test keeps it equal to the live engine).
 
 ### Configuration (Render)
 
-| Variable | Purpose |
-| --- | --- |
-| `BOLNA_API_KEY`, `BOLNA_AGENT_ID` | Server-side Bolna web-call minting (`/web-call/freeswitch-session`) |
-| `VM_VOICE_CAPABILITY`, `VM_VOICE_HARD_EXPIRES_AT` | Bearer Bolna uses for the custom-LLM endpoint, and its absolute expiry |
-| `VM_PUBLIC_CALLS_PER_IP_HOUR`, `VM_PUBLIC_CALLS_PER_DAY`, `VM_PUBLIC_CALL_GAP_MS` | Public call caps (3 / 30 / 30 s on the buildathon deploy) |
-| `VM_PUBLIC_ASK_PER_MIN` | Typed-question rate limit per visitor (default 40) |
-| `VM_OWNER_SIGNIN` | `off` removes the hosted owner workspace (buildathon deploy) |
-| `VM_PUBLIC_HOST`, `VM_PUBLIC_ORIGIN`, `VM_LANDING_URL` | Public host and where it redirects |
-| `VM_DATA_DIR`, `VM_STORE_KEY`, `VM_DENSE`, `VM_GLOBAL_DOC_MB` | Encrypted storage, dense retrieval, memory budgets |
+| Variable                                                                          | Purpose                                                                |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `BOLNA_API_KEY`, `BOLNA_AGENT_ID`                                                 | Server-side Bolna web-call minting (`/web-call/freeswitch-session`)    |
+| `VM_VOICE_CAPABILITY`, `VM_VOICE_HARD_EXPIRES_AT`                                 | Bearer Bolna uses for the custom-LLM endpoint, and its absolute expiry |
+| `VM_PUBLIC_CALLS_PER_IP_HOUR`, `VM_PUBLIC_CALLS_PER_DAY`, `VM_PUBLIC_CALL_GAP_MS` | Public call caps (3 / 30 / 30 s on the buildathon deploy)              |
+| `VM_PUBLIC_ASK_PER_MIN`                                                           | Typed-question rate limit per visitor (default 40)                     |
+| `VM_OWNER_SIGNIN`                                                                 | `off` removes the hosted owner workspace (buildathon deploy)           |
+| `VM_PUBLIC_HOST`, `VM_PUBLIC_ORIGIN`, `VM_LANDING_URL`                            | Public host and where it redirects                                     |
+| `VM_DATA_DIR`, `VM_STORE_KEY`, `VM_DENSE`, `VM_GLOBAL_DOC_MB`                     | Encrypted storage, dense retrieval, memory budgets                     |
 
 ## Repository
 
-| Path | Role |
-| --- | --- |
-| `src/public-api.mjs` | Key-free landing API: cases, ask, documents, graphs, capped call minting |
-| `server.mjs` / `src/server.mjs` | Stable entry point / HTTP server, workspace API, Bolna routes, case loading |
-| `src/engine.ts`, `src/claim-check.ts` | Evidence engine and claim vocabulary |
-| `src/spoken*.mjs` | Spoken layer: intent, verdicts, normalisation |
-| `clinical/` | Lab observations, comparability, explanations (en/hi/Hinglish) |
-| `src/voice-adapter.mjs` | OpenAI-compatible SSE endpoint for Bolna, per-call isolation |
-| `ingest/`, `src/library.mjs` | File ingestion and page-anchored documents |
-| `memory/` | Episodic memory and the knowledge-graph view |
-| `site/` | Landing page, memory graph page, engine snapshot (Vercel) |
-| `public/` | Local owner workspace (uploads, voice notes, voice lab) |
-| `film/` | The submission film (Remotion source) |
-| `evaluation/`, `tests/` | Tests and benchmarks |
+| Path                                  | Role                                                                        |
+| ------------------------------------- | --------------------------------------------------------------------------- |
+| `src/public-api.mjs`                  | Key-free landing API: cases, ask, documents, graphs, capped call minting    |
+| `server.mjs` / `src/server.mjs`       | Stable entry point / HTTP server, workspace API, Bolna routes, case loading |
+| `src/engine.ts`, `src/claim-check.ts` | Evidence engine and claim vocabulary                                        |
+| `src/spoken*.mjs`                     | Spoken layer: intent, verdicts, normalisation                               |
+| `clinical/`                           | Lab observations, comparability, explanations (en/hi/Hinglish)              |
+| `src/voice-adapter.mjs`               | OpenAI-compatible SSE endpoint for Bolna, per-call isolation                |
+| `ingest/`, `src/library.mjs`          | File ingestion and page-anchored documents                                  |
+| `memory/`                             | Episodic memory and the knowledge-graph view                                |
+| `site/`                               | Landing page, memory graph page, engine snapshot (Vercel)                   |
+| `public/`                             | Local owner workspace (uploads, voice notes, voice lab)                     |
+| `film/`                               | The submission film (Remotion source)                                       |
+| `evaluation/`, `tests/`               | Tests and benchmarks                                                        |
 
 ## Next
 

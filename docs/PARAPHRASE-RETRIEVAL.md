@@ -23,10 +23,10 @@ corpus. The outside-authored benchmark on the roadmap is the real test.
 
 ## Results (bge-small, whole-document chunks)
 
-| Split | Keyword r@1 | Hybrid (shipped) r@1 | Dense only r@1 | Dense only r@3 | Unanswerable refused (hybrid) |
-| --- | --- | --- | --- | --- | --- |
-| Development (15 + 5) | 0.33 | 0.47 | 0.53 | 0.80 | 2 of 5 |
-| Held-out (15 + 5) | 0.33 | **0.33** | 0.47 | 0.87 | 4 of 5 |
+| Split                | Keyword r@1 | Hybrid (shipped) r@1 | Dense only r@1 | Dense only r@3 | Unanswerable refused (hybrid) |
+| -------------------- | ----------- | -------------------- | -------------- | -------------- | ----------------------------- |
+| Development (15 + 5) | 0.33        | 0.47                 | 0.53           | 0.80           | 2 of 5                        |
+| Held-out (15 + 5)    | 0.33        | **0.33**             | 0.47           | 0.87           | 4 of 5                        |
 
 Findings:
 
@@ -61,8 +61,8 @@ What changed, each from published practice and none using a language model:
 
 - **Small units, big context.** Every sentence or table row is a retrieval
   unit (25 for Northstar instead of 7 documents), prefixed with its
-  document's heading, type and date, after Anthropic's *Contextual
-  Retrieval* (the prefix is built from the document's own header, not
+  document's heading, type and date, after Anthropic's _Contextual
+  Retrieval_ (the prefix is built from the document's own header, not
   generated).
 - **Weighted reciprocal-rank fusion** of bge-small cosine and BM25, 0.8 / 0.2,
   k = 60 (Cormack et al. 2009; Anthropic contextual-embeddings cookbook).
@@ -76,9 +76,9 @@ What changed, each from published practice and none using a language model:
   wrong passages and zero accepted unanswerable questions.
 
 | Held-out (15 answerable + 5 unanswerable) | recall@1 | wrong passages served | unanswerable accepted |
-| --- | --- | --- | --- |
-| Shipped hybrid, before | 0.33 | 3 | 1 |
-| + paraphrase rescue | **0.40** | 3 (no new) | 1 (no new) |
+| ----------------------------------------- | -------- | --------------------- | --------------------- |
+| Shipped hybrid, before                    | 0.33     | 3                     | 1                     |
+| + paraphrase rescue                       | **0.40** | 3 (no new)            | 1 (no new)            |
 
 Sentence units alone (no gate) put the right sentence in the top 3 for 11 of
 15 held-out paraphrases. The gate is deliberately strict: an evidence engine
