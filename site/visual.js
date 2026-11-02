@@ -51,6 +51,11 @@
       more: (n) => `Show ${n} more results`,
       noRanges: "No reference ranges printed",
       full: ["Show full text", "Show less"],
+      changesLabel: "What changed",
+      st_amended: "amended report",
+      st_preliminary: "preliminary report",
+      st_final: "final report",
+      howto: "How to read this: every strip is one test. The hatched band is the range the lab printed; the dot is the newest value. A hollow struck dot is a value the lab later corrected.",
       also: "Also printed, without a range to place them on:",
       andMore: (n) => ` and ${n} more`,
     },
@@ -80,6 +85,11 @@
       more: (n) => `${n} और नतीजे देखें`,
       noRanges: "कोई सीमा नहीं छपी",
       full: ["पूरा पढ़ें", "कम दिखाएं"],
+      changesLabel: "क्या बदला",
+      st_amended: "संशोधित रिपोर्ट",
+      st_preliminary: "प्रारंभिक रिपोर्ट",
+      st_final: "अंतिम रिपोर्ट",
+      howto: "ऐसे पढ़ें: हर पट्टी एक टेस्ट है। धारीदार बैंड लैब की छपी सीमा है; बिंदु नवीनतम मान। खोखला कटा बिंदु वो मान है जिसे लैब ने बाद में सुधारा।",
       also: "ये भी छपे हैं, पर इनकी कोई सीमा नहीं दी गई:",
       andMore: (n) => ` और ${n} अन्य`,
     },
@@ -109,6 +119,11 @@
       more: (n) => `${n} aur results dekhiye`,
       noRanges: "Koi range nahi chhapi",
       full: ["Poora padhiye", "Kam dikhaiye"],
+      changesLabel: "Kya badla",
+      st_amended: "amended report",
+      st_preliminary: "preliminary report",
+      st_final: "final report",
+      howto: "Aise padhein: har strip ek test hai. Dhari wala band lab ki printed range hai; dot latest value. Khokhla kata dot wo value hai jo lab ne baad mein theek ki.",
       also: "Yeh bhi chhape hain, par inki koi range nahi di gayi:",
       andMore: (n) => ` aur ${n} aur`,
     },
@@ -216,9 +231,9 @@
     if (t.corrected) notes.push(`<span class="vz-note fix">${esc(w.corrected(t.corrected.from, t.corrected.to))}</span>`);
     if (t.unitChanged) notes.push(`<span class="vz-note unit">${esc(w.units)}</span>`);
     return `<li class="vz-row ${tone}" data-test="${esc(t.name.toLowerCase())}" style="--i:${i}">
-      <div class="vz-name"><b>${esc(t.name)}</b><span class="vz-unit">${esc(t.unit ?? "")}</span></div>
+      <div class="vz-name"><b>${esc(t.name)}</b><span class="vz-unit">${esc(t.unit ?? "")}</span>${L.status ? `<span class="vz-status st-${esc(L.status)}" title="status of the report this value comes from">${esc(w["st_" + L.status] ?? L.status)}</span>` : ""}</div>
       <div class="vz-strip">${strip(t, w)}</div>
-      <div class="vz-read"><span class="vz-pos ${tone}">${esc(posWord(L.position, w))}</span>${notes.join("")}</div>
+      <div class="vz-read"><span class="vz-val"><b>${esc(L.raw)}</b>${t.unit ? ` ${esc(t.unit)}` : ""}${L.range && L.range.low != null ? ` · range ${esc(L.range.low)}\u2013${esc(L.range.high)}` : ""}</span><span class="vz-pos ${tone}">${esc(posWord(L.position, w))}</span>${notes.join("")}</div>
       ${withHistory ? history(t, lang) : ""}
     </li>`;
   }
@@ -245,12 +260,21 @@
     const ranged = main.tests.filter((t) => t.latest.range && t.latest.position !== "unknown");
     const out = ranged.filter((t) => /below|above/.test(t.latest.position)).length;
     const focus = v.focus === "answer";
+    const changes = main.tests.flatMap((t) => {
+      const c = [];
+      if (t.corrected)
+        c.push(`<span class="vz-chip fix"><i></i>${esc(t.name)} ${esc(w.corrected(t.corrected.from, t.corrected.to))}</span>`);
+      if (t.unitChanged) c.push(`<span class="vz-chip unit"><i></i>${esc(t.name)}: ${esc(w.units)}</span>`);
+      return c;
+    });
     const head = focus
       ? ""
       : `<div class="vz-head">
           <div class="vz-who"><b>${esc(main.label)}</b>${reportTrail(main, w, lang)}</div>
           <p class="vz-tally">${esc(!ranged.length ? w.noRanges : out ? w.outside(out, ranged.length) : w.allIn(ranged.length))}</p>
-        </div>`;
+        </div>${
+          changes.length ? `<div class="vz-changes" aria-label="${esc(w.changesLabel)}"><span class="vz-changes-k">${esc(w.changesLabel)}</span>${changes.join("")}</div>` : ""
+        }<p class="vz-howto">${esc(w.howto)}</p>`;
     // Strips are for values the lab printed a range for; the rest (logs,
     // text results) are listed, not drawn on a scale they don't have.
     const drawable = (t) =>
