@@ -397,6 +397,29 @@
       sc.onerror = bad;
       document.head.appendChild(sc);
     });
+  const loadCss = (href) => {
+    const l = document.createElement("link");
+    l.rel = "stylesheet";
+    l.href = href;
+    document.head.appendChild(l);
+  };
+  // How-it-works styles ship with the section, not the first load: flow.css
+  // loads as #how approaches (same pattern as the desk chunk below).
+  const howNear = new Promise((ok) => {
+    const how = $("#how");
+    if (!how || !("IntersectionObserver" in window)) return ok(loadCss("flow.css"));
+    const io = new IntersectionObserver(
+      (es) => {
+        if (es.some((e) => e.isIntersecting)) {
+          io.disconnect();
+          loadCss("flow.css");
+          ok();
+        }
+      },
+      { rootMargin: "800px 0px" },
+    );
+    io.observe(how);
+  });
   const deskNear = new Promise((ok) => {
     const desk = $("#desk");
     if (!desk || !("IntersectionObserver" in window)) return ok();
