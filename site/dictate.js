@@ -19,7 +19,8 @@
   "use strict";
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const canRecord = !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
-  const CONSENT_KEY = "vm_dictation_consent_v1";
+  // v2: the consent now names Sarvam / ElevenLabs, so earlier yeses (Gemini only) are asked again.
+  const CONSENT_KEY = "vm_dictation_consent_v2";
 
   // ------------------------------------------------------------ cleanup
   const FILLERS = /\b(um+|uh+|erm+|hmm+|uhh+|umm+|you know|i mean,?\s*like|haan+ ?toh|matlab|basically)\b[,.]?\s*/gi;
@@ -71,6 +72,9 @@
     return t.charAt(0).toUpperCase() + t.slice(1);
   }
 
+  const escHtml = (s) =>
+    String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
   // ------------------------------------------------------------ mic choice
   async function pickMic() {
     try {
@@ -119,6 +123,13 @@
     };
     setState("idle");
 
+    // Name the speech providers this server will actually use, in order.
+    const providerNames = () => {
+      const p = (o.providers?.() ?? ["gemini"]).map(
+        (x) => ({ sarvam: "Sarvam AI", elevenlabs: "ElevenLabs", gemini: "Google Gemini" })[x] ?? x,
+      );
+      return p.length > 1 ? `${p.slice(0, -1).join(", ")} (or ${p.at(-1)} if that is busy)` : p[0];
+    };
     function consent() {
       try {
         if (localStorage.getItem(CONSENT_KEY) === "yes") return Promise.resolve(true);
@@ -128,7 +139,7 @@
         d.className = "dict-consent";
         d.setAttribute("role", "dialog");
         d.setAttribute("aria-label", "Use your microphone");
-        d.innerHTML = `<p><b>Dictate with your microphone?</b> The mic is on only while the button is red. Your words are turned into text by your browser's speech service${o.serverTranscribe() ? " and, for accuracy, the clip is sent to Google Gemini through Voice Memory's server" : ""}. Clips are not stored. Please don't dictate real medical or personal details in this demo.</p><div><button type="button" data-yes>Use the microphone</button><button type="button" data-no>Not now</button></div>`;
+        d.innerHTML = `<p><b>Dictate with your microphone?</b> The mic is on only while the button is red. Your words are turned into text by your browser's speech service${o.serverTranscribe() ? ` and, for accuracy, the clip is sent through Voice Memory's server to ${providerNames()}` : ""}. Clips are not stored. Please don't dictate real medical or personal details in this demo.</p><div><button type="button" data-yes>Use the microphone</button><button type="button" data-no>Not now</button></div>`;
         o.button.closest("form").after(d);
         const done = (v) => {
           d.remove();
@@ -327,6 +338,8 @@
           if (r.ok && typeof b.text === "string" && b.text.trim()) {
             text = b.text;
             via = "server";
+            t.provider = b.provider ?? null;
+            t.repaired = b.raw && b.raw !== b.text ? b.raw : null;
           }
         } catch {
           /* keep the browser's take */
@@ -347,7 +360,13 @@
         return;
       }
       o.input.value = out;
-      say(via === "server" ? "Transcribed. Asking…" : "Asking…", "");
+      const who = { sarvam: "Sarvam", elevenlabs: "ElevenLabs", gemini: "Gemini" }[t.provider] ?? null;
+      say(
+        via === "server"
+          ? `Transcribed${who ? ` by ${who}` : ""}${t.repaired ? ` · heard “${escHtml(t.repaired)}”` : ""}. Asking…`
+          : "Asking…",
+        "",
+      );
       o.onText(out, { via });
       setTimeout(() => say("", ""), 2500);
     }

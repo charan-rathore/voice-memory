@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - "src/dense.mjs"
+      - "src/vernacular.mjs"
       - "vendor/web/src/lib/rag/**"
       - "evaluation/paraphrase-*"
       - "evaluation/retrieval-*"
@@ -36,11 +37,20 @@ jobs:
         env:
           VM_DENSE_CACHE: .cache/models
           VM_MEMORY_LIMIT_MB: "4096"
-      - name: Hybrid retrieval bench
-        run: node evaluation/retrieval-bench-hybrid.mjs | tail -40 | tee -a "$GITHUB_STEP_SUMMARY"
+      # A/B: the same bench with bare chunk embeddings (the default) and with
+      # contextual chunk headers (VM_DENSE_CONTEXT=on, an experiment), so a
+      # retrieval change is always judged against its baseline on one runner.
+      - name: Hybrid retrieval bench, bare chunk embeddings (baseline)
+        run: node evaluation/retrieval-bench-hybrid.mjs | tail -40 | tee ab-bare.txt | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           VM_DENSE_CACHE: .cache/models
           VM_MEMORY_LIMIT_MB: "4096"
+      - name: Hybrid retrieval bench, contextual chunk headers (experiment)
+        run: node evaluation/retrieval-bench-hybrid.mjs | tail -40 | tee ab-context.txt | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          VM_DENSE_CACHE: .cache/models
+          VM_MEMORY_LIMIT_MB: "4096"
+          VM_DENSE_CONTEXT: "on"
       - uses: actions/upload-artifact@v4
         with:
           name: retrieval-results
@@ -57,4 +67,5 @@ jobs:
             const body = "### Paraphrase bench (" + d.sha + ", " + d.model + ", dense " + (d.denseAvailable ? "on" : "OFF") + ")\n\n```json\n" + JSON.stringify(d.summary, null, 1) + "\n```\n\n<details><summary>Per question: split | kind | hybrid top-1 hit | top-3 dense cosine (* = right passage) | unit cosine/margin | question</summary>\n\n```\n" + compact.join("\n") + "\n```\n</details>";
             require("fs").writeFileSync("comment.md", body);
           ' "$f"
+          { echo; echo "### Hybrid retrieval A/B"; echo; echo "Bare chunk embeddings:"; echo '```'; cat ab-bare.txt; echo '```'; echo "Contextual chunk headers:"; echo '```'; cat ab-context.txt; echo '```'; } >> comment.md
           gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -F body=@comment.md >/dev/null

@@ -46,18 +46,57 @@ try {
     await page.screenshot({ path: `${out}/${name}-hero-flight.png` });
     await page.waitForTimeout(2300);
     await page.screenshot({ path: `${out}/${name}-hero.png` });
-    const landed = await page.evaluate(() => {
-      const d5 = document.querySelector(".hc-d5");
-      return (
-        !document.querySelector(".hc-ghost") &&
-        getComputedStyle(d5).opacity === "1"
-      );
-    });
+    // The 5 must land and its flying ghost must be gone: waited for (up to
+    // 8 s) rather than raced against a fixed delay, since a cold engine boot
+    // on the same machine can push the first story back by a few hundred ms.
+    const landed = await page
+      .waitForFunction(
+        () => {
+          const d5 = document.querySelector(".hc-d5");
+          return (
+            !document.querySelector(".hc-ghost") &&
+            getComputedStyle(d5).opacity === "1"
+          );
+        },
+        null,
+        { timeout: 8000 },
+      )
+      .then(() => true)
+      .catch(() => false);
     if (!landed)
       errors.push(`${name}: the 5 never landed in the amended value`);
     await page.locator(".pipe").scrollIntoViewIfNeeded();
     await page.waitForTimeout(1600);
     await page.screenshot({ path: `${out}/${name}-pipeline.png` });
+    // Drill-down: clicking a strip opens the test's timeline, tiles, source
+    // lines and follow-up questions; Escape closes it again.
+    const strip = page
+      .locator('.vz-row[data-test="hemoglobin"] .vz-strip')
+      .first();
+    if (await strip.count()) {
+      await strip.scrollIntoViewIfNeeded();
+      await strip.click();
+      await page.waitForTimeout(700);
+      const dd = await page.evaluate(() => {
+        const row = document.querySelector('.vz-row[data-test="hemoglobin"]');
+        const p = row?.querySelector(".vz-dd");
+        return {
+          open: !!p && !p.hidden,
+          tiles: p?.querySelectorAll(".dd-tile").length ?? 0,
+          points: p?.querySelectorAll(".dd-pt").length ?? 0,
+          asks: p?.querySelectorAll(".dd-ask[data-q]").length ?? 0,
+        };
+      });
+      if (!dd.open || dd.tiles < 2 || dd.points < 2 || dd.asks < 1)
+        errors.push(
+          `${name}: drill-down did not open fully ${JSON.stringify(dd)}`,
+        );
+      await page
+        .locator('.vz-row[data-test="hemoglobin"]')
+        .first()
+        .screenshot({ path: `${out}/${name}-drilldown.png` });
+      await page.keyboard.press("Escape");
+    } else errors.push(`${name}: no hemoglobin strip on the board`);
     await page.locator(".graph-band").scrollIntoViewIfNeeded();
     await page.waitForTimeout(3500);
     if (!(await page.locator(".graph-3d").count()))

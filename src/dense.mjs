@@ -121,6 +121,34 @@ export function embedQueryReady(q) {
 }
 
 /**
+ * The text a chunk is embedded as. Contextual chunk headers (the deterministic
+ * flavour of contextual retrieval): the document title and the chunk's
+ * heading path are prepended, so "Approved by: pending" is embedded as part
+ * of "Commercial revision > Approvals", not as a context-free fragment. The
+ * stored chunk text, citations and BM25 are unchanged.
+ *
+ * OFF by default. Measured on the hybrid bench (CI, 2026-11-02, bge-small,
+ * 30 questions / 16 chunks): bare chunks R@3 0.87, MRR 0.81; with headers
+ * R@3 0.83, MRR 0.79 (one literal question fell out of the top 3). On this
+ * small corpus every chunk of a document gains the same title words, which
+ * blurs chunks of one document together. VM_DENSE_CONTEXT=on to experiment;
+ * bench.yml runs both on every retrieval PR.
+ */
+export function passageText(row) {
+  const text = row?.chunk?.text ?? "";
+  if (process.env.VM_DENSE_CONTEXT !== "on") return text;
+  const title = String(row?.title ?? "")
+    .replace(/\.(md|txt|pdf|docx)$/i, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  const heading = String(row?.chunk?.heading ?? "").trim();
+  const head = [title, heading && !text.startsWith(heading) ? heading : null]
+    .filter(Boolean)
+    .join(" > ");
+  return head ? `${head}\n${text}` : text;
+}
+
+/**
  * Background warmup: load the model (if needed), then fill chunk.embedding
  * (JSON string, the format retrieve-core's parseEmbedding expects) and
  * chunk.embedding_model for the given rows. Never throws; rows simply stay
@@ -136,7 +164,7 @@ export function warmDense(rows) {
         for (const r of rows) {
           if (r.chunk.embedding && r.chunk.embedding_model === MODEL_ID)
             continue;
-          const out = await pipe(r.chunk.text, {
+          const out = await pipe(passageText(r), {
             pooling: "mean",
             normalize: true,
           });

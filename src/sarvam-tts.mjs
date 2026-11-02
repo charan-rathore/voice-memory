@@ -59,6 +59,8 @@ export function createSarvamTts({
           model,
           speaker: speakerFor(lang),
           output_audio_codec: "wav",
+          // A touch slower than default reads numbers and units clearly.
+          pace: Number(process.env.VM_SARVAM_PACE) || 0.95,
           speech_sample_rate: 22050,
         }),
         signal: ac.signal,
@@ -87,5 +89,5 @@ export function createSarvamTts({
       });
     return Buffer.from(b64, "base64");
   }
-  return { synthesize, key };
+  return { name: "sarvam", synthesize, key };
 }

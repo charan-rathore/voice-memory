@@ -210,10 +210,33 @@ export function nameOf(o) {
 
 const HINGLISH =
   /\b(kya|kyaa|mera|meri|mere|hai|hain|kitna|kitni|badla|badli|badha|badhi|ghata|ghati|pichhl\w*|pehle|batao|bataiye|samjhao|report\s+(me|mein)|kaisa|kaisi|theek|kyun|kyu|kyon|kyoon|alag|nahi|nahin|kaun|kaunsa|kaunsi|kab|kahan|kaise|zyada|jyada|wajah|matlab|samjha\w*|hota|hoti|ka|ki|ke|aur|bhi|kuch)\b/i;
+// Romanised-Hindi words that are not English words, weighted: question
+// words and verbs say "this is Hindi" on their own; postpositions only
+// together with something else, unless the rest is all names and test terms
+// ("SYN-0001 ka TSH"). English function words count against.
+const HI_STRONG =
+  /\b(kya|kyaa|kitna|kitni|kitne|kyun|kyu|kyon|kaun|kaunsa|kaunsi|kab|kahan|kaise|kaisa|kaisi|batao|bataiye|bataye|samjhao|samjhaiye|hai|hain|hua|hui|hue|tha|thi|mera|meri|mere|mujhe|aapka|aapki|aapke|chahiye|nahi|nahin|aaya|aayi|wala|wali|wale|badha|badhi|ghata|ghati|pichhl\w*|pehle|zyada|jyada|baaki|sehmati|theek|alag|matlab|wajah|tulna|hota|hoti|gaya|gayi|kiska|kiski|kiske|manzoor|abhi)\b/gi;
+const HI_FINAL =
+  /^(batao|bataiye|bataye|samjhao|samjhaiye|hai|hain|hua|hui|hue|kya|kitna|kitni|chahiye|tha|thi|aaya|aayi|gaya|gayi)$/;
+const HI_WEAK = /\b(ka|ki|ke|ko|pe|par|mein|se|aur|bhi|toh|wo|yeh|ye)\b/gi;
+const EN_FN =
+  /\b(what|whats|what's|is|are|was|were|the|my|of|has|have|had|did|does|how|why|when|which|who|can|could|should|show|tell|give|me|your|an|in|on|since|from|for|and|it|this|that|there|any)\b/gi;
 export function detectLang(text) {
-  if (/[ऀ-ॿ]/.test(text)) return "hi";
-  const hits = (text.match(new RegExp(HINGLISH.source, "gi")) ?? []).length;
-  return hits >= 2 ? "hinglish" : "en";
+  const t = String(text ?? "");
+  if (/[ऀ-ॿ]/.test(t)) return "hi";
+  const strong = (t.match(HI_STRONG) ?? []).length;
+  const weak = (t.match(HI_WEAK) ?? []).length;
+  const en = (t.match(EN_FN) ?? []).length;
+  const hi = strong + weak;
+  if (hi >= 2 && hi >= en) return "hinglish";
+  if (hi >= 1 && en === 0) return "hinglish";
+  // Hindi puts the verb last: "ferrite in result batao" ends like Hindi,
+  // "Is Mera a name?" does not.
+  const last = (t.toLowerCase().match(/[a-z]+/g) ?? []).at(-1) ?? "";
+  if (strong >= 1 && HI_FINAL.test(last)) return "hinglish";
+  // Legacy rule kept as a floor: two distinct Hinglish cues always count.
+  const hits = (t.match(new RegExp(HINGLISH.source, "gi")) ?? []).length;
+  return hits >= 2 && hi > en ? "hinglish" : "en";
 }
 
 const MONTHS = {

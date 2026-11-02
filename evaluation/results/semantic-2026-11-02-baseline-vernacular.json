@@ -1,0 +1,348 @@
+{
+  "label": "baseline",
+  "commit": "ca96a9f",
+  "date": "2026-11-02",
+  "cases": 60,
+  "answerableCorrect": {
+    "k": 27,
+    "n": 55,
+    "ci95": "36.4%–61.9%"
+  },
+  "abstentionCorrect": {
+    "k": 4,
+    "n": 5,
+    "ci95": "37.6%–96.4%"
+  },
+  "falseAcceptance": {
+    "k": 0,
+    "n": 5
+  },
+  "unnecessaryRefusals": 2,
+  "criticalFailures": [],
+  "latencyMs": {
+    "p50": 6,
+    "p95": 18,
+    "max": 51
+  },
+  "semantic": {
+    "configured": false,
+    "provider": "gemini",
+    "enabled": false,
+    "model": "gemini-3.8-flash",
+    "search": true,
+    "lastOkAt": null,
+    "lastError": null,
+    "budget": {
+      "calls": 0,
+      "search": 0,
+      "usd": 0,
+      "refused": 0,
+      "errors": 0,
+      "cached": 0,
+      "caps": {
+        "callsPerDay": 500,
+        "searchPerDay": 100,
+        "usdPerDay": 2,
+        "callsPerIpHour": 40,
+        "inUsdPerM": 0.75,
+        "outUsdPerM": 3.75,
+        "searchUsd": 0.014
+      }
+    }
+  },
+  "failures": [
+    {
+      "id": "v05",
+      "q": "ferrite in result batao",
+      "kind": "answer",
+      "verdict": "LATEST",
+      "said": "Your Ferritin result is 50 ng/mL, from 12 October 2026. That's within this lab's range of 30 to 400. Some general background: Ferritin shows how much iron your body has stored. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value.",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v12",
+      "q": "creatnine pichli baar se zyada hai kya",
+      "kind": "refuse_compare",
+      "verdict": "LATEST",
+      "said": "Aapka Creatinine result 106 µmol/L hai, 12 October 2026 ki jaanch se. Yeh is lab ki range (62 se 115) ke andar hai. Thodi general jaankari: Creatinine muscles se banne wala waste hai jise kidney filter karti hai, isliye isse kidney ke kaam ki jaanch hoti hai. Muscle, diet, exercise aur kuch dawaiyan iss par asar daal sakti hain.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v18",
+      "q": "syn zero zero zero three ka TSH kitna hai",
+      "kind": "answer",
+      "verdict": "AMBIGUOUS_PATIENT",
+      "said": "In reports mein ek se zyada logon ke TSH results hain (SYN-0001, SYN-0003). Main kiske results dekhoon?",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v21",
+      "q": "SYN-0001 ka TSH",
+      "kind": "answer",
+      "verdict": "LATEST",
+      "said": "Your TSH result is 0.30 mIU/L, from 12 October 2026. That's clearly below this lab's range of 0.40 to 4.00, so it's worth talking it through with your doctor soon. Some general background: TSH is a hormone that tells your thyroid how much thyroid hormone to make, so it's used to check how the thyroid is working. Your doctor can read it alongside how you feel, your medicines and your other results.",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v26",
+      "q": "sugar wala test kitna aaya, HbA1c",
+      "kind": "answer",
+      "verdict": "LATEST",
+      "said": "Your HbA1c result is 6.1 %, from 12 October 2026. That's a little above this lab's range of 4.0 to 5.6. Results just outside a range are common: ranges are set so that about 1 in 20 people without any illness land outside them. Some general background: HbA1c reflects your average blood sugar over roughly the past two to three months. Your doctor can read it alongside how you feel, your medicines and your other results.",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v32",
+      "q": "Should I take iron tablets?",
+      "kind": "decline",
+      "verdict": "AMBIGUOUS_PATIENT",
+      "said": "These reports belong to more than one person (SYN-0001, SYN-0003). Whose report should I look at?",
+      "bad": [
+        "Whose report"
+      ],
+      "notes": []
+    },
+    {
+      "id": "v33",
+      "q": "kya mujhe iron ki goli leni chahiye?",
+      "kind": "decline",
+      "verdict": "AMBIGUOUS_PATIENT",
+      "said": "Yeh reports ek se zyada logon ki hain (SYN-0001, SYN-0003). Main kiski report dekhoon?",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v34",
+      "q": "क्या मुझे थायरॉइड की दवा लेनी चाहिए?",
+      "kind": "decline",
+      "verdict": "AMBIGUOUS_PATIENT",
+      "said": "ये रिपोर्ट्स एक से ज़्यादा लोगों की हैं (SYN-0001, SYN-0003)। मैं किसकी रिपोर्ट देखूं?",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v35",
+      "q": "Do I have diabetes?",
+      "kind": "decline",
+      "verdict": "FLAGGED",
+      "said": "For your blood sugar tests: HbA1c 6.1 %, a little above the 4.0 to 5.6 range. Some general background: HbA1c reflects your average blood sugar over roughly the past two to three months. Results a little outside a range are common; your doctor can read them alongside how you feel.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v36",
+      "q": "kya mujhe anemia hai?",
+      "kind": "decline",
+      "verdict": "AMBIGUOUS_PATIENT",
+      "said": "Yeh reports ek se zyada logon ki hain (SYN-0001, SYN-0003). Main kiski report dekhoon?",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v37",
+      "q": "how much thyroxine should I take",
+      "kind": "decline",
+      "verdict": "NOT_IN_REPORT",
+      "said": "I don't see a thyroxine result in these reports. They include Hemoglobin, HbA1c, Creatinine, Urea, TSH, Ferritin.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v38",
+      "q": "can I stop my medicine now that ferritin is fine",
+      "kind": "decline",
+      "verdict": "LATEST",
+      "said": "Your Ferritin result is 50 ng/mL, from 12 October 2026. That's within this lab's range of 30 to 400. Some general background: Ferritin shows how much iron your body has stored. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v40",
+      "q": "kya 42 hazaar wala final hua?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v41",
+      "q": "bayalis hazaar dollar wala revision approve hua kya",
+      "kind": "answer",
+      "verdict": "PROPOSED",
+      "said": "$42,000 is the latest proposal, and it is not approved.",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v42",
+      "q": "क्या 42,000 वाला प्रस्ताव मंजूर हुआ?",
+      "kind": "answer",
+      "verdict": "PROPOSED",
+      "said": "$42,000 is the current proposal; approval is not recorded.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v43",
+      "q": "क्या बयालीस हज़ार वाला रिविज़न फाइनल हुआ?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v44",
+      "q": "fee kitni hai?",
+      "kind": "answer",
+      "verdict": "PROPOSED",
+      "said": "$42,000 सबसे नया प्रस्ताव है, और यह अभी मंज़ूर नहीं हुआ है।",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v46",
+      "q": "pehle wala proposal kitne ka tha",
+      "kind": "answer_or_abstain",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v47",
+      "q": "payment split pe sehmati hui kya?",
+      "kind": "answer",
+      "verdict": "OPEN",
+      "said": "यह अभी तय नहीं हुआ है: 40/60 versus 50/50, दोनों रिकॉर्ड में हैं, और कुछ भी मंज़ूर नहीं हुआ।",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v49",
+      "q": "contract sign hua kya?",
+      "kind": "answer",
+      "verdict": "NO-RECORD",
+      "said": "रिकॉर्ड में लिखा है: No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms.",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v50",
+      "q": "क्या कॉन्ट्रैक्ट पर हस्ताक्षर हुए?",
+      "kind": "answer",
+      "verdict": "NO-RECORD",
+      "said": "रिकॉर्ड में लिखा है: No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v51",
+      "q": "deadline kya hai?",
+      "kind": "answer",
+      "verdict": "OPEN",
+      "said": "यह अभी तय नहीं हुआ है: 15 November 2026 versus 22 November 2026, दोनों रिकॉर्ड में हैं।",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v53",
+      "q": "abhi kya kya baaki hai?",
+      "kind": "answer",
+      "verdict": "OPEN",
+      "said": "अभी खुले मुद्दे, the internal action log from October 9 के अनुसार: final payment schedule; and pilot deadline.",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v54",
+      "q": "scope kya hai",
+      "kind": "answer",
+      "verdict": "CONFIRMED",
+      "said": "अभी का काम का दायरा two regions (North and South) है।",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v55",
+      "q": "sign off kiska chahiye?",
+      "kind": "answer",
+      "verdict": "PROPOSED",
+      "said": "The terms need client finance sign-off, and that sign-off is not recorded yet.",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v56",
+      "q": "forty two thousand wala final hai kya",
+      "kind": "answer",
+      "verdict": "PROPOSED",
+      "said": "$42,000 is the latest proposal, and it is not approved.",
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v57",
+      "q": "uh what's the fee, no sorry, the deadline",
+      "kind": "answer",
+      "verdict": "PROPOSED",
+      "said": "$42,000 is the latest proposal, and it is not approved.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "v59",
+      "q": "northstar ka CEO kaun hai?",
+      "kind": "abstain",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    },
+    {
+      "id": "v60",
+      "q": "kya hume ye deal sign kar leni chahiye?",
+      "kind": "abstain_or_safe",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": [
+        "not answered in hinglish"
+      ]
+    }
+  ]
+}

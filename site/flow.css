@@ -105,3 +105,67 @@
 .pipe.flow2 { padding-top: 44px; }
 @media (max-width: 1060px) { .pipe { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 620px) { .pipe { grid-template-columns: 1fr; } }
+/* ------------------------------------------------------------ visual flow: every step is a moving picture of itself */
+.pipe.flow2 .pipe-fig.pfx { height: 196px; min-height: 196px; align-content: center; overflow: hidden; position: relative; }
+.pfx-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.pfx-langs { display: inline-flex; gap: 3px; }
+.pfx-langs b { font: 600 9.5px/1 var(--sans); letter-spacing: 0.03em; padding: 3px 5px; border-radius: 999px; color: var(--card-ink-2); border: 1px solid rgba(236, 234, 224, 0.2); }
+.pfx-langs b.on { background: var(--mark); color: var(--card); border-color: var(--mark); }
+.pf-call .pf-wave { height: 30px; }
+.pfx-said { color: var(--card-ink); font-style: italic; font-size: 12.5px; }
+.pfx-said s { color: var(--card-ink-2); text-decoration-color: var(--coral); text-decoration-thickness: 1.5px; opacity: 0.8; }
+.pfx-said em { color: var(--card-ink-2); font-size: 11px; }
+.pfx-clean { justify-self: start; background: #fffffb; color: var(--ink); border-radius: 10px 10px 10px 3px; padding: 5px 9px; font-size: 12.5px; }
+.pf-resolve.pfx { gap: 7px; }
+.pfx-map { display: grid; grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); align-items: center; gap: 4px; }
+.pfx-w { font-style: italic; color: var(--ink-2); background: #fffffb; border: 1px solid var(--rule); border-radius: 8px; padding: 4px 8px; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pfx-map i { height: 2px; background: var(--ink-3); position: relative; border-radius: 2px; }
+.pfx-map i::after { content: ""; position: absolute; right: -1px; top: -3px; border-left: 5px solid var(--ink-3); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+.pfx-t { font-family: var(--mono); font-size: 10.5px; background: var(--ink); color: var(--mark); border-radius: 7px; padding: 5px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-doc.pfx { gap: 10px; }
+.pfx-checks { display: grid; gap: 5px; font-size: 11.5px; color: var(--ink-2); }
+.pfx-checks span { display: flex; align-items: center; gap: 7px; }
+.pfx-checks i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--rule); position: relative; flex: none; background: #fffffb; }
+.pfx-checks i::after { content: ""; position: absolute; left: 3.5px; top: 1px; width: 4px; height: 7px; border-right: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(45deg); opacity: 0; }
+.pfx-voice { display: inline-flex; align-items: center; gap: 8px; font: 500 11px var(--sans); color: var(--ink-2); }
+.pfx-spk { display: inline-flex; align-items: center; gap: 2px; height: 16px; }
+.pfx-spk b { width: 3px; height: 30%; border-radius: 2px; background: var(--teal); }
+.pfx-k { border-radius: 4px; transition: background 120ms, color 120ms; }
+/* the loops run while the section is in view (.on from data-reveal) */
+.pipe.on .pfx-said s, .pipe.on .pfx-said em { animation: pfx-strike 6s var(--ease) infinite; }
+.pipe.on .pfx-clean { animation: pfx-pop 6s var(--ease) infinite; }
+.pipe.on .pfx-langs b { animation: pfx-lang 6s steps(1) infinite; }
+.pipe.on .pfx-langs b:nth-child(1) { animation-name: pfx-lang1; }
+.pipe.on .pfx-langs b:nth-child(2) { animation-name: pfx-lang2; }
+.pipe.on .pfx-langs b:nth-child(3) { animation-name: pfx-lang3; }
+.pipe.on .pfx-map { animation: pfx-map 6s var(--ease) infinite; }
+.pipe.on .pfx-map:nth-child(2) { animation-delay: 0.35s; }
+.pipe.on .pfx-map:nth-child(3) { animation-delay: 0.7s; }
+.pipe.on .pfx-map:nth-child(4) { animation-delay: 1.05s; }
+.pipe.on .pfx-checks i { animation: pfx-check 6s var(--ease) infinite; }
+.pipe.on .pfx-checks i::after { animation: pfx-tick 6s var(--ease) infinite; }
+.pipe.on .pfx-checks span:nth-child(2) i, .pipe.on .pfx-checks span:nth-child(2) i::after { animation-delay: 0.45s; }
+.pipe.on .pfx-checks span:nth-child(3) i, .pipe.on .pfx-checks span:nth-child(3) i::after { animation-delay: 0.9s; }
+.pipe.on .pfx-spk b { animation: pf-eq 0.9s ease-in-out infinite; }
+.pipe.on .pfx-spk b:nth-child(2n) { animation-delay: 0.2s; }
+.pipe.on .pfx-spk b:nth-child(3n) { animation-delay: 0.4s; }
+.pipe.on .pfx-k { animation: pfx-karaoke 6s linear infinite; }
+.pipe.on .pfx-k:nth-child(2) { animation-delay: 0.45s; }
+.pipe.on .pfx-k:nth-child(3) { animation-delay: 0.9s; }
+.pipe.on .pfx-k:nth-child(4) { animation-delay: 1.35s; }
+.pipe.on .pfx-k:nth-child(5) { animation-delay: 1.9s; }
+@keyframes pfx-strike { 0%, 18% { opacity: 1; text-decoration-color: transparent; } 30%, 85% { opacity: 0.55; text-decoration-color: var(--coral); } 100% { opacity: 1; text-decoration-color: transparent; } }
+@keyframes pfx-pop { 0%, 30% { opacity: 0; transform: translateY(6px); } 40%, 88% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes pfx-lang1 { 0%, 100% { background: var(--mark); color: var(--card); } 33% { background: transparent; color: var(--card-ink-2); } }
+@keyframes pfx-lang2 { 0%, 100% { background: transparent; color: var(--card-ink-2); } 33% { background: var(--mark); color: var(--card); } 66% { background: transparent; color: var(--card-ink-2); } }
+@keyframes pfx-lang3 { 0%, 100% { background: transparent; color: var(--card-ink-2); border-color: rgba(236, 234, 224, 0.2); } 66% { background: var(--mark); color: var(--card); border-color: var(--mark); } }
+@keyframes pfx-map { 0%, 8% { opacity: 0.25; transform: translateX(-6px); } 18%, 88% { opacity: 1; transform: none; } 100% { opacity: 0.25; } }
+@keyframes pfx-check { 0%, 20% { background: #fffffb; border-color: var(--rule); } 30%, 88% { background: #13786c; border-color: #13786c; } 100% { background: #fffffb; border-color: var(--rule); } }
+@keyframes pfx-tick { 0%, 22% { opacity: 0; } 32%, 88% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes pfx-karaoke { 0%, 6% { background: transparent; } 8%, 14% { background: var(--mark); } 16%, 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  .pipe.on .pfx-said s, .pipe.on .pfx-said em, .pipe.on .pfx-clean, .pipe.on .pfx-langs b, .pipe.on .pfx-map, .pipe.on .pfx-checks i, .pipe.on .pfx-checks i::after, .pipe.on .pfx-spk b, .pipe.on .pfx-k { animation: none; }
+  .pfx-checks i { background: #13786c; border-color: #13786c; }
+  .pfx-checks i::after { opacity: 1; }
+}
+@media (max-width: 720px) { .pipe.flow2 .pipe-fig.pfx { height: auto; min-height: 168px; } }

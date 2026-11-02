@@ -116,6 +116,11 @@
           state.live = true;
           state.voice = s.voice;
           state.semantic = s.semantic ?? null;
+          state.voiceOut = s.voiceOut ?? null;
+          document.documentElement.classList.toggle(
+            "voice-out",
+            !!s.voiceOut?.enabled,
+          );
           if (s.voice?.ready)
             document.documentElement.classList.add("voice-on");
           note(
@@ -160,6 +165,7 @@
     NOT_IN_DOCUMENTS: ["v-no", "Not in these documents"],
     CLARIFY: ["v-ask", "Which one?"],
     FLAGGED: ["v-warn", "Outside range"],
+    DECLINE_ADVICE: ["v-ask", "Not mine to decide"],
   };
   const verdictOf = (v) =>
     VERDICT[v] ??
@@ -587,7 +593,8 @@
   const emit = (name, detail) =>
     document.dispatchEvent(new CustomEvent(name, { detail }));
   function renderAnswer(r, { via, source, question, caseId }) {
-    state.current = r;
+    stopTalking();
+    state.current = { ...r, question: r.question ?? question, _src: r };
     queueMicrotask(() =>
       emit("vm:answer", { verdict: r.lead?.verdict ?? null, via, source }),
     );
@@ -609,20 +616,30 @@
       (ev.length
         ? `From the document: “${prettyQuote(retrieved || ev[0].quote).slice(0, 280)}”${ev.length > 1 ? ` (and ${ev.length - 1} more cited passage${ev.length > 2 ? "s" : ""})` : ""}`
         : "I don't see a supported answer to that in these documents.");
-    const words = text
-      .split(/(\s+)/)
-      .map((w, i) =>
-        w.trim()
-          ? `<span class="w" style="animation-delay:${reduced ? 0 : Math.min(i * 18, 1400)}ms">${esc(w)}</span>`
-          : w,
-      )
-      .join("");
+    // The companion opener ("Honest answer:") is shown before the answer
+    // as well as spoken, so screen and voice are the same words. Every word
+    // is a span with its index in the spoken text, for karaoke highlighting.
+    const opener = lead?.opener ?? null;
+    let wi = 0;
+    const spans = (t, offset) =>
+      t
+        .split(/(\s+)/)
+        .map((w, i) =>
+          w.trim()
+            ? `<span class="w" data-i="${wi++}" style="animation-delay:${reduced ? 0 : Math.min((i + offset) * 18, 1400)}ms">${esc(w)}</span>`
+            : w,
+        )
+        .join("");
+    const openerHtml = opener
+      ? `<span class="a-opener">${spans(opener, 0)}</span> `
+      : "";
+    const words = spans(text, opener ? opener.split(/\s+/).length * 2 : 0);
     const cites = lead?.citations?.length
       ? lead.citations
       : (r.evidence ?? []).slice(0, 3);
     $("#answer").innerHTML = `
       <p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : via === "voice" ? "You said" : "You asked"}</span><q>${esc(question)}</q></p>
-      <p class="a-lead"><span class="verdict-chip ${cls}">${esc(label)}</span>${words}</p>
+      <p class="a-lead"><span class="verdict-chip ${cls}">${esc(label)}</span>${openerHtml}${words}</p>
       ${
         r.lead?.interpretedAs
           ? `<p class="a-understood">Understood as “${esc(r.lead.interpretedAs)}”</p>`
@@ -631,7 +648,11 @@
       ${backgroundHtml(r.lead?.background)}
       <div class="a-visual" id="a-visual"></div>
       <div class="a-tools">
-        <button class="tool" type="button" data-listen><span>▶ Listen</span></button>
+        ${
+          lead?.text && state.voiceOut?.enabled && source !== "saved"
+            ? `<button class="tool listen" type="button" data-listen aria-pressed="false"><i class="eq" aria-hidden="true"><b></b><b></b><b></b></i><span>Listen</span></button>`
+            : ""
+        }
         <span class="dim" style="font-size:12.5px">${
           source === "saved"
             ? "Saved run of the same engine · live engine waking"
@@ -661,7 +682,7 @@
     state.currentLang = r.semantic?.lang ?? state.lang;
     if (r.visual)
       loadVisual().then(() => {
-        if (state.current !== r || !$("#a-visual") || !window.VMVisual) return;
+        if (state.current?._src !== r || !$("#a-visual") || !window.VMVisual) return;
         window.VMVisual.render($("#a-visual"), r.visual, {
           lang: state.currentLang,
           narrateButton: false,
@@ -1127,13 +1148,24 @@
   }
 
   // ------------------------------------------------------------ listen
-  function speak(text) {
-    if (!("speechSynthesis" in window)) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.02;
-    speechSynthesis.speak(u);
-  }
+  // The answer in the server's neural voice, word by word (listen.js, loaded
+  // on the first Listen press; it never falls back to the browser's voice).
+  let listenP = null;
+  const loadListen = () =>
+    (listenP ??= window.VMListen
+      ? Promise.resolve()
+      : loadScript("listen.js").catch(() => (listenP = null)));
+  const stopTalking = () => window.VMListen?.stop();
+  const listenAnswer = (btn) =>
+    loadListen().then(() =>
+      window.VMListen?.play(btn, {
+        api,
+        apiCase,
+        esc,
+        state,
+        $$,
+      }),
+    );
 
   // ------------------------------------------------------------ live call
   const callbar = $("#callbar");
@@ -1548,17 +1580,8 @@
       return;
     }
     if (t.matches("[data-listen]")) {
-      const text = state.current?.lead?.text ?? "";
-      if (
-        window.VMVisual?.narrate(
-          text,
-          state.currentLang ?? state.lang,
-          $("#a-visual"),
-          t,
-        )
-      )
-        return;
-      return speak(text);
+      window.VMVisual?.stop?.();
+      return listenAnswer(t);
     }
   });
   $("#askbar").addEventListener("submit", (e) => {
@@ -1597,6 +1620,7 @@
           lang: () => state.lang,
           caseId: () => (state.case === "own" ? (state.ws ?? "") : state.case),
           serverTranscribe: () => !!state.semantic?.transcribe,
+          providers: () => state.semantic?.transcribeProviders ?? ["gemini"],
           onText: (text) => ask(text, { via: "voice" }),
         }),
       )

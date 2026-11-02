@@ -160,7 +160,7 @@ export function repairDealTerms(text) {
 }
 
 const HINGLISH_CUE =
-  /[ऀ-ॿ]|\b(kya|hai|hain|hua|hui|kitn[ai]|batao|bataiye|mein|tha|thi|kab|kaun)\b/i;
+  /[ऀ-ॿ]|\b(kya|hai|hain|hua|hui|kitn[ai]|batao|bataiye|mein|tha|thi|kab|kaun|kiska|kiski|chahiye|baaki|wala|wali)\b/i;
 // Hindi / Hinglish deal questions map to the English question the engine
 // already answers, by what they ask about (not word-by-word), so word order
 // and particles ("bataiye", "zara", "kya") don't matter.
@@ -180,8 +180,14 @@ const PAYMENT = HAS(
 );
 const AGREE = HAS(/सहमति|सहमत|तय|\bagree\w*\b|\bsehmat\w*\b|\btay\b/i);
 const APPROVED = HAS(
-  /मंज़ूर|मंजूर|अप्रूव|स्वीकार|\bapprov\w*\b|\bmanzoor\b|\bfinal\b/i,
+  /मंज़ूर|मंजूर|अप्रूव|स्वीकार|फ़ाइनल|फाइनल|पक्का|\bapprov\w*\b|\bmanzoor\w*\b|\bfinal\w*\b|\bpakka\b|\bpass\b|\bfix\b/i,
 );
+// A dollar figure as typed or heard after the vernacular front-end
+// ("42 hazaar" -> 42000 -> 42,000): "$42,000", "42,000", "42000".
+const AMOUNT_OF = (t) => {
+  const m = /\$?\b(\d{2,3}),?(\d{3})\b/.exec(t);
+  return m ? `$${m[1]},${m[2]}` : null;
+};
 const OPEN = HAS(
   /बाक़ी|बाकी|खुला|खुले|अधूरा|\bpending\b|\bopen\b|\bbaaki\b|\bbaki\b/i,
 );
@@ -192,6 +198,14 @@ const CHANGE = HAS(/बदल|\bbadal\w*\b|\bchange\w*\b|क्या\s+हु�
 export function glossHindi(text) {
   const t = String(text ?? "");
   if (!HINGLISH_CUE.test(t)) return null;
+  const amount = AMOUNT_OF(t);
+  if (amount && (APPROVED(t) || SIGNED(t)))
+    return `Was the ${amount} revision finalized?`;
+  if (
+    /sign[\s-]?off|साइन[\s-]?ऑफ़?|मंज़ूरी|मंजूरी/i.test(t) &&
+    /\b(kiska|kiski|kiske|kaun|kisko)\b|किसकी|किसका|किसके|कौन/i.test(t)
+  )
+    return "Who needs to sign off?";
   if (CONTRACT(t) && SIGNED(t)) return "Is there a signed contract?";
   if (CONTRACT(t)) return "Is there a signed contract?";
   if (PAYMENT(t) && (AGREE(t) || APPROVED(t)))
@@ -323,7 +337,7 @@ export function toHindi(spoken) {
     return null;
   };
   // sentence by sentence, so joined answers render too
-  const parts = s.split(/(?<=[.?!])\s+(?=[A-Z$0-9])/);
+  const parts = s.split(/(?<=[.?!])(?<!\b(?:No|Yes)\.)\s+(?=[A-Z$0-9])/);
   const out = parts.map((p) => one(p));
   if (out.every((x) => x === null)) return `रिकॉर्ड में लिखा है: ${s}`;
   return out.map((x, i) => x ?? `रिकॉर्ड में लिखा है: ${parts[i]}`).join(" ");

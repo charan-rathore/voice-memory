@@ -810,16 +810,48 @@ test("privacy: a name-shaped TERM never reaches grounded search, consent or not"
 // server-side; a visitor's opt-in cannot widen it.
 test("privacy: demo trial scope gates paid semantics off for visitor uploads, consent flag or not", async () => {
   // Outside trial scope: pre-existing rule preserved exactly.
-  assert.equal(semanticConsentFor("case:voice", false, {}), true, "internal fictional cases keep old behavior");
-  assert.equal(semanticConsentFor("ws:visitor1", false, {}), false, "no consent, no model");
-  assert.equal(semanticConsentFor("ws:visitor1", true, {}), true, "outside trial scope, opt-in allows");
+  assert.equal(
+    semanticConsentFor("case:voice", false, {}),
+    true,
+    "internal fictional cases keep old behavior",
+  );
+  assert.equal(
+    semanticConsentFor("ws:visitor1", false, {}),
+    false,
+    "no consent, no model",
+  );
+  assert.equal(
+    semanticConsentFor("ws:visitor1", true, {}),
+    true,
+    "outside trial scope, opt-in allows",
+  );
   // Under demo scope: exact two-case allowlist; everything else fails closed.
   const demoEnv = { VM_SEMANTIC_AUDIENCE: "demo" };
-  assert.equal(semanticConsentFor("case:deal", false, demoEnv), true, "demo case: deal");
-  assert.equal(semanticConsentFor("case:health", false, demoEnv), true, "demo case: health");
-  assert.equal(semanticConsentFor("case:voice", false, demoEnv), false, "voice session is NOT in the trial allowlist");
-  assert.equal(semanticConsentFor("case:unknown", false, demoEnv), false, "unknown case sid fails closed");
-  assert.equal(semanticConsentFor("", false, demoEnv), false, "empty sid fails closed");
+  assert.equal(
+    semanticConsentFor("case:deal", false, demoEnv),
+    true,
+    "demo case: deal",
+  );
+  assert.equal(
+    semanticConsentFor("case:health", false, demoEnv),
+    true,
+    "demo case: health",
+  );
+  assert.equal(
+    semanticConsentFor("case:voice", false, demoEnv),
+    false,
+    "voice session is NOT in the trial allowlist",
+  );
+  assert.equal(
+    semanticConsentFor("case:unknown", false, demoEnv),
+    false,
+    "unknown case sid fails closed",
+  );
+  assert.equal(
+    semanticConsentFor("", false, demoEnv),
+    false,
+    "empty sid fails closed",
+  );
   assert.equal(
     semanticConsentFor("ws:visitor1", true, demoEnv),
     false,
@@ -830,20 +862,39 @@ test("privacy: demo trial scope gates paid semantics off for visitor uploads, co
   const bundle = identifiedBundle();
   const src = bundle.sources[0];
   const ev = {
-    sourceId: src.id, title: src.title, hash: src.hash,
-    start: 0, end: 120, quote: src.text.slice(0, 120),
+    sourceId: src.id,
+    title: src.title,
+    hash: src.hash,
+    start: 0,
+    end: 120,
+    quote: src.text.slice(0, 120),
   };
   const client = fakeClient((req) => {
     if (req.config.responseJsonSchema?.properties?.claims)
       return { text: JSON.stringify({ answerable: false, claims: [] }) };
-    return { text: '{"intent":"LOOKUP","language":"en","tests":["Ferritin"],"subject":"","rewrite":""}' };
+    return {
+      text: '{"intent":"LOOKUP","language":"en","tests":["Ferritin"],"subject":"","rewrite":""}',
+    };
   });
   const gem = createGemini({ env: {}, client });
-  const consent = semanticConsentFor("ws:visitor1", true, { VM_SEMANTIC_AUDIENCE: "demo" });
-  for (const q of ["What is ferritin?", "Did the dose change?", "how much ferritin"])
+  const consent = semanticConsentFor("ws:visitor1", true, {
+    VM_SEMANTIC_AUDIENCE: "demo",
+  });
+  for (const q of [
+    "What is ferritin?",
+    "Did the dose change?",
+    "how much ferritin",
+  ])
     await semanticRescue({
-      question: q, bundle, lead: null, raw: { evidence: [ev] },
-      rerun: async () => null, validate: () => false, gemini: gem, consent, ctx: null,
+      question: q,
+      bundle,
+      lead: null,
+      raw: { evidence: [ev] },
+      rerun: async () => null,
+      validate: () => false,
+      gemini: gem,
+      consent,
+      ctx: null,
     });
   assert.equal(
     client.calls.length,

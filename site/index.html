@@ -77,34 +77,87 @@
           <p class="fine">Illustrative synthetic records only. Not a diagnostic or clinically validated product.</p>
         </div>
 
-        <figure class="hero-card" aria-label="Ferritin was 5 on the preliminary report and 50 on the amended report">
-          <div class="hc-head">
-            <span class="hc-patient">SYN-0001 · Ferritin · collected 12 Oct</span>
-            <span class="hc-q">“What's my ferritin?”</span>
+        <figure class="hero-card" aria-label="Three questions the engine answers from fictional records: a corrected ferritin result, creatinine in two units, and a proposal that was never approved">
+          <div class="hc-tabs" role="tablist" aria-label="Examples">
+            <button type="button" role="tab" class="hc-tab" data-scene="fix" aria-selected="true"><i aria-hidden="true"></i><span>Correction</span></button>
+            <button type="button" role="tab" class="hc-tab" data-scene="units" aria-selected="false"><i aria-hidden="true"></i><span>Units</span></button>
+            <button type="button" role="tab" class="hc-tab" data-scene="deal" aria-selected="false"><i aria-hidden="true"></i><span>Approval</span></button>
           </div>
-          <div class="hc-row">
-            <div class="hc-val prelim">
-              <span class="hc-tag">Preliminary · 13 Oct</span>
-              <span class="hc-num"><s>5</s></span>
-              <span class="hc-unit">ng/mL</span>
+          <div class="hc-stage">
+            <!-- scene 1: a corrected value (English) -->
+            <div class="hc-scene on" data-scene="fix" data-case="health" data-q="What is SYN-0001's ferritin result?">
+              <div class="hc-head">
+                <span class="hc-patient">SYN-0001 · Ferritin · collected 12 Oct</span>
+                <span class="hc-ask"><span class="hc-lang">EN</span><span class="hc-q">“What's my ferritin?”</span></span>
+              </div>
+              <div class="hc-row">
+                <div class="hc-val prelim">
+                  <span class="hc-tag">Preliminary · 13 Oct</span>
+                  <span class="hc-num"><s>5</s></span>
+                  <span class="hc-unit">ng/mL</span>
+                </div>
+                <svg class="hc-arrow" viewBox="0 0 80 24" aria-hidden="true"><path d="M2 12h70" /><path d="M64 4l10 8-10 8" /></svg>
+                <div class="hc-val amended">
+                  <span class="hc-tag">Amended · 15 Oct</span>
+                  <span class="hc-num"><span class="hc-d5">5</span><span class="hc-d0">0</span></span>
+                  <span class="hc-unit">ng/mL</span>
+                </div>
+              </div>
+              <div class="hc-source">
+                <span class="hc-file">a-2026-10-amended.pdf · page 1</span>
+                <p><mark>Amended 15 October 2026: ferritin result corrected from 5 to 50</mark> (transcription error).</p>
+              </div>
+              <p class="hc-answer">
+                <span class="verdict-chip v-latest">Corrected value</span>
+                “Your ferritin is 50 ng/mL. The 12 October result was corrected from 5 to 50, and I'm using the corrected
+                value.”
+              </p>
             </div>
-            <svg class="hc-arrow" viewBox="0 0 80 24" aria-hidden="true"><path d="M2 12h70" /><path d="M64 4l10 8-10 8" /></svg>
-            <div class="hc-val amended">
-              <span class="hc-tag">Amended · 15 Oct</span>
-              <span class="hc-num"><span class="hc-d5">5</span><span class="hc-d0">0</span></span>
-              <span class="hc-unit">ng/mL</span>
+            <!-- scene 2: two units, never compared (Hinglish) -->
+            <div class="hc-scene" data-scene="units" data-case="health" data-q="creatinine september se badha kya?" aria-hidden="true">
+              <div class="hc-head">
+                <span class="hc-patient">SYN-0001 · Creatinine · Sep and Oct</span>
+                <span class="hc-ask"><span class="hc-lang">Hinglish</span><span class="hc-q">“creatinine september se badha kya?”</span></span>
+              </div>
+              <div class="hc-row hc-units">
+                <div class="hc-val sep">
+                  <span class="hc-tag">3 Sep · final</span>
+                  <span class="hc-num">1.2</span>
+                  <span class="hc-unit">mg/dL</span>
+                </div>
+                <svg class="hc-tear" viewBox="0 0 40 90" aria-hidden="true"><path d="M20 4 l-10 10 l20 12 l-20 12 l20 12 l-20 12 l20 12 l-10 10" /></svg>
+                <div class="hc-val oct">
+                  <span class="hc-tag">12 Oct · amended</span>
+                  <span class="hc-num">106</span>
+                  <span class="hc-unit">µmol/L</span>
+                </div>
+              </div>
+              <div class="hc-stamp no" aria-hidden="true">Not compared <span>mg/dL ≠ µmol/L</span></div>
+              <p class="hc-answer">
+                <span class="verdict-chip v-no">Won't compare</span>
+                “Main aapke dono Creatinine results ki tulna nahi kar sakta: 3 September 2026 wala mg/dL mein hai aur 12
+                October 2026 wala µmol/L mein, aur main units convert nahi karta.”
+              </p>
+            </div>
+            <!-- scene 3: proposed is not approved (Hindi) -->
+            <div class="hc-scene" data-scene="deal" data-case="deal" data-q="क्या 42,000 वाला प्रस्ताव मंजूर हुआ?" aria-hidden="true">
+              <div class="hc-head">
+                <span class="hc-patient">Northstar · engagement fee</span>
+                <span class="hc-ask"><span class="hc-lang">हिंदी</span><span class="hc-q">“क्या 42,000 वाला प्रस्ताव मंजूर हुआ?”</span></span>
+              </div>
+              <div class="hc-deal">
+                <div class="hc-rec old"><span class="hc-tag">Proposal v1 · 4 Sep</span><b>$48,000</b><em>superseded</em></div>
+                <div class="hc-rec new"><span class="hc-tag">Revision · 18 Sep</span><b>$42,000</b><em>proposed</em></div>
+                <div class="hc-rec sign"><span class="hc-tag">Client finance sign-off</span><b class="hc-blank" aria-label="not recorded"><i></i></b><em>not on record</em></div>
+              </div>
+              <div class="hc-stamp warn" aria-hidden="true">Proposed is not approved</div>
+              <p class="hc-answer">
+                <span class="verdict-chip v-warn">Not approved</span>
+                “$42,000 सबसे नया प्रस्ताव है, और यह अभी मंज़ूर नहीं हुआ है।”
+              </p>
             </div>
           </div>
-          <div class="hc-source">
-            <span class="hc-file">a-2026-10-amended.pdf · page 1</span>
-            <p><mark>Amended 15 October 2026: ferritin result corrected from 5 to 50</mark> (transcription error).</p>
-          </div>
-          <p class="hc-answer">
-            <span class="verdict-chip v-latest">Corrected value</span>
-            “Your ferritin is 50 ng/mL. The 12 October result was corrected from 5 to 50, and I'm using the corrected
-            value.”
-          </p>
-          <figcaption>Real engine output on fictional reports. Try it below.</figcaption>
+          <figcaption>Real engine output on fictional records, in the language each question was asked. Try it below.</figcaption>
         </figure>
       </section>
 
@@ -243,50 +296,55 @@
         <h2 id="how-title" class="h2 center">Bolna hears it. The record decides it.</h2>
         <p class="sub center">Speech in, a checked sentence out, and the source on screen while you listen.<span class="voice-state-off"> Voice calling is paused for now; typed asking above is fully live.</span></p>
         <ol class="pipe flow2" data-reveal>
-          <span class="flow-rail" aria-hidden="true"><span class="flow-line"></span><span class="flow-leg" style="--n:0">question, as text</span><span class="flow-leg" style="--n:1">pointed lookup</span><span class="flow-leg" style="--n:2">cited line + status</span><span class="flow-node" style="--n:0"></span><span class="flow-node" style="--n:1"></span><span class="flow-node" style="--n:2"></span><span class="flow-node" style="--n:3"></span><span class="flow-marker"></span></span>
+          <span class="flow-rail" aria-hidden="true"><span class="flow-line"></span><span class="flow-leg" style="--n:0">clean words</span><span class="flow-leg" style="--n:1">what you mean</span><span class="flow-leg" style="--n:2">cited line + status</span><span class="flow-node" style="--n:0"></span><span class="flow-node" style="--n:1"></span><span class="flow-node" style="--n:2"></span><span class="flow-node" style="--n:3"></span><span class="flow-marker"></span></span>
           <li style="--i: 0">
-            <span class="pipe-fig pf-call" aria-hidden="true">
-              <span class="pf-live"><i></i>Live</span>
-              <span class="pf-wave"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></span>
-              <span class="pf-heard">"what's my ferritin?"</span>
+            <span class="pipe-fig pf-call pfx" aria-hidden="true">
+              <span class="pfx-top"><span class="pf-live"><i></i>Listening</span><span class="pfx-langs"><b>EN</b><b>हिं</b><b class="on">Hinglish</b></span></span>
+              <span class="pf-wave"><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></span>
+              <span class="pfx-said"><s>um,</s> mera <s>fee</s> <em>no sorry</em> ferritin kitna hai?</span>
+              <span class="pfx-clean">mera ferritin kitna hai?</span>
             </span>
             <span class="pipe-n">01</span>
-            <h3>Bolna takes the call</h3>
-            <p>Bolna runs the call: it hears you, Hindi or English, and turns your question into text.<span class="voice-state-off"> Calling is paused right now.</span></p>
+            <h3>You ask, in your words</h3>
+            <p>Speak or type in English, Hindi or Hinglish. Fillers and “no, sorry” corrections are cleaned, and test names and IDs are spelled from your case.<span class="voice-state-off"> Phone calling is paused; dictation and typing are live.</span></p>
           </li>
           <li style="--i: 1">
-            <span class="pipe-fig pf-resolve" aria-hidden="true">
-              <span class="pf-q">"what's my ferritin?"</span>
-              <span class="pf-arrow">→</span>
-              <span class="pf-norm">ferritin · SYN-0001 · latest report</span>
-              <span class="pf-case-note">in this demo you picked the fictional case SYN-0001, so "my" means that case</span>
+            <span class="pipe-fig pf-resolve pfx" aria-hidden="true">
+              <span class="pfx-map"><span class="pfx-w">mera</span><i></i><span class="pfx-t">SYN-0001</span></span>
+              <span class="pfx-map"><span class="pfx-w">ferritin</span><i></i><span class="pfx-t">Ferritin</span></span>
+              <span class="pfx-map"><span class="pfx-w">kitna hai</span><i></i><span class="pfx-t">latest value</span></span>
+              <span class="pfx-map"><span class="pfx-w">bayalis hazaar</span><i></i><span class="pfx-t">$42,000</span></span>
             </span>
             <span class="pipe-n">02</span>
-            <h3>Voice Memory resolves it</h3>
-            <p>"Forty two thousand" becomes $42,000. "It" becomes the fee you just asked about. "My" becomes the case you selected.</p>
+            <h3>It works out what you mean</h3>
+            <p>“My” becomes your case, “bayalis hazaar” becomes $42,000, “it” becomes the thing you just asked about. Advice it can't give, it says so.</p>
           </li>
           <li style="--i: 2">
-            <span class="pipe-fig pf-doc" aria-hidden="true">
+            <span class="pipe-fig pf-doc pfx" aria-hidden="true">
               <span class="pf-page">
                 <span class="pf-line"></span>
-                <span class="pf-line"></span>
-                <span class="pf-line pf-hit"><mark>Ferritin <s>5</s> → <b>50</b>&nbsp;ng/mL</mark><em>Amended 15 Oct</em></span>
+                <span class="pf-line pf-hit"><mark>Ferritin <s>5</s> → <b>50</b>&nbsp;ng/mL</mark></span>
                 <span class="pf-line"></span>
               </span>
-              <span class="pf-pageno">page 1</span>
+              <span class="pfx-checks">
+                <span><i></i>SYN-0001, not SYN-0003</span>
+                <span><i></i>ng/mL, same unit</span>
+                <span><i></i>amended beats preliminary</span>
+              </span>
             </span>
             <span class="pipe-n">03</span>
-            <h3>The engine checks the source</h3>
-            <p>Finds the original passage and checks its status: amended, preliminary, which patient, which unit.</p>
+            <h3>The record decides</h3>
+            <p>The original line, then its status: which patient, which unit, amended or preliminary, proposed or approved.</p>
           </li>
           <li style="--i: 3">
-            <span class="pipe-fig pf-answer" aria-hidden="true">
-              <span class="pf-say">"Your ferritin is <b>50 ng/mL</b>, from the amended report of 15 Oct."</span>
+            <span class="pipe-fig pf-answer pfx" aria-hidden="true">
+              <span class="pfx-voice"><span class="pfx-spk"><b></b><b></b><b></b><b></b><b></b></span>Sarvam Bulbul</span>
+              <span class="pf-say"><span class="pfx-k">Dekhiye,</span> <span class="pfx-k">aapka</span> <span class="pfx-k">Ferritin</span> <span class="pfx-k"><b>50 ng/mL</b></span> <span class="pfx-k">hai.</span></span>
               <span class="pf-cite">a-2026-10-amended.pdf · page 1</span>
             </span>
             <span class="pipe-n">04</span>
-            <h3>One sentence, one line</h3>
-            <p>Bolna speaks the sentence the record supports. The cited line opens on screen.</p>
+            <h3>A friend answers, with the line</h3>
+            <p>One warm sentence in your language, every word lit as it is spoken, and the cited line open on screen.</p>
           </li>
         </ol>
       </section>

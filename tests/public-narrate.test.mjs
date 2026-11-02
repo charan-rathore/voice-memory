@@ -25,7 +25,10 @@ async function start({ sarvam = null, env = {} } = {}) {
     else process.env[k] = v;
   }
   const api = createPublicApi({
-    cases: { health: { bundle: { fake: true } }, deal: { bundle: { fake: true } } },
+    cases: {
+      health: { bundle: { fake: true } },
+      deal: { bundle: { fake: true } },
+    },
     resolve: async () => {
       throw new Error("not exercised");
     },
@@ -102,10 +105,7 @@ test("speaks canonical server narration only - client text is never spoken", asy
     assert.equal(r.status, 200);
     assert.equal(r.headers.get("content-type"), "audio/wav");
     assert.equal(r.headers.get("x-vm-sentences"), "3");
-    assert.deepEqual(
-      Buffer.from(await r.arrayBuffer()).equals(WAV),
-      true,
-    );
+    assert.deepEqual(Buffer.from(await r.arrayBuffer()).equals(WAV), true);
     // exactly the server's own second sentence reached the provider
     assert.deepEqual(calls, [{ text: SENTENCES[1].trim(), lang: "en" }]);
   } finally {
@@ -118,7 +118,9 @@ test("identical sentences are synthesized once and served from cache", async () 
   const { base, close } = await start({ sarvam: stubSarvam(calls) });
   try {
     for (let i = 0; i < 3; i++) {
-      const r = await fetch(`${base}/api/public/narrate-audio/health/0?lang=en`);
+      const r = await fetch(
+        `${base}/api/public/narrate-audio/health/0?lang=en`,
+      );
       assert.equal(r.status, 200);
     }
     assert.equal(calls.length, 1);

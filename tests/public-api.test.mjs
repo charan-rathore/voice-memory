@@ -77,7 +77,10 @@ test("a generic 'my blood levels' phrasing also asks whose", async () => {
 });
 
 test("an overview naming the patient still answers for that patient", async () => {
-  const { status, body } = await ask("health", "what are SYN-0001's blood levels");
+  const { status, body } = await ask(
+    "health",
+    "what are SYN-0001's blood levels",
+  );
   assert.equal(status, 200);
   assert.equal(body.lead.verdict, "OVERVIEW");
   assert.match(body.lead.text, /SYN-0001/);
@@ -1129,10 +1132,22 @@ test("demo trial scope: server transcription is refused for every caller, zero p
   try {
     const variants = [
       ["no consent header", {}],
-      ["consented, built-in demo case", { "x-vm-consent": "audio", "x-vm-case": "deal" }],
-      ["consented, other built-in demo", { "x-vm-consent": "audio", "x-vm-case": "health" }],
-      ["consented, workspace case", { "x-vm-consent": "audio", "x-vm-case": "ws:owner-case-1" }],
-      ["consented, unknown case", { "x-vm-consent": "audio", "x-vm-case": "nope" }],
+      [
+        "consented, built-in demo case",
+        { "x-vm-consent": "audio", "x-vm-case": "deal" },
+      ],
+      [
+        "consented, other built-in demo",
+        { "x-vm-consent": "audio", "x-vm-case": "health" },
+      ],
+      [
+        "consented, workspace case",
+        { "x-vm-consent": "audio", "x-vm-case": "ws:owner-case-1" },
+      ],
+      [
+        "consented, unknown case",
+        { "x-vm-consent": "audio", "x-vm-case": "nope" },
+      ],
       ["consented, no case at all", { "x-vm-consent": "audio" }],
     ];
     for (const [label, headers] of variants) {

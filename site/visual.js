@@ -59,6 +59,27 @@
       howto: "How to read this: every strip is one test. The hatched band is the range the lab printed; the dot is the newest value. A hollow struck dot is a value the lab later corrected.",
       also: "Also printed, without a range to place them on:",
       andMore: (n) => ` and ${n} more`,
+      explore: (n) => `Explore ${n}`,
+      close: "Close",
+      since: (d) => `Since ${d}`,
+      toRange: "To the printed range",
+      readings: (n, m) => `${n} reading${n === 1 ? "" : "s"} across ${m} report${m === 1 ? "" : "s"}`,
+      readingsK: "Readings",
+      by: (b, side, bound) => `${b} ${side === "below" ? "below" : "above"} ${bound}`,
+      inRange: "inside the range",
+      nc: { unit: "Not compared: the units differ", bound: "Not compared: one value is a bound (like <0.05), not a number", missing_unit: "Not compared: a unit is missing", non_numeric: "Not compared: not a number", test: "Not compared" },
+      ncK: "Change",
+      times: (x) => `${x}× the earlier value`,
+      open: "Open the source line",
+      sourceOf: (d, t) => `${d} · ${t}`,
+      replaced: (a) => `printed ${a} first, corrected`,
+      askWhy: (n) => `Why is ${n} outside the range?`,
+      askChange: (n) => `Has ${n} changed since the last report?`,
+      askWhat: (n) => `What is ${n}?`,
+      askCorr: (n) => `Why was ${n} corrected?`,
+      askUnits: (n) => `Why is ${n} in different units?`,
+      askK: "Ask about this",
+      pointsK: "Every reading, oldest first",
     },
     hi: {
       inside: "लैब की सीमा के अंदर",
@@ -94,6 +115,27 @@
       howto: "ऐसे पढ़ें: हर पट्टी एक टेस्ट है। धारीदार बैंड लैब की छपी सीमा है; बिंदु नवीनतम मान। खोखला कटा बिंदु वो मान है जिसे लैब ने बाद में सुधारा।",
       also: "ये भी छपे हैं, पर इनकी कोई सीमा नहीं दी गई:",
       andMore: (n) => ` और ${n} अन्य`,
+      explore: (n) => `${n} विस्तार से`,
+      close: "बंद करें",
+      since: (d) => `${d} से`,
+      toRange: "छपी सीमा से दूरी",
+      readings: (n, m) => `${m} रिपोर्ट में ${n} नतीजे`,
+      readingsK: "नतीजे",
+      by: (b, side, bound) => `${bound} से ${b} ${side === "below" ? "कम" : "ज़्यादा"}`,
+      inRange: "सीमा के अंदर",
+      nc: { unit: "तुलना नहीं: यूनिट अलग हैं", bound: "तुलना नहीं: एक मान सीमा है (जैसे <0.05), संख्या नहीं", missing_unit: "तुलना नहीं: यूनिट नहीं छपी", non_numeric: "तुलना नहीं: संख्या नहीं", test: "तुलना नहीं" },
+      ncK: "बदलाव",
+      times: (x) => `पहले से ${x} गुना`,
+      open: "स्रोत लाइन खोलें",
+      sourceOf: (d, t) => `${d} · ${t}`,
+      replaced: (a) => `पहले ${a} छपा, फिर सुधारा`,
+      askWhy: (n) => `${n} सीमा से बाहर क्यों है?`,
+      askChange: (n) => `क्या ${n} पिछली रिपोर्ट से बदला है?`,
+      askWhat: (n) => `${n} क्या है?`,
+      askCorr: (n) => `${n} क्यों सुधारा गया?`,
+      askUnits: (n) => `${n} की यूनिट अलग क्यों है?`,
+      askK: "इसके बारे में पूछें",
+      pointsK: "हर नतीजा, पुराने से नए",
     },
     hinglish: {
       inside: "lab ki range ke andar",
@@ -129,6 +171,27 @@
       howto: "Aise padhein: har strip ek test hai. Dhari wala band lab ki printed range hai; dot latest value. Khokhla kata dot wo value hai jo lab ne baad mein theek ki.",
       also: "Yeh bhi chhape hain, par inki koi range nahi di gayi:",
       andMore: (n) => ` aur ${n} aur`,
+      explore: (n) => `${n} detail mein`,
+      close: "Band karein",
+      since: (d) => `${d} se`,
+      toRange: "Printed range se doori",
+      readings: (n, m) => `${m} reports mein ${n} results`,
+      readingsK: "Results",
+      by: (b, side, bound) => `${bound} se ${b} ${side === "below" ? "kam" : "zyada"}`,
+      inRange: "range ke andar",
+      nc: { unit: "Tulna nahi: units alag hain", bound: "Tulna nahi: ek value bound hai (jaise <0.05), number nahi", missing_unit: "Tulna nahi: unit nahi chhapi", non_numeric: "Tulna nahi: number nahi", test: "Tulna nahi" },
+      ncK: "Badlav",
+      times: (x) => `pehle se ${x} guna`,
+      open: "Source line kholiye",
+      sourceOf: (d, t) => `${d} · ${t}`,
+      replaced: (a) => `pehle ${a} chhapa, phir sudhara`,
+      askWhy: (n) => `${n} range se bahar kyun hai?`,
+      askChange: (n) => `Kya ${n} pichhli report se badla?`,
+      askWhat: (n) => `${n} kya hota hai?`,
+      askCorr: (n) => `${n} kyun sudhara gaya?`,
+      askUnits: (n) => `${n} ki unit alag kyun hai?`,
+      askK: "Iske baare mein poochiye",
+      pointsK: "Har result, purane se naye",
     },
   };
   const W = (lang) => WORDS[lang] ?? WORDS.en;
@@ -233,13 +296,150 @@
     const notes = [];
     if (t.corrected) notes.push(`<span class="vz-note fix">${esc(w.corrected(t.corrected.from, t.corrected.to))}</span>`);
     if (t.unitChanged) notes.push(`<span class="vz-note unit">${esc(w.units)}</span>`);
+    const dd = `vzdd${++uid}`;
+    DATA.set(dd, { t, lang });
     return `<li class="vz-row ${tone}" data-test="${esc(t.name.toLowerCase())}" style="--i:${i}">
+      <button type="button" class="vz-open" aria-expanded="false" aria-controls="${dd}" data-dd="${dd}" aria-label="${esc(w.explore(t.name))}"><span aria-hidden="true">${esc(w.explore(""))}</span><i aria-hidden="true"></i></button>
       <div class="vz-name"><b>${esc(t.name)}</b><span class="vz-unit">${esc(t.unit ?? "")}</span>${L.status ? `<span class="vz-status st-${esc(L.status)}" title="status of the report this value comes from">${esc(w["st_" + L.status] ?? L.status)}</span>` : ""}</div>
       <div class="vz-strip">${strip(t, w)}</div>
       <div class="vz-read"><span class="vz-val"><b>${esc(L.raw)}</b>${t.unit ? ` ${esc(t.unit)}` : ""}${L.range && L.range.low != null ? ` · range ${esc(L.range.low)}\u2013${esc(L.range.high)}` : ""}</span><span class="vz-pos ${tone}">${esc(posWord(L.position, w))}</span>${notes.join("")}</div>
       ${withHistory ? history(t, lang) : ""}
+      <div class="vz-dd" id="${dd}" role="region" aria-label="${esc(w.explore(t.name))}" hidden></div>
     </li>`;
   }
+
+  // ------------------------------------------------------------ drill-down
+  // Click a strip (or press Enter on it) to open one test the way an
+  // analytics tool opens a metric: every reading on a timeline against the
+  // lab's band, the change since last time (only when the engine calls the
+  // two readings comparable), the distance to the printed range, each
+  // reading's source line one click away, and the questions worth asking
+  // next. Numbers come from the engine's insight (visual-summary.mjs).
+  const DATA = new Map();
+  const signed = (n) => (n > 0 ? `+${n}` : String(n));
+  function timeline(t, w, lang) {
+    const hs = t.history ?? [];
+    if (!hs.length) return "";
+    const unitsDiffer = new Set(hs.map((h) => h.unit ?? "?")).size > 1;
+    const W0 = 440, H0 = 150, padX = 40, top = 24, bot = 112;
+    const xs = hs.map((_, i) => (hs.length === 1 ? W0 / 2 : padX + (i / (hs.length - 1)) * (W0 - 2 * padX)));
+    if (unitsDiffer) {
+      // No shared axis for different units: each reading stands alone,
+      // with a torn gap between them, never a connecting line.
+      return `<svg class="dd-svg" viewBox="0 0 ${W0} ${H0}" role="img" aria-label="${esc(w.nc.unit)}">
+        ${hs.map((h, i) => `<g class="dd-pt" tabindex="0" role="button" ${h.title ? `data-doc="${esc(h.title)}"` : ""} aria-label="${esc(`${h.raw} ${h.unit ?? ""}, ${shortDate(h.date, lang)}, ${h.status}`)}"><circle class="dd-halo" cx="${xs[i].toFixed(1)}" cy="74" r="14"/><circle class="dd-dot" cx="${xs[i].toFixed(1)}" cy="74" r="6"/><text class="dd-v" x="${xs[i].toFixed(1)}" y="56" text-anchor="middle">${esc(h.raw)}</text><text class="dd-u" x="${xs[i].toFixed(1)}" y="98" text-anchor="middle">${esc(h.unit ?? "")}</text><text class="dd-d" x="${xs[i].toFixed(1)}" y="${H0 - 8}" text-anchor="middle">${esc(shortDate(h.date, lang))}</text></g>`).join("")}
+        ${xs.slice(1).map((x, i) => `<path class="dd-tear" d="M${((x + xs[i]) / 2 - 6).toFixed(1)} 48 l12 8 l-12 8 l12 8 l-12 8 l12 8 l-12 8"/>`).join("")}
+      </svg>`;
+    }
+    const nums = hs.map((h) => h.value).filter(Number.isFinite);
+    const ghosts = hs.flatMap((h) => h.superseded.map((g) => Number(g.raw))).filter(Number.isFinite);
+    const r = t.latest.range;
+    const bounds = [...nums, ...ghosts, r?.lowN, r?.highN].filter(Number.isFinite);
+    // Values a hundredfold apart (ferritin 0.5 -> 50 against 30-400) vanish
+    // on a linear axis; a labelled log axis keeps every reading readable.
+    const minB = Math.min(...bounds), maxB = Math.max(...bounds);
+    const log = minB > 0 && maxB / minB >= 20;
+    const f = log ? Math.log10 : (v) => v;
+    let lo = f(minB), hi = f(maxB);
+    const pad = (hi - lo || Math.abs(hi) || 1) * 0.16;
+    lo -= pad; hi += pad;
+    if (!log && minB >= 0 && lo < 0) lo = 0;
+    const Y = (v) => bot - ((f(v) - lo) / (hi - lo || 1)) * (bot - top);
+    const band = r && Number.isFinite(r.lowN) && Number.isFinite(r.highN)
+      ? `<rect class="dd-band" x="${padX - 14}" y="${Y(r.highN).toFixed(1)}" width="${W0 - 2 * padX + 38}" height="${Math.max(2, Y(r.lowN) - Y(r.highN)).toFixed(1)}" fill="url(#vz-hatch)"/><text class="dd-lim" x="2" y="${(Y(r.highN) + 4).toFixed(1)}">${esc(r.high)}</text><text class="dd-lim" x="2" y="${(Y(r.lowN) + 4).toFixed(1)}">${esc(r.low)}</text>`
+      : "";
+    const pts = hs.map((h, i) => ({ h, x: xs[i], y: Number.isFinite(h.value) ? Y(h.value) : (top + bot) / 2 }));
+    const line = pts.length > 1 ? `<polyline class="dd-line" pathLength="1" points="${pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}"/>` : "";
+    const ghostSvg = pts.flatMap((p) => p.h.superseded.map((g) => {
+      const gy = Y(Number(g.raw));
+      if (!Number.isFinite(gy)) return "";
+      return `<g class="dd-ghost"><circle cx="${(p.x - 22).toFixed(1)}" cy="${gy.toFixed(1)}" r="5.5"/><line x1="${(p.x - 29).toFixed(1)}" y1="${(gy - 7).toFixed(1)}" x2="${(p.x - 15).toFixed(1)}" y2="${(gy + 7).toFixed(1)}"/><text x="${(p.x - 34).toFixed(1)}" y="${(gy + 4).toFixed(1)}" text-anchor="end">${esc(g.raw)}</text><path class="dd-fix" d="M${(p.x - 17).toFixed(1)} ${gy.toFixed(1)} Q${(p.x - 8).toFixed(1)} ${((gy + p.y) / 2 - 10).toFixed(1)} ${(p.x - 6).toFixed(1)} ${(p.y + (gy > p.y ? 6 : -6)).toFixed(1)}"/></g>`;
+    })).join("");
+    const dots = pts.map((p) => {
+      const bound = p.h.comparator ? `<path class="dd-bound" d="M${p.x.toFixed(1)} ${(p.y + 9).toFixed(1)} v12 m-4 -4 l4 4 l4 -4"/>` : "";
+      return `<g class="dd-pt st-${esc(p.h.status)}" tabindex="0" role="button" ${p.h.title ? `data-doc="${esc(p.h.title)}"` : ""} aria-label="${esc(`${p.h.raw}${t.unit ? " " + t.unit : ""}, ${shortDate(p.h.date, lang)}, ${p.h.status}${p.h.title ? ", " + p.h.title : ""}`)}"><circle class="dd-halo" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="14"/><circle class="dd-dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6"/>${bound}<text class="dd-v" x="${p.x.toFixed(1)}" y="${(p.y - 13).toFixed(1)}" text-anchor="middle">${esc(p.h.raw)}</text><text class="dd-d" x="${p.x.toFixed(1)}" y="${H0 - 8}" text-anchor="middle">${esc(shortDate(p.h.date, lang))}</text></g>`;
+    }).join("");
+    return `<svg class="dd-svg" viewBox="0 0 ${W0} ${H0}" role="img" aria-label="${esc(`${t.name}: ${hs.map((h) => h.raw).join(", ")}`)}"><line class="dd-axis" x1="${padX - 24}" y1="${bot + 8}" x2="${W0 - padX + 24}" y2="${bot + 8}"/>${band}${line}${ghostSvg}${dots}${log ? `<text class="dd-scale" x="${W0 - 4}" y="12" text-anchor="end">log scale</text>` : ""}</svg>`;
+  }
+  function drill(t, lang) {
+    const w = W(lang);
+    const ins = t.insight ?? {};
+    const hs = t.history ?? [];
+    const reportsN = new Set(hs.map((h) => h.title).filter(Boolean)).size + hs.reduce((n, h) => n + h.superseded.length, 0);
+    const tiles = [];
+    if (ins.change) {
+      const c = ins.change;
+      const ratio = c.pct != null && Math.abs(c.pct) >= 300 ? w.times(fmt(c.to / c.from)) : c.pct != null ? `${signed(c.pct)}%` : "";
+      tiles.push(`<div class="dd-tile ${c.direction}"><span>${esc(w.since(shortDate(c.fromDate, lang)))}</span><b>${esc(signed(c.abs))}${t.unit ? ` <small>${esc(t.unit)}</small>` : ""}</b><em>${esc(`${c.from} → ${c.to}`)}${ratio ? ` · ${esc(ratio)}` : ""}</em></div>`);
+    } else if (ins.notCompared) {
+      tiles.push(`<div class="dd-tile nc"><span>${esc(w.ncK)}</span><b class="dd-nc">${esc(w.nc[ins.notCompared] ?? w.nc.test)}</b></div>`);
+    }
+    if (t.latest.range)
+      tiles.push(`<div class="dd-tile"><span>${esc(w.toRange)}</span><b${ins.distance ? "" : ' class="txt"'}>${esc(ins.distance ? w.by(fmt(ins.distance.by), ins.distance.side, ins.distance.bound) : t.latest.position === "within" ? w.inRange : w.noRange)}</b><em>${esc(`${t.latest.range.low}–${t.latest.range.high}${t.unit ? " " + t.unit : ""}`)}</em></div>`);
+    tiles.push(`<div class="dd-tile"><span>${esc(w.readingsK)}</span><b class="txt">${esc(w.readings(hs.length, Math.max(reportsN, hs.length)))}</b></div>`);
+    const points = hs
+      .map((h) => `<li><button type="button" class="dd-src" data-doc="${esc(h.title ?? "")}"${h.title ? "" : " disabled"}><span class="dd-src-d">${esc(shortDate(h.date, lang))}</span><b>${esc(h.raw)}${h.unit ? ` <small>${esc(h.unit)}</small>` : ""}</b><span class="vz-status st-${esc(h.status)}">${esc(w["st_" + h.status] ?? h.status)}</span>${h.superseded.map((g) => `<s class="dd-was">${esc(w.replaced(g.raw))}</s>`).join("")}<span class="dd-go">${esc(w.open)} →</span></button></li>`)
+      .join("");
+    const asks = [];
+    if (/below|above/.test(t.latest.position)) asks.push(w.askWhy(t.name));
+    if (t.corrected) asks.push(w.askCorr(t.name));
+    if (t.unitChanged) asks.push(w.askUnits(t.name));
+    if (hs.length > 1 && !t.unitChanged) asks.push(w.askChange(t.name));
+    asks.push(w.askWhat(t.name));
+    return `<div class="dd-grid">
+        <div class="dd-chart">${timeline(t, w, lang)}<div class="dd-tip" role="status" aria-live="polite"></div></div>
+        <div class="dd-tiles">${tiles.join("")}</div>
+      </div>
+      <p class="dd-k">${esc(w.pointsK)}</p><ol class="dd-points">${points}</ol>
+      <p class="dd-k">${esc(w.askK)}</p><div class="dd-asks">${asks.slice(0, 4).map((q) => `<button type="button" class="dd-ask" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
+  }
+  const fmt = (n) => (Number.isInteger(n) ? String(n) : String(Number(n.toPrecision(3))));
+  function toggle(btn, open) {
+    const panel = document.getElementById(btn.dataset.dd);
+    if (!panel) return;
+    const want = open ?? btn.getAttribute("aria-expanded") !== "true";
+    if (want && !panel.childElementCount) {
+      const d = DATA.get(btn.dataset.dd);
+      if (d) panel.innerHTML = drill(d.t, d.lang);
+    }
+    btn.setAttribute("aria-expanded", String(want));
+    btn.closest(".vz-row")?.classList.toggle("open", want);
+    panel.hidden = !want;
+    if (want && !reduced) panel.animate([{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }], { duration: 260, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" });
+  }
+  // One delegated listener for every board on the page.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest?.(".vz-open");
+    if (btn) return toggle(btn);
+    // a click anywhere on a strip opens its row (the button is the keyboard path)
+    const strip = e.target.closest?.(".vz-row .vz-strip, .vz-row .vz-name");
+    if (strip) strip.closest(".vz-row").querySelector(".vz-open")?.click();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const row = e.target.closest?.(".vz-row.open");
+      const btn = row?.querySelector(".vz-open");
+      if (btn) (toggle(btn, false), btn.focus());
+    } else if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".dd-pt")) {
+      e.preventDefault();
+      e.target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    }
+  });
+  // Hover / focus a reading: a tooltip with its report and status.
+  const tip = (e) => {
+    const g = e.target.closest?.(".dd-pt");
+    const chart = e.target.closest?.(".dd-chart");
+    const box = chart?.querySelector(".dd-tip");
+    if (!box) return;
+    if (!g) return void (box.hidden = true);
+    box.textContent = g.getAttribute("aria-label");
+    const cr = chart.getBoundingClientRect(), gr = g.getBoundingClientRect();
+    box.style.left = `${Math.min(cr.width - 180, Math.max(0, gr.left - cr.left + gr.width / 2 - 90))}px`;
+    box.style.top = `${Math.max(0, gr.top - cr.top - 44)}px`;
+    box.hidden = false;
+  };
+  document.addEventListener("pointerover", tip);
+  document.addEventListener("focusin", tip);
 
   const DEFS = `<svg class="vz-defs" width="0" height="0" aria-hidden="true" focusable="false"><defs>
     <pattern id="vz-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="vz-hatch-bg"/><line x1="0" y1="0" x2="0" y2="6" class="vz-hatch-ln"/></pattern>

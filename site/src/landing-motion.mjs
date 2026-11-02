@@ -11,7 +11,7 @@
 //     audio levels;
 //   - catch cards: the question flies to the answer desk (Motion spring).
 // Bundled by scripts/build-site-motion.mjs into site/motion.bundle.mjs.
-import { createTimeline, animate as anime } from "animejs";
+import { animate as anime } from "animejs";
 import { animate as motionAnimate } from "motion";
 import {
   catmullRom,
@@ -45,42 +45,83 @@ const rgb = (el) =>
 const rel = (r, base) => ({ x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height });
 
 // ------------------------------------------------------------ hero card
-// The card replays one real exchange on a loop while it is on screen:
+// One card, three short stories, each a real engine answer in the language
+// it was asked: a corrected value (English), two units never compared
+// (Hinglish), a proposal that was never approved (Hindi). Each story plays
 //   ask   - the question arrives with a live voice waveform;
-//   scan  - a read head sweeps the amended page and marks the line;
-//   fix   - the preliminary 5 is struck and flies (Catmull-Rom path,
-//           arc-length timed) into the amended report, becoming 50;
-//   answer- the verdict springs in and the spoken answer arrives word by word;
-//   hold  - everything rests long enough to read, then resets softly.
+//   scan  - the record is read (a read head sweeps the cited line);
+//   fix   - the scene's decision: the preliminary 5 flies (Catmull-Rom path,
+//           arc-length timed) into 50; the units tear apart; the empty
+//           sign-off slot stays empty;
+//   answer- the verdict springs in and the answer arrives word by word;
+//   rest  - then the next story. Tabs jump; hover or focus pauses; the
+// progress bar under each tab is the story's own clock.
 // Steps are CSS states on [data-step]; JS owns only the flight and timing.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function heroFlight() {
   const card = $(".hero-card");
-  if (!card || still) return;
-  const from = $(".hc-val.prelim .hc-num s", card);
-  const to5 = $(".hc-val.amended .hc-d5", card);
-  const to0 = $(".hc-val.amended .hc-d0", card);
+  if (!card) return;
+  const scenes = $$(".hc-scene", card);
+  const tabs = $$(".hc-tab", card);
+  const order = scenes.map((s) => s.dataset.scene);
+  let current = order[0];
+  let jump = null;
+  const show = (name) => {
+    current = name;
+    for (const sc of scenes) {
+      const on = sc.dataset.scene === name;
+      sc.classList.toggle("on", on);
+      sc.setAttribute("aria-hidden", String(!on));
+      sc.inert = !on;
+    }
+    for (const t of tabs) {
+      const on = t.dataset.scene === name;
+      t.setAttribute("aria-selected", "false");
+      if (on) {
+        void t.offsetWidth; // restart the progress animation
+        t.setAttribute("aria-selected", "true");
+      }
+    }
+  };
+  // Tabs always work, motion or not.
+  tabs.forEach((t) =>
+    t.addEventListener("click", () => {
+      jump = t.dataset.scene;
+      show(jump);
+    }),
+  );
+  card.addEventListener("keydown", (e) => {
+    if (!e.target.matches?.(".hc-tab") || !/^Arrow(Left|Right)$/.test(e.key)) return;
+    const i = (order.indexOf(current) + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length;
+    tabs[i].focus();
+    tabs[i].click();
+  });
+  show(current);
+  if (still) return;
+  const fixScene = scenes.find((sc) => sc.dataset.scene === "fix");
+  const from = $(".hc-val.prelim .hc-num s", fixScene);
+  const to5 = $(".hc-val.amended .hc-d5", fixScene);
+  const to0 = $(".hc-val.amended .hc-d0", fixScene);
   if (!from || !to5 || !to0) return;
   card.classList.add("hc-motion", "hc-loop");
-  // the spoken answer, word by word
-  const ans = $(".hc-answer", card);
-  const chip = $(".verdict-chip", ans);
-  const text = [...ans.childNodes].filter((n) => n !== chip).map((n) => n.textContent).join("").trim();
-  ans.innerHTML = "";
-  ans.append(chip, " ");
-  text.split(/\s+/).forEach((w, i) => {
-    const sp = document.createElement("span");
-    sp.className = "hc-w";
-    sp.style.setProperty("--w", i);
-    sp.textContent = w + " ";
-    ans.append(sp);
-  });
-  // a live voice waveform beside the question (Catmull-Rom through noise)
-  const q = $(".hc-q", card);
+  // every answer, word by word
+  for (const ans of $$(".hc-answer", card)) {
+    const chip = $(".verdict-chip", ans);
+    const text = [...ans.childNodes].filter((n) => n !== chip).map((n) => n.textContent).join("").replace(/\s+/g, " ").trim();
+    ans.innerHTML = "";
+    ans.append(chip, " ");
+    text.split(/\s+/).forEach((w, i) => {
+      const sp = document.createElement("span");
+      sp.className = "hc-w";
+      sp.style.setProperty("--w", i);
+      sp.textContent = w + " ";
+      ans.append(sp);
+    });
+  }
+  // one live voice waveform, moved into the asking scene
   const wave = document.createElement("canvas");
   wave.className = "hc-wave";
   wave.setAttribute("aria-hidden", "true");
-  q.before(wave);
   const W = 46,
     H = 18,
     dpr = Math.min(2, devicePixelRatio || 1);
@@ -115,79 +156,119 @@ export async function heroFlight() {
   let stopWave = null;
   await document.fonts?.ready;
 
-  const fly = async () => {
-    const base = card.getBoundingClientRect();
-    const a = rel(from.getBoundingClientRect(), base);
-    const b = rel(to5.getBoundingClientRect(), base);
-    const ghost = document.createElement("span");
-    ghost.className = "hc-ghost";
-    ghost.textContent = "5";
-    const fs = getComputedStyle(from);
-    Object.assign(ghost.style, { fontSize: fs.fontSize, lineHeight: fs.lineHeight, fontFamily: fs.fontFamily, letterSpacing: fs.letterSpacing });
-    ghost.setAttribute("aria-hidden", "true");
-    card.appendChild(ghost);
-    const c0 = rgb(from),
-      c1 = rgb(to5);
-    // lift off the struck value, arc over the arrow, settle into "5" of 50
-    const path = pathOf(
-      catmullRom([
-        [a.x, a.y],
-        [a.x + 18, a.y - P.lift * 0.75],
-        [(a.x + b.x) / 2, Math.min(a.y, b.y) - P.lift],
-        [b.x - 20, b.y - P.lift * 0.45],
-        [b.x, b.y],
-      ]),
-    );
-    const ease = cubicBezierTiming(...P.flightEase);
-    const place = (u) => {
-      const { p, tangent } = travel(path, path.total * u);
-      const lean = Math.atan2(tangent[1], tangent[0]) * 0.18 * Math.sin(Math.PI * u);
-      const c = c0.map((v, i) => Math.round(lerp(v, c1[i], u)));
-      ghost.style.transform = `translate3d(${p[0]}px, ${p[1]}px, 0) rotate(${lean}rad) scale(${1 + 0.12 * Math.sin(Math.PI * u)})`;
-      ghost.style.color = `rgb(${c})`;
-    };
-    place(0);
-    const flight = { u: 0 };
-    await new Promise((done) =>
-      createTimeline()
-        .add(ghost, { opacity: [0, 1], duration: 140, ease: "linear" }, 0)
-        .add(flight, { u: [0, 1], duration: P.flightMs, ease, onUpdate: () => place(flight.u) }, 0)
-        .call(() => {
-          to5.style.opacity = "1";
-          ghost.remove();
-          done();
-        }, P.flightMs),
-    );
-    anime(to0, { opacity: [0, 1], scale: [0.55, 1], duration: 520, ease: "outBack(2.2)" });
-  };
+  // The flight runs on its own clock with a timer backstop: if frames stall
+  // (a background tab, a busy main thread) the 5 still lands and the ghost is
+  // always removed. (A timeline callback scheduled exactly at its end could be
+  // skipped, leaving the ghost parked over the amended card.)
+  const fly = () =>
+    new Promise((done) => {
+      const base = card.getBoundingClientRect();
+      const a = rel(from.getBoundingClientRect(), base);
+      const b = rel(to5.getBoundingClientRect(), base);
+      const ghost = document.createElement("span");
+      ghost.className = "hc-ghost";
+      ghost.textContent = "5";
+      const fs = getComputedStyle(from);
+      Object.assign(ghost.style, { fontSize: fs.fontSize, lineHeight: fs.lineHeight, fontFamily: fs.fontFamily, letterSpacing: fs.letterSpacing, opacity: "0" });
+      ghost.setAttribute("aria-hidden", "true");
+      card.appendChild(ghost);
+      const c0 = rgb(from),
+        c1 = rgb(to5);
+      const path = pathOf(
+        catmullRom([
+          [a.x, a.y],
+          [a.x + 18, a.y - P.lift * 0.75],
+          [(a.x + b.x) / 2, Math.min(a.y, b.y) - P.lift],
+          [b.x - 20, b.y - P.lift * 0.45],
+          [b.x, b.y],
+        ]),
+      );
+      const ease = cubicBezierTiming(...P.flightEase);
+      const place = (u) => {
+        const { p, tangent } = travel(path, path.total * u);
+        const lean = Math.atan2(tangent[1], tangent[0]) * 0.18 * Math.sin(Math.PI * u);
+        const c = c0.map((v, i) => Math.round(lerp(v, c1[i], u)));
+        ghost.style.transform = `translate3d(${p[0]}px, ${p[1]}px, 0) rotate(${lean}rad) scale(${1 + 0.12 * Math.sin(Math.PI * u)})`;
+        ghost.style.color = `rgb(${c})`;
+      };
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(backstop);
+        to5.style.opacity = "1";
+        ghost.remove();
+        to0.animate([{ opacity: 0, transform: "scale(0.55)" }, { opacity: 1, transform: "scale(1.06)", offset: 0.7 }, { opacity: 1, transform: "none" }], { duration: 520, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
+        to0.style.opacity = "1";
+        done();
+      };
+      const backstop = setTimeout(finish, P.flightMs + 350);
+      const t0 = performance.now();
+      place(0);
+      const frame = (now) => {
+        if (finished) return;
+        const k = Math.min(1, (now - t0) / P.flightMs);
+        ghost.style.opacity = String(Math.min(1, (now - t0) / 140));
+        place(ease(k));
+        if (k < 1) requestAnimationFrame(frame);
+        else finish();
+      };
+      requestAnimationFrame(frame);
+    });
 
   let alive = false,
-    running = false;
+    running = false,
+    paused = false;
+  card.addEventListener("pointerenter", () => ((paused = true), card.classList.add("hc-paused")));
+  card.addEventListener("pointerleave", () => ((paused = false), card.classList.remove("hc-paused")));
+  card.addEventListener("focusin", () => ((paused = true), card.classList.add("hc-paused")));
+  card.addEventListener("focusout", () => ((paused = false), card.classList.remove("hc-paused")));
+  // waits that stop the clock while paused and end early on a tab jump
+  // (elapsed time is measured, so timer drift never stretches a story)
+  const wait = async (ms) => {
+    let left = ms;
+    while (left > 0 && alive && !jump) {
+      const t0 = performance.now();
+      await sleep(Math.min(paused ? 100 : left, 250));
+      if (!paused) left -= performance.now() - t0;
+    }
+  };
+  const DUR = { fix: 1300 + 1100 + 250 + P.flightMs + 450 + 4200 + 600, units: 1300 + 1100 + 700 + 450 + 4200 + 600, deal: 1300 + 1100 + 700 + 450 + 4200 + 600 };
+  const play = async (name) => {
+    show(name);
+    card.style.setProperty("--scene-ms", `${DUR[name] ?? 8000}ms`);
+    const sc = scenes.find((x) => x.dataset.scene === name);
+    $(".hc-q", sc)?.before(wave);
+    card.dataset.step = "ask";
+    to5.style.opacity = "0";
+    to0.style.opacity = "0";
+    target = 1;
+    stopWave ??= loop(drawWave);
+    await wait(1300);
+    target = 0.08;
+    card.dataset.step = "scan";
+    await wait(1100);
+    card.dataset.step = "fix";
+    await wait(name === "fix" ? 250 : 700);
+    if (name === "fix" && !jump && alive) await fly();
+    card.dataset.step = "landed";
+    await wait(450);
+    card.dataset.step = "answer";
+    await wait(4200);
+    card.dataset.step = "rest";
+    target = 0;
+    await wait(600);
+  };
   const cycle = async () => {
     running = true;
     while (alive) {
-      card.dataset.step = "ask";
-      to5.style.opacity = "0";
-      to0.style.opacity = "0";
-      target = 1;
-      stopWave ??= loop(drawWave);
-      await sleep(1300);
-      target = 0.08;
-      card.dataset.step = "scan";
-      await sleep(1100);
-      card.dataset.step = "fix";
-      await sleep(250);
-      await fly();
-      card.dataset.step = "landed";
-      await sleep(450);
-      card.dataset.step = "answer";
-      await sleep(5200);
-      card.dataset.step = "rest";
-      target = 0;
-      await sleep(900);
-      stopWave?.();
-      stopWave = null;
+      const name = jump ?? current;
+      jump = null;
+      await play(name);
+      if (!jump && alive) current = order[(order.indexOf(name) + 1) % order.length];
     }
+    stopWave?.();
+    stopWave = null;
     running = false;
   };
   onVisible(card, (vis) => {

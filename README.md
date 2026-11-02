@@ -21,6 +21,7 @@ against the exact quoted span first (see [docs/SEMANTIC.md](docs/SEMANTIC.md)).
 | Engine / API | https://voice-memory.onrender.com (Render, free tier) |
 | For agents | [`llms.txt`](https://voice-memory-beige.vercel.app/llms.txt) · [OpenAPI](https://voice-memory-beige.vercel.app/openapi.json) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Voice, languages, charts | [docs/COMPANION.md](docs/COMPANION.md): neural Listen (Sarvam / ElevenLabs), Hindi and Hinglish understanding, advice declines, drill-down charts |
 
 All patients, values and companies are fictional or synthetic. It is a research
 prototype, not a diagnostic or clinically validated product.
@@ -125,6 +126,7 @@ source sentence.
 | `npm run test:evaluation` | spoken answers on 3 corpora, call isolation, longitudinal memory, **landing snapshot equals the live engine** |
 | `npm run test:ingest` / `test:clinical` | PDF/DOCX/OCR ingestion; lab comparisons incl. Hindi and Hinglish |
 | `npm run test:vault` | Bolna-shaped calls over HTTP |
+| `evaluation/vernacular.test.mjs` | English, Hindi and Hinglish asks, recogniser noise, advice declines (dev set complete, held-out at least 20/22) |
 
 Spoken-answer evaluation (`npm run eval:spoken`): Northstar 23/23, Harbor 15/15,
 Lumen 14/14 after fixes; Lumen's first, unseen run was 12/14. All three corpora

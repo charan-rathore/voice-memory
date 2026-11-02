@@ -23,6 +23,7 @@
 //    evaluation/paraphrase-questions.json and reported on held-out.
 import { sentencesOf, cite, docLabelOf } from "./spoken-routes.mjs";
 import { embedTextsReady } from "./dense.mjs";
+import { bridgeToEnglish } from "./vernacular.mjs";
 import { layExpand } from "./lay-terms.mjs";
 
 export const QUERY_INSTRUCTION =
@@ -222,9 +223,12 @@ export async function paraphraseLookup(
     ]);
     if (!ready || !idx.vectors) return null;
   }
-  const [qv] = (await embedTextsReady([QUERY_PREFIX + question])) ?? [];
+  // Hindi / Hinglish asks also search the English words for their terms.
+  const bridge = bridgeToEnglish(question);
+  const searched = bridge ? `${question} ${bridge}` : question;
+  const [qv] = (await embedTextsReady([QUERY_PREFIX + searched])) ?? [];
   if (!qv) return null;
-  const hit = gate(rankUnits(question, bundle, qv), thresholds);
+  const hit = gate(rankUnits(searched, bundle, qv), thresholds);
   if (!hit) return null;
   const { src, sent } = hit.unit;
   const label = bundle.sources.length === 1 ? "the report" : docLabelOf(src);
