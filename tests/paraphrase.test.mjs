@@ -127,12 +127,18 @@ test("a sentence stating a superseded value is never promoted (stale-fee regress
     },
   ]);
   assert.equal(
-    statesUnresolvedValue(two, "The fixed engagement fee is $42,000 for three regions."),
+    statesUnresolvedValue(
+      two,
+      "The fixed engagement fee is $42,000 for three regions.",
+    ),
     true,
     "the October 4 value is superseded by the October 20 revision",
   );
   assert.equal(
-    statesUnresolvedValue(two, "The fixed engagement fee is revised to $48,000."),
+    statesUnresolvedValue(
+      two,
+      "The fixed engagement fee is revised to $48,000.",
+    ),
     false,
     "the current value is speakable",
   );
@@ -164,17 +170,26 @@ test("a sentence presenting one side of an unresolved conflict is never promoted
     },
   ]);
   assert.equal(
-    statesUnresolvedValue(conflict, "The consulting fee is $42,000 for the full engagement."),
+    statesUnresolvedValue(
+      conflict,
+      "The consulting fee is $42,000 for the full engagement.",
+    ),
     true,
     "the older side of an unresolved conflict abstains",
   );
   assert.equal(
-    statesUnresolvedValue(conflict, "The consulting fee is $48,000 after the scope change."),
+    statesUnresolvedValue(
+      conflict,
+      "The consulting fee is $48,000 after the scope change.",
+    ),
     true,
     "the newer side abstains too - the engine's conflict answer speaks instead",
   );
   assert.equal(
-    statesUnresolvedValue(conflict, "Payment is due within thirty days of invoice."),
+    statesUnresolvedValue(
+      conflict,
+      "Payment is due within thirty days of invoice.",
+    ),
     false,
     "an uncontested fact stays speakable",
   );
