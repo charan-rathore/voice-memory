@@ -747,7 +747,8 @@ export function createPublicApi({
         if (process.env.VM_SEMANTIC_AUDIENCE === "demo")
           return (
             send(res, 503, {
-              error: "Server transcription is off during the demo trial; using the browser's.",
+              error:
+                "Server transcription is off during the demo trial; using the browser's.",
               fallback: true,
             }),
             true

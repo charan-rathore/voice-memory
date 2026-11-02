@@ -32,10 +32,13 @@ function lev(a, b) {
 
 // Ordinary words whose consonant skeleton sits next to a test name.
 const NOT_TESTS = new Set(
-  "certain curtain protein written britain pretend partner fortune frighten portion parting printing pertain fattening threatening creating created reading heading ferry forty fourteen thirty thirteen finalized finalised thousand fortnight".split(
+  "certain curtain protein written britain pretend partner fortune frighten portion parting printing pertain fattening threatening creating created corrected correction creative reading heading ferry forty fourteen thirty thirteen finalized finalised thousand fortnight".split(
     " ",
   ),
 );
+
+const ENGLISH_SUFFIX =
+  /(?:ed|ing|ion|ions|ive|ively|ly|ment|ments|ness|able|ible|ful)$/;
 
 /** Test names (and aliases) present in the loaded reports. */
 export function labVocabulary(reports, aliasesFor = () => []) {
@@ -149,6 +152,10 @@ export function repairTestNames(text, vocab) {
       const tol = sk.length >= 5 && e.sk.length >= 4 ? 2 : 1;
       if (d > tol) continue;
       const raw = lev(base, e.n);
+      // An ordinary English inflection ("corrected", "creative") is a word,
+      // not a damaged test name: snap it only when it is a single edit away.
+      if (raw > 1 && ENGLISH_SUFFIX.test(base) && !ENGLISH_SUFFIX.test(e.n))
+        continue;
       if (!best || d < best.d || (d === best.d && raw < best.raw)) {
         best = { d, raw, canon: e.canon };
         tied = false;

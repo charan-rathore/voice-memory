@@ -45,11 +45,15 @@ import {
 import { extractReport } from "../clinical/observations.mjs";
 import { sectionAnswer, fieldAnswer } from "./doc-sections.mjs";
 import { detectLang, aliasesFor } from "../clinical/explain.mjs";
-import {
-  labVocabulary,
-  repairTestNames,
-} from "./spoken-repair.mjs";
+import { labVocabulary, repairTestNames } from "./spoken-repair.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
+import {
+  normalizeVernacular,
+  adviceKind,
+  declineLead,
+  toHinglish,
+  noAnswerLead,
+} from "./vernacular.mjs";
 import { createMemory, recordTurn, liveEpisodes } from "../memory/memory.mjs";
 import { buildGraph } from "../memory/graph.mjs";
 import { createStore, snapshotOf, restoreInto } from "../memory/store.mjs";
@@ -619,6 +623,20 @@ export function createLocalServer({
     );
     return answerCache.resolve(key, async () => {
       const original = question;
+      const lang = langOfText(original);
+      // Treatment, diagnosis or a decision that is the visitor's to make:
+      // say no clearly, in their language, before any retrieval can turn a
+      // nearby value into something that sounds like advice.
+      const advice = adviceKind(original);
+      if (advice)
+        return {
+          raw: null,
+          shown: {
+            lead: declineLead(advice, lang),
+            semantic: { intent: "ADVICE", lang, steps: ["decline_advice"] },
+            evidence: [],
+          },
+        };
       const { raw, shown } = await deterministicAnswer(s, question, ctx);
       // Understand first, verify after: intent-specific rescue (grounded
       // background, composed summaries, model interpretation, verified
@@ -647,6 +665,10 @@ export function createLocalServer({
         ).evidence;
       shown.lead = sem.lead;
       shown.semantic = sem.trace;
+      // A Hindi or Hinglish visitor with nothing supported hears that in
+      // their own language, not a silent English fallback.
+      if (!shown.lead && lang !== "en" && !(shown.evidence ?? []).length)
+        shown.lead = noAnswerLead(lang);
       // The picture of the answer: ranges, series, corrections, units,
       // drawn from the same typed rows the sentence came from.
       shown.visual = visualFor(original, bundle, shown.lead);
@@ -745,7 +767,21 @@ export function createLocalServer({
           };
       }
       if (!sectioned && junkQuote(shown.lead)) shown.lead = null;
-      if (gloss && shown.lead?.text) shown.lead.text = toHindi(shown.lead.text);
+      // The deal's fixed English templates are rendered in the visitor's
+      // language: Devanagari for Hindi, romanised for Hinglish. Record text
+      // and values stay verbatim (see toHindi / toHinglish).
+      const answerLang = langOfText(original);
+      if (
+        shown.lead?.text &&
+        answerLang !== "en" &&
+        !/[ऀ-ॿ]/.test(shown.lead.text) &&
+        (gloss || isDealQuestion(question) || !bundle.clinical?.length) &&
+        detectLang(shown.lead.text) === "en"
+      )
+        shown.lead.text =
+          answerLang === "hi"
+            ? toHindi(shown.lead.text)
+            : toHinglish(shown.lead.text);
       if (shown.lead)
         shown.lead.citations = decorateResult(
           { evidence: shown.lead.citations, question },
@@ -1099,7 +1135,10 @@ export function createLocalServer({
     cases: caseSessions,
     workspaces: workspaceApi,
     resolve: async (cs, question, ctx, opts = {}) => {
-      const q = normalizeSpoken(question) || question;
+      const q =
+        normalizeSpoken(normalizeVernacular(question)) ||
+        normalizeSpoken(question) ||
+        question;
       const { json } = await resolveAnswer(cs, q, ctx, opts);
       return { ...JSON.parse(json).shown, question };
     },

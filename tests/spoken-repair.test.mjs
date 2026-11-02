@@ -49,7 +49,10 @@ test("misheard test names, without touching ordinary words", () => {
 });
 
 test("split-word mishearings rejoin: 'ferrite in' -> Ferritin", () => {
-  assert.match(repairTestNames("what is my ferrite in level", vocab), /my Ferritin level/);
+  assert.match(
+    repairTestNames("what is my ferrite in level", vocab),
+    /my Ferritin level/,
+  );
   assert.match(repairTestNames("hemo globin low", vocab), /Hemoglobin low/);
   for (const s of ["the protein in my diet", "what is in the report"])
     assert.equal(repairTestNames(s, vocab), s);
@@ -71,7 +74,10 @@ test("an exact tie between two test names repairs nothing", () => {
     "what is my ferri til level",
   );
   // A clear single nearest match still repairs against the same vocab.
-  assert.match(repairTestNames("what is my ferritun level", tied), /my Ferritin level/);
+  assert.match(
+    repairTestNames("what is my ferritun level", tied),
+    /my Ferritin level/,
+  );
 });
 
 test("fragments are recognised; full questions are not", () => {
