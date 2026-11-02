@@ -240,7 +240,8 @@ test("adapter maps languages, posts the documented shape, decodes audios[0]", as
   assert.equal(init.headers["api-subscription-key"], "test-key");
   const body = JSON.parse(init.body);
   assert.equal(body.language_code, "hi-IN");
-  assert.equal(body.model, "bulbul:v3");
+  assert.equal(body.model, "bulbul:v4-flash");
+  assert.equal(body.speaker, "ritu_hi_conversation"); // v4 persona, hi
   assert.equal(body.text, "Namaste duniya");
 });
 

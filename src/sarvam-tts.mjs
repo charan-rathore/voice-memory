@@ -9,16 +9,33 @@
 // the visitor hears this voice or reads the text.
 const LANGS = { en: "en-IN", hi: "hi-IN", hinglish: "hi-IN" };
 
+// Default model: bulbul:v4-flash, Sarvam's current recommendation for new
+// integrations (same request contract as v3, cheaper promo pricing through
+// 2026-11-12). Speakers are model-specific persona IDs, per language: the
+// v4 catalog's short v3 names are NOT valid on v4. VM_SARVAM_SPEAKER pins
+// one persona for every language if set.
+const SPEAKERS = {
+  "bulbul:v4-flash": {
+    en: "shubh_en_narration",
+    hi: "ritu_hi_conversation",
+    hinglish: "simran_enhi_conversation",
+  },
+  "bulbul:v3": { en: "shubh", hi: "shubh", hinglish: "shubh" },
+  "bulbul:v2": { en: "anushka", hi: "anushka", hinglish: "anushka" },
+};
+
 export function createSarvamTts({
   apiKey = process.env.VM_SARVAM_API_KEY,
-  model = process.env.VM_SARVAM_MODEL || "bulbul:v3",
-  speaker = process.env.VM_SARVAM_SPEAKER || "shubh",
+  model = process.env.VM_SARVAM_MODEL || "bulbul:v4-flash",
+  speaker = process.env.VM_SARVAM_SPEAKER || null,
   endpoint = "https://api.sarvam.ai/text-to-speech",
   timeoutMs = 15000,
   fetchImpl = globalThis.fetch,
 } = {}) {
   if (!apiKey) return null;
-  const key = `${model}|${speaker}`;
+  const speakers = SPEAKERS[model] ?? SPEAKERS["bulbul:v4-flash"];
+  const speakerFor = (lang) => speaker ?? speakers[lang] ?? speakers.en;
+  const key = `${model}|${speaker ?? "per-lang"}`;
   async function synthesize(text, lang) {
     const language_code = LANGS[lang];
     if (!language_code)
@@ -37,7 +54,7 @@ export function createSarvamTts({
           text,
           language_code,
           model,
-          speaker,
+          speaker: speakerFor(lang),
           output_audio_codec: "wav",
           speech_sample_rate: 22050,
         }),

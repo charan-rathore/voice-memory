@@ -365,6 +365,7 @@
     if (!speaking) return;
     speaking.resolve?.(); // release a mid-play await so narrate() can exit
     speaking.audio?.pause();
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
     speaking.root
       ?.querySelectorAll(".vz-row.speaking")
       .forEach((r) => r.classList.remove("speaking"));
@@ -384,6 +385,50 @@
    * when the server voice is unavailable the button says so and the text
    * stays on screen to read. Row highlighting follows the spoken sentence.
    */
+  // Owner-app boards (no public case): keep the pre-existing in-browser
+  // voice. It is local-only audio for the owner's own workspace - nothing
+  // leaves the browser - and it is NOT the public demo's readout voice.
+  function pickVoice(lang) {
+    const voices = speechSynthesis.getVoices();
+    const want =
+      lang === "hi"
+        ? ["hi-IN"]
+        : lang === "hinglish"
+          ? ["en-IN", "hi-IN"]
+          : ["en-IN", "en-GB", "en-US"];
+    const score = (v) =>
+      (/natural|online|neural|google/i.test(v.name) ? 2 : 0) +
+      (v.localService ? 0 : 1);
+    for (const tag of want) {
+      const m = voices
+        .filter((v) => v.lang.replace("_", "-").startsWith(tag))
+        .sort((a, b) => score(b) - score(a));
+      if (m.length) return m[0];
+    }
+    return null;
+  }
+  function narrateLocal(text, lang, root, btn) {
+    if (!("speechSynthesis" in window)) return (voiceUnavailable(btn, lang), false);
+    const parts = splitSentences(text);
+    speaking = { root, btn, lang, audio: null };
+    btn?.classList.add("on");
+    if (btn) btn.querySelector("span").textContent = W(lang).stop;
+    const voice = pickVoice(lang);
+    const rows = [...(root?.querySelectorAll(".vz-row") ?? [])];
+    parts.forEach((s, i) => {
+      const u = new SpeechSynthesisUtterance(s.trim());
+      if (voice) u.voice = voice;
+      u.lang = voice?.lang ?? (lang === "hi" ? "hi-IN" : "en-IN");
+      u.onstart = () =>
+        rows.forEach((r) =>
+          r.classList.toggle("speaking", s.toLowerCase().includes(r.dataset.test)),
+        );
+      if (i === parts.length - 1)
+        u.onend = u.onerror = () => speaking?.btn === btn && stop();
+      speechSynthesis.speak(u);
+    });
+    return true;
+  }
   async function narrate(text, lang, root, btn, caseId, sentences) {
     if (!text) return false;
     if (speaking) {
@@ -391,7 +436,7 @@
       stop();
       if (same) return true;
     }
-    if (!caseId) return (voiceUnavailable(btn, lang), false);
+    if (!caseId) return narrateLocal(text, lang, root, btn);
     const parts = sentences?.length ? sentences : splitSentences(text);
     speaking = { root, btn, lang, audio: null };
     btn?.classList.add("on");
