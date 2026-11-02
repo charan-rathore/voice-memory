@@ -1973,6 +1973,34 @@
     syncVoiceClasses();
   })();
 
+  // The saved memory graphs live in snapshot-graphs.js, off the first load.
+  // The landing's 3D band reads them from VM_SNAPSHOT.graphs when it nears
+  // the viewport, so fetch them well before that (page idle, or 1600 px out)
+  // and expose them there.
+  (() => {
+    const cv = $("#graph-mini");
+    if (!cv || !window.VM_SNAPSHOT) return;
+    if (!window.VM_SNAPSHOT.graphs)
+      Object.defineProperty(window.VM_SNAPSHOT, "graphs", {
+        configurable: true,
+        get: () => window.VM_SNAPSHOT_GRAPHS,
+      });
+    let started = false;
+    const go = () => {
+      if (started || window.VM_SNAPSHOT_GRAPHS) return;
+      started = true;
+      loadScript("snapshot-graphs.js").catch(() => (started = false));
+    };
+    const io = new IntersectionObserver(
+      (es) => es.some((e) => e.isIntersecting) && (io.disconnect(), go()),
+      { rootMargin: "1600px 0px" },
+    );
+    io.observe(cv);
+    (window.requestIdleCallback ?? ((f) => setTimeout(f, 2500)))(go, {
+      timeout: 4000,
+    });
+  })();
+
   // Hero: hovering the card pauses the story so it can be read, but a tab
   // click must still play the chosen story through to its answer; otherwise
   // the pointer on the tab freezes the card on its empty first step.
