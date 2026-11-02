@@ -369,10 +369,17 @@ test("router: verified model claims are accepted, fabricated ones rejected, with
     gemini: gem,
     consent: true,
   });
-  assert.equal(out.lead.origin, "model");
-  assert.equal(out.lead.text, "The revised fee is $42,000.");
-  assert.equal(out.lead.citations.length, 1);
-  assert.ok(validate(out.lead.citations[0]));
+  // Two of the model's three claims are fabricated. A partial reading must
+  // not ship as a complete answer: the router abstains instead.
+  assert.equal(
+    out.lead,
+    null,
+    "any rejected claim fails the whole model answer closed",
+  );
+  assert.deepEqual(out.trace.rejected.sort(), [
+    "status_upgraded",
+    "value_not_in_quote:39000",
+  ]);
 
   const noConsent = await semanticRescue({
     question: "how much will the narrower pilot cost them",
@@ -900,5 +907,137 @@ test("privacy: demo trial scope gates paid semantics off for visitor uploads, co
     client.calls.length,
     0,
     "demo trial scope: an opted-in upload still produces zero model calls",
+  );
+});
+
+test("router: a fully verified claim set ships with per-claim citations; failed citation validation abstains", async () => {
+  const bundle = northstar();
+  const src = bundle.sources.find((s) => /Commercial_Revision/.test(s.title));
+  const i = src.text.indexOf("1. Following");
+  const ev = {
+    sourceId: src.id,
+    title: src.title,
+    hash: src.hash,
+    start: i,
+    end: i + 120,
+    quote: src.text.slice(i, i + 120),
+  };
+  const claimsReply = () => ({
+    text: JSON.stringify({
+      answerable: true,
+      claims: [
+        {
+          statement: "The revised fee is $42,000.",
+          passage: 0,
+          quote: "the revised fee is $42,000",
+          polarity: "affirmed",
+        },
+      ],
+    }),
+  });
+  const gem = createGemini({
+    env: {},
+    client: fakeClient((req) =>
+      req.config.responseJsonSchema?.properties?.claims
+        ? claimsReply()
+        : {
+            text: '{"intent":"LOOKUP","language":"en","tests":[],"subject":"unspecified","rewrite":""}',
+          },
+    ),
+  });
+  const out = await semanticRescue({
+    question: "what is the revised fee",
+    bundle,
+    lead: null,
+    raw: { evidence: [ev] },
+    rerun: async () => null,
+    validate: (e) => validateEvidence(e, bundle),
+    gemini: gem,
+    consent: true,
+  });
+  assert.equal(out.lead?.origin, "model");
+  assert.equal(out.lead.text, "The revised fee is $42,000.");
+  assert.equal(out.lead.citations.length, 1);
+
+  const out2 = await semanticRescue({
+    question: "what is the revised fee",
+    bundle,
+    lead: null,
+    raw: { evidence: [ev] },
+    rerun: async () => null,
+    validate: () => false,
+    gemini: gem,
+    consent: true,
+  });
+  assert.equal(
+    out2.lead,
+    null,
+    "an accepted claim whose evidence fails validation never ships",
+  );
+});
+
+test("router: a rewrite that flips negation or swaps the named subject is refused", async () => {
+  const bundle = northstar();
+  let rewrite = "Was the fee not approved?";
+  const gem = createGemini({
+    env: {},
+    client: fakeClient(() => ({
+      text: JSON.stringify({
+        intent: "LOOKUP",
+        language: "en",
+        tests: [],
+        subject: "unspecified",
+        rewrite,
+      }),
+    })),
+  });
+  const engineLead = {
+    text: "$42,000 is approved.",
+    verdict: "APPROVED",
+    citations: [{ quote: "$42,000" }],
+  };
+  const out = await semanticRescue({
+    question: "Was the fee approved?",
+    bundle,
+    lead: null,
+    raw: { evidence: [] },
+    rerun: async () => engineLead,
+    validate: () => true,
+    gemini: gem,
+    consent: true,
+  });
+  assert.notEqual(
+    out.lead?.verdict,
+    "APPROVED",
+    "a negation-flipped rewrite is not rerun",
+  );
+
+  rewrite = "What is SYN-0002's ferritin?";
+  const gem2 = createGemini({
+    env: {},
+    client: fakeClient(() => ({
+      text: JSON.stringify({
+        intent: "LOOKUP",
+        language: "en",
+        tests: [],
+        subject: "unspecified",
+        rewrite,
+      }),
+    })),
+  });
+  const out2 = await semanticRescue({
+    question: "What is SYN-0001's ferritin?",
+    bundle,
+    lead: null,
+    raw: { evidence: [] },
+    rerun: async () => engineLead,
+    validate: () => true,
+    gemini: gem2,
+    consent: true,
+  });
+  assert.notEqual(
+    out2.lead?.verdict,
+    "APPROVED",
+    "a subject-swapping rewrite is not rerun",
   );
 });

@@ -265,12 +265,26 @@ const patientIds = (bundle) =>
     .map(String);
 
 /** Does the rewrite stay inside the catalog's words (no invented values)? */
+const REWRITE_NEG =
+  /\b(not|no|never|none|without|neither|nor|isn't|wasn't|aren't|weren't|doesn't|didn't|hasn't|haven't|cannot|can't|nahi|nahin)\b|\u0928\u0939\u0940\u0902/i;
+const REWRITE_SUBJECT = /\b(SYN-\d{3,}|\[ID\d+\])/g;
+
 function safeRewrite(rewrite, original) {
   if (!rewrite || rewrite.length > 300) return false;
   const nums = (s) => String(s).match(/\d[\d,.]*/g) ?? [];
   const orig = new Set(nums(original));
   // A rewrite may restate the person's own numbers, never add new ones.
-  return nums(rewrite).every((n) => orig.has(n) || /^SYN-?0*\d+$/i.test(n));
+  if (!nums(rewrite).every((n) => orig.has(n) || /^SYN-?0*\d+$/i.test(n)))
+    return false;
+  // Negation and named subjects decide what the answer means. A rewrite that
+  // flips either is a different question, and the engine's answer to a
+  // different question is not an answer to the user's.
+  if (REWRITE_NEG.test(rewrite) !== REWRITE_NEG.test(original)) return false;
+  const subs = (s) => new Set(String(s).match(REWRITE_SUBJECT) ?? []);
+  const a = subs(original);
+  const b = subs(rewrite);
+  if (a.size !== b.size || [...a].some((x) => !b.has(x))) return false;
+  return true;
 }
 
 /**
@@ -465,16 +479,31 @@ export async function semanticRescue(a) {
         `claims:${accepted.length}/${(plan.claims ?? []).length}`,
       );
       trace.rejected = rejected.map((r) => r.reason);
-      const citations = cite(
-        accepted.map((c) => c.evidence),
-        validate,
-      );
-      if (plan.answerable && citations.length) {
+      // Fail closed, twice. Every accepted claim keeps its own validated
+      // citation - a statement whose evidence fails validation is dropped,
+      // not orphaned into the answer. And a single rejected claim means the
+      // model's reading of the record is only partly trustworthy, so a
+      // partial answer must not go out dressed as a complete one.
+      const verified = accepted.filter((c) => {
+        try {
+          return validate(c.evidence);
+        } catch {
+          return false;
+        }
+      });
+      const complete =
+        (plan.claims ?? []).length > 0 &&
+        rejected.length === 0 &&
+        verified.length === accepted.length;
+      if (plan.answerable && complete) {
         lead = {
-          text: accepted.map((c) => c.statement).join(" "),
+          text: verified.map((c) => c.statement).join(" "),
           verdict: "QUOTED",
           field: null,
-          citations,
+          citations: cite(
+            verified.map((c) => c.evidence),
+            validate,
+          ),
           intent: intent.intent,
           origin: "model",
         };

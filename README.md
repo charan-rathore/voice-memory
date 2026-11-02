@@ -112,7 +112,11 @@ flowchart LR
 The **memory graph** (`/graph`) draws the same structure the engine answers
 from: patients → reports → values → tests, with `corrects`, `supersedes`,
 `competes with` and `not comparable` edges, each value linked to its exact
-source sentence.
+source sentence. It is a faithful projection rebuilt from the current
+documents and interaction history on every request - clinical observations
+are keyed by patient identity, so one person's records never share a node
+with another's. It is not (yet) a versioned claim store: corrections are
+derived from the current documents, not recorded as stored amendment events.
 
 ## What is verified
 

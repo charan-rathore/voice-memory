@@ -202,9 +202,18 @@ export function buildGraph(bundle, mem, focus = "overview") {
     for (const lab of bundle.clinical ?? []) {
       const src = docs.get(lab.sourceId);
       if (!src) continue;
-      node({ id: "topic:lab", kind: "topic", label: "Lab results" });
+      // One topic per person: two people's reports never share a node.
+      const who = String(
+        lab.meta?.patient?.name || lab.meta?.patient?.id || "",
+      ).replace(/\s*\(synthetic\)/i, "");
+      const tid = who ? `topic:lab:${who}` : "topic:lab";
+      node({
+        id: tid,
+        kind: "topic",
+        label: who ? `Lab results - ${who}` : "Lab results",
+      });
       docNode(src);
-      edge({ from: `doc:${src.id}`, to: "topic:lab", kind: "records" });
+      edge({ from: `doc:${src.id}`, to: tid, kind: "records" });
     }
     for (const e of eps.slice(-8)) {
       qNode(e);

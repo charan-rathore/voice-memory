@@ -194,9 +194,15 @@ export function gate(ranked, { minCosine, minMargin, agree = null } = GATE) {
       .sort((a, b) => b.cosine - a.cosine)[0];
     if (lex && lex.cosine >= agree && lex.cosine >= topCos - 0.08) {
       const other = ranked.find((r) => r.unit.src !== lex.unit.src);
+      const margin = lex.cosine - (other?.cosine ?? 0);
+      // The margin rule is not optional: agreement between two signals about
+      // the SAME document cannot settle ambiguity BETWEEN documents. A
+      // lexical leader with a cross-document rival within the margin is a
+      // guess, and a guess must not be spoken as the answer.
+      if (margin < minMargin) return null;
       return {
         ...lex,
-        margin: lex.cosine - (other?.cosine ?? 0),
+        margin,
         agreed: true,
       };
     }

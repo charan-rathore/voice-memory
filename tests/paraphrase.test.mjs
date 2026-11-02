@@ -88,3 +88,28 @@ test("the lookup's query prefix exists (a missing constant silently disabled eve
   const P = await import("../src/paraphrase.mjs");
   assert.equal(typeof P.QUERY_PREFIX, "string");
 });
+
+test("the agreement path enforces the cross-document margin (false-confidence regression)", () => {
+  // Two documents discuss the same fee; the lexical leader clears the
+  // agreement cosine floor but a rival document is within the margin. The
+  // old code spoke it anyway - a topically-similar sentence presented as
+  // the answer. The gate must abstain.
+  const ranked = [
+    { unit: { src: "a" }, cosine: 0.62, lexical: 1.0, fused: 0.7 },
+    { unit: { src: "b" }, cosine: 0.61, lexical: 0.2, fused: 0.55 },
+    { unit: { src: "a" }, cosine: 0.4, lexical: 0.1, fused: 0.35 },
+  ];
+  assert.equal(
+    gate(ranked, { minCosine: 0.72, minMargin: 0.02, agree: 0.5 }),
+    null,
+    "lexical agreement cannot settle a between-document ambiguity",
+  );
+  const clear = [
+    { unit: { src: "a" }, cosine: 0.62, lexical: 1.0, fused: 0.7 },
+    { unit: { src: "b" }, cosine: 0.3, lexical: 0.2, fused: 0.25 },
+  ];
+  const hit = gate(clear, { minCosine: 0.72, minMargin: 0.02, agree: 0.5 });
+  assert.ok(hit, "a lexical leader with a real margin still passes");
+  assert.equal(hit.agreed, true);
+  assert.ok(hit.margin >= 0.02);
+});
