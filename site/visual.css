@@ -570,7 +570,7 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
 .m-pt .m-v { font: 400 15px var(--serif); fill: var(--m-ink); font-variant-numeric: tabular-nums; }
 .m-pt .m-date { font: 500 11px var(--sans); fill: var(--m-ink3); color: var(--m-ink3); }
 .m-flash { fill: none; stroke: var(--m-yellow); stroke-width: 2; transform-box: fill-box; transform-origin: center; opacity: 0; animation: m-flash 900ms var(--m-smooth) calc(var(--d, 0ms) + 500ms) both; }
-@keyframes m-flash { 0% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(3.2); } }
+@keyframes m-flash { 0% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(2.2); } }
 .m-bound { fill: none; stroke: var(--m-ink2); stroke-width: 1.4; }
 .m-ghost circle { fill: var(--m-bg); stroke: var(--m-red); stroke-width: 1.6; }
 .m-ghost line { stroke: var(--m-red); stroke-width: 1.6; }
@@ -670,12 +670,24 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
   .m-field, .m-track { min-width: 470px; }
   .m-nl { min-width: 540px; }
 }
+/* Reduced motion keeps the charts alive: anything that carries information
+   still animates (strokes are drawn, text is written, bars grow, the
+   playhead sweeps the dates, a decision's marker travels to its stage, a
+   scene fades in), a little faster. What goes is spatial motion that says
+   nothing: marks sliding or popping into place, the copy that flies into
+   the stage, the flash ring, scenes sliding. */
 @media (prefers-reduced-motion: reduce) {
-  .m-create, .m-tick, .rr-gap { animation: none; stroke-dashoffset: 0; }
-  .m-write { animation: none; fill-opacity: 1; stroke-width: 0; }
-  .m-grow-x, .m-grow-y, .m-dot, .m-pt, .m-marker, .m-node, .rr-dot, .rr-row, .tl-node, .tl::before, .ln-k, .ln-line, .m-bar, .m-bar-t i, .m-ev, .vl::before, .vl-n, .st-scene, .m-xf *, .m-tw { animation: none; opacity: 1; clip-path: none; }
-  .m-dot { transform: none; }
+  .m-create, .m-tick, .rr-gap, .m-write, .m-grow-x, .m-grow-y, .m-tw, .m-bar-t i, .ln-line, .vl::before, .tl::before { animation-duration: 560ms; }
+  .m-dot { transform: none; animation: m-appear 420ms var(--m-smooth) var(--d, 0ms) both; }
+  .rr-dot, .m-node { animation: m-appear 360ms var(--m-smooth) var(--d, 0ms) both; }
+  .rr-row, .tl-node, .ln-k, .m-bar, .m-ev, .vl-n { animation-name: m-appear; animation-duration: 360ms; }
+  .m-marker { animation-duration: 600ms; }
+  .st-scene { animation: m-appear 260ms var(--m-smooth) both; }
+  .st-scene.leaving { animation: m-fade-out 160ms linear forwards; }
   .m-xfer, .m-flash { display: none; }
-  .ln-mark { transition: none; }
+  .m-dot .m-c, .m-pt .m-c, .tl-dot, .ln-mark { transition-duration: 120ms; }
+}
+@keyframes m-fade-out { to { opacity: 0; } }
+@keyframes m-appear { from { opacity: 0; } to { opacity: 1; } }
 }
 .vz-say.no-voice { grid-template-columns: 1fr; }

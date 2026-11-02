@@ -1045,8 +1045,9 @@
       return t0 + k * (t1 - t0);
     };
     const sweep = () => {
-      if (reduced) return asOf(board, t1);
-      const T = 2600, s0 = performance.now();
+      // the sweep reads the dates in order, so it stays under reduced motion,
+      // just quicker
+      const T = reduced ? 1400 : 2600, s0 = performance.now();
       const step = (now) => {
         if (!board.isConnected) return;
         const k = Math.min(1, (now - s0) / T);
@@ -1348,7 +1349,7 @@
     for (const old of document.querySelectorAll(".stage")) if (old !== rep.stage) old.remove();
     const rw = R(rep.lang);
     const st = document.createElement("aside");
-    st.className = `stage${reduced ? " still" : ""}`;
+    st.className = "stage";
     st.dataset.lang = rep.lang;
     st.setAttribute("aria-label", rw.stageK);
     st.innerHTML = `<header class="st-bar"><button type="button" class="st-back" aria-label="${esc(rw.back)}" disabled>←</button><nav class="st-crumbs" aria-label="${esc(rw.stageK)}"></nav><button type="button" class="st-min" aria-expanded="true">${esc(rw.hide)}</button></header><div class="st-body"></div>`;
@@ -1407,10 +1408,10 @@
     scene.className = "st-scene play";
     scene.dataset.key = key;
     scene.innerHTML = sc.html;
-    if (old && !reduced) {
+    if (old) {
       old.classList.add("leaving");
       old.style.position = "absolute";
-      setTimeout(() => old.remove(), 260);
+      setTimeout(() => old.remove(), reduced ? 170 : 260);
     } else old?.remove();
     body.append(scene);
     // crumbs: the scenes on the stack
