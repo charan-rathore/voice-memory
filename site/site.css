@@ -421,12 +421,11 @@ kbd { font: 500 11px/1 var(--sans); min-width: 22px; height: 22px; padding: 0 6p
 .rr b { font-weight: 600; color: var(--ink); text-align: right; }
 .rr > :last-child { text-align: right; color: var(--ink-3); }
 .rr-lost, .rr-lost b, .rr-lost > :last-child { color: var(--red); }
-.rr-lost [data-scramble] { filter: blur(3px); opacity: 0.45; transition: filter 1100ms cubic-bezier(0.22, 1, 0.36, 1), opacity 1100ms cubic-bezier(0.22, 1, 0.36, 1); }
-.rr-lost [data-scramble]:nth-child(2) { transition-delay: 90ms; }
-.rr-lost [data-scramble]:nth-child(3) { transition-delay: 180ms; }
-.rr-lost [data-scramble]:nth-child(4) { transition-delay: 270ms; }
-.rr-lost.clear [data-scramble] { filter: none; opacity: 1; }
-.rr-lost > :nth-child(3), .rr-lost > :nth-child(4) { text-decoration: underline wavy rgba(194, 65, 47, 0.55); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.rr-lost [data-scramble] { filter: blur(0.5px); }
+/* the caption belongs to the canvas figures, where it overlays empty art; in
+   the results figure it must flow below the rows, not overlap the last one */
+.stat-fig.fig-results { height: auto; min-height: 168px; align-content: start; }
+.fig-results .fig-cap { position: static; display: block; max-width: none; padding: 10px 2px 2px; }
 
 /* ---------------------------------------------------------------- catches: live product figures */
 .catch-grid { gap: 0; margin-top: 48px; border-top: 1px solid var(--rule); }
