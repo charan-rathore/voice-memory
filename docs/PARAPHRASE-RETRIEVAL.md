@@ -179,6 +179,19 @@ Results (CI, bge-small, 2026-11-02):
    the best precision at each coverage level on dev and its held-out result,
    so the next change (a cross-encoder reranker) is judged on the same curve.
 
+   The precision-coverage curve from that sweep (dev = even rows, held-out =
+   odd rows; at most 10% shown when absent):
+
+   | Min coverage (dev) | Best rule on dev                         | Dev                                     | Held-out                                |
+   | ------------------ | ---------------------------------------- | --------------------------------------- | --------------------------------------- |
+   | 5%                 | cos ≥ 0.68, margin ≥ 0.06, keyword top 3 | 12/203 shown, 83.3% right, 0/106 absent | 18/178 shown, 83.3% right, 3/130 absent |
+   | 10%                | cos ≥ 0.50, margin ≥ 0.05, keyword top 3 | 25/203, 80.0% right, 2/106 absent       | 24/178, 83.3% right, 4/130 absent       |
+   | 20%                | cos ≥ 0.50, margin ≥ 0.03, keyword top 3 | 41/203, 68.3% right, 6/106 absent       | 42/178, 76.2% right, 11/130 absent      |
+   | 30%                | cos ≥ 0.60, keyword top 1                | 72/203, 63.9% right, 10/106 absent      | 57/178, 73.7% right, 20/130 absent      |
+
+   With bge-small and fusion, about 83% is the ceiling at useful coverage.
+   Clearing 90% needs a better ranker, not a different threshold.
+
 Decision: the closest-line pointer is **off by default**. A pointer that is
 wrong a third of the time on meetings undermines the one promise the product
 makes. Retrieval keeps the hybrid ranking; answers stay with the engine.
