@@ -5,12 +5,13 @@ Each entry says what changed, why, and how it was checked.
 ## 2026-11-02 (branch `ux-v2`)
 
 ### Voice and conversation
+
 - **Mixed questions** in one breath ("ferritin and also the deal fee", Hindi or
   Hinglish) are split by domain and answered part by part (`splitMixed`,
   `domainOf` in `src/conversation.mjs`). Typed questions about the other demo
   case come back as an `also` block with a one-click switch.
 - **Help, upload and goodbye intents** in English, Hindi and Hinglish. "How do
-  I upload my own reports?" switches the page to *Your documents* and
+  I upload my own reports?" switches the page to _Your documents_ and
   highlights the drop zone (`runAction` in `site/site.js`).
 - The assistant speaks in the first person with feminine Hindi forms
   throughout. "critical" is no longer misheard as Creatinine.
@@ -18,6 +19,7 @@ Each entry says what changed, why, and how it was checked.
   (`evaluation/call-replay.mjs`); all now answer correctly.
 
 ### Evidence on the page
+
 - The cited sentence, and only that sentence, is highlighted in the opened
   document (whitespace-tolerant span match; the whole-document highlight is gone).
 - **Reworded questions: built, measured, kept off.** A "closest line, not an
@@ -29,6 +31,7 @@ Each entry says what changed, why, and how it was checked.
   exposed (it showed a line for 86% of absent clauses) is fixed.
 
 ### Charts
+
 - The overview became two or three report charts instead of many strips: a
   donut of where results sit against their printed ranges, each result on its
   own range with previous → current movement, a report timeline, and, for
@@ -36,6 +39,7 @@ Each entry says what changed, why, and how it was checked.
   Browser-checked in `scripts/site-shots.mjs`.
 
 ### Landing page
+
 - **Hero rebuilt** as a white evidence card (BoardUI/Cardboard references):
   one OKLCH colour family for supported, refused and proposed. Its motion
   physics: a critically damped tab thumb, an orbiting light while listening,
@@ -49,6 +53,7 @@ Each entry says what changed, why, and how it was checked.
   `snapshot-graphs.js`; the budget test tightened to 530 KB.
 
 ### Integration and evaluation
+
 - **MCP server** (`mcp/server.mjs`, zero dependencies, stdio), tested
   end to end against the engine.
 - **Outside-authored benchmark** (`evaluation/outside-bench.mjs`): QMSum and
@@ -56,6 +61,7 @@ Each entry says what changed, why, and how it was checked.
   44.0%; chance 5.3% and 1.2%), plus the discovery gate's calibration sweep.
 
 ### Known and not fixed here
+
 - Production Listen says "Voice unavailable": no `VM_SARVAM_API_KEY` or
   `ELEVENLABS_API_KEY` is set on the host (`/api/public/status` reports
   `voiceOut.enabled: false`). The button is now hidden when voice is off.

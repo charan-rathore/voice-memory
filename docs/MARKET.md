@@ -39,31 +39,31 @@ when the record cannot say.
 
 ## 3. Who already does what (checked)
 
-| Category | Examples | What they do | What they leave open |
-| --- | --- | --- | --- |
-| Voice orchestration | Bolna, Vapi, Retell, Bland, ElevenLabs Agents | Telephony, STT, TTS, LLM routing, per-minute pricing | Answer correctness over the customer's changing documents is the customer's prompt problem |
-| Grounded doc Q&A | NotebookLM (free tier; bundled in Workspace), ChatGPT projects, Glean ($30K to $200K+ a year), Hebbia | Cited answers over uploaded or indexed documents | Version status is not a first-class output; a cited line can be a superseded one |
-| Lab report explainers (India) | ReportSense, Bharat Swasth, Ashvi Health (14 languages), ChatGPT Health (US records) | Plain-language summary of one report | Cross-report comparison that refuses unsafe comparisons; line-level source |
-| Contract version compare | Sirion, SpotDraft, LegalOn, Spellbook | Diffs and AI change summaries for lawyers | Not an API an agent calls mid-conversation; English-first |
+| Category                      | Examples                                                                                              | What they do                                         | What they leave open                                                                       |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Voice orchestration           | Bolna, Vapi, Retell, Bland, ElevenLabs Agents                                                         | Telephony, STT, TTS, LLM routing, per-minute pricing | Answer correctness over the customer's changing documents is the customer's prompt problem |
+| Grounded doc Q&A              | NotebookLM (free tier; bundled in Workspace), ChatGPT projects, Glean ($30K to $200K+ a year), Hebbia | Cited answers over uploaded or indexed documents     | Version status is not a first-class output; a cited line can be a superseded one           |
+| Lab report explainers (India) | ReportSense, Bharat Swasth, Ashvi Health (14 languages), ChatGPT Health (US records)                  | Plain-language summary of one report                 | Cross-report comparison that refuses unsafe comparisons; line-level source                 |
+| Contract version compare      | Sirion, SpotDraft, LegalOn, Spellbook                                                                 | Diffs and AI change summaries for lawyers            | Not an API an agent calls mid-conversation; English-first                                  |
 
 **Commodity now:** "upload a PDF, get a cited summary". Competing there is a
 losing position.
 
-**Not a commodity:** a per-answer verdict about *which* value is in force,
+**Not a commodity:** a per-answer verdict about _which_ value is in force,
 a refusal when units, people or versions make a comparison unsafe, and that
 verdict surviving a phone call in Hindi.
 
 ## 4. Where Voice Memory stands today (measured, not claimed)
 
-| Capability | State |
-| --- | --- |
-| Version-aware answers (amended, preliminary, proposed, superseded, open) | Working on fictional cases; 152 evaluation tests and a vault of golden answers in CI |
-| Refusals (unit mismatch, patient mismatch, not in record) | Working; enforced by tests |
-| Hindi, Hinglish, mixed-domain questions | Working on typed and Bolna voice paths; real-call replay harness (`evaluation/call-replay.mjs`) |
-| Reworded questions | Hybrid ranking helps on outside contracts (top-1 44% → 50%); the closest-line pointer is built but off, at 65 to 82% right when shown against a 90% bar |
-| Outside-authored benchmark | QMSum meetings and CUAD contracts: hybrid top-1 42.1% and 50.0% against chance 5.3% and 1.2% |
-| Integration surfaces | Public REST API (OpenAPI, llms.txt), Bolna custom-LLM endpoint, **MCP server** (`mcp/server.mjs`) |
-| Not done | Real customer documents, SSO, audit log, retention controls, SLAs, clinician review, LOINC/UCUM |
+| Capability                                                               | State                                                                                                                                                   |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Version-aware answers (amended, preliminary, proposed, superseded, open) | Working on fictional cases; 152 evaluation tests and a vault of golden answers in CI                                                                    |
+| Refusals (unit mismatch, patient mismatch, not in record)                | Working; enforced by tests                                                                                                                              |
+| Hindi, Hinglish, mixed-domain questions                                  | Working on typed and Bolna voice paths; real-call replay harness (`evaluation/call-replay.mjs`)                                                         |
+| Reworded questions                                                       | Hybrid ranking helps on outside contracts (top-1 44% → 50%); the closest-line pointer is built but off, at 65 to 82% right when shown against a 90% bar |
+| Outside-authored benchmark                                               | QMSum meetings and CUAD contracts: hybrid top-1 42.1% and 50.0% against chance 5.3% and 1.2%                                                            |
+| Integration surfaces                                                     | Public REST API (OpenAPI, llms.txt), Bolna custom-LLM endpoint, **MCP server** (`mcp/server.mjs`)                                                       |
+| Not done                                                                 | Real customer documents, SSO, audit log, retention controls, SLAs, clinician review, LOINC/UCUM                                                         |
 
 ## 5. Ideal first customer (assumption to test)
 
@@ -124,12 +124,12 @@ This is a hypothesis to test in the pilots, not a validated price.
 
 ## 9. The next 90 days: falsifiable milestones
 
-| By | Milestone | Pass | Fail means |
-| --- | --- | --- | --- |
-| 30 days | 3 design partners connect their own agent via MCP, REST or Bolna | 3 connected, each with 5+ real versioned documents | The integration is not the bottleneck we think; revisit ICP |
-| 45 days | Outside benchmark with dense retrieval and a reranker | Closest-line gate right in 90%+ of shown lines, shown on under 10% of absent clauses | Keep reworded answers as pointers only |
-| 60 days | Pilot metric: wrong-version answers on partner transcripts | At least 50% fewer than the partner's current agent on the same questions | The verdict layer is not worth paying for in this segment |
-| 90 days | First paid conversion at the usage price | 1 of 3 partners pays | Price, buyer or segment is wrong; test the next segment |
+| By      | Milestone                                                        | Pass                                                                                 | Fail means                                                  |
+| ------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| 30 days | 3 design partners connect their own agent via MCP, REST or Bolna | 3 connected, each with 5+ real versioned documents                                   | The integration is not the bottleneck we think; revisit ICP |
+| 45 days | Outside benchmark with dense retrieval and a reranker            | Closest-line gate right in 90%+ of shown lines, shown on under 10% of absent clauses | Keep reworded answers as pointers only                      |
+| 60 days | Pilot metric: wrong-version answers on partner transcripts       | At least 50% fewer than the partner's current agent on the same questions            | The verdict layer is not worth paying for in this segment   |
+| 90 days | First paid conversion at the usage price                         | 1 of 3 partners pays                                                                 | Price, buyer or segment is wrong; test the next segment     |
 
 ## Sources
 

@@ -23,10 +23,10 @@ corpus. The outside-authored benchmark on the roadmap is the real test.
 
 ## Results (bge-small, whole-document chunks)
 
-| Split | Keyword r@1 | Hybrid (shipped) r@1 | Dense only r@1 | Dense only r@3 | Unanswerable refused (hybrid) |
-| --- | --- | --- | --- | --- | --- |
-| Development (15 + 5) | 0.33 | 0.47 | 0.53 | 0.80 | 2 of 5 |
-| Held-out (15 + 5) | 0.33 | **0.33** | 0.47 | 0.87 | 4 of 5 |
+| Split                | Keyword r@1 | Hybrid (shipped) r@1 | Dense only r@1 | Dense only r@3 | Unanswerable refused (hybrid) |
+| -------------------- | ----------- | -------------------- | -------------- | -------------- | ----------------------------- |
+| Development (15 + 5) | 0.33        | 0.47                 | 0.53           | 0.80           | 2 of 5                        |
+| Held-out (15 + 5)    | 0.33        | **0.33**             | 0.47           | 0.87           | 4 of 5                        |
 
 Findings:
 
@@ -61,8 +61,8 @@ What changed, each from published practice and none using a language model:
 
 - **Small units, big context.** Every sentence or table row is a retrieval
   unit (25 for Northstar instead of 7 documents), prefixed with its
-  document's heading, type and date, after Anthropic's *Contextual
-  Retrieval* (the prefix is built from the document's own header, not
+  document's heading, type and date, after Anthropic's _Contextual
+  Retrieval_ (the prefix is built from the document's own header, not
   generated).
 - **Weighted reciprocal-rank fusion** of bge-small cosine and BM25, 0.8 / 0.2,
   k = 60 (Cormack et al. 2009; Anthropic contextual-embeddings cookbook).
@@ -76,9 +76,9 @@ What changed, each from published practice and none using a language model:
   wrong passages and zero accepted unanswerable questions.
 
 | Held-out (15 answerable + 5 unanswerable) | recall@1 | wrong passages served | unanswerable accepted |
-| --- | --- | --- | --- |
-| Shipped hybrid, before | 0.33 | 3 | 1 |
-| + paraphrase rescue | **0.40** | 3 (no new) | 1 (no new) |
+| ----------------------------------------- | -------- | --------------------- | --------------------- |
+| Shipped hybrid, before                    | 0.33     | 3                     | 1                     |
+| + paraphrase rescue                       | **0.40** | 3 (no new)            | 1 (no new)            |
 
 Sentence units alone (no gate) put the right sentence in the top 3 for 11 of
 15 held-out paraphrases. The gate is deliberately strict: an evidence engine
@@ -118,7 +118,7 @@ What production does with a reworded question the engine cannot answer:
 benchmark below showed the pointer is not yet reliable enough to show
 visitors; see "What the outside data decided".
 
-Why this shape: the 2026-11-02 review failures were all about *speaking* a
+Why this shape: the 2026-11-02 review failures were all about _speaking_ a
 retrieved sentence as the answer. A pointer the person opens and judges keeps
 the useful part (the dense model usually finds the right place) without
 upgrading a record's status. Promotion stays behind `VM_PARAPHRASE_PROMOTE=1`.
@@ -150,10 +150,10 @@ in the `bench` workflow and posted on pull requests.
 
 Results (CI, bge-small, 2026-11-02):
 
-| Set | answerable / absent | chance top-1 | keyword top-1 / top-3 | hybrid top-1 / top-3 | dense only top-1 / top-3 |
-| --- | --- | --- | --- | --- | --- |
-| QMSum meetings | 197 / 0 | 5.3% | 40.6% / 62.4% | 42.1% / 62.4% | 40.1% / 61.4% |
-| CUAD contracts | 184 / 236 | 1.2% | 44.0% / 65.2% | **50.0%** / 67.4% | 42.9% / 62.5% |
+| Set            | answerable / absent | chance top-1 | keyword top-1 / top-3 | hybrid top-1 / top-3 | dense only top-1 / top-3 |
+| -------------- | ------------------- | ------------ | --------------------- | -------------------- | ------------------------ |
+| QMSum meetings | 197 / 0             | 5.3%         | 40.6% / 62.4%         | 42.1% / 62.4%        | 40.1% / 61.4%            |
+| CUAD contracts | 184 / 236           | 1.2%         | 44.0% / 65.2%         | **50.0%** / 67.4%    | 42.9% / 62.5%            |
 
 ### What the outside data decided
 
@@ -168,10 +168,10 @@ Results (CI, bge-small, 2026-11-02):
    the next-best line of any document, keyword agreement in the top 3) fixes
    the absent-clause problem but not precision:
 
-   | Set | shown (answerable) | right when shown | shown when absent |
-   | --- | --- | --- | --- |
-   | QMSum | 21.8% | 65.1% | - |
-   | CUAD | 6.0% | 81.8% | 1.7% |
+   | Set   | shown (answerable) | right when shown | shown when absent |
+   | ----- | ------------------ | ---------------- | ----------------- |
+   | QMSum | 21.8%              | 65.1%            | -                 |
+   | CUAD  | 6.0%               | 81.8%            | 1.7%              |
 
 4. **No rule reaches the bar.** Sweeping cosine floor, margin and keyword
    agreement on the development half (even rows), no setting reaches 90%
