@@ -255,3 +255,30 @@ test("closestLine abstains without the model and never claims to be an answer", 
   assert.equal(await closestLine("when is the money meeting", fresh), null);
   assert.ok(Date.now() - t0 < 4000);
 });
+
+test("discovery gate: in one document the margin is over the next line, not another document", async () => {
+  const { discoveryGate, gate: promote } = await import(
+    "../src/paraphrase.mjs"
+  );
+  const src = { id: "only" };
+  const u = (cosine, lexical) => ({ unit: { src }, cosine, lexical });
+  // two near-identical lines in a single file: the promotion gate sees no
+  // rival document and passes; discovery sees a tie and refuses
+  const tie = [u(0.86, 2), u(0.855, 1), u(0.4, 0)];
+  assert.ok(promote(tie, { minCosine: 0.72, minMargin: 0.02 }));
+  assert.equal(
+    discoveryGate(tie, { minCosine: 0.7, minMargin: 0.03, lexTop: 3 }),
+    null,
+  );
+  // a clear leader that keywords also rank near the top is shown
+  const clear = [u(0.86, 2), u(0.7, 3), u(0.4, 0)];
+  assert.ok(
+    discoveryGate(clear, { minCosine: 0.7, minMargin: 0.03, lexTop: 3 }),
+  );
+  // a clear leader that keywords don't support at all is not
+  const noWords = [u(0.86, 0), u(0.7, 3), u(0.4, 1)];
+  assert.equal(
+    discoveryGate(noWords, { minCosine: 0.7, minMargin: 0.03, lexTop: 3 }),
+    null,
+  );
+});

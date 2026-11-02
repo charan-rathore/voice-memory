@@ -1,6 +1,12 @@
 {
+ "calibration": null,
+ "discovery": {
+  "minCosine": 0.7,
+  "minMargin": 0.03,
+  "lexTop": 3
+ },
  "date": "2026-11-02",
- "sha": "51b9e78",
+ "sha": "5579e01",
  "data": {
   "qmsum": "83d7768",
   "cuad": "67faa0e"

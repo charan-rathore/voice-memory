@@ -358,6 +358,39 @@ export function rankUnitsLexical(question, bundle) {
     .sort((a, b) => b.fused - a.fused);
 }
 
+// Discovery gate. The promotion gate's margin is measured against the best
+// unit of ANOTHER document, which never exists in a single uploaded file:
+// on the outside benchmark (one meeting or one contract per bundle) that
+// gate showed a line for 86% of absent clauses. Discovery instead needs:
+//  - the top unit's cosine above a floor,
+//  - a lead over the next-best unit of any document (not just another one),
+//  - agreement: the same unit ranks in the keyword top `lexTop`.
+// Thresholds are chosen on the development half of the outside benchmark
+// (QMSum + CUAD, evaluation/outside-bench.mjs --calibrate) as the most lines
+// shown with at least 90% right and at most 10% shown when the answer is
+// absent, and reported on the held-out half.
+export const DISCOVERY = { minCosine: 0.7, minMargin: 0.03, lexTop: 3 };
+export function discoveryGate(
+  ranked,
+  { minCosine, minMargin, lexTop } = DISCOVERY,
+) {
+  const top = ranked[0];
+  if (!top) return null;
+  const rival = ranked
+    .filter((r) => r !== top)
+    .reduce((m, r) => Math.max(m, r.cosine), -1);
+  const margin = top.cosine - rival;
+  if (top.cosine < minCosine || margin < minMargin) return null;
+  if (lexTop) {
+    const lexRank =
+      top.lexical > 0
+        ? 1 + ranked.filter((r) => r.lexical > top.lexical).length
+        : Infinity;
+    if (lexRank > lexTop) return null;
+  }
+  return { ...top, margin };
+}
+
 const PRELIM_DOC = /\b(prelim\w*|provisional|draft)\b/i;
 const CORRECTING_DOC =
   /\b(amend\w*|correct\w*|revis\w*|supersed\w*|final report)\b/i;
@@ -386,7 +419,7 @@ export function replacedSource(bundle, src) {
 export async function closestLine(
   question,
   bundle,
-  { thresholds = GATE } = {},
+  { thresholds = DISCOVERY } = {},
 ) {
   const idx = unitsOf(bundle);
   if (!idx.vectors) {
@@ -403,7 +436,7 @@ export async function closestLine(
   const ranked = rankUnits(searched, bundle, qv).filter(
     (r) => !replacedSource(bundle, r.unit.src),
   );
-  const hit = gate(ranked, thresholds);
+  const hit = discoveryGate(ranked, thresholds);
   if (!hit) return null;
   const { src, sent } = hit.unit;
   if (Q_STRONG_ACTION.test(question) && SENT_WEAK_STATUS.test(sent.text))

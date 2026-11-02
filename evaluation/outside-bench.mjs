@@ -34,6 +34,8 @@ import {
   rankUnitsLexical,
   gate,
   GATE,
+  discoveryGate,
+  DISCOVERY,
   QUERY_PREFIX,
 } from "../src/paraphrase.mjs";
 import { warmDense, embedTextsReady, DENSE_MODEL_ID } from "../src/dense.mjs";
@@ -188,6 +190,25 @@ for (const it of items) {
     const g = gate(hyb, GATE);
     row.hybrid = it.answerable ? score(hyb, it) : null;
     row.dense = it.answerable ? score(den, it) : null;
+    // features of the top hybrid unit, for the discovery-gate sweep
+    const top = hyb[0];
+    const rival = hyb.slice(1).reduce((m, r) => Math.max(m, r.cosine), -1);
+    row.top = {
+      cosine: +top.cosine.toFixed(4),
+      margin: +(top.cosine - rival).toFixed(4),
+      lexRank:
+        top.lexical > 0
+          ? 1 + hyb.filter((r) => r.lexical > top.lexical).length
+          : null,
+      right: it.answerable ? overlaps(top.unit, it.spans) : false,
+    };
+    const d = discoveryGate(hyb, DISCOVERY);
+    row.discovery = d
+      ? {
+          shown: true,
+          right: it.answerable ? overlaps(d.unit, it.spans) : false,
+        }
+      : { shown: false };
     row.gate = g
       ? {
           shown: true,
@@ -236,14 +257,77 @@ function summarize(rs) {
         ? pct(U.filter((r) => r.gate.shown).length / U.length)
         : null,
     };
+    const shownD = A.filter((r) => r.discovery.shown);
+    s.discovery = {
+      shownOnAnswerable: pct(shownD.length / (A.length || 1)),
+      rightWhenShown: pct(
+        shownD.filter((r) => r.discovery.right).length / (shownD.length || 1),
+      ),
+      shownOnUnanswerable: U.length
+        ? pct(U.filter((r) => r.discovery.shown).length / U.length)
+        : null,
+    };
   }
   return s;
+}
+
+// Discovery-gate calibration: choose on the development half (even rows of
+// each set), report on the held-out half (odd rows). Most lines shown with
+// >= 90% right and <= 10% shown when the answer is absent.
+function evalRule(rs, rule) {
+  const pass = (r) =>
+    r.top.cosine >= rule.minCosine &&
+    r.top.margin >= rule.minMargin &&
+    (rule.lexTop == null ||
+      (r.top.lexRank != null && r.top.lexRank <= rule.lexTop));
+  const A = rs.filter((r) => r.answerable);
+  const U = rs.filter((r) => !r.answerable);
+  const shown = A.filter(pass);
+  return {
+    shown: shown.length,
+    answerable: A.length,
+    right: shown.filter((r) => r.top.right).length,
+    absentShown: U.filter(pass).length,
+    absent: U.length,
+  };
+}
+function calibrate(rows) {
+  const dev = [],
+    held = [];
+  for (const set of ["qmsum", "cuad"])
+    rows
+      .filter((r) => r.set === set)
+      .forEach((r, i) => (i % 2 ? held : dev).push(r));
+  let best = null;
+  for (let c = 0.5; c <= 0.92; c += 0.01)
+    for (let m = 0; m <= 0.1001; m += 0.005)
+      for (const lexTop of [1, 3, null]) {
+        const rule = {
+          minCosine: +c.toFixed(2),
+          minMargin: +m.toFixed(3),
+          lexTop,
+        };
+        const e = evalRule(dev, rule);
+        const prec = e.shown ? e.right / e.shown : 0;
+        const absent = e.absent ? e.absentShown / e.absent : 0;
+        if (e.shown < 5 || prec < 0.9 || absent > 0.1) continue;
+        if (!best || e.shown > best.dev.shown) best = { rule, dev: e };
+      }
+  if (!best)
+    return {
+      rule: null,
+      note: "no rule reaches 90% right with <= 10% absent shown on dev",
+    };
+  return { ...best, held: evalRule(held, best.rule) };
 }
 const summary = {
   qmsum: summarize(rows.filter((r) => r.set === "qmsum")),
   cuad: summarize(rows.filter((r) => r.set === "cuad")),
 };
+const calibration = dense ? calibrate(rows) : null;
 const out = {
+  calibration,
+  discovery: DISCOVERY,
   date: new Date().toISOString().slice(0, 10),
   sha: sha("."),
   data: { qmsum: sha(`${DATA}/QMSum`), cuad: sha(`${DATA}/cuad`) },
@@ -271,4 +355,20 @@ console.log(
 console.log("| --- | --- | --- | --- | --- | --- | --- | --- |");
 console.log(line("QMSum meetings", summary.qmsum));
 console.log(line("CUAD contracts", summary.cuad));
+if (dense) {
+  const d = (n, s) =>
+    `| ${n} | ${s.discovery.shownOnAnswerable}% shown, ${s.discovery.rightWhenShown}% right | ${s.discovery.shownOnUnanswerable ?? "-"}${s.discovery.shownOnUnanswerable != null ? "%" : ""} |`;
+  console.log(`\n**Shipped discovery gate** ${JSON.stringify(DISCOVERY)}\n`);
+  console.log("| Set | answerable | shown when absent |\n| --- | --- | --- |");
+  console.log(d("QMSum", summary.qmsum));
+  console.log(d("CUAD", summary.cuad));
+  const c = calibration;
+  const fmt = (e) =>
+    `${e.shown}/${e.answerable} shown, ${e.shown ? ((100 * e.right) / e.shown).toFixed(1) : 0}% right, absent shown ${e.absentShown}/${e.absent}`;
+  console.log(
+    c.rule
+      ? `\n**Calibrated on dev** ${JSON.stringify(c.rule)}: dev ${fmt(c.dev)}; held-out ${fmt(c.held)}`
+      : `\n**Calibration:** ${c.note}`,
+  );
+}
 process.exit(0);
