@@ -29,6 +29,65 @@ const ORDER = {
   unknown: 3,
 };
 
+// Decimal places a printed value carries ("12.9" -> 1), so a computed
+// difference is never more precise than the reports themselves.
+const places = (raw) =>
+  (String(raw).split(".")[1] ?? "").replace(/\D.*/, "").length;
+const fixedTo = (n, d) => Number(n.toFixed(d));
+/**
+ * What the drill-down may say about a test, computed with the engine's own
+ * rules: the change since the previous reading only when compare() calls the
+ * two readings comparable (same unit, both exact numbers; superseded values
+ * never count), and the distance to the printed range only for an exact
+ * value outside it. Everything else is reported as a reason, not a number.
+ */
+export function insightOf(series, o, r, pos) {
+  const readings = series.length;
+  const out = { readings, change: null, notCompared: null, distance: null };
+  if (series.length > 1) {
+    const prev = series[series.length - 2].current;
+    const c = compare(prev, o);
+    const exact = !prev.comparator && !o.comparator;
+    if (
+      c.comparable &&
+      exact &&
+      Number.isFinite(prev.value) &&
+      Number.isFinite(o.value)
+    ) {
+      const d = Math.max(places(prev.raw), places(o.raw));
+      const abs = fixedTo(o.value - prev.value, d);
+      out.change = {
+        from: prev.raw,
+        to: o.raw,
+        fromDate: series[series.length - 2].date,
+        toDate: series[series.length - 1].date,
+        abs,
+        pct:
+          prev.value !== 0
+            ? fixedTo((100 * (o.value - prev.value)) / Math.abs(prev.value), 1)
+            : null,
+        direction: c.direction,
+      };
+    } else out.notCompared = !c.comparable ? c.reason : "bound"; // "<0.05" is a bound, not a value
+  }
+  if (r && Number.isFinite(o.value) && !o.comparator) {
+    const d = places(o.raw);
+    if (/^below/.test(pos) && Number.isFinite(r.lowN))
+      out.distance = {
+        side: "below",
+        by: fixedTo(r.lowN - o.value, d),
+        bound: r.low ?? String(r.lowN),
+      };
+    else if (/^above/.test(pos) && Number.isFinite(r.highN))
+      out.distance = {
+        side: "above",
+        by: fixedTo(o.value - r.highN, d),
+        bound: r.high ?? String(r.highN),
+      };
+  }
+  return out;
+}
+
 function testCard(reports, key, sid) {
   const series = seriesFor(reports, key, sid);
   if (!series.length) return null;
@@ -43,6 +102,7 @@ function testCard(reports, key, sid) {
     comparator: s.current.comparator ?? null,
     unit: s.current.unit ?? null,
     status: s.current.report?.meta?.status ?? "unknown",
+    title: s.current.report?.title ?? null,
     range: rangeOf(s.current)
       ? { lowN: rangeOf(s.current).lowN, highN: rangeOf(s.current).highN }
       : null,
@@ -58,6 +118,7 @@ function testCard(reports, key, sid) {
     trend = c.comparable ? c.direction : `not_comparable:${c.reason}`;
   }
   const fixed = [...series].reverse().find((s) => s.superseded.length);
+  const insight = insightOf(series, o, r, pos);
   return {
     key,
     name: nameOf(o),
@@ -84,6 +145,7 @@ function testCard(reports, key, sid) {
     history,
     trend,
     unitChanged: units.length > 1,
+    insight,
     corrected: fixed
       ? {
           date: fixed.date,
