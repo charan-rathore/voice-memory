@@ -860,3 +860,59 @@ html:not(.voice-on) .voice-off { display: block; }
 .dict-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
 .dict-btn:hover { color: var(--ink); border-color: rgba(255, 255, 255, 0.3); }
 .dict-btn:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+
+/* how-it-works: one continuous surface, the artifact travels along a rail */
+.pipe.flow2 { border: 1px solid var(--rule); border-radius: 22px; background: #fffffb; padding: 34px 18px 18px; gap: 0; }
+.pipe.flow2 li { border: 0; border-radius: 0; background: transparent; padding: 14px 14px 10px; position: relative; }
+.pipe.flow2 li:not(:last-child) { border-right: 1px dashed var(--rule); }
+.pipe.flow2 li:first-child { background: transparent; color: inherit; }
+.pipe.flow2 li:first-child p, .pipe.flow2 li:first-child .pipe-n { color: var(--ink-2); }
+.pipe.flow2 li:first-child .pipe-n { color: var(--ink-3); }
+.pipe.flow2 li:last-child { background: transparent; }
+.pipe.flow2 .pf-call { background: var(--card); border-color: var(--card); }
+.pipe.flow2 .pf-answer { background: rgba(244, 220, 74, 0.28); border-color: rgba(183, 121, 31, 0.35); }
+.pf-case-note { font-size: 10.5px; line-height: 1.35; color: var(--ink-3); font-style: italic; }
+.flow-rail { position: absolute; left: 4%; right: 4%; top: 15px; height: 12px; z-index: 2; }
+.flow-line { position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: repeating-linear-gradient(90deg, var(--rule) 0 6px, transparent 6px 11px); }
+.flow-node { position: absolute; top: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--paper); border: 2px solid var(--ink-3); left: calc(var(--n) * 33.333%); }
+.flow-marker { position: absolute; top: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--mark); box-shadow: 0 0 0 4px rgba(244, 220, 74, 0.3), 0 0 16px rgba(244, 220, 74, 0.8); animation: flow-travel 7s var(--ease) infinite; }
+@keyframes flow-travel {
+  0% { left: 0; opacity: 0; }
+  6% { opacity: 1; }
+  28% { left: 33.333%; }
+  45% { left: 33.333%; }
+  62% { left: 66.666%; }
+  78% { left: 66.666%; }
+  94% { left: calc(100% - 12px); opacity: 1; }
+  100% { left: calc(100% - 12px); opacity: 0; }
+}
+@media (max-width: 720px) {
+  .pipe.flow2 { grid-template-columns: 1fr; padding: 18px 14px 14px 40px; }
+  .pipe.flow2 li:not(:last-child) { border-right: 0; border-bottom: 1px dashed var(--rule); }
+  .flow-rail { left: 14px; right: auto; top: 4%; bottom: 4%; width: 12px; height: auto; }
+  .flow-line { left: 5px; right: auto; top: 0; bottom: 0; width: 2px; height: auto; background: repeating-linear-gradient(180deg, var(--rule) 0 6px, transparent 6px 11px); }
+  .flow-node { left: 2px; top: calc(var(--n) * 33.333%); }
+  .flow-marker { animation-name: flow-travel-v; }
+}
+@keyframes flow-travel-v {
+  0% { top: 0; opacity: 0; }
+  6% { opacity: 1; }
+  28% { top: 33.333%; }
+  45% { top: 33.333%; }
+  62% { top: 66.666%; }
+  78% { top: 66.666%; }
+  94% { top: calc(100% - 12px); opacity: 1; }
+  100% { top: calc(100% - 12px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-marker { animation: none; opacity: 0; }
+}
+/* 2-col band: rail spans rows awkwardly; keep seams, hide rail */
+@media (min-width: 721px) and (max-width: 1000px) {
+  .pipe.flow2 { grid-template-columns: 1fr 1fr; }
+  .flow-rail { display: none; }
+  .pipe.flow2 li:nth-child(2n+1) { border-right: 1px dashed var(--rule); }
+  .pipe.flow2 li:not(:last-child) { border-right: 0; }
+  .pipe.flow2 li:nth-child(odd) { border-right: 1px dashed var(--rule); }
+  .pipe.flow2 li:nth-child(-n+2) { border-bottom: 1px dashed var(--rule); }
+}
