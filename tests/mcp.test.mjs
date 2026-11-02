@@ -15,14 +15,25 @@ import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-function client(base) {
+function client(base, extraEnv = {}, onRequest) {
+  const env = { ...process.env, VM_API_BASE: base, ...extraEnv };
+  for (const k of ["VM_MCP_UPLOAD_ROOTS", "VM_MCP_UPLOAD_CONFIRM"])
+    if (!(k in extraEnv)) delete env[k];
   const p = spawn(process.execPath, ["mcp/server.mjs"], {
-    env: { ...process.env, VM_API_BASE: base },
+    env,
     stdio: ["pipe", "pipe", "inherit"],
   });
   const waiting = new Map();
   createInterface({ input: p.stdout }).on("line", (l) => {
     const m = JSON.parse(l);
+    // a request from the server (elicitation): answer it
+    if (m.method && m.id !== undefined) {
+      const result = onRequest?.(m) ?? { action: "decline" };
+      p.stdin.write(
+        JSON.stringify({ jsonrpc: "2.0", id: m.id, result }) + "\n",
+      );
+      return;
+    }
     waiting.get(m.id)?.(m);
     waiting.delete(m.id);
   });
@@ -58,7 +69,6 @@ test("MCP: handshake, tool list, and a cited answer from the engine", async () =
         "list_cases",
         "ask_records",
         "create_workspace",
-        "upload_document",
         "add_document_text",
         "workspace_status",
       ],
@@ -115,7 +125,12 @@ test("MCP: upload_document only reads documents a person meant to share", async 
   mkdirSync(join(d, ".ssh"));
   writeFileSync(join(d, ".ssh", "keys.txt"), "secret");
   symlinkSync(join(d, "id_rsa"), join(d, "looks-fine.pdf"));
-  assert.ok(await checkUploadPath(join(d, "report.pdf")));
+  // no roots configured: uploads are off entirely
+  await assert.rejects(
+    checkUploadPath(join(d, "report.pdf"), ""),
+    /uploads are off/,
+  );
+  assert.ok(await checkUploadPath(join(d, "report.pdf"), d));
   for (const p of [
     join(d, "id_rsa"), // not a document type
     join(d, ".ssh", "keys.txt"), // inside a hidden folder
@@ -123,12 +138,99 @@ test("MCP: upload_document only reads documents a person meant to share", async 
     "report.pdf", // relative
     join(d, "missing.pdf"),
   ])
-    await assert.rejects(checkUploadPath(p), undefined, p);
+    await assert.rejects(checkUploadPath(p, d), undefined, p);
   // with roots set, only files under them
   await assert.rejects(
     checkUploadPath(join(d, "report.pdf"), tmpdir() + "-nope"),
   );
-  assert.ok(await checkUploadPath(join(d, "report.pdf"), d));
+});
+
+test("MCP: an upload needs allowed folders and the person's yes", async () => {
+  const srv = createLocalServer({ port: 0 });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${srv.address().port}/api/public`;
+  const ok = mkdtempSync(join(tmpdir(), "vm-ok-"));
+  const other = mkdtempSync(join(tmpdir(), "vm-other-"));
+  writeFileSync(join(ok, "notes.txt"), "The renewal fee is $9,000.");
+  writeFileSync(join(other, "tax-return.txt"), "private");
+  const init = (c, capabilities = {}) =>
+    c.rpc("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities,
+      clientInfo: { name: "test", version: "0" },
+    });
+  const names = async (c) =>
+    (await c.rpc("tools/list", {})).result.tools.map((t) => t.name);
+  const upload = async (c, path) => {
+    const ws = await c.rpc("tools/call", {
+      name: "create_workspace",
+      arguments: {},
+    });
+    const workspace = ws.result.structuredContent.workspace;
+    return (
+      await c.rpc("tools/call", {
+        name: "upload_document",
+        arguments: { workspace, path },
+      })
+    ).result;
+  };
+  const clients = [];
+  const mk = (...a) => {
+    const c = client(base, ...a);
+    clients.push(c);
+    return c;
+  };
+  try {
+    // no roots: not offered, and refused if called anyway
+    const off = mk();
+    await init(off, { elicitation: {} });
+    assert.ok(!(await names(off)).includes("upload_document"));
+    const r0 = await upload(off, join(ok, "notes.txt"));
+    assert.equal(r0.isError, true);
+    assert.match(r0.content[0].text, /uploads are off/);
+
+    // roots set, client asks the person: outside the roots is refused before asking
+    let asked = 0;
+    const yes = mk({ VM_MCP_UPLOAD_ROOTS: ok }, (m) => {
+      assert.equal(m.method, "elicitation/create");
+      assert.match(m.params.message, /notes\.txt/);
+      asked++;
+      return { action: "accept", content: { confirm: true } };
+    });
+    await init(yes, { elicitation: {} });
+    assert.ok((await names(yes)).includes("upload_document"));
+    const r1 = await upload(yes, join(other, "tax-return.txt"));
+    assert.equal(r1.isError, true);
+    assert.match(r1.content[0].text, /outside the folders/);
+    assert.equal(asked, 0);
+    const r2 = await upload(yes, join(ok, "notes.txt"));
+    assert.equal(r2.isError, false, JSON.stringify(r2));
+    assert.equal(asked, 1);
+
+    // the person says no
+    const no = mk({ VM_MCP_UPLOAD_ROOTS: ok }, () => ({ action: "decline" }));
+    await init(no, { elicitation: {} });
+    const r3 = await upload(no, join(ok, "notes.txt"));
+    assert.equal(r3.isError, true);
+    assert.match(r3.content[0].text, /not confirmed/);
+
+    // a client that cannot ask is refused unless the operator opted out
+    const mute = mk({ VM_MCP_UPLOAD_ROOTS: ok });
+    await init(mute);
+    assert.match(
+      (await upload(mute, join(ok, "notes.txt"))).content[0].text,
+      /not confirmed/,
+    );
+    const optOut = mk({
+      VM_MCP_UPLOAD_ROOTS: ok,
+      VM_MCP_UPLOAD_CONFIRM: "off",
+    });
+    await init(optOut);
+    assert.equal((await upload(optOut, join(ok, "notes.txt"))).isError, false);
+  } finally {
+    clients.forEach((c) => c.close());
+    srv.close();
+  }
 });
 
 test("MCP over Streamable HTTP: the engine serves the same tools at /api/public/mcp", async () => {

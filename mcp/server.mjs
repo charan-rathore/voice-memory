@@ -17,11 +17,15 @@
 //       "args": ["/path/to/voice-memory/mcp/server.mjs"] } } }
 // or, remote: https://voice-memory-beige.vercel.app/api/public/mcp
 //
-// upload_document reads a local file, so an agent tricked by a prompt could
-// try to send anything on disk. It only accepts the document types the
-// engine reads, under 4 MB, never inside a hidden directory, and, when
-// VM_MCP_UPLOAD_ROOTS is set (colon-separated), only under those folders.
-// The remote transport has no local files and does not offer it.
+// upload_document reads a local file and sends it to the Voice Memory
+// server, so an agent misled by a prompt could try to send anything on disk.
+// It is OFF unless VM_MCP_UPLOAD_ROOTS names the folders it may read
+// (path-delimiter separated); it accepts only the document types the engine
+// reads, under 4 MB, never inside a hidden folder, judged by the real path.
+// Each upload is also confirmed by the person: through MCP elicitation when
+// the client supports it; a client without elicitation is refused unless
+// the operator sets VM_MCP_UPLOAD_CONFIRM=off (the roots are then the only
+// consent). The remote transport has no local files and never offers it.
 import { readFile, realpath, stat } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { basename, isAbsolute, sep, delimiter } from "node:path";
@@ -203,7 +207,11 @@ export async function checkUploadPath(
     );
   if (real.split(sep).some((seg) => seg.startsWith(".") && seg.length > 1))
     throw new Error("files inside hidden folders are never uploaded");
-  if (roots) {
+  if (!roots)
+    throw new Error(
+      "uploads are off: set VM_MCP_UPLOAD_ROOTS to the folders this server may read",
+    );
+  {
     const allowed = await Promise.all(
       roots
         .split(delimiter)
@@ -217,6 +225,36 @@ export async function checkUploadPath(
   if (!st.isFile()) throw new Error("not a regular file");
   if (st.size > MAX_UPLOAD) throw new Error("file is over 4 MB");
   return real;
+}
+
+export const uploadsEnabled = () => !!process.env.VM_MCP_UPLOAD_ROOTS;
+
+/**
+ * Ask the person before a file leaves their computer. Elicitation
+ * (MCP 2025-06-18) when the client offers it; otherwise refuse, unless the
+ * operator turned the prompt off and the upload roots are the consent.
+ */
+async function confirmUpload(ctx, file, size, workspace) {
+  if (ctx.elicit) {
+    const r = await ctx
+      .elicit(
+        `Send ${basename(file)} (${Math.ceil(size / 1024)} KB) from ${file} to Voice Memory at ${new URL(ctx.base ?? BASE).host}, workspace ${workspace}? The file leaves this computer.`,
+        {
+          type: "object",
+          properties: {
+            confirm: {
+              type: "boolean",
+              title: "Send this file",
+              description: "Upload it to the workspace",
+            },
+          },
+          required: ["confirm"],
+        },
+      )
+      .catch(() => null);
+    return r?.action === "accept" && r?.content?.confirm === true;
+  }
+  return process.env.VM_MCP_UPLOAD_CONFIRM === "off";
 }
 
 async function call(name, args = {}, ctx = {}) {
@@ -252,6 +290,9 @@ async function call(name, args = {}, ctx = {}) {
       if (!/^w_[0-9a-f]{32}$/.test(String(args.workspace)))
         throw new Error("workspace must be an id from create_workspace");
       const file = await checkUploadPath(args.path);
+      const size = (await stat(file)).size;
+      if (!(await confirmUpload(ctx, file, size, args.workspace)))
+        throw new Error("upload not confirmed by the user; nothing was sent");
       const bytes = await readFile(file);
       return a(`/workspace/${args.workspace}/upload`, {
         method: "POST",
@@ -295,7 +336,8 @@ export async function handle(msg, ctx = {}) {
   const { id, method, params } = msg ?? {};
   if (typeof method !== "string")
     throw Object.assign(new Error("invalid request"), { code: -32600 });
-  if (method === "initialize")
+  if (method === "initialize") {
+    ctx.onInit?.(params?.capabilities ?? {});
     return {
       protocolVersion: negotiate(params?.protocolVersion),
       capabilities: { tools: { listChanged: false } },
@@ -307,12 +349,14 @@ export async function handle(msg, ctx = {}) {
       instructions:
         "Evidence engine over changing records. Relay `answer` and `citations` as given; a `closest` line is a pointer, not an answer. Demo cases are fictional; not a diagnostic product.",
     };
+  }
   if (method === "ping") return {};
   if (method === "tools/list")
     return {
-      tools: ctx.remote
-        ? TOOLS.filter((t) => t.name !== "upload_document")
-        : TOOLS,
+      tools:
+        ctx.remote || !uploadsEnabled()
+          ? TOOLS.filter((t) => t.name !== "upload_document")
+          : TOOLS,
     };
   if (method === "tools/call") {
     try {
@@ -447,6 +491,34 @@ const isMain = (() => {
 })();
 const send = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 if (isMain) {
+  // requests this server sends to the client (elicitation) and their replies
+  const waiting = new Map();
+  let seq = 0;
+  let clientCaps = {};
+  const ctx = {
+    onInit: (caps) => (clientCaps = caps),
+    get elicit() {
+      if (!clientCaps.elicitation) return undefined;
+      return (message, requestedSchema) =>
+        new Promise((ok, bad) => {
+          const id = `vm-elicit-${++seq}`;
+          const t = setTimeout(() => {
+            waiting.delete(id);
+            bad(new Error("no answer"));
+          }, 120000);
+          waiting.set(id, (m) => {
+            clearTimeout(t);
+            m.error ? bad(new Error(m.error.message)) : ok(m.result);
+          });
+          send({
+            jsonrpc: "2.0",
+            id,
+            method: "elicitation/create",
+            params: { message, requestedSchema },
+          });
+        });
+    },
+  };
   const rl = createInterface({ input: process.stdin });
   rl.on("line", async (line) => {
     if (!line.trim()) return;
@@ -460,7 +532,13 @@ if (isMain) {
         error: { code: -32700, message: "parse error" },
       });
     }
-    const out = await respond(msg);
+    // a reply to one of our requests
+    if (msg && !msg.method && waiting.has(msg.id)) {
+      const done = waiting.get(msg.id);
+      waiting.delete(msg.id);
+      return done(msg);
+    }
+    const out = await respond(msg, ctx);
     if (out) send(out);
   });
 }

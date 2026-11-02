@@ -191,10 +191,15 @@ public API, so the same rate limits and refusals apply. It does not offer
 ```
 
 `upload_document` reads a local file, so an agent misled by a prompt could
-try to send anything on disk. It only accepts PDF, DOCX, PNG, JPEG, TXT and MD
-files under 4 MB, never from a hidden folder (`.ssh`, `.aws`, ...), judged by
-the real path after symlinks; set `VM_MCP_UPLOAD_ROOTS=/path/a:/path/b` to
-allow only those folders. `VM_API_BASE` points it at another deployment.
+try to send anything on disk. It is off, and not even listed, until
+`VM_MCP_UPLOAD_ROOTS=/path/a:/path/b` names the folders it may read. Even
+then it only accepts PDF, DOCX, PNG, JPEG, TXT and MD files under 4 MB, never
+from a hidden folder (`.ssh`, `.aws`, ...), judged by the real path after
+symlinks, and it asks the person before each file leaves the computer
+(MCP elicitation: file name, size, path and destination). A client that
+cannot ask is refused; an operator who wants the folder list to be the only
+consent sets `VM_MCP_UPLOAD_CONFIRM=off`. `VM_API_BASE` points it at another
+deployment.
 
 Checked with the official MCP SDK client over stdio (direct and through a
 symlink) and Streamable HTTP, and with Claude Code (`claude mcp list`:
@@ -253,23 +258,23 @@ shown while the free host wakes up; a test keeps it equal to the live engine).
 
 ## Repository
 
-| Path                                  | Role                                                                         |
-| ------------------------------------- | ---------------------------------------------------------------------------- |
-| `src/public-api.mjs`                  | Key-free landing API: cases, ask, documents, graphs, capped call minting     |
-| `server.mjs` / `src/server.mjs`       | Stable entry point / HTTP server, workspace API, Bolna routes, case loading  |
-| `src/engine.ts`, `src/claim-check.ts` | Evidence engine and claim vocabulary                                         |
-| `src/spoken*.mjs`                     | Spoken layer: intent, verdicts, normalisation                                |
-| `clinical/`                           | Lab observations, comparability, explanations (en/hi/Hinglish)               |
-| `src/voice-adapter.mjs`               | OpenAI-compatible SSE endpoint for Bolna, per-call isolation                 |
-| `ingest/`, `src/library.mjs`          | File ingestion and page-anchored documents                                   |
-| `memory/`                             | Episodic memory and the knowledge-graph view                                 |
-| `site/`                               | Landing page, memory graph page, engine snapshot (Vercel)                    |
-| `public/`                             | Local owner workspace (uploads, voice notes, voice lab)                      |
-| `film/`                               | The submission film (Remotion source)                                        |
+| Path                                  | Role                                                                          |
+| ------------------------------------- | ----------------------------------------------------------------------------- |
+| `src/public-api.mjs`                  | Key-free landing API: cases, ask, documents, graphs, capped call minting      |
+| `server.mjs` / `src/server.mjs`       | Stable entry point / HTTP server, workspace API, Bolna routes, case loading   |
+| `src/engine.ts`, `src/claim-check.ts` | Evidence engine and claim vocabulary                                          |
+| `src/spoken*.mjs`                     | Spoken layer: intent, verdicts, normalisation                                 |
+| `clinical/`                           | Lab observations, comparability, explanations (en/hi/Hinglish)                |
+| `src/voice-adapter.mjs`               | OpenAI-compatible SSE endpoint for Bolna, per-call isolation                  |
+| `ingest/`, `src/library.mjs`          | File ingestion and page-anchored documents                                    |
+| `memory/`                             | Episodic memory and the knowledge-graph view                                  |
+| `site/`                               | Landing page, memory graph page, engine snapshot (Vercel)                     |
+| `public/`                             | Local owner workspace (uploads, voice notes, voice lab)                       |
+| `film/`                               | The submission film (Remotion source)                                         |
 | `mcp/server.mjs`                      | MCP server (stdio and Streamable HTTP, zero dependencies) over the public API |
-| `src/paraphrase.mjs`                  | Sentence units, dense + BM25 fusion, calibrated gate, closest-line discovery |
-| `evaluation/`, `tests/`               | Tests and benchmarks (`evaluation/outside-bench.mjs`: QMSum + CUAD)          |
-| `docs/MARKET.md`                      | Market, position, pricing hypothesis and 90-day falsifiable plan             |
+| `src/paraphrase.mjs`                  | Sentence units, dense + BM25 fusion, calibrated gate, closest-line discovery  |
+| `evaluation/`, `tests/`               | Tests and benchmarks (`evaluation/outside-bench.mjs`: QMSum + CUAD)           |
+| `docs/MARKET.md`                      | Market, position, pricing hypothesis and 90-day falsifiable plan              |
 
 ## Next
 
