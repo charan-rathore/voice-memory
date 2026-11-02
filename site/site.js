@@ -1835,6 +1835,30 @@
     update();
   })();
 
+  // Hero: hovering the card pauses the story so it can be read, but a tab
+  // click must still play the chosen story through to its answer; otherwise
+  // the pointer on the tab freezes the card on its empty first step.
+  (() => {
+    const card = $(".hero-card");
+    if (!card) return;
+    // "" idle, "jump" until the chosen story starts, "play" until its answer
+    let phase = "";
+    for (const t of $$(".hc-tab", card))
+      t.addEventListener("click", () => {
+        if (!card.classList.contains("hc-loop")) return;
+        phase = "jump";
+        card.dispatchEvent(new PointerEvent("pointerleave"));
+      });
+    new MutationObserver(() => {
+      const s = card.dataset.step;
+      if (phase === "jump" && s === "ask") phase = "play";
+      if (phase !== "play" || s !== "answer") return;
+      phase = "";
+      if (card.matches(":hover, :focus-within"))
+        card.dispatchEvent(new PointerEvent("pointerenter"));
+    }).observe(card, { attributes: true, attributeFilter: ["data-step"] });
+  })();
+
   setCase("health");
   miniGraph();
   connect();
