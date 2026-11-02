@@ -196,6 +196,26 @@ Decision: the closest-line pointer is **off by default**. A pointer that is
 wrong a third of the time on meetings undermines the one promise the product
 makes. Retrieval keeps the hybrid ranking; answers stay with the engine.
 
+## Cross-encoder rerank (2026-11-02): better ranking, gate still short
+
+`src/rerank.mjs` reranks the fused top 20 sentence units with a cross-encoder
+(local ONNX, off unless `VM_RERANK=on`); the outside bench sweeps a gate on
+its probability, its lead over the runner-up and the line's fused rank, on
+the dev half, and reports held-out. CI, PR #36:
+
+| Reranker | QMSum top-1 / top-3 | CUAD top-1 / top-3 | MRR@10 (QMSum, CUAD) |
+| --- | --- | --- | --- |
+| None (hybrid) | 42.1% / 62.4% | 50.0% / 67.4% | 0.540, 0.603 |
+| ms-marco MiniLM-L6 | **48.7% / 66.5%** | **56.0% / 72.8%** | 0.594, 0.650 |
+| jina-reranker-v1-tiny | 45.2% / 65.5% | 38.6% / 62.5% | 0.569, 0.519 |
+
+MiniLM-L6 puts the right line first 6 to 7 points more often on both outside
+sets. As a gate it still misses the bar: at 5% coverage its best dev rule is
+84.6% right (1/106 absent shown) and 78.9% held-out (9/130 absent shown);
+higher coverage costs precision. So `RERANK_GATE` stays null and the
+closest-line pointer stays off. The ranking gain is real; trusting one line
+without a person checking it is not yet.
+
 ## Next experiments
 
 - A cross-encoder reranker (bge-reranker-base) over the top 10 units, the
