@@ -47,12 +47,68 @@
   const note = (t) => ($("#engine-note").textContent = t);
 
   // ------------------------------------------------------------ API
+  // ------------------------------------------------------------ your own voice keys
+  // A visitor's own Bolna, Sarvam or ElevenLabs keys. They stay in this
+  // browser (this tab, or this device if they choose), are sent to this
+  // server only with the one call or Listen request that needs them, and the
+  // server uses them once and keeps nothing.
+  const byo = (() => {
+    const K = "vm-byo";
+    const empty = { bolnaKey: "", bolnaAgent: "", ttsProvider: "", ttsKey: "", remember: false };
+    let v = { ...empty };
+    try {
+      v = { ...empty, ...JSON.parse(localStorage.getItem(K) || sessionStorage.getItem(K) || "{}") };
+    } catch {
+      /* storage blocked: keys live for this page only */
+    }
+    const save = () => {
+      try {
+        localStorage.removeItem(K);
+        sessionStorage.removeItem(K);
+        (v.remember ? localStorage : sessionStorage).setItem(K, JSON.stringify(v));
+      } catch {
+        /* storage blocked */
+      }
+    };
+    return {
+      get: () => ({ ...v }),
+      set(patch) {
+        v = { ...v, ...patch };
+        save();
+      },
+      clear() {
+        v = { ...empty };
+        try {
+          localStorage.removeItem(K);
+          sessionStorage.removeItem(K);
+        } catch {
+          /* storage blocked */
+        }
+      },
+      hasCall: () => !!(v.bolnaKey && v.bolnaAgent),
+      hasTts: () => !!(v.ttsProvider && v.ttsKey),
+      ttsHeaders: () =>
+        v.ttsProvider && v.ttsKey
+          ? { "x-vm-tts-provider": v.ttsProvider, "x-vm-tts-key": v.ttsKey }
+          : {},
+    };
+  })();
+  window.VM_BYO = { ttsHeaders: () => byo.ttsHeaders() };
+  const listenOn = () => !!state.voiceOut?.enabled || byo.hasTts();
+  const callOn = () => !!state.voice?.ready || byo.hasCall();
+  const syncVoiceClasses = () => {
+    document.documentElement.classList.toggle("voice-on", callOn());
+    document.documentElement.classList.toggle("voice-out", listenOn());
+  };
+
   async function api(path, opts = {}, timeoutMs = 20000) {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
     try {
+      const own = /^\/(speak|narrate-audio\/)/.test(path) ? byo.ttsHeaders() : {};
       const r = await fetch("/api/public" + path, {
         ...opts,
+        headers: { ...(opts.headers ?? {}), ...own },
         signal: ctl.signal,
       });
       const text = await r.text();
@@ -117,12 +173,7 @@
           state.voice = s.voice;
           state.semantic = s.semantic ?? null;
           state.voiceOut = s.voiceOut ?? null;
-          document.documentElement.classList.toggle(
-            "voice-out",
-            !!s.voiceOut?.enabled,
-          );
-          if (s.voice?.ready)
-            document.documentElement.classList.add("voice-on");
+          syncVoiceClasses();
           note(
             "Live engine connected. Every answer is computed now from the fictional records.",
           );
@@ -522,7 +573,7 @@
       stageHost: $("#desk .desk-right"),
       // Listen is offered only when the server has a neural voice; the
       // narration text is always on screen either way.
-      narrateButton: !!state.voiceOut?.enabled,
+      narrateButton: listenOn(),
     });
   }
 
@@ -662,7 +713,7 @@
       <div class="a-visual" id="a-visual"></div>
       <div class="a-tools">
         ${
-          lead?.text && state.voiceOut?.enabled && source !== "saved"
+          lead?.text && listenOn() && source !== "saved"
             ? `<button class="tool listen" type="button" data-listen aria-pressed="false"><i class="eq" aria-hidden="true"><b></b><b></b><b></b></i><span>Listen</span></button>`
             : ""
         }
@@ -1327,10 +1378,11 @@
     // Server gate first: when minting is closed, never ask for the
     // microphone - say so and stop. The buttons are hidden in this state;
     // this guard is the programmatic backstop.
-    if (!state.voice?.ready) {
+    if (!callOn()) {
       callState("Voice calls are currently disabled on this server.");
       return;
     }
+    const own = byo.hasCall() ? byo.get() : null;
     $("#try").scrollIntoView({
       behavior: reduced ? "auto" : "smooth",
       block: "start",
@@ -1398,16 +1450,25 @@
     const call = new window.BolnaWebCall({
       ...(audio ? { audio } : {}),
       getSession: async () => {
-        const r = await fetch("/api/public/voice/session", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            user_data: {
-              page: "landing",
-              vm_ws: state.case === "own" && state.ws ? state.ws : "demo",
-            },
-          }),
-        });
+        const user_data = {
+          page: "landing",
+          vm_ws: state.case === "own" && state.ws ? state.ws : "demo",
+        };
+        // your own Bolna account pays for the call; no server allowance used
+        const r = own
+          ? await fetch("/api/public/voice/byo/session", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-bolna-key": own.bolnaKey,
+              },
+              body: JSON.stringify({ agent_id: own.bolnaAgent, user_data }),
+            })
+          : await fetch("/api/public/voice/session", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ user_data }),
+            });
         const body = await r.json().catch(() => ({}));
         if (!r.ok)
           throw new Error(body.error || "Couldn't start a call right now.");
@@ -1835,6 +1896,81 @@
       { passive: true },
     );
     update();
+  })();
+
+  // Your own voice keys: the panel under the call bar.
+  (() => {
+    const root = $("#byo");
+    if (!root) return;
+    const f = {
+      bolnaKey: $("#byo-bolna-key"),
+      bolnaAgent: $("#byo-bolna-agent"),
+      ttsProvider: $("#byo-tts-provider"),
+      ttsKey: $("#byo-tts-key"),
+      remember: $("#byo-remember"),
+    };
+    const fill = () => {
+      const v = byo.get();
+      for (const [k, el] of Object.entries(f))
+        if (el) el.type === "checkbox" ? (el.checked = !!v[k]) : (el.value = v[k] ?? "");
+      $("#byo-state").textContent = [
+        byo.hasCall() ? "Calls use your Bolna account" : "",
+        byo.hasTts() ? `Listen uses your ${v.ttsProvider === "sarvam" ? "Sarvam" : "ElevenLabs"} key` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    };
+    const save = () => {
+      byo.set(
+        Object.fromEntries(
+          Object.entries(f).map(([k, el]) => [k, el.type === "checkbox" ? el.checked : el.value.trim()]),
+        ),
+      );
+      syncVoiceClasses();
+      fill();
+      if ($("#answer .overview")) renderOverview();
+    };
+    for (const el of Object.values(f)) el?.addEventListener("change", save);
+    $("#byo-clear")?.addEventListener("click", () => {
+      byo.clear();
+      syncVoiceClasses();
+      fill();
+      $("#byo-llm").hidden = true;
+      if ($("#answer .overview")) renderOverview();
+    });
+    $("#byo-llm-get")?.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const scope = state.case === "own" ? state.ws : state.case;
+      try {
+        const k = await api("/llm/key", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ case: scope || "demo" }),
+        });
+        const box = $("#byo-llm");
+        box.querySelector('[data-k="url"]').textContent = k.baseUrl;
+        box.querySelector('[data-k="key"]').textContent = k.apiKey;
+        box.querySelector('[data-k="model"]').textContent = k.model;
+        box.querySelector('[data-k="until"]').textContent = new Date(k.expiresAt).toLocaleString();
+        box.hidden = false;
+      } catch (err) {
+        $("#byo-state").textContent = err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    root.addEventListener("click", (e) => {
+      const c = e.target.closest("[data-copy]");
+      if (!c) return;
+      const text = c.previousElementSibling?.textContent ?? "";
+      navigator.clipboard?.writeText(text).then(() => {
+        c.textContent = "Copied";
+        setTimeout(() => (c.textContent = "Copy"), 1200);
+      });
+    });
+    fill();
+    syncVoiceClasses();
   })();
 
   // Hero: hovering the card pauses the story so it can be read, but a tab

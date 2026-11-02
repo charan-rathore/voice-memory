@@ -1015,8 +1015,10 @@ export function createLocalServer({
   // Bolna web-call session mint. SDK v3.0.1 expects the FreeSWITCH session
   // shape ({run_id, wss_url, sip_username, ...}); the older /web-call/session
   // route is only a fallback for accounts that do not have it.
-  async function mintBolna(userData) {
-    if (!bolnaKey || !bolnaAgent) {
+  async function mintBolna(userData, creds = null) {
+    const key = creds?.key ?? bolnaKey;
+    const agentId = creds?.agent ?? bolnaAgent;
+    if (!key || !agentId) {
       const e = Error("Bolna web call is not configured on this server.");
       e.status = 503;
       throw e;
@@ -1026,11 +1028,11 @@ export function createLocalServer({
       const r = await vendorFetch("https://api.bolna.ai" + route, {
         method: "POST",
         headers: {
-          authorization: "Bearer " + bolnaKey,
+          authorization: "Bearer " + key,
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          agent_id: bolnaAgent,
+          agent_id: agentId,
           ...(userData && typeof userData === "object"
             ? { user_data: userData }
             : {}),
@@ -1189,6 +1191,67 @@ export function createLocalServer({
     }
     return null;
   });
+  // ------------------------------------------------------------ bring your own voice
+  // A visitor's own voice platform (Bolna, Vapi, Retell, ElevenLabs Agents)
+  // pays for speech; this engine still writes every reply. A key issued here
+  // is a capability on a SEPARATE adapter, bound to one public case or the
+  // visitor's own workspace, so it answers exactly what /api/public/ask
+  // answers, in the OpenAI chat format a "custom LLM" setting expects. It
+  // can never reach the operator's fixed Bolna capability or another
+  // workspace. Every key dies 24 hours after issue, or with its workspace.
+  // Visitor Bolna keys are used for one mint and never kept.
+  const BYO_HARD_MS = 24 * 3600 * 1000;
+  const byoVoice = createVoiceAdapter({
+    ttlMs: 30 * 60 * 1000,
+    hardTtlMs: BYO_HARD_MS,
+  });
+  const byoKeys = new Map(); // token -> { at, scope, bundle }
+  const byoHits = new Map(); // `${kind}|${ip}` -> { n, start }
+  const byoAllow = (kind, ip, max, windowMs = 3600000) => {
+    const k = `${kind}|${ip}`;
+    const t = Date.now();
+    const r = byoHits.get(k) ?? { n: 0, start: t };
+    if (t - r.start > windowMs) Object.assign(r, { n: 0, start: t });
+    r.n++;
+    byoHits.set(k, r);
+    if (byoHits.size > 20000) byoHits.delete(byoHits.keys().next().value);
+    return r.n <= max;
+  };
+  const byoBundle = (scope) => {
+    if (scope === "demo" || scope === "health" || scope === "deal")
+      return (
+        (scope === "demo" ? voiceCase.bundle : caseSessions[scope]?.bundle) ??
+        null
+      );
+    if (/^w_[0-9a-f]{32}$/.test(String(scope)))
+      return workspaces.get(scope)?.s?.bundle ?? null;
+    return null;
+  };
+  // A key is live while it is under 24 hours old and its scope still
+  // exists. A workspace key follows the workspace: new uploads are answered
+  // from, and once the workspace is deleted the key dies with it, so no
+  // document outlives the visitor's 30-minute promise through a voice key.
+  const byoLive = (token) => {
+    const k = byoKeys.get(token);
+    if (!k) return false;
+    const current =
+      Date.now() - k.at <= BYO_HARD_MS ? byoBundle(k.scope) : null;
+    if (!current) {
+      byoKeys.delete(token);
+      byoVoice.retire(token);
+      return false;
+    }
+    if (current !== k.bundle) {
+      byoVoice.retarget(token, current);
+      k.bundle = current;
+    }
+    return true;
+  };
+  const byoSweep = () => {
+    for (const t of [...byoKeys.keys()]) byoLive(t);
+  };
+  // drop keys (and their bundle references) for deleted workspaces promptly
+  setInterval(byoSweep, 60000).unref?.();
   // Public narration voice (Sarvam Bulbul). Null without VM_SARVAM_API_KEY:
   // the narrate-audio route then fails closed with 503, never a fallback.
   const sarvamTts = createSarvamTts();
@@ -1419,6 +1482,151 @@ export function createLocalServer({
         }),
       );
       return;
+    }
+    // Bring your own voice: issue a scoped custom-LLM key, serve it, and
+    // start a web call on the visitor's own Bolna account.
+    const byoPath = req.url.split("?")[0];
+    if (
+      byoPath.startsWith("/api/public/llm/") ||
+      byoPath === "/api/public/voice/byo/session"
+    ) {
+      const ip = clientAddress(req);
+      const reply = (code, obj) => {
+        res.writeHead(code, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        });
+        res.end(JSON.stringify(obj));
+      };
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, { Allow: "GET, POST" });
+        res.end();
+        return;
+      }
+      if (byoPath === "/api/public/llm/key" && req.method === "POST") {
+        if (!byoAllow("key", ip, 10))
+          return reply(429, {
+            error: "Too many keys from here. Try again in an hour.",
+          });
+        loadPublicCases();
+        await casesReady?.catch?.(() => {});
+        const data = await body(req).catch(() => ({}));
+        const scope = String(data?.case ?? "demo");
+        const bundle = byoBundle(scope);
+        if (!bundle)
+          return reply(scope.startsWith("w_") ? 404 : 400, {
+            error: scope.startsWith("w_")
+              ? "That workspace has no documents yet, or it has expired."
+              : "Pick health, deal or a workspace id.",
+          });
+        byoSweep();
+        if (byoKeys.size >= 2000) {
+          const [oldest] = byoKeys.keys();
+          byoKeys.delete(oldest);
+          byoVoice.retire(oldest);
+        }
+        const token = byoVoice.bind(bundle, randomBytes(32).toString("hex"));
+        byoKeys.set(token, { at: Date.now(), scope, bundle });
+        const site =
+          process.env.VM_PUBLIC_SITE_ORIGIN ||
+          (req.headers["x-forwarded-host"]
+            ? `https://${String(req.headers["x-forwarded-host"]).split(",")[0].trim()}`
+            : `http://${req.headers.host}`);
+        return reply(200, {
+          baseUrl: `${site}/api/public/llm/v1`,
+          apiKey: token,
+          model: "voice-memory",
+          scope,
+          expiresAt: new Date(Date.now() + BYO_HARD_MS).toISOString(),
+        });
+      }
+      if (
+        byoPath === "/api/public/llm/v1/models" ||
+        byoPath === "/api/public/llm/v1/chat/completions"
+      ) {
+        const bearer = String(req.headers.authorization ?? "").replace(
+          /^Bearer /,
+          "",
+        );
+        if (!byoLive(bearer))
+          return reply(401, {
+            error: "Invalid or expired key. Get a new one on the page.",
+          });
+        if (
+          req.method === "POST" &&
+          !byoAllow("turn", bearer, 600, 24 * 3600000)
+        )
+          return reply(429, { error: "This key has reached today's turns." });
+        const response = await byoVoice.handle(
+          new Request(origin + byoPath.replace("/api/public/llm", ""), {
+            method: req.method,
+            headers: { authorization: "Bearer " + bearer },
+            ...(req.method === "POST"
+              ? {
+                  body: await body(req)
+                    .then(JSON.stringify)
+                    .catch(() => ""),
+                }
+              : {}),
+          }),
+        );
+        res.writeHead(response.status, {
+          "Content-Type":
+            response.headers.get("content-type") ?? "application/json",
+          "Cache-Control": "no-store",
+        });
+        if (response.body) {
+          const reader = response.body.getReader();
+          try {
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              res.write(value);
+            }
+          } finally {
+            await reader.cancel().catch(() => {});
+          }
+        }
+        res.end();
+        return;
+      }
+      if (
+        byoPath === "/api/public/voice/byo/session" &&
+        req.method === "POST"
+      ) {
+        // The visitor's key arrives in a header, is used for this one mint,
+        // and is never stored or logged. Their account pays for the call.
+        const key = String(req.headers["x-bolna-key"] ?? "").trim();
+        const data = await body(req).catch(() => ({}));
+        const agent = String(data?.agent_id ?? "").trim();
+        if (!key || key.length > 200 || /\s/.test(key))
+          return reply(400, { error: "Paste your Bolna API key." });
+        if (!/^[0-9a-f-]{8,64}$/i.test(agent))
+          return reply(400, { error: "Paste your Bolna agent id." });
+        if (!byoAllow("call", ip, 20))
+          return reply(429, {
+            error: "Too many calls from here. Try again in an hour.",
+          });
+        try {
+          const ws = String(data?.user_data?.vm_ws ?? "demo");
+          const session = await mintBolna(
+            {
+              page: "landing-byo",
+              vm_ws: /^w_[0-9a-f]{32}$/.test(ws) ? ws : "demo",
+            },
+            { key, agent },
+          );
+          return reply(200, session);
+        } catch (e) {
+          return reply(e.status === 429 ? 429 : 502, {
+            error:
+              e.status === 503
+                ? "Bolna web call is not configured."
+                : "Bolna did not start the call. Check the key and agent id, and that the agent has web calls enabled.",
+          });
+        }
+      }
+      return reply(404, { error: "Not found." });
     }
     // Remote MCP (Streamable HTTP): the same tools as mcp/server.mjs, served
     // by calling this engine's own public API over loopback, so every limit

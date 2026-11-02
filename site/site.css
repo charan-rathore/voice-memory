@@ -952,3 +952,27 @@ html:not(.voice-on) .voice-off { display: block; }
   .tm-plug { grid-template-columns: 1fr; }
   .tm-cta { grid-column: 1; grid-row: auto; }
 }
+
+/* ---------------------------------------------------------------- your own voice keys */
+.byo { border: 1px solid var(--rule); border-radius: 12px; background: rgba(255, 255, 255, 0.02); }
+.byo summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 9px 12px; font-size: 13.5px; }
+.byo summary::-webkit-details-marker { display: none; }
+.byo summary b { font-weight: 500; color: var(--ink); }
+.byo summary b::before { content: "+ "; color: var(--ink-3); }
+.byo[open] summary b::before { content: "− "; }
+.byo summary span { font-size: 12px; color: var(--teal-ink, #62d5c3); }
+.byo-body { display: grid; gap: 12px; padding: 0 12px 12px; }
+.byo-lede { margin: 0; font: 15px/1.45 var(--serif); color: var(--ink-2); }
+.byo fieldset { margin: 0; padding: 10px 12px 12px; border: 1px solid var(--rule); border-radius: 10px; display: grid; gap: 8px; }
+.byo legend { padding: 0 6px; font: 600 11px var(--sans); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); }
+.byo label { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
+.byo input:not([type="checkbox"]), .byo select { width: 100%; min-width: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid #2a3350; background: #0a0f20; color: var(--ink); font: 13.5px var(--mono, monospace); }
+.byo input:focus-visible, .byo select:focus-visible { outline: 2px solid rgba(244, 220, 74, 0.6); outline-offset: 1px; }
+.byo-fine { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-3); }
+.byo-llm { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; margin: 0; align-items: center; }
+.byo-llm dt { font-size: 12px; color: var(--ink-3); }
+.byo-llm dd { margin: 0; display: flex; gap: 8px; align-items: center; min-width: 0; }
+.byo-llm code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px var(--mono, monospace); color: var(--ink); }
+.byo-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.byo-check { display: flex !important; grid-auto-flow: column; align-items: center; gap: 6px !important; }
+.byo .tool { color: var(--ink); background: transparent; }

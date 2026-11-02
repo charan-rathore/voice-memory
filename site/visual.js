@@ -1644,6 +1644,8 @@
     const get = (i) =>
       fetch(
         `/api/public/narrate-audio/${caseId}/${i}?lang=${encodeURIComponent(lang)}`,
+        // the visitor's own voice key, when they set one (site.js)
+        { headers: window.VM_BYO?.ttsHeaders?.() ?? {} },
       )
         .then((r) => (r.ok ? r.blob() : null))
         .catch(() => null);

@@ -28,6 +28,8 @@ import { seriesFor, compare } from "../clinical/observations.mjs";
 import { spokenText, splitSentences as splitSpoken } from "./companion.mjs";
 import { repairTestNames } from "./spoken-repair.mjs";
 import { spokenIds } from "./vernacular.mjs";
+import { createSarvamTts } from "./sarvam-tts.mjs";
+import { createElevenTts, createVoiceOut } from "./voice-providers.mjs";
 
 export const CASES = {
   health: {
@@ -107,6 +109,29 @@ export function createPublicApi({
   // callers, the bare Sarvam adapter. Either way null means "not configured"
   // and every voice route fails closed.
   const tts = voice ?? sarvam;
+  const serverTts = tts;
+  // Bring your own voice: a visitor may send their own Sarvam or ElevenLabs
+  // key with a Listen request (x-vm-tts-provider / x-vm-tts-key). It is used
+  // for that one synthesis, never stored or logged, and their quota pays
+  // for it, so the server's daily narration caps do not apply; the per-IP
+  // limit below still does, so this is not an open proxy.
+  const byoTtsLimit = limiter(120, 3600000);
+  const ttsFor = (req) => {
+    const p = String(req.headers["x-vm-tts-provider"] ?? "");
+    const k = String(req.headers["x-vm-tts-key"] ?? "");
+    if (!p || !k || k.length < 8 || k.length > 200 || /\s/.test(k)) return null;
+    if (p === "sarvam")
+      return createVoiceOut({
+        sarvam: createSarvamTts({ apiKey: k }),
+        order: ["sarvam"],
+      });
+    if (p === "elevenlabs")
+      return createVoiceOut({
+        eleven: createElevenTts({ apiKey: k }),
+        order: ["elevenlabs"],
+      });
+    return null;
+  };
   const tickets = new Map(); // ticket -> mint time (call evidence feed)
   const askLimit = limiter(num(process.env.VM_PUBLIC_ASK_PER_MIN, 40), 60000);
   const globalAsk = limiter(
@@ -697,6 +722,8 @@ export function createPublicApi({
       }
       const nav = /^\/narrate-audio\/(\w+)\/(\d+)$/.exec(path);
       if (req.method === "GET" && nav) {
+        const own = ttsFor(req);
+        const tts = own ?? serverTts;
         if (!tts)
           return (
             send(res, 503, {
@@ -740,7 +767,9 @@ export function createPublicApi({
         if (!buf) {
           // Only real syntheses count against the day's caps; cached audio
           // costs nothing to serve again.
-          if (!narratePerIp(ip) || !narrateGlobal("all"))
+          if (
+            own ? !byoTtsLimit(ip) : !narratePerIp(ip) || !narrateGlobal("all")
+          )
             return (
               send(res, 429, {
                 error: "Voice narration limit reached for today.",
@@ -782,6 +811,8 @@ export function createPublicApi({
         return true;
       }
       if (req.method === "POST" && path === "/speak") {
+        const own = ttsFor(req);
+        const tts = own ?? serverTts;
         // One sentence of an answer in the neural voice. The client sends
         // the question, never the text: the server re-resolves the answer
         // (an answer-cache hit) and speaks its own opener + sentence, so
@@ -842,7 +873,7 @@ export function createPublicApi({
           .digest("hex");
         let out = narrateCacheGet(ckey);
         if (!out) {
-          if (!speakPerIp(ip) || !speakGlobal("all"))
+          if (own ? !byoTtsLimit(ip) : !speakPerIp(ip) || !speakGlobal("all"))
             return (
               send(res, 429, {
                 error:
