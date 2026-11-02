@@ -1585,6 +1585,65 @@
     ctl?.start();
   });
 
+  // Active-section pill: a black lozenge that slides behind the nav link
+  // for the section currently in view (anchor links only).
+  (() => {
+    const ul = $(".nav ul");
+    if (!ul) return;
+    const links = $$('a[href^="#"]', ul)
+      .map((a) => ({ a, sec: $(a.getAttribute("href")) }))
+      .filter((x) => x.sec);
+    if (!links.length) return;
+    const pill = document.createElement("span");
+    pill.className = "nav-pill";
+    pill.setAttribute("aria-hidden", "true");
+    ul.prepend(pill);
+    let current = null;
+    let ticking = false;
+    const place = (a) => {
+      const r = a.getBoundingClientRect();
+      const ur = ul.getBoundingClientRect();
+      pill.style.left = `${r.left - ur.left}px`;
+      pill.style.top = `${r.top - ur.top}px`;
+      pill.style.width = `${r.width}px`;
+      pill.style.height = `${r.height}px`;
+    };
+    const update = () => {
+      ticking = false;
+      const y = scrollY + innerHeight * 0.38;
+      let active = null;
+      for (const { a, sec } of links) if (sec.offsetTop <= y) active = a;
+      if (active === current) return;
+      current = active;
+      for (const { a } of links) a.classList.toggle("active", a === active);
+      if (active) {
+        place(active);
+        pill.style.opacity = "1";
+      } else {
+        pill.style.opacity = "0";
+      }
+    };
+    addEventListener(
+      "scroll",
+      () => {
+        if (!ticking) {
+          ticking = true;
+          requestAnimationFrame(update);
+        }
+      },
+      { passive: true },
+    );
+    addEventListener(
+      "resize",
+      () => {
+        if (current) place(current);
+        update();
+      },
+      { passive: true },
+    );
+    update();
+  })();
+
   setCase("health");
   miniGraph();
   connect();
