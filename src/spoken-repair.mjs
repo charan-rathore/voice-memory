@@ -32,7 +32,7 @@ function lev(a, b) {
 
 // Ordinary words whose consonant skeleton sits next to a test name.
 const NOT_TESTS = new Set(
-  "certain curtain protein written britain pretend partner fortune frighten portion parting printing pertain fattening threatening creating created corrected correction creative reading heading ferry forty fourteen thirty thirteen finalized finalised thousand fortnight".split(
+  "certain curtain protein written britain pretend partner fortune frighten portion parting printing pertain fattening threatening creating created corrected correction creative critical clinical criteria credit reading heading ferry forty fourteen thirty thirteen finalized finalised thousand fortnight".split(
     " ",
   ),
 );

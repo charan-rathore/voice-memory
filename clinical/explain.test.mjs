@@ -220,5 +220,5 @@ test("comparisons still refuse across units, in the asker's language", async () 
     R,
   );
   assert.equal(hi.verdict, "NOT_COMPARABLE");
-  assert.match(hi.spoken, /यूनिट नहीं बदलता/);
+  assert.match(hi.spoken, /यूनिट नहीं बदलती/);
 });

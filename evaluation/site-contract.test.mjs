@@ -200,6 +200,11 @@ test("first load stays inside its weight budget (3D graph, call library and film
   );
   assert.doesNotMatch(
     html,
+    /snapshot-graphs/,
+    "the saved memory graphs load with the graph band",
+  );
+  assert.doesNotMatch(
+    html,
     /tune\.bundle/,
     "the tuning panel loads only with ?tune",
   );
@@ -210,12 +215,13 @@ test("first load stays inside its weight budget (3D graph, call library and film
     "narrated overviews load with the lazy visual chunk",
   );
   // index.html + CSS + preloaded fonts + site.js + snapshot + motion bundle.
-  // 560 KB -> 572 KB (2026-11-02): the hero tells three stories (correction,
-  // units in Hinglish, approval in Hindi) and the answer panel carries the
-  // neural-voice controls; the Listen player itself (listen.js), the
-  // drill-down and the how-it-works styles stay lazy. The largest eager file
-  // is snapshot.js (~117 KB of saved answers), the next lever if this grows.
-  assert.ok(bytes < 572_000, `first load is ${bytes} bytes`);
+  // 560 KB -> 572 KB (2026-11-02): the hero tells three stories and the
+  // answer panel carries the neural-voice controls.
+  // 572 KB -> 530 KB (2026-11-02): the saved memory graphs (~69 KB) moved
+  // out of snapshot.js into snapshot-graphs.js, loaded with the graph band;
+  // the hero (white evidence card, gauges, funnel) and page actions fit in
+  // what that freed. snapshot.js (~49 KB of saved answers) is next if needed.
+  assert.ok(bytes < 530_000, `first load is ${bytes} bytes`);
 });
 
 test("the motion bundle is built from the committed sources", async () => {

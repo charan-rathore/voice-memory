@@ -264,3 +264,34 @@ export function springCSS(omega = 14, zeta = 0.62, samples = 40) {
   pts[samples] = 1;
   return { easing: `linear(${pts.map((v) => +v.toFixed(4)).join(", ")})`, ms: Math.round(T * 1000) };
 }
+
+// ------------------------------------------------------------ trajectories
+/**
+ * Minimum-jerk profile (Flash & Hogan, 1985): the quintic 10t³ − 15t⁴ + 6t⁵.
+ * Position, velocity and acceleration are all zero at both ends, which is
+ * how a hand moves a pointer from one target to another.
+ */
+export const minJerk = (t) => ((t = clamp01(t)), t * t * t * (10 + t * (-15 + 6 * t)));
+/**
+ * Impulse response of a damped spring, scaled so its first peak is 1:
+ * x(t) = e^(−ζωt) sin(ω_d t) / peak. Starts at 0 with a push, swings out,
+ * returns and settles at 0 (a tether, not a step).
+ */
+export function springImpulse(omega, zeta, t) {
+  const z = Math.min(0.999, zeta);
+  const wd = omega * Math.sqrt(1 - z * z);
+  const tp = Math.atan(wd / (z * omega)) / wd; // time of the first peak
+  const peak = Math.exp(-z * omega * tp) * Math.sin(wd * tp);
+  return (Math.exp(-z * omega * t) * Math.sin(wd * t)) / peak;
+}
+/**
+ * One semi-implicit Euler step of a spring toward `target` on state { x, v }.
+ * Stiffness k; damping c = 2ζ√k (ζ = 1 is critically damped: fastest
+ * arrival with no overshoot). Stable for the dt the frame loop hands out.
+ */
+export function springTo(s, target, k, zeta, dt) {
+  const c = 2 * zeta * Math.sqrt(k);
+  s.v += (-k * (s.x - target) - c * s.v) * dt;
+  s.x += s.v * dt;
+  return s;
+}

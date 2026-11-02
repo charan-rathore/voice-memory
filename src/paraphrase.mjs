@@ -250,7 +250,12 @@ export async function paraphraseLookup(
   const searched = bridge ? `${question} ${bridge}` : question;
   const [qv] = (await embedTextsReady([QUERY_PREFIX + searched])) ?? [];
   if (!qv) return null;
-  const hit = gate(rankUnits(searched, bundle, qv), thresholds);
+  const hit = gate(
+    rankUnits(searched, bundle, qv).filter(
+      (r) => !replacedSource(bundle, r.unit.src),
+    ),
+    thresholds,
+  );
   if (!hit) return null;
   const { src, sent } = hit.unit;
   // Answerability, not just relevance. Two fail-closed checks stand between
@@ -341,4 +346,115 @@ export function statesUnresolvedValue(bundle, sentence) {
     if (distinct.size > 1 && list.some((c) => says(c.value))) return true;
   }
   return false;
+}
+
+// ------------------------------------------------------------ discovery
+/** Keyword-only ranking of the same units (BM25, lay terms expanded). */
+export function rankUnitsLexical(question, bundle) {
+  const idx = unitsOf(bundle);
+  const lex = bm25(idx, question);
+  return idx.units
+    .map((u, i) => ({ unit: u, cosine: 0, lexical: lex[i], fused: lex[i] }))
+    .sort((a, b) => b.fused - a.fused);
+}
+
+// Discovery gate. The promotion gate's margin is measured against the best
+// unit of ANOTHER document, which never exists in a single uploaded file:
+// on the outside benchmark (one meeting or one contract per bundle) that
+// gate showed a line for 86% of absent clauses. Discovery instead needs:
+//  - the top unit's cosine above a floor,
+//  - a lead over the next-best unit of any document (not just another one),
+//  - agreement: the same unit ranks in the keyword top `lexTop`.
+// Thresholds are chosen on the development half of the outside benchmark
+// (QMSum + CUAD, evaluation/outside-bench.mjs --calibrate) as the most lines
+// shown with at least 90% right and at most 10% shown when the answer is
+// absent, and reported on the held-out half.
+export const DISCOVERY = { minCosine: 0.7, minMargin: 0.03, lexTop: 3 };
+export function discoveryGate(
+  ranked,
+  { minCosine, minMargin, lexTop } = DISCOVERY,
+) {
+  const top = ranked[0];
+  if (!top) return null;
+  const rival = ranked
+    .filter((r) => r !== top)
+    .reduce((m, r) => Math.max(m, r.cosine), -1);
+  const margin = top.cosine - rival;
+  if (top.cosine < minCosine || margin < minMargin) return null;
+  if (lexTop) {
+    const lexRank =
+      top.lexical > 0
+        ? 1 + ranked.filter((r) => r.lexical > top.lexical).length
+        : Infinity;
+    if (lexRank > lexTop) return null;
+  }
+  return { ...top, margin };
+}
+
+const PRELIM_DOC = /\b(prelim\w*|provisional|draft)\b/i;
+const CORRECTING_DOC =
+  /\b(amend\w*|correct\w*|revis\w*|supersed\w*|final report)\b/i;
+/**
+ * A document the record itself has replaced: it is marked preliminary or
+ * draft in its header while another document in the bundle amends, corrects
+ * or revises. Its sentences are never offered, even as a pointer.
+ */
+export function replacedSource(bundle, src) {
+  const head = (s) => String(s.text).slice(0, 400) + " " + (s.title ?? "");
+  if (!PRELIM_DOC.test(head(src))) return false;
+  return (bundle?.sources ?? []).some(
+    (o) => o !== src && CORRECTING_DOC.test(head(o)),
+  );
+}
+
+/**
+ * Discovery, not an answer. After the engine abstains, the single sentence a
+ * reworded question most plausibly points at, so a person can open it and
+ * judge for themselves. It is labelled "closest line, not an answer" by every
+ * caller and never spoken as the reply. Same calibrated gate as promotion,
+ * plus the same refusals: no weak-status line for a strong-action question,
+ * no superseded or conflicting value, and no line from a document the record
+ * has replaced (a preliminary report beside its amendment).
+ */
+// Off by default. On the outside benchmark (2026-11-02) no discovery rule
+// reached 90% right with <= 10% shown when the answer is absent; the
+// single-file gate measured 65% right on meetings and 82% on contracts when
+// shown. A pointer that is wrong a third of the time is not shown to
+// visitors; VM_CLOSEST_LINE=on enables it for gate work and pilots.
+export const closestLineEnabled = () => process.env.VM_CLOSEST_LINE === "on";
+
+export async function closestLine(
+  question,
+  bundle,
+  { thresholds = DISCOVERY, force = false } = {},
+) {
+  if (!force && !closestLineEnabled()) return null;
+  const idx = unitsOf(bundle);
+  if (!idx.vectors) {
+    const ready = await Promise.race([
+      warmUnits(bundle),
+      new Promise((r) => setTimeout(() => r(false), 2500)),
+    ]);
+    if (!ready || !idx.vectors) return null;
+  }
+  const bridge = bridgeToEnglish(question);
+  const searched = bridge ? `${question} ${bridge}` : question;
+  const [qv] = (await embedTextsReady([QUERY_PREFIX + searched])) ?? [];
+  if (!qv) return null;
+  const ranked = rankUnits(searched, bundle, qv).filter(
+    (r) => !replacedSource(bundle, r.unit.src),
+  );
+  const hit = discoveryGate(ranked, thresholds);
+  if (!hit) return null;
+  const { src, sent } = hit.unit;
+  if (Q_STRONG_ACTION.test(question) && SENT_WEAK_STATUS.test(sent.text))
+    return null;
+  if (statesUnresolvedValue(bundle, sent.text)) return null;
+  return {
+    line: sent.text,
+    document: docLabelOf(src),
+    citation: cite(src, sent),
+    cosine: +hit.cosine.toFixed(3),
+    margin: +hit.margin.toFixed(3),
+  };
 }

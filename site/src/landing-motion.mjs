@@ -21,6 +21,11 @@ import {
   smoothDamp,
   expDecay,
   lerp,
+  minJerk,
+  springImpulse,
+  springStep,
+  springSettle,
+  springTo,
 } from "../motion-math.mjs";
 import { animate as loop, onVisible, reducedMotion } from "../motion-loop.mjs";
 
@@ -29,7 +34,7 @@ export const P = {
   flightMs: 1150,
   flightEase: [0.65, 0, 0.35, 1],
   lift: 64,
-  tiltDeg: 5,
+  tiltDeg: 1.5,
   tiltSmooth: 0.18,
   tokenSpeed: 520,
   meterSamples: 28,
@@ -45,27 +50,101 @@ const rgb = (el) =>
 const rel = (r, base) => ({ x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height });
 
 // ------------------------------------------------------------ hero card
-// One card, three short stories, each a real engine answer in the language
-// it was asked: a corrected value (English), two units never compared
-// (Hinglish), a proposal that was never approved (Hindi). Each story plays
-//   ask   - the question arrives with a live voice waveform;
-//   scan  - the record is read (a read head sweeps the cited line);
-//   fix   - the scene's decision: the preliminary 5 flies (Catmull-Rom path,
-//           arc-length timed) into 50; the units tear apart; the empty
-//           sign-off slot stays empty;
-//   answer- the verdict springs in and the answer arrives word by word;
-//   rest  - then the next story. Tabs jump; hover or focus pauses; the
-// progress bar under each tab is the story's own clock.
-// Steps are CSS states on [data-step]; JS owns only the flight and timing.
+// One white evidence card, three short stories, each a real engine answer in
+// the language it was asked: a corrected value (English), two units that must
+// not be compared (Hinglish), a proposal that was never approved (Hindi).
+//   ask    - the question arrives (live waveform; an orbiting light runs
+//            round the field at constant angular speed);
+//   scan   - the record is read (status spinner; the cited line highlights);
+//   fix    - the decision: the preliminary 5 flies along an arc-length
+//            Catmull-Rom path into 50; two gauge needles swing to their own
+//            readings with galvanometer dynamics (underdamped spring,
+//            zeta 0.42) and the ≠ springs in; the funnel fills on a
+//            minimum-jerk profile to "proposed", is pushed toward sign-off
+//            and tethered back by a damped impulse response;
+//   landed - the status ticks and the verdict chip springs in;
+//   answer - the answer arrives word by word (no blur, always readable);
+//   rest   - then the next story.
+// The tab thumb is a critically damped spring (c = 2√k). Tabs jump; hover or
+// focus pauses. Steps are CSS states on [data-step]; JS owns geometry/timing.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const SVG = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs) => {
+  const el = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+};
+// Gauge: a 180° arc centred at (80, 84), radius 64. Ticks and labels come
+// from data-min/max so each dial shows its own unit's numbers.
+const G = { cx: 80, cy: 84, r: 64 }; // needle reaches r = 32, labels sit at r ≈ 42
+function buildGauge(g) {
+  const ticks = $(".hg-ticks", g);
+  if (!ticks || ticks.childElementCount) return;
+  const min = +g.dataset.min,
+    max = +g.dataset.max;
+  for (let i = 0; i <= 20; i++) {
+    const f = i / 20,
+      th = Math.PI * (1 - f),
+      big = i % 5 === 0;
+    const r1 = G.r - 9,
+      r0 = r1 - (big ? 7 : 4);
+    const c = Math.cos(th),
+      sn = Math.sin(th);
+    ticks.append(svgEl("line", { x1: G.cx + r0 * c, y1: G.cy - r0 * sn, x2: G.cx + r1 * c, y2: G.cy - r1 * sn, class: big ? "big" : "" }));
+    if (i % 10 === 0) {
+      const rt = r0 - 6;
+      const t = svgEl("text", { x: G.cx + rt * c, y: G.cy - rt * sn + 3, "text-anchor": i === 0 ? "start" : i === 20 ? "end" : "middle" });
+      t.textContent = +(min + f * (max - min)).toFixed(2);
+      ticks.append(t);
+    }
+  }
+}
+// fraction of the dial for the gauge's own reading
+const gaugeFrac = (g) => (+g.dataset.v - +g.dataset.min) / (+g.dataset.max - +g.dataset.min);
+const setGauge = (g, f) => {
+  g.style.setProperty("--f", Math.max(0, Math.min(1, f)).toFixed(4));
+  g.style.setProperty("--deg", `${(-90 + 180 * f).toFixed(2)}deg`);
+};
+
 export async function heroFlight() {
   const card = $(".hero-card");
   if (!card) return;
   const scenes = $$(".hc-scene", card);
   const tabs = $$(".hc-tab", card);
+  const ind = $(".hx-ind", card);
   const order = scenes.map((s) => s.dataset.scene);
   let current = order[0];
   let jump = null;
+
+  // tab indicator: two critically damped springs (left edge, width)
+  const ix = { x: 0, v: 0 },
+    iw = { x: 0, v: 0 };
+  let tgt = { x: 0, w: 0 },
+    indRun = null;
+  const placeInd = (snap) => {
+    const t = tabs.find((x) => x.dataset.scene === current);
+    if (!t || !ind) return;
+    tgt = { x: t.offsetLeft, w: t.offsetWidth };
+    if (snap || still || !iw.x) {
+      ix.x = tgt.x;
+      iw.x = tgt.w;
+      ix.v = iw.v = 0;
+      ind.style.setProperty("--ix", `${ix.x}px`);
+      ind.style.setProperty("--iw", `${iw.x}px`);
+      return;
+    }
+    indRun ??= loop((dt) => {
+      springTo(ix, tgt.x, 320, 1, dt);
+      springTo(iw, tgt.w, 320, 1, dt);
+      ind.style.setProperty("--ix", `${ix.x.toFixed(2)}px`);
+      ind.style.setProperty("--iw", `${iw.x.toFixed(2)}px`);
+      if (Math.abs(ix.x - tgt.x) + Math.abs(iw.x - tgt.w) + Math.abs(ix.v) + Math.abs(iw.v) < 0.05) {
+        indRun = null;
+        return false;
+      }
+      return true;
+    });
+  };
   const show = (name) => {
     current = name;
     for (const sc of scenes) {
@@ -82,6 +161,7 @@ export async function heroFlight() {
         t.setAttribute("aria-selected", "true");
       }
     }
+    placeInd(false);
   };
   // Tabs always work, motion or not.
   tabs.forEach((t) =>
@@ -96,7 +176,53 @@ export async function heroFlight() {
     tabs[i].focus();
     tabs[i].click();
   });
+  addEventListener("resize", () => placeInd(true));
+  const gauges = $$(".hg", card);
+  gauges.forEach(buildGauge);
+  const dealScene = scenes.find((sc) => sc.dataset.scene === "deal");
+  const bar = $(".hf-bar", dealScene);
+  const P_PROPOSED = 2 / 3; // end of the second stage
+  const setBar = (p) => bar?.style.setProperty("--p", p.toFixed(4));
+  const restFrames = () => {
+    gauges.forEach((g) => setGauge(g, gaugeFrac(g)));
+    setBar(P_PROPOSED);
+  };
+  // needles: x(t) = f · step(ω, ζ, t), the second dial a beat behind
+  const NEEDLE = { omega: 11, zeta: 0.42, lag: 0.14 };
+  const swingGauges = () =>
+    new Promise((done) => {
+      let t = 0;
+      const T = springSettle(NEEDLE.omega, NEEDLE.zeta, 0.004) + NEEDLE.lag;
+      const stop = loop((d) => {
+        t += d;
+        gauges.forEach((g, i) => setGauge(g, gaugeFrac(g) * springStep(NEEDLE.omega, NEEDLE.zeta, Math.max(0, t - i * NEEDLE.lag))));
+        if (t >= T) return restFrames(), done(), false;
+        return true;
+      });
+      setTimeout(() => (stop(), restFrames(), done()), T * 1000 + 400);
+    });
+  // funnel: minimum-jerk fill to "proposed", then a push the record cannot
+  // carry: p = 2/3 + A · impulse(ω, ζ, t), which returns to 2/3 by itself
+  const PUSH = { omega: 10, zeta: 0.3, amp: 0.07, T1: 0.85 };
+  const fillFunnel = () =>
+    new Promise((done) => {
+      let t = 0;
+      const T2 = springSettle(PUSH.omega, PUSH.zeta, 0.01);
+      const stop = loop((d) => {
+        t += d;
+        if (t < PUSH.T1) setBar(P_PROPOSED * minJerk(t / PUSH.T1));
+        else {
+          setBar(P_PROPOSED + PUSH.amp * Math.max(0, springImpulse(PUSH.omega, PUSH.zeta, t - PUSH.T1)));
+          if (t - PUSH.T1 >= T2) return setBar(P_PROPOSED), done(), false;
+        }
+        return true;
+      });
+      setTimeout(() => (stop(), setBar(P_PROPOSED), done()), (PUSH.T1 + T2) * 1000 + 400);
+    });
+
   show(current);
+  placeInd(true);
+  restFrames();
   if (still) return;
   const fixScene = scenes.find((sc) => sc.dataset.scene === "fix");
   const from = $(".hc-val.prelim .hc-num s", fixScene);
@@ -114,8 +240,8 @@ export async function heroFlight() {
       const sp = document.createElement("span");
       sp.className = "hc-w";
       sp.style.setProperty("--w", i);
-      sp.textContent = w + " ";
-      ans.append(sp);
+      sp.textContent = w;
+      ans.append(sp, " ");
     });
   }
   // one live voice waveform, moved into the asking scene
@@ -132,7 +258,6 @@ export async function heroFlight() {
   let level = 0,
     target = 0,
     t = 0;
-  const color = getComputedStyle(document.documentElement).getPropertyValue("--teal").trim() || "#1f9e8f";
   const drawWave = (dt) => {
     t += dt;
     level = expDecay(level, target, 10, dt);
@@ -147,7 +272,7 @@ export async function heroFlight() {
     wctx.beginPath();
     wctx.moveTo(...pts[0]);
     for (const [, c1, c2, p] of catmullRom(pts)) wctx.bezierCurveTo(...c1, ...c2, ...p);
-    wctx.strokeStyle = color;
+    wctx.strokeStyle = "#111317";
     wctx.lineWidth = 1.6;
     wctx.lineCap = "round";
     wctx.stroke();
@@ -155,11 +280,11 @@ export async function heroFlight() {
   };
   let stopWave = null;
   await document.fonts?.ready;
+  placeInd(true);
 
   // The flight runs on its own clock with a timer backstop: if frames stall
   // (a background tab, a busy main thread) the 5 still lands and the ghost is
-  // always removed. (A timeline callback scheduled exactly at its end could be
-  // skipped, leaving the ghost parked over the amended card.)
+  // always removed.
   const fly = () =>
     new Promise((done) => {
       const base = card.getBoundingClientRect();
@@ -215,7 +340,6 @@ export async function heroFlight() {
       };
       requestAnimationFrame(frame);
     });
-
   let alive = false,
     running = false,
     paused = false;
@@ -233,15 +357,17 @@ export async function heroFlight() {
       if (!paused) left -= performance.now() - t0;
     }
   };
-  const DUR = { fix: 1300 + 1100 + 250 + P.flightMs + 450 + 4200 + 600, units: 1300 + 1100 + 700 + 450 + 4200 + 600, deal: 1300 + 1100 + 700 + 450 + 4200 + 600 };
+  const DUR = { fix: 1300 + 1100 + 250 + P.flightMs + 450 + 4200 + 600, units: 1300 + 1100 + 1500 + 450 + 4200 + 600, deal: 1300 + 1100 + 2000 + 450 + 4200 + 600 };
   const play = async (name) => {
     show(name);
     card.style.setProperty("--scene-ms", `${DUR[name] ?? 8000}ms`);
     const sc = scenes.find((x) => x.dataset.scene === name);
-    $(".hc-q", sc)?.before(wave);
+    $(".hx-ask", sc)?.append(wave);
     card.dataset.step = "ask";
     to5.style.opacity = "0";
     to0.style.opacity = "0";
+    if (name === "units") gauges.forEach((g) => setGauge(g, 0));
+    if (name === "deal") setBar(0);
     target = 1;
     stopWave ??= loop(drawWave);
     await wait(1300);
@@ -249,8 +375,13 @@ export async function heroFlight() {
     card.dataset.step = "scan";
     await wait(1100);
     card.dataset.step = "fix";
-    await wait(name === "fix" ? 250 : 700);
-    if (name === "fix" && !jump && alive) await fly();
+    if (name === "fix") {
+      await wait(250);
+      if (!jump && alive) await fly();
+    } else if (name === "units") {
+      if (!jump && alive) await swingGauges();
+    } else if (!jump && alive) await fillFunnel();
+    if (jump) restFrames(); // a jump mid-story leaves complete frames behind
     card.dataset.step = "landed";
     await wait(450);
     card.dataset.step = "answer";
@@ -524,9 +655,14 @@ export function graphBand() {
     (vis) => {
       if (!vis) return;
       stop();
-      const graph = window.VM_SNAPSHOT?.graphs?.health;
-      import(new URL("graph3d.bundle.mjs", import.meta.url).href)
-        .then((m) => m.mount(cv, graph))
+      // the saved graph arrives with the band, never on first load
+      const graphs = new Promise((ok) => {
+        if (window.VM_SNAPSHOT_GRAPHS) return ok();
+        const sc = Object.assign(document.createElement("script"), { src: new URL("snapshot-graphs.js", import.meta.url).href, onload: ok, onerror: ok });
+        document.head.append(sc);
+      });
+      Promise.all([graphs, import(new URL("graph3d.bundle.mjs", import.meta.url).href)])
+        .then(([, m]) => m.mount(cv, window.VM_SNAPSHOT_GRAPHS?.health))
         .catch(() => {});
     },
     "400px",

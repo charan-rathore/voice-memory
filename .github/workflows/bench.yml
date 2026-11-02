@@ -11,6 +11,8 @@ on:
       - "src/vernacular.mjs"
       - "vendor/web/src/lib/rag/**"
       - "evaluation/paraphrase-*"
+      - "evaluation/outside*"
+      - "src/paraphrase.mjs"
       - "evaluation/retrieval-*"
       - ".github/workflows/bench.yml"
 permissions:
@@ -19,7 +21,7 @@ permissions:
 jobs:
   retrieval:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,6 +36,18 @@ jobs:
       - run: npm run build
       - name: Paraphrase bench (keyword vs hybrid vs dense, dev + held-out)
         run: node evaluation/paraphrase-bench.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          VM_DENSE_CACHE: .cache/models
+          VM_MEMORY_LIMIT_MB: "4096"
+      # Outside-authored records and questions (QMSum meetings, CUAD
+      # contracts), pinned commits, cached between runs.
+      - uses: actions/cache@v4
+        with:
+          path: .cache/outside
+          key: outside-qmsum-83d7768-cuad-67faa0e
+      - run: bash evaluation/outside/fetch.sh .cache/outside
+      - name: Outside-authored bench (keyword vs hybrid vs dense, closest-line gate)
+        run: node evaluation/outside-bench.mjs | tee outside.md | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           VM_DENSE_CACHE: .cache/models
           VM_MEMORY_LIMIT_MB: "4096"
@@ -67,5 +81,6 @@ jobs:
             const body = "### Paraphrase bench (" + d.sha + ", " + d.model + ", dense " + (d.denseAvailable ? "on" : "OFF") + ")\n\n```json\n" + JSON.stringify(d.summary, null, 1) + "\n```\n\n<details><summary>Per question: split | kind | hybrid top-1 hit | top-3 dense cosine (* = right passage) | unit cosine/margin | question</summary>\n\n```\n" + compact.join("\n") + "\n```\n</details>";
             require("fs").writeFileSync("comment.md", body);
           ' "$f"
+          { echo; cat outside.md; } >> comment.md
           { echo; echo "### Hybrid retrieval A/B"; echo; echo "Bare chunk embeddings:"; echo '```'; cat ab-bare.txt; echo '```'; echo "Contextual chunk headers:"; echo '```'; cat ab-context.txt; echo '```'; } >> comment.md
           gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -F body=@comment.md >/dev/null

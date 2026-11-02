@@ -218,3 +218,69 @@ test("production boundary: promotedAnswer abstains unless a developer explicitly
     else process.env.VM_PARAPHRASE_PROMOTE = saved;
   }
 });
+
+test("a preliminary document beside its amendment is a replaced source", async () => {
+  const { replacedSource, unitsOf: u } = await import("../src/paraphrase.mjs");
+  const lab = importBundle([
+    {
+      title: "a-2026-10-prelim.md",
+      text: "# Laboratory report (PRELIMINARY)\nDate: 2026-10-13.\n1. Ferritin 5 ng/mL.",
+    },
+    {
+      title: "a-2026-10-amended.md",
+      text: "# Laboratory report (AMENDED)\nDate: 2026-10-15.\n1. Ferritin 50 ng/mL. Amended: ferritin corrected from 5 to 50.",
+    },
+  ]);
+  const [prelim, amended] = lab.sources;
+  assert.equal(replacedSource(lab, prelim), true);
+  assert.equal(replacedSource(lab, amended), false);
+  // alone, a preliminary report is the only record: not replaced
+  const alone = importBundle(
+    [lab.sources[0]].map((s) => ({ title: s.title, text: s.text })),
+  );
+  assert.equal(replacedSource(alone, alone.sources[0]), false);
+  assert.ok(u(lab).units.length >= 2);
+});
+
+test("closestLine abstains without the model and never claims to be an answer", async () => {
+  const { closestLine } = await import("../src/paraphrase.mjs");
+  const fresh = importBundle([
+    {
+      title: "x.md",
+      text: "# Note\nDate: 2026-01-01.\n1. The budget review moved to Friday.",
+    },
+  ]);
+  // no resident model in unit tests: no pointer, no wait beyond the cap
+  const t0 = Date.now();
+  assert.equal(await closestLine("when is the money meeting", fresh), null);
+  // and it is off unless explicitly enabled
+  assert.equal(process.env.VM_CLOSEST_LINE, undefined);
+  assert.ok(Date.now() - t0 < 4000);
+});
+
+test("discovery gate: in one document the margin is over the next line, not another document", async () => {
+  const { discoveryGate, gate: promote } = await import(
+    "../src/paraphrase.mjs"
+  );
+  const src = { id: "only" };
+  const u = (cosine, lexical) => ({ unit: { src }, cosine, lexical });
+  // two near-identical lines in a single file: the promotion gate sees no
+  // rival document and passes; discovery sees a tie and refuses
+  const tie = [u(0.86, 2), u(0.855, 1), u(0.4, 0)];
+  assert.ok(promote(tie, { minCosine: 0.72, minMargin: 0.02 }));
+  assert.equal(
+    discoveryGate(tie, { minCosine: 0.7, minMargin: 0.03, lexTop: 3 }),
+    null,
+  );
+  // a clear leader that keywords also rank near the top is shown
+  const clear = [u(0.86, 2), u(0.7, 3), u(0.4, 0)];
+  assert.ok(
+    discoveryGate(clear, { minCosine: 0.7, minMargin: 0.03, lexTop: 3 }),
+  );
+  // a clear leader that keywords don't support at all is not
+  const noWords = [u(0.86, 0), u(0.7, 3), u(0.4, 1)];
+  assert.equal(
+    discoveryGate(noWords, { minCosine: 0.7, minMargin: 0.03, lexTop: 3 }),
+    null,
+  );
+});

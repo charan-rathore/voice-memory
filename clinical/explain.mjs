@@ -478,23 +478,23 @@ const T = {
       lower: "यह पहले से कम है।",
       same: "यह पहले जितना ही है।",
       undetermined:
-        "मैं नहीं बता सकता कि यह बढ़ा या घटा, क्योंकि एक नतीजा सिर्फ़ एक सीमा के रूप में दिया गया है।",
+        "मैं नहीं बता सकती कि यह बढ़ा या घटा, क्योंकि एक नतीजा सिर्फ़ एक सीमा के रूप में दिया गया है।",
     },
     moved: {
       in: "अब यह लैब की सीमा के अंदर है।",
       out: "अब यह लैब की सीमा से बाहर है।",
     },
     amended: (date, from, to) =>
-      `${date} का नतीजा ${from} से सुधारकर ${to} किया गया था, और मैं सुधरा हुआ नतीजा इस्तेमाल कर रहा हूं।`,
+      `${date} का नतीजा ${from} से सुधारकर ${to} किया गया था, और मैं सुधरा हुआ नतीजा इस्तेमाल कर रही हूं।`,
     noConvert: (o, a, b, da, db) =>
-      `मैं आपके दोनों ${nameOf(o)} नतीजों की तुलना नहीं कर सकता: ${da} वाला ${a.unit} में है और ${db} वाला ${b.unit} में, और मैं यूनिट नहीं बदलता। दोनों नतीजे स्क्रीन पर हैं, और आपके डॉक्टर या लैब इनकी सही तुलना कर सकते हैं।`,
+      `मैं आपके दोनों ${nameOf(o)} नतीजों की तुलना नहीं कर सकती: ${da} वाला ${a.unit} में है और ${db} वाला ${b.unit} में, और मैं यूनिट नहीं बदलती। दोनों नतीजे स्क्रीन पर हैं, और आपके डॉक्टर या लैब इनकी सही तुलना कर सकते हैं।`,
     single: (o) =>
       `इन रिपोर्ट्स में ${nameOf(o)} का सिर्फ़ एक नतीजा है, इसलिए अभी तुलना के लिए कुछ नहीं है।`,
     which: (test, ids) =>
       `इन रिपोर्ट्स में एक से ज़्यादा लोगों के ${test} नतीजे हैं (${ids.join(", ")})। मैं किसके नतीजे देखूं?`,
-    unknownPatient: `मैं नहीं बता सकता कि ये नतीजे किसके हैं, इसलिए मैं इनकी तुलना या व्याख्या नहीं करूंगा। रिपोर्ट्स स्क्रीन पर हैं।`,
+    unknownPatient: `मैं नहीं बता सकती कि ये नतीजे किसके हैं, इसलिए मैं इनकी तुलना या व्याख्या नहीं करूंगा। रिपोर्ट्स स्क्रीन पर हैं।`,
     undated: (o) =>
-      `मैं नहीं बता सकता कि इनमें से कौन सी रिपोर्ट नई है, क्योंकि तारीखें साफ़ नहीं छपी हैं, इसलिए मैं ${nameOf(o)} को बढ़ा या घटा नहीं कहूंगा। दोनों नतीजे स्क्रीन पर हैं।`,
+      `मैं नहीं बता सकती कि इनमें से कौन सी रिपोर्ट नई है, क्योंकि तारीखें साफ़ नहीं छपी हैं, इसलिए मैं ${nameOf(o)} को बढ़ा या घटा नहीं कहूंगा। दोनों नतीजे स्क्रीन पर हैं।`,
     flagConflict: (o) =>
       `एक बात जांच लें: रिपोर्ट का ${o.flag} निशान उसकी अपनी सीमा से मेल नहीं खाता, इसलिए लैब से पुष्टि कर लेना अच्छा रहेगा।`,
   },
@@ -528,7 +528,7 @@ const T = {
       lower: "Yeh pehle se kam hai.",
       same: "Yeh pehle jitna hi hai.",
       undetermined:
-        "Main nahi bata sakta ki yeh badha ya ghata, kyunki ek result sirf ek seema ke roop mein diya gaya hai.",
+        "Main nahi bata sakti ki yeh badha ya ghata, kyunki ek result sirf ek seema ke roop mein diya gaya hai.",
     },
     moved: {
       in: "Ab yeh lab ki range ke andar hai.",
@@ -537,14 +537,14 @@ const T = {
     amended: (date, from, to) =>
       `${date} ka result ${from} se sudhaar kar ${to} kiya gaya tha, aur main sudhra hua result use kar raha hoon.`,
     noConvert: (o, a, b, da, db) =>
-      `Main aapke dono ${nameOf(o)} results ki tulna nahi kar sakta: ${da} wala ${a.unit} mein hai aur ${db} wala ${b.unit} mein, aur main units convert nahi karta. Dono results screen par hain, aur aapke doctor ya lab inki sahi tulna kar sakte hain.`,
+      `Main aapke dono ${nameOf(o)} results ki tulna nahi kar sakti: ${da} wala ${a.unit} mein hai aur ${db} wala ${b.unit} mein, aur main units convert nahi karti. Dono results screen par hain, aur aapke doctor ya lab inki sahi tulna kar sakte hain.`,
     single: (o) =>
       `In reports mein ${nameOf(o)} ka sirf ek result hai, isliye abhi tulna ke liye kuch nahi hai.`,
     which: (test, ids) =>
       `In reports mein ek se zyada logon ke ${test} results hain (${ids.join(", ")}). Main kiske results dekhoon?`,
-    unknownPatient: `Main nahi bata sakta ki yeh results kiske hain, isliye main inki tulna ya explanation nahi karunga. Reports screen par hain.`,
+    unknownPatient: `Main nahi bata sakti ki yeh results kiske hain, isliye main inki tulna ya explanation nahi karunga. Reports screen par hain.`,
     undated: (o) =>
-      `Main nahi bata sakta ki in mein se kaunsi report nayi hai, kyunki dates saaf nahi chhapi hain, isliye main ${nameOf(o)} ko badha ya ghata nahi kahunga. Dono results screen par hain.`,
+      `Main nahi bata sakti ki in mein se kaunsi report nayi hai, kyunki dates saaf nahi chhapi hain, isliye main ${nameOf(o)} ko badha ya ghata nahi kahunga. Dono results screen par hain.`,
     flagConflict: (o) =>
       `Ek baat check kar lein: report ka ${o.flag} flag uski apni range se match nahi karta, isliye lab se confirm kar lena achha rahega.`,
   },

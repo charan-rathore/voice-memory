@@ -555,6 +555,367 @@
     return `<div class="vz-board"><ul>${rows}</ul></div>${timeline}`;
   }
 
+  // ------------------------------------------------------------ report charts
+  // The overview is a report, read the way an analytics report is read:
+  //   1. a donut that answers "how many need attention?" at a glance;
+  //   2. one row per test showing where the value sits against the lab's own
+  //      range and how it moved since the previous report (hollow dot ->
+  //      filled dot; no arrow where the engine says the readings are not
+  //      comparable);
+  //   3. a timeline of what each report changed (a correction, a unit switch).
+  // Every mark is a button: it opens a details panel underneath with the
+  // numbers behind it, the source lines, and the questions worth asking next.
+  // Records (contracts, meetings) get a decisions donut and topic lanes over
+  // time instead. All numbers come from the engine's payload.
+  const REPORTS = new Map();
+  let rid = 0;
+  const SEV = {
+    within: "in",
+    below_slightly: "near",
+    above_slightly: "near",
+    below_clearly: "out",
+    above_clearly: "out",
+    qual_differs: "out",
+    unknown: "none",
+  };
+  const SEV_ORDER = ["out", "near", "in", "none"];
+  const RW = {
+    en: {
+      sev: { out: "Clearly outside", near: "Just outside", in: "Inside range", none: "No range printed" },
+      donutK: "Where the results sit",
+      donutC: (n, m) => [String(n), `of ${m} outside`, "the range"],
+      donutC0: (m) => ["0", `of ${m} outside`, "the range"],
+      rangeK: "Each result against its own printed range",
+      rangeHint: "Hollow dot: previous report. Filled dot: latest. Select a row for the detail.",
+      axis: ["below", "printed range", "above"],
+      tlK: "What each report changed",
+      notCompared: "not compared",
+      baseline: (n) => `${n} results reported`,
+      prelim: "Preliminary report issued",
+      amended: "Amended report replaces the preliminary",
+      corrected: (n, a, b, u) => `${n} corrected ${a} → ${b}${u ? " " + u : ""}`,
+      unit: (n, a, b) => `${n} now in ${b} (was ${a})`,
+      flagged: (n) => `${n} result${n === 1 ? "" : "s"} outside the printed range`,
+      detailK: "Detail",
+      pick: "Select any slice, row or report above to see the numbers behind it.",
+      inSeg: (k, n) => `${n} result${n === 1 ? "" : "s"}: ${k.toLowerCase()}`,
+      openReport: "Open this report",
+      decK: "Decisions on record",
+      decC: (n, m) => [String(n), `of ${m} decisions`, "approved"],
+      lanesK: "Where each decision was written, over time",
+      lanesHint: "Each mark is a document that speaks to that topic. Select one to read the line.",
+      dec: { APPROVED: "Approved", AGREED: "Agreed", PROPOSED: "Proposed only", OPEN: "Still open", "NO-RECORD": "Not on record" },
+      ask: "Ask about this",
+      sources: "Lines on record, oldest first",
+      also: "Others in these reports",
+    },
+    hi: {
+      sev: { out: "सीमा से काफ़ी बाहर", near: "सीमा से थोड़ा बाहर", in: "सीमा के अंदर", none: "सीमा नहीं छपी" },
+      donutK: "नतीजे कहाँ हैं",
+      donutC: (n, m) => [String(n), `${m} में से`, "सीमा से बाहर"],
+      donutC0: (m) => ["0", `${m} में से`, "सीमा से बाहर"],
+      rangeK: "हर नतीजा, उसकी अपनी छपी सीमा पर",
+      rangeHint: "खोखला बिंदु: पिछली रिपोर्ट। भरा बिंदु: नई। विवरण के लिए पंक्ति चुनें।",
+      axis: ["कम", "छपी सीमा", "ज़्यादा"],
+      tlK: "हर रिपोर्ट में क्या बदला",
+      notCompared: "तुलना नहीं",
+      baseline: (n) => `${n} नतीजे`,
+      prelim: "प्रारंभिक रिपोर्ट",
+      amended: "संशोधित रिपोर्ट ने प्रारंभिक की जगह ली",
+      corrected: (n, a, b, u) => `${n} ${a} से सुधारकर ${b}${u ? " " + u : ""}`,
+      unit: (n, a, b) => `${n} अब ${b} में (पहले ${a})`,
+      flagged: (n) => `${n} नतीजे सीमा से बाहर`,
+      detailK: "विवरण",
+      pick: "विवरण देखने के लिए ऊपर कोई हिस्सा, पंक्ति या रिपोर्ट चुनें।",
+      inSeg: (k, n) => `${n} नतीजे: ${k}`,
+      openReport: "यह रिपोर्ट खोलें",
+      decK: "रिकॉर्ड में फ़ैसले",
+      decC: (n, m) => [String(n), `${m} में से`, "मंज़ूर"],
+      lanesK: "हर फ़ैसला कहाँ लिखा गया, समय के साथ",
+      lanesHint: "हर निशान एक दस्तावेज़ है। लाइन पढ़ने के लिए चुनें।",
+      dec: { APPROVED: "मंज़ूर", AGREED: "तय", PROPOSED: "सिर्फ़ प्रस्ताव", OPEN: "अभी तय नहीं", "NO-RECORD": "दर्ज नहीं" },
+      ask: "इसके बारे में पूछें",
+      sources: "रिकॉर्ड की लाइनें, पुराने से नए",
+      also: "इन रिपोर्ट्स में और लोग",
+    },
+  };
+  RW.hinglish = {
+    ...RW.en,
+    sev: { out: "Range se kaafi bahar", near: "Range se thoda bahar", in: "Range ke andar", none: "Range nahi chhapi" },
+    donutK: "Results kahan hain",
+    donutC: (n, m) => [String(n), `${m} mein se`, "range se bahar"],
+    donutC0: (m) => ["0", `${m} mein se`, "range se bahar"],
+    rangeK: "Har result, apni printed range par",
+    rangeHint: "Khokhla dot: pichhli report. Bhara dot: latest. Detail ke liye row chuniye.",
+    axis: ["kam", "printed range", "zyada"],
+    tlK: "Har report mein kya badla",
+    notCompared: "tulna nahi",
+    detailK: "Detail",
+    pick: "Detail dekhne ke liye upar koi slice, row ya report chuniye.",
+    decK: "Record mein faisle",
+    decC: (n, m) => [String(n), `${m} mein se`, "manzoor"],
+    lanesK: "Har faisla kahan likha gaya, samay ke saath",
+    ask: "Iske baare mein poochiye",
+  };
+  const R = (lang) => RW[lang] ?? RW.en;
+  const QS = {
+    fee: "What is the engagement fee?",
+    split: "Did they agree on the payment split?",
+    deadline: "What is the deadline?",
+    contract: "Is there a signed contract?",
+    open: "What's still open?",
+  };
+
+  // position of a value against its printed range: 0 = low limit, 1 = high
+  const posOf = (h, range) => {
+    const r = range ?? h?.range;
+    if (!r || !Number.isFinite(r.lowN) || !Number.isFinite(r.highN) || !Number.isFinite(h?.value)) return null;
+    return (h.value - r.lowN) / (r.highN - r.lowN || 1);
+  };
+
+  function donut(parts, center, label, sel) {
+    const total = parts.reduce((n, p) => n + p.n, 0) || 1;
+    const R0 = 52, C = 2 * Math.PI * R0, gap = parts.filter((p) => p.n).length > 1 ? 3 : 0;
+    let off = 0;
+    const arcs = parts
+      .filter((p) => p.n)
+      .map((p, i) => {
+        const len = Math.max(0.01, (p.n / total) * C - gap);
+        const a = `<circle class="dn-seg ${p.key}" cx="70" cy="70" r="${R0}" style="--len:${len.toFixed(2)};--C:${C.toFixed(2)};--off:${(-off).toFixed(2)};--d:${i * 140}ms" stroke-dasharray="${len.toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" data-sel="${esc(sel(p))}" tabindex="0" role="button" aria-label="${esc(`${p.label}: ${p.n}`)}"><title>${esc(`${p.label}: ${p.n}`)}</title></circle>`;
+        off += (p.n / total) * C;
+        return a;
+      })
+      .join("");
+    const legend = parts
+      .map((p) => `<button type="button" class="dn-leg ${p.key}" data-sel="${esc(sel(p))}"${p.n ? "" : " disabled"}><i></i><span>${esc(p.label)}</span><b>${p.n}</b></button>`)
+      .join("");
+    return `<div class="rp-donut"><svg viewBox="0 0 140 140" class="dn" role="group" aria-label="${esc(label)}"><circle class="dn-track" cx="70" cy="70" r="${R0}"/><g transform="rotate(-90 70 70)">${arcs}</g><g class="dn-c" data-sel="${esc(sel(parts.find((p) => p.n) ?? parts[0]))}"><text x="70" y="68" class="dn-n" text-anchor="middle">${esc(center[0])}</text><text x="70" y="85" class="dn-l" text-anchor="middle">${esc(center[1] ?? "")}</text><text x="70" y="97" class="dn-l" text-anchor="middle">${esc(center[2] ?? "")}</text></g></svg><div class="dn-legend">${legend}</div></div>`;
+  }
+
+  function rangeRows(tests, w, rw, lang) {
+    const D0 = -0.8, D1 = 1.8;
+    const X = (p) => 8 + ((Math.max(D0, Math.min(D1, p)) - D0) / (D1 - D0)) * 284;
+    const head = `<div class="rr-axis" aria-hidden="true"><span></span><svg viewBox="0 0 300 18"><rect class="rr-band" x="${X(0)}" y="2" width="${X(1) - X(0)}" height="14" fill="url(#vz-hatch)"/><text x="${(X(D0) + X(0)) / 2}" y="13" text-anchor="middle">${esc(rw.axis[0])}</text><text x="${(X(0) + X(1)) / 2}" y="13" text-anchor="middle">${esc(rw.axis[1])}</text><text x="${(X(1) + X(D1)) / 2}" y="13" text-anchor="middle">${esc(rw.axis[2])}</text></svg><span></span></div>`;
+    const rows = tests
+      .map((t, i) => {
+        const L = t.latest;
+        const sev = SEV[L.position] ?? "none";
+        const pNow = posOf(L, L.range);
+        const prev = (t.history ?? []).length > 1 ? t.history[t.history.length - 2] : null;
+        const pPrev = prev && !t.unitChanged ? posOf(prev, L.range) : null;
+        let svg = `<line class="rr-base" x1="8" y1="11" x2="292" y2="11"/><rect class="rr-band" x="${X(0)}" y="4" width="${X(1) - X(0)}" height="14" rx="2" fill="url(#vz-hatch)"/>`;
+        if (pNow != null) {
+          const xn = X(pNow);
+          if (sev !== "in") {
+            const edge = pNow < 0 ? X(0) : X(1);
+            svg += `<line class="rr-gap ${sev}" x1="${edge.toFixed(1)}" y1="11" x2="${xn.toFixed(1)}" y2="11"/>`;
+          }
+          if (pPrev != null && Math.abs(X(pPrev) - xn) > 3) {
+            const xp = X(pPrev);
+            const dir = xn > xp ? -1 : 1;
+            svg += `<circle class="rr-prev" cx="${xp.toFixed(1)}" cy="11" r="4"/><path class="rr-move" d="M${xp.toFixed(1)} 11 L${(xn + dir * 7).toFixed(1)} 11"/><path class="rr-head" d="M${(xn + dir * 7).toFixed(1)} 7.5 L${(xn + dir * 3).toFixed(1)} 11 L${(xn + dir * 7).toFixed(1)} 14.5"/>`;
+          }
+          if (pNow < D0 || pNow > D1) svg += `<text class="rr-off" x="${xn.toFixed(1)}" y="9" text-anchor="middle">${pNow < D0 ? "◀" : "▶"}</text>`;
+          svg += `<circle class="rr-dot ${sev}" cx="${xn.toFixed(1)}" cy="11" r="5.5" style="--d:${120 + i * 70}ms"/>`;
+        } else svg += `<text class="rr-none" x="150" y="15" text-anchor="middle">${esc(L.qual ?? w.noRange)}</text>`;
+        const note = t.corrected
+          ? `<em class="rr-note fix">${esc(w.corrected(t.corrected.from, t.corrected.to))}</em>`
+          : t.unitChanged
+            ? `<em class="rr-note unit">${esc(rw.notCompared)}: ${esc(w.units.split(",")[0])}</em>`
+            : "";
+        return `<button type="button" class="rr-row ${sev}" data-sel="test:${esc(t.key)}" style="--i:${i}" aria-label="${esc(`${t.name} ${L.raw}${t.unit ? " " + t.unit : ""}, ${posWord(L.position, w)}`)}">
+          <span class="rr-name"><b>${esc(t.name)}</b>${note}</span>
+          <svg class="rr-svg" viewBox="0 0 300 22" aria-hidden="true">${svg}</svg>
+          <span class="rr-val"><b>${esc(L.raw)}</b> <small>${esc(t.unit ?? "")}</small><i>${esc(L.range?.low != null ? `${L.range.low}–${L.range.high}` : "")}</i></span>
+        </button>`;
+      })
+      .join("");
+    return `<section class="rp-card"><header class="rp-h"><h4>${esc(rw.rangeK)}</h4><p>${esc(rw.rangeHint)}</p></header>${head}<div class="rr-rows">${rows}</div></section>`;
+  }
+
+  function reportEvents(subject, rw) {
+    const reps = subject.reports ?? [];
+    const out = [];
+    reps.forEach((r, i) => {
+      const items = [];
+      if (i === 0) items.push({ kind: "base", text: rw.baseline(subject.tests.length) });
+      if (r.status === "preliminary") items.push({ kind: "pre", text: rw.prelim });
+      if (r.status === "amended") {
+        items.push({ kind: "amd", text: rw.amended });
+        for (const t of subject.tests.filter((x) => x.corrected))
+          items.push({ kind: "fix", text: rw.corrected(t.name, t.corrected.from, t.corrected.to, t.unit), key: t.key });
+      }
+      for (const t of subject.tests.filter((x) => x.unitChanged)) {
+        const hs = t.history ?? [];
+        const k = hs.findIndex((h, j) => j && h.unit !== hs[j - 1].unit);
+        if (k > 0 && hs[k].title === r.title)
+          items.push({ kind: "unit", text: rw.unit(t.name, hs[k - 1].unit, hs[k].unit), key: t.key });
+      }
+      if (i === reps.length - 1) {
+        const n = subject.tests.filter((t) => /below|above|qual_differs/.test(t.latest.position)).length;
+        if (n) items.push({ kind: "flag", text: rw.flagged(n) });
+      }
+      out.push({ report: r, items });
+    });
+    return out;
+  }
+
+  function timelineCard(subject, rw, lang, w) {
+    const ev = reportEvents(subject, rw);
+    if (ev.length < 2) return "";
+    const nodes = ev
+      .map(
+        (e, i) => `<li class="tl-node st-${esc(e.report.status)}" style="--i:${i}">
+          <button type="button" class="tl-dot" data-sel="ev:${i}" aria-label="${esc(`${shortDate(e.report.date, lang)}, ${e.report.status}`)}"><i></i></button>
+          <span class="tl-date">${esc(shortDate(e.report.reported ?? e.report.date, lang))}</span>
+          <span class="tl-st">${esc(w["st_" + e.report.status] ?? e.report.status)}</span>
+          <ul>${e.items.map((x) => `<li class="tl-it ${x.kind}"${x.key ? ` data-sel="test:${esc(x.key)}" role="button" tabindex="0"` : ""}>${esc(x.text)}</li>`).join("")}</ul>
+        </li>`,
+      )
+      .join("");
+    return `<section class="rp-card"><header class="rp-h"><h4>${esc(rw.tlK)}</h4></header><ol class="tl">${nodes}</ol></section>`;
+  }
+
+  function detailFor(rep, key) {
+    const { v, lang } = rep;
+    const w = W(lang),
+      rw = R(lang);
+    const [kind, id] = key.split(":");
+    if (v.kind === "records") {
+      if (kind === "dec") {
+        const rows = v.rows.filter((r) => r.verdict === id);
+        return rows.map((r) => recDetail(r, rw, lang)).join("");
+      }
+      const r = v.rows.find((x) => x.id === id);
+      return r ? recDetail(r, rw, lang) : "";
+    }
+    const subject = v.subjects[rep.subject] ?? v.subjects[0];
+    if (kind === "test") {
+      const t = subject.tests.find((x) => x.key === id);
+      return t ? `<h5 class="dt-h">${esc(t.name)}</h5>${drill(t, lang)}` : "";
+    }
+    if (kind === "seg") {
+      const ts = subject.tests.filter((t) => (SEV[t.latest.position] ?? "none") === id);
+      return `<h5 class="dt-h">${esc(rw.inSeg(rw.sev[id], ts.length))}</h5><div class="dt-list">${ts
+        .map((t) => `<button type="button" class="dt-item ${id}" data-sel="test:${esc(t.key)}"><b>${esc(t.name)}</b><span>${esc(t.latest.raw)} ${esc(t.unit ?? "")}</span><em>${esc(t.latest.range?.low != null ? `${w.range} ${t.latest.range.low}–${t.latest.range.high}` : w.noRange)}</em><i>${esc(posWord(t.latest.position, w))}</i></button>`)
+        .join("")}</div>`;
+    }
+    if (kind === "ev") {
+      const e = reportEvents(subject, rw)[Number(id)];
+      if (!e) return "";
+      return `<h5 class="dt-h">${esc(shortDate(e.report.reported ?? e.report.date, lang))} · ${esc(w["st_" + e.report.status] ?? e.report.status)}</h5><ul class="dt-ev">${e.items
+        .map((x) => `<li class="tl-it ${x.kind}"${x.key ? ` data-sel="test:${esc(x.key)}" role="button" tabindex="0"` : ""}>${esc(x.text)}</li>`)
+        .join("")}</ul><button type="button" class="dd-src" data-doc="${esc(e.report.title)}"><span class="dd-src-d">${esc(shortDate(e.report.date, lang))}</span><b>${esc(e.report.title)}</b><span class="dd-go">${esc(rw.openReport)} →</span></button>`;
+    }
+    return "";
+  }
+
+  function recDetail(r, rw, lang) {
+    const [tone] = STAMP[r.verdict] ?? ["warn"];
+    const docs = new Map((REPORTS.get("__docs") ?? []).map((d) => [d.title, d]));
+    const src = (r.sources ?? [])
+      .map((x) => ({ ...x, date: docs.get(x.title)?.date ?? "" }))
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    return `<div class="dt-rec"><h5 class="dt-h">${esc(r.label)} <span class="vz-stamp ${tone}">${esc(rw.dec[r.verdict] ?? r.verdict)}</span></h5>
+      <p class="dt-say">${esc(r.text)}</p>
+      ${src.length ? `<p class="dd-k">${esc(rw.sources)}</p><ol class="dd-points">${src.map((x) => `<li><button type="button" class="dd-src" data-doc="${esc(x.title)}"><span class="dd-src-d">${esc(x.date ? shortDate(x.date, lang) : "")}</span><span class="dt-q">${esc(String(x.quote).replace(/^\d+\.\s*/, ""))}</span><span class="dd-go">${esc(x.title.replace(/^\d+_|\.md$/g, "").replace(/_/g, " "))} →</span></button></li>`).join("")}</ol>` : ""}
+      ${QS[r.id] ? `<p class="dd-k">${esc(rw.ask)}</p><div class="dd-asks"><button type="button" class="dd-ask" data-q="${esc(QS[r.id])}">${esc(QS[r.id])}</button></div>` : ""}</div>`;
+  }
+
+  function labReport(v, opts, subjectIndex = 0) {
+    const lang = opts.lang ?? v.lang ?? "en";
+    const w = W(lang),
+      rw = R(lang);
+    const subject = v.subjects[subjectIndex] ?? v.subjects[0];
+    if (!subject) return "";
+    const counts = Object.fromEntries(SEV_ORDER.map((k) => [k, 0]));
+    for (const t of subject.tests) counts[SEV[t.latest.position] ?? "none"]++;
+    const outside = counts.out + counts.near;
+    const ranged = subject.tests.length - counts.none;
+    const parts = SEV_ORDER.map((k) => ({ key: k, label: rw.sev[k], n: counts[k] }));
+    const order = (t) => ({ out: 0, near: 1, in: 2, none: 3 })[SEV[t.latest.position] ?? "none"];
+    const tests = [...subject.tests].sort((a, b) => order(a) - order(b) || Number(!!b.corrected) - Number(!!a.corrected));
+    const who = v.subjects.length > 1
+      ? `<div class="rp-who" role="tablist">${v.subjects.map((s, i) => `<button type="button" role="tab" class="rp-subj" data-subject="${i}" aria-selected="${i === subjectIndex}">${esc(s.label)}</button>`).join("")}</div>`
+      : `<div class="rp-who"><b>${esc(subject.label)}</b></div>`;
+    return `<div class="rp-top">${who}${reportTrail(subject, w, lang)}</div>
+      <section class="rp-card rp-kpi"><header class="rp-h"><h4>${esc(rw.donutK)}</h4></header>${donut(parts, outside ? rw.donutC(outside, ranged) : rw.donutC0(ranged), rw.donutK, (p) => `seg:${p.key}`)}</section>
+      ${rangeRows(tests, w, rw, lang)}
+      ${timelineCard(subject, rw, lang, w)}
+      <section class="rp-detail" aria-live="polite"><p class="rp-pick">${esc(rw.pick)}</p></section>`;
+  }
+
+  function recordsReport(v, opts) {
+    const lang = opts.lang ?? v.lang ?? "en";
+    const rw = R(lang);
+    REPORTS.set("__docs", v.documents ?? []);
+    const keys = ["APPROVED", "PROPOSED", "OPEN", "NO-RECORD"];
+    const parts = keys.map((k) => ({
+      key: { APPROVED: "in", PROPOSED: "near", OPEN: "open", "NO-RECORD": "out" }[k],
+      dec: k,
+      label: rw.dec[k],
+      n: v.rows.filter((r) => (k === "APPROVED" ? r.verdict === "APPROVED" || r.verdict === "AGREED" : r.verdict === k)).length,
+    }));
+    const approved = parts[0].n;
+    const docs = (v.documents ?? []).filter((d) => d.date).sort((a, b) => a.date.localeCompare(b.date));
+    const t0 = docs.length ? Date.parse(docs[0].date) : 0,
+      t1 = docs.length ? Date.parse(docs.at(-1).date) : 1;
+    const X = (d) => 4 + (t1 > t0 ? (Date.parse(d) - t0) / (t1 - t0) : 0.5) * 92;
+    const lanes = v.rows
+      .map((r, i) => {
+        const [tone] = STAMP[r.verdict] ?? ["warn"];
+        const titles = [...new Set((r.sources ?? []).map((x) => x.title))];
+        const marks = docs
+          .filter((d) => titles.includes(d.title))
+          .map((d, k) => `<button type="button" class="ln-mark ${tone}" style="left:${X(d.date).toFixed(1)}%;--d:${(i * 4 + k) * 60}ms" data-sel="rec:${esc(r.id)}" title="${esc(`${d.title.replace(/^\d+_|\.md$/g, "").replace(/_/g, " ")} · ${shortDate(d.date, lang)}`)}" aria-label="${esc(`${r.label}: ${d.title}`)}"></button>`)
+          .join("");
+        const firstX = marks ? Math.min(...docs.filter((d) => titles.includes(d.title)).map((d) => X(d.date))) : 4;
+        return `<div class="ln-row" style="--i:${i}"><button type="button" class="ln-k" data-sel="rec:${esc(r.id)}"><b>${esc(r.label)}</b><span class="vz-stamp ${tone}">${esc(rw.dec[r.verdict] ?? r.verdict)}</span></button><div class="ln-track"><span class="ln-line ${tone}" style="left:${firstX.toFixed(1)}%"></span>${marks}</div></div>`;
+      })
+      .join("");
+    const axis = docs
+      .map((d) => `<span style="left:${X(d.date).toFixed(1)}%">${esc(shortDate(d.date, lang))}</span>`)
+      .join("");
+    return `<section class="rp-card rp-kpi"><header class="rp-h"><h4>${esc(rw.decK)}</h4></header>${donut(parts, rw.decC(approved, v.rows.length), rw.decK, (p) => `dec:${p.dec}`)}</section>
+      <section class="rp-card"><header class="rp-h"><h4>${esc(rw.lanesK)}</h4><p>${esc(rw.lanesHint)}</p></header><div class="ln">${lanes}<div class="ln-axis"><span class="ln-k"></span><div class="ln-ticks">${axis}</div></div></div></section>
+      <section class="rp-detail" aria-live="polite"><p class="rp-pick">${esc(rw.pick)}</p></section>`;
+  }
+
+  // one delegated handler: select a mark, show its detail, keep the mark lit
+  function select(board, key) {
+    const rep = REPORTS.get(board.dataset.rep);
+    if (!rep) return;
+    board.querySelectorAll("[data-sel].sel").forEach((x) => x.classList.remove("sel"));
+    board.querySelectorAll(`[data-sel="${CSS.escape(key)}"]`).forEach((x) => x.classList.add("sel"));
+    const panel = board.querySelector(".rp-detail");
+    if (!panel) return;
+    panel.innerHTML = `<p class="dd-k">${esc(R(rep.lang).detailK)}</p>${detailFor(rep, key) || `<p class="rp-pick">${esc(R(rep.lang).pick)}</p>`}`;
+    if (!reduced) panel.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+    const r = panel.getBoundingClientRect();
+    if (r.top > innerHeight - 80 || r.bottom < 0) panel.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest" });
+  }
+  document.addEventListener("click", (e) => {
+    const subj = e.target.closest?.(".rp-subj");
+    if (subj) {
+      const board = subj.closest(".vz[data-rep]");
+      const rep = REPORTS.get(board?.dataset.rep);
+      if (!rep) return;
+      rep.subject = Number(subj.dataset.subject);
+      board.querySelector(".rp-body").innerHTML = labReport(rep.v, rep.opts, rep.subject);
+      return;
+    }
+    const m = e.target.closest?.("[data-sel]");
+    if (!m || m.closest(".vz-dd")) return;
+    const board = m.closest(".vz[data-rep]");
+    if (board) select(board, m.dataset.sel);
+  });
+  document.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("[data-sel][tabindex]")) {
+      e.preventDefault();
+      e.target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    }
+  });
+
   // ------------------------------------------------------------ narration
   // narration-split: /.+?(?:[.!?।]+(?!\d)|$)\s*/g (decimals stay inline; MUST match the other side)
   // the server speaks one indexed sentence; rows highlight by that index.)
@@ -698,11 +1059,24 @@
     if (!el || !v) return;
     stop();
     const lang = opts.lang ?? v.lang ?? "en";
-    const body = v.kind === "records" ? records(v, opts) : labs(v, opts);
+    const focus = v.focus === "answer";
+    const id = `rp${++rid}`;
+    if (!focus) REPORTS.set(id, { v, opts, lang, subject: 0 });
+    // Answers show the picture of that answer (the test's own drill-down);
+    // the overview is the report.
+    const body = focus
+      ? v.kind === "records"
+        ? records(v, opts)
+        : v.subjects[0]?.tests?.length
+          ? v.subjects[0].tests.slice(0, 2).map((t) => `<div class="vz-answer-test"><h5 class="dt-h">${esc(t.name)}</h5>${drill(t, lang)}</div>`).join("")
+          : labs(v, opts)
+      : v.kind === "records"
+        ? recordsReport(v, opts)
+        : labReport(v, opts, 0);
     const narration = opts.narration ?? v.narration ?? null;
-    el.innerHTML = `<div class="vz ${v.kind === "records" ? "vz-rec" : "vz-lab"}${v.focus === "answer" ? " vz-focus" : ""}${reduced ? " still" : ""}" lang="${lang === "hi" ? "hi" : "en"}">
-      ${body}
-      ${narration && opts.narrateButton !== false ? `<div class="vz-say"><button type="button" class="vz-listen"><i aria-hidden="true"></i><span>${esc(W(lang).listen)}</span></button><div><p class="vz-narr clamp">${esc(narration)}</p><button type="button" class="vz-more">${esc(W(lang).full[0])}</button></div></div>` : ""}
+    el.innerHTML = `<div class="vz ${v.kind === "records" ? "vz-rec" : "vz-lab"}${focus ? " vz-focus" : " vz-report"}${reduced ? " still" : ""}"${focus ? "" : ` data-rep="${id}"`} lang="${lang === "hi" ? "hi" : "en"}">
+      ${focus ? body : `${DEFS}<div class="rp-body">${body}</div>`}
+      ${narration && (opts.narrateButton !== false || !focus) ? `<div class="vz-say${opts.narrateButton === false ? " no-voice" : ""}">${opts.narrateButton === false ? "" : `<button type="button" class="vz-listen"><i aria-hidden="true"></i><span>${esc(W(lang).listen)}</span></button>`}<div><p class="vz-narr clamp">${esc(narration)}</p><button type="button" class="vz-more">${esc(W(lang).full[0])}</button></div></div>` : ""}
     </div>`;
     const btn = el.querySelector(".vz-listen");
     btn?.addEventListener("click", () =>

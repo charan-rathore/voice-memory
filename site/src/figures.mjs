@@ -119,32 +119,25 @@ function waffle(cv) {
   addEventListener("resize", () => (size.w = 0));
 }
 
-// ------------------------------------------------------------ 1 in 3: an unreadable result
+// ------------------------------------------------------------ 1 in 3: a result nobody explained
+// The third row is a real result whose unit and range changed between
+// reports. It stays still and readable: one soft focus-pull when it first
+// scrolls into view (blur eases out on a critically damped curve), then the
+// question a reader is left with is underlined. No per-frame text swaps, so
+// nothing reflows or flickers.
 function scramble(root) {
-  const els = $$("[data-scramble]", root).map((el) => ({ el, text: el.textContent }));
-  if (!els.length) return;
-  // abstract redaction blocks, never fake medical-looking glyphs: the real
-  // fixture values resolve every 6 s, unreadable the rest of the time
-  const BLOCKS = "\u2592\u2591\u2593\u2592\u2591\u2592";
-  const swap = (ch, k) => (/\s/.test(ch) ? ch : BLOCKS[k % BLOCKS.length]);
-  let acc = 0;
-  whileVisible(root, (dt, t) => {
-    if (still) return;
-    acc += dt;
-    if (acc < 1 / 14) return;
-    acc = 0;
-    // every 6 s the row resolves for a moment: what an explanation does
-    const phase = t % 6;
-    const clear = phase > 4.4 && phase < 5.4 ? 1 - Math.abs(phase - 4.9) / 0.5 : 0;
-    els.forEach(({ el, text }, j) => {
-      let out = "";
-      for (let i = 0; i < text.length; i++) {
-        const n = noise2(i * 0.7 + t * 3, j * 3.1, 11) * 0.5 + 0.5;
-        out += n > 0.32 + clear * 0.8 ? swap(text[i], (Math.random() * 260) | 0) : text[i];
-      }
-      el.textContent = out;
-    });
-  });
+  const row = root.querySelector(".rr-lost");
+  if (!row) return;
+  if (still) return void row.classList.add("clear");
+  const stop = onVisible(
+    row,
+    (vis) => {
+      if (!vis) return;
+      stop();
+      row.classList.add("clear");
+    },
+    "-15% 0px",
+  );
 }
 
 // ------------------------------------------------------------ 40M+ a day: streams into one point

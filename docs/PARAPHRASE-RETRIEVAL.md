@@ -1,4 +1,4 @@
-# Paraphrase-aware retrieval: where it stands (2026-11-01)
+# Paraphrase-aware retrieval: where it stands (2026-11-02)
 
 The roadmap item is "paraphrase-aware search with a dense retriever behind
 the same evidence gate, measured on held-out questions". The dense retriever
@@ -98,6 +98,104 @@ remains evidence discovery only. Unit tests: `tests/paraphrase.test.mjs`;
 numbers: the `bench` workflow posts them on every pull request that touches
 retrieval.
 
+## Discovery, not promotion (2026-11-02): built, measured, off by default
+
+What production does with a reworded question the engine cannot answer:
+
+1. The engine abstains as before ("I don't see that in these documents").
+2. `closestLine` (src/paraphrase.mjs) ranks sentence units with the same
+   dense + BM25 fusion and the same calibrated gate (`GATE`), after removing
+   every sentence from a document the record has replaced (a report marked
+   preliminary or draft beside one that amends, corrects or revises it).
+3. If one line clears the gate and passes the same refusals as promotion
+   (no weak-status line for a strong-action question, no superseded or
+   conflicting value), the typed answer shows it under the abstention as
+   **"Closest line in <document> · not an answer"**, with a button that opens
+   the document at that sentence. It is never the reply, never spoken on a
+   call, and the verdict stays an abstention.
+
+**Status: off in production (`VM_CLOSEST_LINE=on` to enable).** The outside
+benchmark below showed the pointer is not yet reliable enough to show
+visitors; see "What the outside data decided".
+
+Why this shape: the 2026-11-02 review failures were all about _speaking_ a
+retrieved sentence as the answer. A pointer the person opens and judges keeps
+the useful part (the dense model usually finds the right place) without
+upgrading a record's status. Promotion stays behind `VM_PARAPHRASE_PROMOTE=1`.
+The replaced-source filter now applies to the promotion path too.
+
+## Outside-authored benchmark (evaluation/outside-bench.mjs)
+
+The Northstar questions were written by the corpus authors. This benchmark
+uses records and questions written by people who never saw the engine:
+
+- **QMSum** test split (Zhong et al., NAACL 2021): 35 real meeting
+  transcripts (AMI and ICSI product and research meetings, Welsh Parliament
+  committees), spoken language with disfluencies. Annotators wrote the
+  queries and marked the answering turns. Kept: 197 specific queries whose
+  answer covers at most 15% of the meeting.
+- **CUAD v1** test split (Hendrycks et al., NeurIPS 2021): the first 30
+  contracts (by title) of real SEC EDGAR filings; 14 clause types fixed
+  before any run (governing law, expiration, renewal, termination for
+  convenience, non-compete, exclusivity, liability cap, insurance, audit,
+  assignment, minimum commitment, warranty duration, effective date). The
+  question is the category's plain-English description, so it paraphrases
+  the clause by construction. Lawyers marked 236 of 420 as absent: those are
+  the unanswerable set.
+
+Nothing is tuned on this data. Each record is its own bundle (ranking within
+one meeting or one contract, as when a person uploads one file). Data is
+fetched at pinned commits by `evaluation/outside/fetch.sh`; the dense run is
+in the `bench` workflow and posted on pull requests.
+
+Results (CI, bge-small, 2026-11-02):
+
+| Set            | answerable / absent | chance top-1 | keyword top-1 / top-3 | hybrid top-1 / top-3 | dense only top-1 / top-3 |
+| -------------- | ------------------- | ------------ | --------------------- | -------------------- | ------------------------ |
+| QMSum meetings | 197 / 0             | 5.3%         | 40.6% / 62.4%         | 42.1% / 62.4%        | 40.1% / 61.4%            |
+| CUAD contracts | 184 / 236           | 1.2%         | 44.0% / 65.2%         | **50.0%** / 67.4%    | 42.9% / 62.5%            |
+
+### What the outside data decided
+
+1. **Fusion helps, dense alone does not.** Hybrid (dense + BM25, RRF) beats
+   keyword on both sets, most on contracts (+6 points top-1). Dense alone is
+   slightly worse than keyword: the lexical half carries clause vocabulary.
+2. **The promotion gate does not transfer to one file.** Its margin is
+   measured against another document; a single meeting or contract has none.
+   It showed a line for 87 to 92% of answerable questions, right only 47 to
+   48% of the time, and for **85.6% of absent CUAD clauses**.
+3. **A single-file discovery gate** (`discoveryGate`: cosine floor, lead over
+   the next-best line of any document, keyword agreement in the top 3) fixes
+   the absent-clause problem but not precision:
+
+   | Set   | shown (answerable) | right when shown | shown when absent |
+   | ----- | ------------------ | ---------------- | ----------------- |
+   | QMSum | 21.8%              | 65.1%            | -                 |
+   | CUAD  | 6.0%               | 81.8%            | 1.7%              |
+
+4. **No rule reaches the bar.** Sweeping cosine floor, margin and keyword
+   agreement on the development half (even rows), no setting reaches 90%
+   right with at most 10% shown when the answer is absent. The bench prints
+   the best precision at each coverage level on dev and its held-out result,
+   so the next change (a cross-encoder reranker) is judged on the same curve.
+
+   The precision-coverage curve from that sweep (dev = even rows, held-out =
+   odd rows; at most 10% shown when absent):
+
+   | Min coverage (dev) | Best rule on dev                         | Dev                                     | Held-out                                |
+   | ------------------ | ---------------------------------------- | --------------------------------------- | --------------------------------------- |
+   | 5%                 | cos ≥ 0.68, margin ≥ 0.06, keyword top 3 | 12/203 shown, 83.3% right, 0/106 absent | 18/178 shown, 83.3% right, 3/130 absent |
+   | 10%                | cos ≥ 0.50, margin ≥ 0.05, keyword top 3 | 25/203, 80.0% right, 2/106 absent       | 24/178, 83.3% right, 4/130 absent       |
+   | 20%                | cos ≥ 0.50, margin ≥ 0.03, keyword top 3 | 41/203, 68.3% right, 6/106 absent       | 42/178, 76.2% right, 11/130 absent      |
+   | 30%                | cos ≥ 0.60, keyword top 1                | 72/203, 63.9% right, 10/106 absent      | 57/178, 73.7% right, 20/130 absent      |
+
+   With bge-small and fusion, about 83% is the ceiling at useful coverage.
+   Clearing 90% needs a better ranker, not a different threshold.
+
+Decision: the closest-line pointer is **off by default**. A pointer that is
+wrong a third of the time on meetings undermines the one promise the product
+makes. Retrieval keeps the hybrid ranking; answers stay with the engine.
+
 ## Next experiments
 
 - A cross-encoder reranker (bge-reranker-base) over the top 10 units, the
@@ -105,5 +203,5 @@ retrieval.
   free instance's memory.
 - `dtype: "q8"` for the resident model (about a quarter of the memory), with
   the gate re-tuned on development.
-- A larger, outside-authored question set: 15 held-out questions can show a
-  direction, not a reliable size.
+- Gate re-tuned on a development half of the outside data (QMSum val split,
+  CUAD train contracts), reported on the test halves above.

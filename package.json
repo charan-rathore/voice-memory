@@ -7,9 +7,9 @@
     "test": "node --test --test-force-exit tests/test.mjs tests/motion-math.test.mjs tests/paraphrase.test.mjs tests/spoken-normalize.test.mjs tests/voicelab-score.test.mjs tests/retrieval-core.test.mjs tests/memorable-json.test.mjs tests/dense-guard.test.mjs tests/budget.test.mjs tests/spoken-repair.test.mjs tests/semantic.test.mjs tests/vernacular.test.mjs tests/dense-context.test.mjs tests/visual-insight.test.mjs",
     "start": "node server.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "test:boundaries": "node --test --test-force-exit tests/server.test.mjs tests/voice-adapter.test.mjs tests/synthesis.test.mjs tests/provider.test.mjs tests/retrieval-bridge.test.mjs tests/fictional-sample.test.mjs tests/cache.test.mjs tests/motion.test.mjs tests/persistence.test.mjs tests/public-api.test.mjs tests/public-narrate.test.mjs tests/voice-companion.test.mjs",
+    "test:boundaries": "node --test --test-force-exit tests/server.test.mjs tests/voice-adapter.test.mjs tests/synthesis.test.mjs tests/provider.test.mjs tests/retrieval-bridge.test.mjs tests/fictional-sample.test.mjs tests/cache.test.mjs tests/motion.test.mjs tests/persistence.test.mjs tests/public-api.test.mjs tests/public-narrate.test.mjs tests/voice-companion.test.mjs tests/mcp.test.mjs",
     "test:browser": "node tests/browser-check.mjs && node tests/notes-check.mjs && node tests/site-check.mjs",
-    "format:check": "prettier --check \"src/*.{mjs,ts}\" \"tests/*.mjs\" \"tests/vendor/*\" \"scripts/*.mjs\" \"*.{mjs,json}\" public/* memory/* evaluation/vault/*",
+    "format:check": "prettier --check \"src/*.{mjs,ts}\" \"tests/*.mjs\" \"tests/vendor/*\" \"scripts/*.mjs\" \"*.{mjs,json}\" \"mcp/*.mjs\" public/* memory/* evaluation/vault/*",
     "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:vault && npm run test:browser && npm run test:graph",
     "test:evaluation": "node --test evaluation/*.test.mjs",
     "test:ingest": "node --test --test-concurrency=1 ingest/*.test.mjs",
@@ -27,6 +27,8 @@
     "verify:fast": "node scripts/verify-parallel.mjs --fast",
     "hooks:install": "node scripts/hooks-install.mjs",
     "build:site": "node scripts/build-site-motion.mjs",
+    "mcp": "node mcp/server.mjs",
+    "bench:outside": "bash evaluation/outside/fetch.sh && node evaluation/outside-bench.mjs",
     "dev:site": "node scripts/site-dev.mjs"
   },
   "dependencies": {

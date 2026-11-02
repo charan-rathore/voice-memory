@@ -40,6 +40,8 @@ import {
   repairDealTerms,
   glossHindi,
   splitCompound,
+  splitMixed,
+  domainOf,
   isVagueLab,
   clarifyLab,
   fragmentReply,
@@ -47,6 +49,8 @@ import {
   hasSubject,
   isDealQuestion,
 } from "./conversation.mjs";
+import { normalizeVernacular } from "./vernacular.mjs";
+
 export function createVoiceAdapter({
   ttlMs = 120000,
   now = () => Date.now(),
@@ -403,6 +407,79 @@ export function createVoiceAdapter({
         lang,
         last: lastSpoken ? messageText(lastSpoken) : null,
       });
+      // Two subjects in one breath ("my ferritin, and what changed in the
+      // Northstar deal"): each half answered by the renderer for its records,
+      // in the caller's language, then spoken together.
+      let mixedTurn = null;
+      if (!social) {
+        const parts = splitMixed(normalizeVernacular(transcript));
+        if (parts.length >= 2 && new Set(parts.map(domainOf)).size >= 2) {
+          const said = [],
+            cites = [];
+          let verdict = null;
+          for (const part of parts) {
+            const q = normalizeSpoken(part) || part;
+            let r = null;
+            try {
+              if (domainOf(q) === "lab" && reports.length) {
+                const c =
+                  clinicalAnswer(q, reports) ?? clinicalOverview(q, reports);
+                if (c)
+                  r = {
+                    spoken: c.spoken,
+                    verdict: c.verdict,
+                    citations: c.used
+                      .map((o) => observationEvidence(o, bundle))
+                      .filter(Boolean)
+                      .map((e) => ({
+                        title: e.title,
+                        docDate: null,
+                        quote: e.quote,
+                        firstLine: e.firstLine,
+                        lastLine: e.lastLine,
+                        hash: e.hash,
+                      })),
+                    localized: true,
+                  };
+              } else {
+                const g = glossHindi(repairDealTerms(q));
+                const broad =
+                  !g &&
+                  /\b(chang\w*|happen\w*|exactly|summary|status|update|overview|badl\w*)\b|बदल|क्या\s+हुआ/i.test(
+                    q,
+                  );
+                const qs = broad
+                  ? ["What happened to the fee?", "What's still open?"]
+                  : [normalizeSpoken(g ?? repairDealTerms(q)) || q];
+                const got = qs
+                  .map((x) => spokenTurn(x, bundle, null))
+                  .filter((x) => x?.spoken && x.verdict !== "UNKNOWN");
+                if (got.length)
+                  r = {
+                    spoken: got.map((x) => x.spoken).join(" "),
+                    verdict: got[0].verdict,
+                    citations: got.flatMap((x) => x.citations ?? []),
+                    localized: false,
+                  };
+              }
+            } catch {
+              r = null;
+            }
+            if (!r) continue;
+            verdict ??= r.verdict;
+            said.push(
+              isHindi(lang) && !r.localized ? toHindi(r.spoken) : r.spoken,
+            );
+            cites.push(...r.citations);
+          }
+          if (said.length)
+            mixedTurn = {
+              spoken: said.join(" "),
+              verdict: verdict ?? "MIXED",
+              citations: cites,
+            };
+        }
+      }
       let asked = candidates[0] || normalizeSpoken(transcript) || transcript;
       let clinicalHit = false;
       const deal = isDealQuestion(transcript) || isDealQuestion(asked);
@@ -423,7 +500,8 @@ export function createVoiceAdapter({
         if (g) asked = normalizeSpoken(g) || g;
       }
       // Two questions in one breath: answer the first here, the second below.
-      const [firstQ, secondQ] = splitCompound(asked);
+      const [firstQ, secondQ0] = splitCompound(asked);
+      const secondQ = mixedTurn ? null : secondQ0;
       if (secondQ) asked = firstQ;
       const streaming = true;
       const sequence = ++grant.sequence;
@@ -437,7 +515,17 @@ export function createVoiceAdapter({
         return new Response(null, { status: 499 });
       }
       let spoken, turn;
-      if (social) {
+      if (mixedTurn) {
+        spoken = mixedTurn.spoken;
+        turn = {
+          spokenTurn: {
+            intent: "MIXED",
+            verdict: mixedTurn.verdict,
+            spoken,
+            citations: mixedTurn.citations,
+          },
+        };
+      } else if (social) {
         // about the call itself: a fixed reply, no record facts
         spoken = social.spoken;
         turn = {
@@ -660,7 +748,7 @@ export function createVoiceAdapter({
       // same renderers, rather than an abstention.
       // Reworded beyond keyword reach: one verbatim sentence, only when the
       // calibrated paraphrase gate is unambiguous (paraphrase.mjs).
-      if (!social && refusal(spoken) && !isFragment(transcript)) {
+      if (!social && !mixedTurn && refusal(spoken) && !isFragment(transcript)) {
         let p = null;
         try {
           p = sectionAnswer(asked, bundle);
@@ -721,7 +809,8 @@ export function createVoiceAdapter({
       // Hindi on request or when spoken to in Hindi. Clinical answers are
       // already rendered in the caller's language; deal templates are
       // rendered here, with record quotes kept verbatim.
-      if (isHindi(lang) && !clinicalHit && !social) spoken = toHindi(spoken);
+      if (isHindi(lang) && !clinicalHit && !social && !mixedTurn)
+        spoken = toHindi(spoken);
       releaseBusy();
       const id = "local-contract-" + randomBytes(8).toString("hex");
       const encoder = new TextEncoder();
@@ -737,8 +826,17 @@ export function createVoiceAdapter({
           });
           try {
             onTurn?.(token, {
-              question: asked,
-              lead: turn?.spokenTurn ?? null,
+              question: transcript,
+              // what was actually spoken (both halves, in the caller's
+              // language), so the page shows the same words; plus any page
+              // action the turn asks for (show the upload panel)
+              lead: turn?.spokenTurn
+                ? {
+                    ...turn.spokenTurn,
+                    spoken,
+                    action: social?.action ?? null,
+                  }
+                : null,
               result: turn?.result ?? null,
               scope: bundle?.scope ?? null,
             });

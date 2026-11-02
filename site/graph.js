@@ -6,7 +6,7 @@
   const $ = (s) => document.querySelector(s);
   const cv = $("#g");
   const ctx = cv.getContext("2d");
-  const snap = window.VM_SNAPSHOT ?? { graphs: {} };
+  const snap = { graphs: window.VM_SNAPSHOT_GRAPHS ?? {} };
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 

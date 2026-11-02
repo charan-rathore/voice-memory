@@ -4,7 +4,7 @@ import { createCallCounters } from "./public-call-counters.mjs";
 import { selectCallCounters } from "./public-call-counters-upstash.mjs";
 import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
-import { promotedAnswer, warmUnits } from "./paraphrase.mjs";
+import { promotedAnswer, warmUnits, closestLine } from "./paraphrase.mjs";
 import {
   repairDealTerms,
   stripPreamble,
@@ -13,6 +13,9 @@ import {
   isDealQuestion,
   glossHindi,
   toHindi,
+  socialTurn,
+  splitMixed,
+  domainOf,
 } from "./conversation.mjs";
 import {
   importBundle,
@@ -289,6 +292,41 @@ export function classifyBolnaMintFailure(status) {
     : "ambiguous";
 }
 
+const BROAD_DEAL =
+  /\b(chang\w*|happen\w*|summary|summari[sz]e|status|update|overview|badl\w*|kya\s+hua)\b|बदल|क्या\s+हुआ/i;
+// Social turns a typed visitor gets a reply to (the rest go to the engine).
+const TYPED_SOCIAL = new Set([
+  "HELP",
+  "UPLOAD",
+  "WHO",
+  "THANKS",
+  "BYE",
+  "GREET",
+]);
+// Replies written to be spoken, set for reading.
+const typedText = (s) =>
+  String(s)
+    .replace(/S Y N zero zero zero one/g, "SYN-0001")
+    .replace(/forty two thousand dollar/gi, "$42,000")
+    .replace(/thirty idle minutes/g, "30 idle minutes")
+    .replace(/up to five/g, "up to 5")
+    .replace(
+      /voice memory beige dot vercel dot app/g,
+      "voice-memory-beige.vercel.app",
+    );
+// A strong subject: a test name or patient ID, or a deal term. Generic words
+// ("report", "result") never move a question to another case.
+const STRONG_LAB =
+  /\b(ferritin|creatin\w*|tsh|thyroid|h(a)?emoglobin|hba1c|urea|syn-?\d{4})\b|फेरिटिन|क्रिएटिनिन|थायरॉइड|हीमोग्लोबिन|यूरिया/i;
+const STRONG_DEAL =
+  /\b(northstar|meridian|kapoor|engagement\s+fee|fees?|proposal|revision|contract|agreement|payment\s+split|deadline|steering|pilot)\b|फ़ीस|फीस|अनुबंध|कॉन्ट्रैक्ट|भुगतान|डेडलाइन/i;
+function strongDomain(text) {
+  const t = repairDealTerms(String(text ?? ""));
+  const lab = STRONG_LAB.test(t),
+    deal = STRONG_DEAL.test(t);
+  return lab && !deal ? "lab" : deal && !lab ? "deal" : null;
+}
+
 export function createLocalServer({
   voice = createVoiceAdapter({
     ttlMs: voiceTtlMs(),
@@ -465,6 +503,7 @@ export function createLocalServer({
             ).evidence,
           }
         : null;
+      if (lead && t.lead.action) lead.action = t.lead.action;
       publicTurns.push({ at: Date.now(), question: t.question, lead });
       if (publicTurns.length > 20) publicTurns.shift();
     }
@@ -773,6 +812,19 @@ export function createLocalServer({
             verdict: "QUOTED",
             field: null,
             citations: [p.citation],
+          };
+      }
+      // Still abstaining: offer the closest line as a pointer, labelled
+      // "not an answer", never as the reply (paraphrase.mjs closestLine).
+      if (!sectioned && weakLead(shown.lead)) {
+        const c = await closestLine(question, bundle).catch(() => null);
+        if (c)
+          shown.closest = {
+            ...c,
+            citation: {
+              ...c.citation,
+              documentId: s.sourceToEntry?.get(c.citation.sourceId)?.id ?? null,
+            },
           };
       }
       if (!sectioned && junkQuote(shown.lead)) shown.lead = null;
@@ -1157,15 +1209,131 @@ export function createLocalServer({
     cases: caseSessions,
     workspaces: workspaceApi,
     resolve: async (cs, question, ctx, opts = {}) => {
-      const q =
-        normalizeSpoken(normalizeVernacular(question)) ||
-        normalizeSpoken(question) ||
-        question;
-      const { json } = await resolveAnswer(cs, q, ctx, opts);
-      const shown = JSON.parse(json).shown;
-      if (shown.lead)
-        shown.lead.opener = openerFor(shown.lead, shown.semantic?.lang ?? "en");
-      return { ...shown, question };
+      const lang = langOfText(question);
+      // About the page, not the records ("how can you help", "how do I use
+      // my own reports", "thanks"): a fixed reply, and a page action.
+      const social = socialTurn(repairDealTerms(question), { lang });
+      if (social && TYPED_SOCIAL.has(social.intent))
+        return {
+          question,
+          lead: {
+            text: typedText(social.spoken),
+            verdict: social.intent === "UPLOAD" ? "HOW_TO" : "HELP",
+            field: null,
+            citations: [],
+            action: social.action ?? null,
+          },
+          semantic: { intent: social.intent, lang, steps: ["social"] },
+          evidence: [],
+        };
+      const answerOne = async (session, text) => {
+        const q =
+          normalizeSpoken(normalizeVernacular(text)) ||
+          normalizeSpoken(text) ||
+          text;
+        const { json } = await resolveAnswer(session, q, ctx, opts);
+        const shown = JSON.parse(json).shown;
+        // "What changed in the Northstar deal?": the fee change and what is
+        // still open, from the engine's own cited answers, never a guess.
+        if (
+          session === caseSessions.deal &&
+          (!shown.lead || shown.lead.verdict === "UNKNOWN") &&
+          BROAD_DEAL.test(text)
+        ) {
+          const subs = [];
+          for (const sq of [
+            "What happened to the fee?",
+            "What's still open?",
+          ]) {
+            const r = JSON.parse(
+              (await resolveAnswer(session, sq, ctx, opts)).json,
+            ).shown.lead;
+            if (r?.text && r.verdict !== "UNKNOWN") subs.push(r);
+          }
+          if (subs.length) {
+            const render = (x) =>
+              lang === "hi"
+                ? toHindi(x)
+                : lang === "hinglish"
+                  ? toHinglish(x)
+                  : x;
+            shown.lead = {
+              ...subs[0],
+              text: subs.map((x) => render(x.text)).join(" "),
+              citations: subs.flatMap((x) => x.citations ?? []),
+            };
+            shown.semantic = { ...(shown.semantic ?? {}), lang };
+          }
+        }
+        if (shown.lead)
+          shown.lead.opener = openerFor(
+            shown.lead,
+            shown.semantic?.lang ?? "en",
+          );
+        return shown;
+      };
+      // The two demo cases hold different records. A question (or half of
+      // one) about the other case is answered from that case and handed to
+      // the page, which offers it or switches there.
+      const caseId =
+        cs === caseSessions.health
+          ? "health"
+          : cs === caseSessions.deal
+            ? "deal"
+            : null;
+      const caseDomain = { health: "lab", deal: "deal" }[caseId] ?? null;
+      const otherOf = (d) => (d === "lab" ? "health" : "deal");
+      if (caseDomain) {
+        const parts = splitMixed(normalizeVernacular(question)).map((p) => ({
+          text: p,
+          domain: strongDomain(p),
+        }));
+        const away = parts.filter((p) => p.domain && p.domain !== caseDomain);
+        const home = parts.filter((p) => !away.includes(p));
+        if (away.length) {
+          const also = [];
+          for (const p of away) {
+            const other = caseSessions[otherOf(p.domain)];
+            if (!other?.bundle) continue;
+            const shownOther = await answerOne(other, p.text);
+            if (shownOther.lead)
+              also.push({
+                case: otherOf(p.domain),
+                question: p.text,
+                lead: shownOther.lead,
+              });
+          }
+          if (!home.length && also.length === 1)
+            // entirely about the other case: the page switches and asks there
+            return {
+              question,
+              lead: {
+                text: typedText(
+                  {
+                    hi: `यह ${also[0].case === "deal" ? "Northstar डील" : "लैब रिपोर्ट"} के बारे में है, तो मैं वहाँ ले चलती हूँ।`,
+                    hinglish: `Yeh ${also[0].case === "deal" ? "Northstar deal" : "lab reports"} ke baare mein hai, main wahan le chalti hoon.`,
+                  }[lang] ??
+                    `That's about the ${also[0].case === "deal" ? "Northstar deal" : "lab reports"}, so I'm taking you there.`,
+                ),
+                verdict: "SWITCH",
+                field: null,
+                citations: [],
+                action: {
+                  type: "switch",
+                  case: also[0].case,
+                  question: also[0].question,
+                },
+              },
+              semantic: { intent: "SWITCH", lang, steps: ["other_case"] },
+              evidence: [],
+            };
+          const shown = home.length
+            ? await answerOne(cs, home.map((p) => p.text).join(" and "))
+            : { lead: null, evidence: [] };
+          return { ...shown, question, also };
+        }
+      }
+      return { ...(await answerOne(cs, question)), question };
     },
     visual: (cs, lang) => caseVisual(cs.bundle, lang),
     gemini,

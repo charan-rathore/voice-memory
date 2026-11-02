@@ -1,0 +1,42 @@
+name: Pilot request
+description: Try Voice Memory behind your own voice or chat agent, on your own documents.
+title: "Pilot: <team or company>"
+labels: ["pilot"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Pilots run 30 days on up to 5 of your documents, behind the agent you already use (MCP, Bolna custom LLM, or REST).
+        Please don't paste personal or health data here; describe the documents instead.
+  - type: input
+    id: contact
+    attributes:
+      label: How to reach you
+      description: An email or a handle we can reply to.
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Where your agent runs
+      options: [Bolna, Vapi, Retell, ElevenLabs Agents, Claude or ChatGPT (MCP), Our own stack, No agent yet]
+    validations:
+      required: true
+  - type: textarea
+    id: documents
+    attributes:
+      label: The documents and how they change
+      description: For example "rate card revised monthly", "proposal v1, v2 and steering minutes", "amended lab reports".
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: A question your agent gets wrong today
+      description: The question as a caller asks it, and the answer the record supports.
+  - type: dropdown
+    id: languages
+    attributes:
+      label: Languages callers use
+      multiple: true
+      options: [English, Hindi, Hinglish, Other]
