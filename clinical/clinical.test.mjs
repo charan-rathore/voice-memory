@@ -358,3 +358,24 @@ test("a month name inside an ordinary word is not an anchor", async () => {
     assert.equal(t.used[0].raw, "106", q);
   }
 });
+
+test("Hindi month anchors resolve the same way, answered in Hindi", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-prelim.pdf", "a-2026-10-amended.pdf"].map(
+      report,
+    ),
+  );
+  const t = clinicalTurn(
+    "सितंबर की रिपोर्ट में मेरा क्रिएटिनिन क्या था?",
+    reports,
+  );
+  assert.ok(t, "answered");
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "1.2");
+  assert.equal(t.used[0].report.title, "a-2026-09.pdf");
+  assert.match(t.spoken, /3 सितंबर 2026/);
+  assert.doesNotMatch(t.spoken, /106/);
+  const t2 = clinicalTurn("मेरा फेरिटिन सितंबर 2026 में क्या था?", reports);
+  assert.equal(t2.verdict, "VALUE");
+  assert.equal(t2.used[0].raw, "0.5");
+});
