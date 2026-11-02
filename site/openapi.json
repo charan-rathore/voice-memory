@@ -432,6 +432,17 @@
             "$ref": "#/components/responses/Retry"
           }
         }
+      },
+      "delete": {
+        "summary": "Revoke a custom-LLM key; send it as Authorization: Bearer <key>",
+        "responses": {
+          "200": {
+            "description": "revoked"
+          },
+          "404": {
+            "description": "No such key, or it already expired"
+          }
+        }
       }
     },
     "/llm/v1/chat/completions": {

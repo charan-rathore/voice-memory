@@ -1933,11 +1933,19 @@
     for (const el of Object.values(f)) el?.addEventListener("change", save);
     $("#byo-clear")?.addEventListener("click", () => {
       byo.clear();
+      revokeShown();
       syncVoiceClasses();
       fill();
       $("#byo-llm").hidden = true;
       if ($("#answer .overview")) renderOverview();
     });
+    // custom-LLM keys issued on this page, kept only in memory so Clear can revoke them
+    const shownKeys = new Set();
+    const revokeShown = () => {
+      for (const key of shownKeys)
+        fetch("/api/public/llm/key", { method: "DELETE", headers: { authorization: `Bearer ${key}` } }).catch(() => {});
+      shownKeys.clear();
+    };
     $("#byo-llm-get")?.addEventListener("click", async (e) => {
       const btn = e.currentTarget;
       btn.disabled = true;
@@ -1950,6 +1958,7 @@
         });
         const box = $("#byo-llm");
         box.querySelector('[data-k="url"]').textContent = k.baseUrl;
+        shownKeys.add(k.apiKey);
         box.querySelector('[data-k="key"]').textContent = k.apiKey;
         box.querySelector('[data-k="model"]').textContent = k.model;
         box.querySelector('[data-k="until"]').textContent = new Date(k.expiresAt).toLocaleString();

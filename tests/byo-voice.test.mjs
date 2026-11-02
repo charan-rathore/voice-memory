@@ -135,3 +135,60 @@ test("a BYO call mints on the visitor's own Bolna account and keeps no key", asy
     srv.close();
   }
 });
+
+test("a key can be revoked by whoever holds it, and stops working at once", async () => {
+  const { srv, base } = await boot();
+  try {
+    const key = await (
+      await fetch(`${base}/llm/key`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ case: "health" }),
+      })
+    ).json();
+    const auth = { authorization: `Bearer ${key.apiKey}` };
+    assert.equal(
+      (await fetch(`${base}/llm/v1/models`, { headers: auth })).status,
+      200,
+    );
+    const del = await fetch(`${base}/llm/key`, {
+      method: "DELETE",
+      headers: auth,
+    });
+    assert.equal(del.status, 200);
+    assert.equal(
+      (await fetch(`${base}/llm/v1/models`, { headers: auth })).status,
+      401,
+    );
+    const again = await fetch(`${base}/llm/key`, {
+      method: "DELETE",
+      headers: auth,
+    });
+    assert.equal(again.status, 404);
+    const none = await fetch(`${base}/llm/key`, { method: "DELETE" });
+    assert.equal(none.status, 404);
+  } finally {
+    srv.close();
+  }
+});
+
+test("keys issued across all visitors have an hourly ceiling", async () => {
+  const before = process.env.VM_BYO_KEYS_PER_HOUR;
+  process.env.VM_BYO_KEYS_PER_HOUR = "2";
+  const { srv, base } = await boot();
+  try {
+    const mint = () =>
+      fetch(`${base}/llm/key`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ case: "deal" }),
+      });
+    assert.equal((await mint()).status, 200);
+    assert.equal((await mint()).status, 200);
+    assert.equal((await mint()).status, 429);
+  } finally {
+    if (before === undefined) delete process.env.VM_BYO_KEYS_PER_HOUR;
+    else process.env.VM_BYO_KEYS_PER_HOUR = before;
+    srv.close();
+  }
+});

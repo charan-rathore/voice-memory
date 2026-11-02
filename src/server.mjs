@@ -1247,6 +1247,16 @@ export function createLocalServer({
     }
     return true;
   };
+  // Ceilings across all visitors, so many addresses cannot add up to an
+  // unbounded load on the engine: keys issued per hour, turns per day.
+  const BYO_KEYS_HOUR = Number(process.env.VM_BYO_KEYS_PER_HOUR || 300);
+  const BYO_TURNS_DAY = Number(process.env.VM_BYO_TURNS_PER_DAY || 20000);
+  const byoRevoke = (token) => {
+    if (!byoKeys.has(token)) return false;
+    byoKeys.delete(token);
+    byoVoice.retire(token);
+    return true;
+  };
   const byoSweep = () => {
     for (const t of [...byoKeys.keys()]) byoLive(t);
   };
@@ -1499,7 +1509,7 @@ export function createLocalServer({
         res.end(JSON.stringify(obj));
       };
       if (req.method === "OPTIONS") {
-        res.writeHead(204, { Allow: "GET, POST" });
+        res.writeHead(204, { Allow: "GET, POST, DELETE" });
         res.end();
         return;
       }
@@ -1507,6 +1517,10 @@ export function createLocalServer({
         if (!byoAllow("key", ip, 10))
           return reply(429, {
             error: "Too many keys from here. Try again in an hour.",
+          });
+        if (!byoAllow("key", "*", BYO_KEYS_HOUR))
+          return reply(429, {
+            error: "Too many keys issued this hour. Try again later.",
           });
         loadPublicCases();
         await casesReady?.catch?.(() => {});
@@ -1522,8 +1536,7 @@ export function createLocalServer({
         byoSweep();
         if (byoKeys.size >= 2000) {
           const [oldest] = byoKeys.keys();
-          byoKeys.delete(oldest);
-          byoVoice.retire(oldest);
+          byoRevoke(oldest);
         }
         const token = byoVoice.bind(bundle, randomBytes(32).toString("hex"));
         byoKeys.set(token, { at: Date.now(), scope, bundle });
@@ -1539,6 +1552,16 @@ export function createLocalServer({
           scope,
           expiresAt: new Date(Date.now() + BYO_HARD_MS).toISOString(),
         });
+      }
+      // Revoke: the key itself is the only credential needed to kill it.
+      if (byoPath === "/api/public/llm/key" && req.method === "DELETE") {
+        const bearer = String(req.headers.authorization ?? "").replace(
+          /^Bearer /,
+          "",
+        );
+        return byoRevoke(bearer)
+          ? reply(200, { revoked: true })
+          : reply(404, { error: "No such key, or it already expired." });
       }
       if (
         byoPath === "/api/public/llm/v1/models" ||
@@ -1557,6 +1580,13 @@ export function createLocalServer({
           !byoAllow("turn", bearer, 600, 24 * 3600000)
         )
           return reply(429, { error: "This key has reached today's turns." });
+        if (
+          req.method === "POST" &&
+          !byoAllow("turn", "*", BYO_TURNS_DAY, 24 * 3600000)
+        )
+          return reply(429, {
+            error: "Today's turns are used up. Try tomorrow.",
+          });
         const response = await byoVoice.handle(
           new Request(origin + byoPath.replace("/api/public/llm", ""), {
             method: req.method,
