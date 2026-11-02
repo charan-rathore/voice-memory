@@ -402,6 +402,8 @@ const T = {
   en: {
     value: (o, date) =>
       `Your ${nameOf(o)} result is ${valueText(o, "en")}, from ${date}.`,
+    notInPeriod: (test, period) =>
+      `These reports have no ${test} result from ${period}. The results that are here are on screen.`,
     within: (r) => `That's within this lab's range of ${span(r, "en")}.`,
     below_slightly: (r) =>
       `That's a little below this lab's range of ${span(r, "en")}. Results just outside a range are common: ranges are set so that about 1 in 20 people without any illness land outside them.`,
@@ -451,6 +453,8 @@ const T = {
   hi: {
     value: (o, date) =>
       `आपका ${nameOf(o)} नतीजा ${valueText(o, "hi")} है, ${date} की जांच से।`,
+    notInPeriod: (test, period) =>
+      `इन रिपोर्ट्स में ${period} का कोई ${test} नतीजा नहीं है। जो नतीजे हैं वे स्क्रीन पर हैं।`,
     within: (r) => `यह इस लैब की सीमा (${span(r, "hi")}) के अंदर है।`,
     below_slightly: (r) =>
       `यह इस लैब की सीमा (${span(r, "hi")}) से थोड़ा कम है। सीमा से थोड़ा बाहर आना आम बात है: सीमा ऐसे तय की जाती है कि बिना किसी बीमारी वाले लगभग हर 20 में से 1 व्यक्ति का नतीजा भी इसके बाहर आता है।`,
@@ -501,6 +505,8 @@ const T = {
   hinglish: {
     value: (o, date) =>
       `Aapka ${nameOf(o)} result ${valueText(o, "hinglish")} hai, ${date} ki jaanch se.`,
+    notInPeriod: (test, period) =>
+      `In reports mein ${period} ka koi ${test} result nahi hai. Jo results hain wo screen par hain.`,
     within: (r) => `Yeh is lab ki range (${span(r, "hinglish")}) ke andar hai.`,
     below_slightly: (r) =>
       `Yeh is lab ki range (${span(r, "hinglish")}) se thoda kam hai. Range se thoda bahar aana aam baat hai: range aise set hoti hai ki bina kisi bimari wale lagbhag har 20 mein se 1 insaan ka result bhi iske bahar aata hai.`,

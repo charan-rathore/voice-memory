@@ -29,7 +29,7 @@ import {
 import { locate } from "../ingest/canonical.mjs";
 import { canonOf } from "./explain.mjs";
 
-const MONTHS = {
+export const MONTHS = {
   january: 1,
   february: 2,
   march: 3,
@@ -54,6 +54,22 @@ const MONTHS = {
   oct: 10,
   nov: 11,
   dec: 12,
+  जनवरी: 1,
+  "फ़रवरी": 2,
+  फरवरी: 2,
+  मार्च: 3,
+  अप्रैल: 4,
+  मई: 5,
+  जून: 6,
+  जुलाई: 7,
+  अगस्त: 8,
+  सितंबर: 9,
+  सितम्बर: 9,
+  अक्टूबर: 10,
+  नवंबर: 11,
+  नवम्बर: 11,
+  दिसंबर: 12,
+  दिसम्बर: 12,
 };
 const DATE = String.raw`(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})`;
 

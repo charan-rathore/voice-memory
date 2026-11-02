@@ -241,3 +241,120 @@ test("overview: one patient answers, several patients ask whose", async () => {
   const named = clinicalAnswer("what are SYN-0001's blood levels", [a09, a10, c10]);
   assert.equal(named?.verdict, "OVERVIEW");
 });
+
+// A question that anchors a report by date must be answered from THAT
+// report, never silently with the latest value. The public demo's teaching
+// case is exactly this: September printed creatinine in mg/dL, October
+// changed the unit - so "what did September say" must say 1.2 mg/dL.
+test("date-anchored question answers the anchored report, not the latest", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-prelim.pdf", "a-2026-10-amended.pdf"].map(
+      report,
+    ),
+  );
+  for (const q of [
+    "What was the creatinine value and unit in the September report?",
+    "In the 3 September 2026 report, what was the creatinine result?",
+    "What was my creatinine in September 2026? SYN-0001",
+  ]) {
+    const t = clinicalTurn(q, reports);
+    assert.ok(t, `answered: ${q}`);
+    assert.equal(t.verdict, "VALUE", `${q} -> ${t.verdict}`);
+    assert.equal(t.used[0].raw, "1.2", q);
+    assert.equal(t.used[0].unit, "mg/dL", q);
+    assert.equal(t.used[0].report.title, "a-2026-09.pdf", q);
+    assert.match(t.spoken, /1\.2 mg\/dL/, q);
+    assert.match(t.spoken, /3 September 2026/, q);
+    assert.doesNotMatch(t.spoken, /106|µmol/, q);
+  }
+});
+
+test("date-anchored question uses the anchored report's own unit and range", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf"].map(report),
+  );
+  const t = clinicalTurn(
+    "What was the ferritin result in September?",
+    reports,
+  );
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "0.5");
+  assert.match(t.spoken, /0\.5 ng\/mL/);
+  assert.match(t.spoken, /3 September 2026/);
+  assert.doesNotMatch(t.spoken, /50 ng\/mL|corrected/, "no October correction leaks into a September answer");
+});
+
+test("an October anchor uses the amended value, with the correction note", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-prelim.pdf", "a-2026-10-amended.pdf"].map(
+      report,
+    ),
+  );
+  const t = clinicalTurn("What was the ferritin result in October?", reports);
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "50");
+  assert.equal(t.used[0].report.title, "a-2026-10-amended.pdf");
+  assert.match(t.spoken, /corrected from 5 to 50/);
+});
+
+test("no date anchor keeps the latest-value behaviour", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf"].map(report),
+  );
+  const t = clinicalTurn("What was my creatinine result? SYN-0001", reports);
+  assert.equal(t.verdict, "LATEST");
+  assert.equal(t.used[0].raw, "106");
+});
+
+test("an anchor no report matches is an honest miss, never the latest value", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf"].map(report),
+  );
+  const t = clinicalTurn(
+    "What was the creatinine result in the August report?",
+    reports,
+  );
+  assert.ok(t, "answered");
+  assert.equal(t.verdict, "NOT_IN_REPORT");
+  assert.doesNotMatch(t.spoken, /106|1\.2/);
+});
+
+test("a person named with a date anchor still isolates that person", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf", "c-2026-10.pdf"].map(report),
+  );
+  const t = clinicalTurn(
+    "What was the creatinine in the September report for SYN-0001?",
+    reports,
+  );
+  assert.equal(t.verdict, "VALUE");
+  assert.ok(t.used.every((o) => o.report.meta.patient.id === "SYN-0001"));
+  assert.equal(t.used[0].raw, "1.2");
+});
+
+test("a compare question mentioning a month still compares, anchors don't hijack it", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf"].map(report),
+  );
+  const t = clinicalTurn(
+    "Did my creatinine change since the September report?",
+    reports,
+  );
+  assert.equal(t.verdict, "NOT_COMPARABLE", t.spoken);
+  assert.match(t.spoken, /don't convert between units/);
+});
+
+test("a month name inside an ordinary word is not an anchor", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "a-2026-10-amended.pdf"].map(report),
+  );
+  for (const q of [
+    "What was the creatinine value marked on my report?",
+    "What was my creatinine result? Please remark on it.",
+  ]) {
+    const t = clinicalTurn(q, reports);
+    assert.ok(t, `answered: ${q}`);
+    assert.equal(t.verdict, "LATEST", `${q} -> ${t.verdict}`);
+    assert.equal(t.used[0].raw, "106", q);
+  }
+});
