@@ -1598,6 +1598,12 @@
     pill.className = "nav-pill";
     pill.setAttribute("aria-hidden", "true");
     ul.prepend(pill);
+    // Compact mobile indicator: a small black chip naming the active
+    // section, shown only where the link list is hidden.
+    const chip = document.createElement("span");
+    chip.className = "nav-chip";
+    chip.setAttribute("aria-hidden", "true");
+    ul.before(chip);
     let current = null;
     let ticking = false;
     const place = (a) => {
@@ -1616,6 +1622,7 @@
       if (active === current) return;
       current = active;
       for (const { a } of links) a.classList.toggle("active", a === active);
+      chip.textContent = active ? active.textContent : "";
       if (active) {
         place(active);
         pill.style.opacity = "1";
