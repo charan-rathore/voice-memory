@@ -419,8 +419,7 @@
   // loads as #how approaches (same pattern as the desk chunk below).
   const howNear = new Promise((ok) => {
     const how = $("#how");
-    if (!how || !("IntersectionObserver" in window))
-      return ok(loadCss("flow.css"));
+    if (!how || !("IntersectionObserver" in window)) return ok(loadCss("flow.css"));
     const io = new IntersectionObserver(
       (es) => {
         if (es.some((e) => e.isIntersecting)) {
@@ -694,8 +693,7 @@
     state.currentLang = r.semantic?.lang ?? state.lang;
     if (r.visual)
       loadVisual().then(() => {
-        if (state.current?._src !== r || !$("#a-visual") || !window.VMVisual)
-          return;
+        if (state.current?._src !== r || !$("#a-visual") || !window.VMVisual) return;
         window.VMVisual.render($("#a-visual"), r.visual, {
           lang: state.currentLang,
           narrateButton: false,
@@ -739,21 +737,15 @@
       setCase("own", { quiet: true });
       showEmptyViewer();
       const drop = $("#drop");
-      drop?.scrollIntoView({
-        behavior: reduced ? "auto" : "smooth",
-        block: "center",
-      });
+      drop?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
       coach(drop, "Drop PDFs, Word files or photos here, or click to choose");
       coach($('.case-tab[data-case="own"]'));
     } else if (a.type === "switch" && a.case && a.question) {
-      setTimeout(
-        () => {
-          setCase(a.case, { quiet: true });
-          coach($(`.case-tab[data-case="${a.case}"]`));
-          ask(a.question);
-        },
-        reduced ? 0 : 900,
-      );
+      setTimeout(() => {
+        setCase(a.case, { quiet: true });
+        coach($(`.case-tab[data-case="${a.case}"]`));
+        ask(a.question);
+      }, reduced ? 0 : 900);
     }
   }
   // The half of a question that belongs to the other demo case.
@@ -1029,11 +1021,7 @@
     return A.length ? A.filter((w) => B.has(w)).length / A.length : 0;
   };
   const findSpan = (html, quote) => {
-    const q = esc(
-      String(quote ?? "")
-        .trim()
-        .replace(/^\d+\.\s*/, ""),
-    );
+    const q = esc(String(quote ?? "").trim().replace(/^\d+\.\s*/, ""));
     if (q.length < 8 || q.length > 600) return null;
     const re = new RegExp(
       q
@@ -1540,10 +1528,9 @@
     cv.height = H * dpr;
     ctx.scale(dpr, dpr);
     const load = async () =>
-      (await (
-        window.VM_SNAPSHOT_GRAPHS
-          ? Promise.resolve()
-          : loadScript("snapshot-graphs.js")
+      (await (window.VM_SNAPSHOT_GRAPHS
+        ? Promise.resolve()
+        : loadScript("snapshot-graphs.js")
       ).then(
         () => window.VM_SNAPSHOT_GRAPHS?.health,
         () => null,
@@ -1703,12 +1690,8 @@
       return ask(t.dataset.q, { caseId: t.dataset.case || state.case });
     if (t.matches("[data-cite]")) return openCitation(Number(t.dataset.cite));
     if (t.matches(".tm-tabs [data-plug]")) {
-      $$(".tm-tabs [data-plug]").forEach((b) =>
-        b.setAttribute("aria-selected", String(b === t)),
-      );
-      $$(".tm-code[data-plug]").forEach(
-        (c) => (c.hidden = c.dataset.plug !== t.dataset.plug),
-      );
+      $$(".tm-tabs [data-plug]").forEach((b) => b.setAttribute("aria-selected", String(b === t)));
+      $$(".tm-code[data-plug]").forEach((c) => (c.hidden = c.dataset.plug !== t.dataset.plug));
       return;
     }
     if (t.matches("[data-closest]") && state.closest?.title)
