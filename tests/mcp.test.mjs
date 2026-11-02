@@ -166,7 +166,8 @@ test("MCP: an upload needs allowed folders and the person's yes", async () => {
       name: "create_workspace",
       arguments: {},
     });
-    const workspace = ws.result.structuredContent.workspace;
+    const out = ws.result.structuredContent;
+    const workspace = out.id ?? out.workspace;
     return (
       await c.rpc("tools/call", {
         name: "upload_document",
