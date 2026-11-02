@@ -218,3 +218,40 @@ test("production boundary: promotedAnswer abstains unless a developer explicitly
     else process.env.VM_PARAPHRASE_PROMOTE = saved;
   }
 });
+
+test("a preliminary document beside its amendment is a replaced source", async () => {
+  const { replacedSource, unitsOf: u } = await import("../src/paraphrase.mjs");
+  const lab = importBundle([
+    {
+      title: "a-2026-10-prelim.md",
+      text: "# Laboratory report (PRELIMINARY)\nDate: 2026-10-13.\n1. Ferritin 5 ng/mL.",
+    },
+    {
+      title: "a-2026-10-amended.md",
+      text: "# Laboratory report (AMENDED)\nDate: 2026-10-15.\n1. Ferritin 50 ng/mL. Amended: ferritin corrected from 5 to 50.",
+    },
+  ]);
+  const [prelim, amended] = lab.sources;
+  assert.equal(replacedSource(lab, prelim), true);
+  assert.equal(replacedSource(lab, amended), false);
+  // alone, a preliminary report is the only record: not replaced
+  const alone = importBundle(
+    [lab.sources[0]].map((s) => ({ title: s.title, text: s.text })),
+  );
+  assert.equal(replacedSource(alone, alone.sources[0]), false);
+  assert.ok(u(lab).units.length >= 2);
+});
+
+test("closestLine abstains without the model and never claims to be an answer", async () => {
+  const { closestLine } = await import("../src/paraphrase.mjs");
+  const fresh = importBundle([
+    {
+      title: "x.md",
+      text: "# Note\nDate: 2026-01-01.\n1. The budget review moved to Friday.",
+    },
+  ]);
+  // no resident model in unit tests: no pointer, no wait beyond the cap
+  const t0 = Date.now();
+  assert.equal(await closestLine("when is the money meeting", fresh), null);
+  assert.ok(Date.now() - t0 < 4000);
+});

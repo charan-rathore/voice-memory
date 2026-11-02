@@ -1,4 +1,4 @@
-# Paraphrase-aware retrieval: where it stands (2026-11-01)
+# Paraphrase-aware retrieval: where it stands (2026-11-02)
 
 The roadmap item is "paraphrase-aware search with a dense retriever behind
 the same evidence gate, measured on held-out questions". The dense retriever
@@ -98,6 +98,62 @@ remains evidence discovery only. Unit tests: `tests/paraphrase.test.mjs`;
 numbers: the `bench` workflow posts them on every pull request that touches
 retrieval.
 
+## Shipped: discovery, not promotion (2026-11-02)
+
+What production does with a reworded question the engine cannot answer:
+
+1. The engine abstains as before ("I don't see that in these documents").
+2. `closestLine` (src/paraphrase.mjs) ranks sentence units with the same
+   dense + BM25 fusion and the same calibrated gate (`GATE`), after removing
+   every sentence from a document the record has replaced (a report marked
+   preliminary or draft beside one that amends, corrects or revises it).
+3. If one line clears the gate and passes the same refusals as promotion
+   (no weak-status line for a strong-action question, no superseded or
+   conflicting value), the typed answer shows it under the abstention as
+   **"Closest line in <document> · not an answer"**, with a button that opens
+   the document at that sentence. It is never the reply, never spoken on a
+   call, and the verdict stays an abstention.
+
+Why this shape: the 2026-11-02 review failures were all about *speaking* a
+retrieved sentence as the answer. A pointer the person opens and judges keeps
+the useful part (the dense model usually finds the right place) without
+upgrading a record's status. Promotion stays behind `VM_PARAPHRASE_PROMOTE=1`.
+The replaced-source filter now applies to the promotion path too.
+
+## Outside-authored benchmark (evaluation/outside-bench.mjs)
+
+The Northstar questions were written by the corpus authors. This benchmark
+uses records and questions written by people who never saw the engine:
+
+- **QMSum** test split (Zhong et al., NAACL 2021): 35 real meeting
+  transcripts (AMI and ICSI product and research meetings, Welsh Parliament
+  committees), spoken language with disfluencies. Annotators wrote the
+  queries and marked the answering turns. Kept: 197 specific queries whose
+  answer covers at most 15% of the meeting.
+- **CUAD v1** test split (Hendrycks et al., NeurIPS 2021): the first 30
+  contracts (by title) of real SEC EDGAR filings; 14 clause types fixed
+  before any run (governing law, expiration, renewal, termination for
+  convenience, non-compete, exclusivity, liability cap, insurance, audit,
+  assignment, minimum commitment, warranty duration, effective date). The
+  question is the category's plain-English description, so it paraphrases
+  the clause by construction. Lawyers marked 236 of 420 as absent: those are
+  the unanswerable set.
+
+Nothing is tuned on this data. Each record is its own bundle (ranking within
+one meeting or one contract, as when a person uploads one file). Data is
+fetched at pinned commits by `evaluation/outside/fetch.sh`; the dense run is
+in the `bench` workflow and posted on pull requests.
+
+| Set | answerable / absent | chance top-1 | keyword top-1 / top-3 |
+| --- | --- | --- | --- |
+| QMSum meetings | 197 / 0 | 5.3% | 40.6% / 62.4% |
+| CUAD contracts | 184 / 236 | 1.2% | 44.0% / 65.2% |
+
+Keyword numbers measured locally (2026-11-02). Hybrid, dense-only and the
+closest-line gate (how often a line is shown, how often it is the right one,
+how often one is shown when the clause is absent) need the model and come
+from CI; they are recorded here when the run lands, not estimated.
+
 ## Next experiments
 
 - A cross-encoder reranker (bge-reranker-base) over the top 10 units, the
@@ -105,5 +161,5 @@ retrieval.
   free instance's memory.
 - `dtype: "q8"` for the resident model (about a quarter of the memory), with
   the gate re-tuned on development.
-- A larger, outside-authored question set: 15 held-out questions can show a
-  direction, not a reliable size.
+- Gate re-tuned on a development half of the outside data (QMSum val split,
+  CUAD train contracts), reported on the test halves above.

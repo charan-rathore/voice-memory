@@ -250,7 +250,12 @@ export async function paraphraseLookup(
   const searched = bridge ? `${question} ${bridge}` : question;
   const [qv] = (await embedTextsReady([QUERY_PREFIX + searched])) ?? [];
   if (!qv) return null;
-  const hit = gate(rankUnits(searched, bundle, qv), thresholds);
+  const hit = gate(
+    rankUnits(searched, bundle, qv).filter(
+      (r) => !replacedSource(bundle, r.unit.src),
+    ),
+    thresholds,
+  );
   if (!hit) return null;
   const { src, sent } = hit.unit;
   // Answerability, not just relevance. Two fail-closed checks stand between
@@ -341,4 +346,74 @@ export function statesUnresolvedValue(bundle, sentence) {
     if (distinct.size > 1 && list.some((c) => says(c.value))) return true;
   }
   return false;
+}
+
+// ------------------------------------------------------------ discovery
+/** Keyword-only ranking of the same units (BM25, lay terms expanded). */
+export function rankUnitsLexical(question, bundle) {
+  const idx = unitsOf(bundle);
+  const lex = bm25(idx, question);
+  return idx.units
+    .map((u, i) => ({ unit: u, cosine: 0, lexical: lex[i], fused: lex[i] }))
+    .sort((a, b) => b.fused - a.fused);
+}
+
+const PRELIM_DOC = /\b(prelim\w*|provisional|draft)\b/i;
+const CORRECTING_DOC =
+  /\b(amend\w*|correct\w*|revis\w*|supersed\w*|final report)\b/i;
+/**
+ * A document the record itself has replaced: it is marked preliminary or
+ * draft in its header while another document in the bundle amends, corrects
+ * or revises. Its sentences are never offered, even as a pointer.
+ */
+export function replacedSource(bundle, src) {
+  const head = (s) => String(s.text).slice(0, 400) + " " + (s.title ?? "");
+  if (!PRELIM_DOC.test(head(src))) return false;
+  return (bundle?.sources ?? []).some(
+    (o) => o !== src && CORRECTING_DOC.test(head(o)),
+  );
+}
+
+/**
+ * Discovery, not an answer. After the engine abstains, the single sentence a
+ * reworded question most plausibly points at, so a person can open it and
+ * judge for themselves. It is labelled "closest line, not an answer" by every
+ * caller and never spoken as the reply. Same calibrated gate as promotion,
+ * plus the same refusals: no weak-status line for a strong-action question,
+ * no superseded or conflicting value, and no line from a document the record
+ * has replaced (a preliminary report beside its amendment).
+ */
+export async function closestLine(
+  question,
+  bundle,
+  { thresholds = GATE } = {},
+) {
+  const idx = unitsOf(bundle);
+  if (!idx.vectors) {
+    const ready = await Promise.race([
+      warmUnits(bundle),
+      new Promise((r) => setTimeout(() => r(false), 2500)),
+    ]);
+    if (!ready || !idx.vectors) return null;
+  }
+  const bridge = bridgeToEnglish(question);
+  const searched = bridge ? `${question} ${bridge}` : question;
+  const [qv] = (await embedTextsReady([QUERY_PREFIX + searched])) ?? [];
+  if (!qv) return null;
+  const ranked = rankUnits(searched, bundle, qv).filter(
+    (r) => !replacedSource(bundle, r.unit.src),
+  );
+  const hit = gate(ranked, thresholds);
+  if (!hit) return null;
+  const { src, sent } = hit.unit;
+  if (Q_STRONG_ACTION.test(question) && SENT_WEAK_STATUS.test(sent.text))
+    return null;
+  if (statesUnresolvedValue(bundle, sent.text)) return null;
+  return {
+    line: sent.text,
+    document: docLabelOf(src),
+    citation: cite(src, sent),
+    cosine: +hit.cosine.toFixed(3),
+    margin: +hit.margin.toFixed(3),
+  };
 }

@@ -969,3 +969,9 @@ html:not(.voice-on) .voice-off { display: block; }
   .hx .hc-answer { font-size: 15.5px; }
 }
 @media (prefers-reduced-motion: reduce) { .hx .hc-scene { transition: none; } .hx .hc-wave { display: none; } }
+
+/* closest line after an abstention: a pointer, visibly not the answer */
+.a-closest { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--rule); background: var(--paper); display: grid; gap: 6px; }
+.a-closest-k { font: 600 11px/1 var(--sans); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.a-closest q { font: 15px/1.45 var(--serif); color: var(--ink-2); quotes: "“" "”"; }
+.a-closest .tool { justify-self: start; }

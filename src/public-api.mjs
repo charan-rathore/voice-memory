@@ -1266,6 +1266,16 @@ export function publicAnswer(shown) {
       verdict: a.lead?.verdict ?? null,
       opener: a.lead?.opener ?? null,
     })),
+    // After an abstention: the closest line, as a pointer the person opens
+    // and judges. Never the answer (paraphrase.mjs closestLine).
+    closest: shown.closest
+      ? {
+          line: shown.closest.line,
+          document: shown.closest.document,
+          citation: cite(shown.closest.citation),
+          cosine: shown.closest.cosine,
+        }
+      : null,
     semantic: shown.semantic
       ? {
           intent: shown.semantic.intent,

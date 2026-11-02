@@ -4,7 +4,7 @@ import { createCallCounters } from "./public-call-counters.mjs";
 import { selectCallCounters } from "./public-call-counters-upstash.mjs";
 import { readFile, readdir } from "node:fs/promises";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
-import { promotedAnswer, warmUnits } from "./paraphrase.mjs";
+import { promotedAnswer, warmUnits, closestLine } from "./paraphrase.mjs";
 import {
   repairDealTerms,
   stripPreamble,
@@ -812,6 +812,19 @@ export function createLocalServer({
             verdict: "QUOTED",
             field: null,
             citations: [p.citation],
+          };
+      }
+      // Still abstaining: offer the closest line as a pointer, labelled
+      // "not an answer", never as the reply (paraphrase.mjs closestLine).
+      if (!sectioned && weakLead(shown.lead)) {
+        const c = await closestLine(question, bundle).catch(() => null);
+        if (c)
+          shown.closest = {
+            ...c,
+            citation: {
+              ...c.citation,
+              documentId: s.sourceToEntry?.get(c.citation.sourceId)?.id ?? null,
+            },
           };
       }
       if (!sectioned && junkQuote(shown.lead)) shown.lead = null;

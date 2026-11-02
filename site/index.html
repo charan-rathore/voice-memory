@@ -448,13 +448,14 @@
               <li>A memory graph of documents, values and the sentences behind them</li>
               <li>Your own documents on this page, in a private workspace deleted after 30 idle minutes</li>
               <li>A key-free API for scripts and agents (<a href="llms.txt">llms.txt</a>, <a href="openapi.json">OpenAPI</a>)</li>
+              <li>Reworded questions: when the record can't answer, the closest line is offered to open and judge, never spoken as the answer (<a href="https://github.com/charan-rathore/voice-memory/blob/main/docs/PARAPHRASE-RETRIEVAL.md">measured</a>)</li>
+              <li>Benchmarked on outside-authored records: real meeting transcripts (QMSum) and SEC contracts (CUAD)</li>
             </ul>
           </div>
           <div style="--i: 1">
             <h3>Next</h3>
             <ul>
-              <li>Paraphrase-aware search: the dense retriever finds the right passage, the evidence gate doesn't accept it yet (<a href="https://github.com/charan-rathore/voice-memory/blob/main/docs/PARAPHRASE-RETRIEVAL.md">measured</a>)</li>
-              <li>A benchmark of real, messy records written by people outside the team</li>
+              <li>Speaking a reworded answer directly, once a reranker clears the outside benchmark with no wrong lines</li>
               <li>Clinician review of lab explanations before any patient pilot</li>
               <li>Phone-number calls and WhatsApp voice notes through Bolna</li>
             </ul>
