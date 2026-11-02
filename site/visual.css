@@ -241,3 +241,12 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
   .vz-val { font-size: 13px; }
   .vz-val b { font-size: 14.5px; }
 }
+
+/* name/status must never collide with the value column: wrap by container */
+.vz { container-type: inline-size; }
+.vz-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.vz-status { margin-left: 0; flex: none; }
+@container (max-width: 620px) {
+  .vz-row { grid-template-columns: 1fr; grid-template-areas: "name" "read" "strip" "hist"; gap: 4px; }
+  .vz-read { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+}
