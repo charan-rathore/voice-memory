@@ -439,7 +439,7 @@
           "200": {
             "description": "revoked"
           },
-          "404": {
+          "401": {
             "description": "No such key, or it already expired"
           }
         }

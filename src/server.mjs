@@ -1561,7 +1561,7 @@ export function createLocalServer({
         );
         return byoRevoke(bearer)
           ? reply(200, { revoked: true })
-          : reply(404, { error: "No such key, or it already expired." });
+          : reply(401, { error: "Invalid or expired key." });
       }
       if (
         byoPath === "/api/public/llm/v1/models" ||

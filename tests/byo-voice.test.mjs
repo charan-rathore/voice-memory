@@ -164,9 +164,9 @@ test("a key can be revoked by whoever holds it, and stops working at once", asyn
       method: "DELETE",
       headers: auth,
     });
-    assert.equal(again.status, 404);
+    assert.equal(again.status, 401);
     const none = await fetch(`${base}/llm/key`, { method: "DELETE" });
-    assert.equal(none.status, 404);
+    assert.equal(none.status, 401);
   } finally {
     srv.close();
   }
