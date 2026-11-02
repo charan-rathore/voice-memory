@@ -59,6 +59,7 @@ test("MCP: handshake, tool list, and a cited answer from the engine", async () =
         "ask_records",
         "create_workspace",
         "upload_document",
+        "add_document_text",
         "workspace_status",
       ],
     );
