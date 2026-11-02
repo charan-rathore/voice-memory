@@ -360,6 +360,13 @@
   // the server speaks one indexed sentence; rows highlight by that index.)
   const splitSentences = (text) =>
     String(text).match(/.+?(?:[.!?।]+(?!\d)|$)\s*/g) ?? [text];
+  // Rows the narration speaks about: the main subject's list only. Other
+  // people on the board live inside .vz-other details; a shared analyte name
+  // must never light their rows while the main subject is being read.
+  const spokenRows = (root) =>
+    [...(root?.querySelectorAll(".vz-row") ?? [])].filter(
+      (r) => !r.closest(".vz-other"),
+    );
   let speaking = null; // {audio, root, btn, lang}
   function stop() {
     if (!speaking) return;
@@ -414,7 +421,7 @@
     btn?.classList.add("on");
     if (btn) btn.querySelector("span").textContent = W(lang).stop;
     const voice = pickVoice(lang);
-    const rows = [...(root?.querySelectorAll(".vz-row") ?? [])];
+    const rows = spokenRows(root);
     parts.forEach((s, i) => {
       const u = new SpeechSynthesisUtterance(s.trim());
       if (voice) u.voice = voice;
@@ -441,7 +448,7 @@
     speaking = { root, btn, lang, audio: null };
     btn?.classList.add("on");
     if (btn) btn.querySelector("span").textContent = W(lang).stop;
-    const rows = [...(root?.querySelectorAll(".vz-row") ?? [])];
+    const rows = spokenRows(root);
     const alive = () => speaking && speaking.btn === btn;
     const get = (i) =>
       fetch(

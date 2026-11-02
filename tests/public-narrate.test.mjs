@@ -245,6 +245,29 @@ test("adapter maps languages, posts the documented shape, decodes audios[0]", as
   assert.equal(body.text, "Namaste duniya");
 });
 
+test("default personas are pinned to the current v4 catalog enums", () => {
+  // Frozen from https://docs.sarvam.ai/api-reference/text-to-speech/convert
+  // (speaker enum); the pre-activation probe is the live re-check.
+  const VALID_V4 = new Set([
+    "shubh_en_narration",
+    "ritu_hi_conversation",
+    "simran_enhi_companion",
+  ]);
+  const src = readFileSync(
+    new URL("../src/sarvam-tts.mjs", import.meta.url),
+    "utf8",
+  );
+  const block = src.match(/"bulbul:v4-flash": \{([^}]*)\}/s)?.[1] ?? "";
+  const defaults = [...block.matchAll(/(en|hi|hinglish): "([^"]+)"/g)].map(
+    (m) => m[2],
+  );
+  assert.equal(defaults.length, 3);
+  for (const d of defaults) {
+    assert.match(d, /^[a-z]+_(en|hi|enhi)_[a-z_]+$/, `${d} is a v4 persona ID`);
+    assert.ok(VALID_V4.has(d), `${d} is in the frozen valid set`);
+  }
+});
+
 test("adapter is null without a key (route fails closed upstream)", () => {
   assert.equal(createSarvamTts({ apiKey: undefined }), null);
 });

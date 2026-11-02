@@ -10,15 +10,18 @@
 const LANGS = { en: "en-IN", hi: "hi-IN", hinglish: "hi-IN" };
 
 // Default model: bulbul:v4-flash, Sarvam's current recommendation for new
-// integrations (same request contract as v3, cheaper promo pricing through
-// 2026-11-12). Speakers are model-specific persona IDs, per language: the
-// v4 catalog's short v3 names are NOT valid on v4. VM_SARVAM_SPEAKER pins
-// one persona for every language if set.
+// integrations (same request contract as v3; standard pricing Rs1/1,000
+// chars). Speakers are model-specific persona IDs, per language, pinned to
+// the current catalog enums in
+// https://docs.sarvam.ai/api-reference/text-to-speech/convert - the v4
+// catalog's short v3 names are NOT valid on v4, and the probe before
+// activation is the live validity check. VM_SARVAM_SPEAKER pins one persona
+// for every language if set.
 const SPEAKERS = {
   "bulbul:v4-flash": {
     en: "shubh_en_narration",
     hi: "ritu_hi_conversation",
-    hinglish: "simran_enhi_conversation",
+    hinglish: "simran_enhi_companion",
   },
   "bulbul:v3": { en: "shubh", hi: "shubh", hinglish: "shubh" },
   "bulbul:v2": { en: "anushka", hi: "anushka", hinglish: "anushka" },
