@@ -491,3 +491,50 @@ export function noAnswerLead(lang = "en") {
   }[["en", "hi", "hinglish"].includes(lang) ? lang : "en"];
   return { verdict: "UNKNOWN", text, field: null, citations: [] };
 }
+
+// ------------------------------------------------------------ cross-lingual retrieval bridge
+// The local embedding model and BM25 index read English. A Hindi or Hinglish
+// question about an English document gets the English words for its domain
+// terms appended at search time only (never shown as the question, never
+// used to state a value): "भुगतान की आखिरी तारीख" also searches "payment
+// deadline date". Retrieval widens; the exact-span evidence gate is unchanged.
+const BRIDGE = [
+  [/भुगतान|पेमेंट|\bbhugtan\b/i, "payment"],
+  [
+    /समय\s*सीमा|डेडलाइन|आख़िरी\s*तारीख|आखिरी\s*तारीख|\bsamay\s*seema\b/i,
+    "deadline",
+  ],
+  [/तारीख|\btareekh\b|\btarikh\b/i, "date"],
+  [/फ़ीस|फीस|शुल्क/i, "fee"],
+  [/कीमत|दाम|\bkeemat\b|\bdaam\b/i, "price cost"],
+  [/राशि|रकम|\brashi\b|\brakam\b/i, "amount"],
+  [/मंज़ूर|मंजूर|स्वीकृत|\bmanzoor\w*\b|\bsweekrit\b/i, "approved approval"],
+  [/हस्ताक्षर|साइन|\bhastakshar\b/i, "signed signature"],
+  [
+    /अनुबंध|करार|कॉन्ट्रैक्ट|एग्रीमेंट|\banubandh\b|\bkaraar\b/i,
+    "contract agreement",
+  ],
+  [/प्रस्ताव|\bprastav\b/i, "proposal"],
+  [/फ़ैसला|फैसला|निर्णय|\bfaisla\b|\bnirnay\b/i, "decision decided"],
+  [/बैठक|मीटिंग|\bbaithak\b/i, "meeting"],
+  [/रिपोर्ट/i, "report"],
+  [/नतीजा|नतीजे|परिणाम|\bnatija\b|\bnateeja\b|\bparinaam\b/i, "result"],
+  [/जांच|जाँच|टेस्ट|\bjaanch\b|\bjanch\b/i, "test"],
+  [/खून|रक्त|\bkhoon\b|\brakt\b/i, "blood"],
+  [/शुगर|चीनी|मधुमेह/i, "sugar glucose"],
+  [/गुर्दा|किडनी|\bgurda\b/i, "kidney"],
+  [/दवा|दवाई|\bdawa\w*\b/i, "medication"],
+  [/डॉक्टर/i, "doctor"],
+  [/बदला|बदली|बदलाव|\bbadla\w*\b|\bbadlav\b/i, "changed revised"],
+  [/कारण|वजह|\bkaaran\b|\bwajah\b/i, "reason"],
+  [/ज़िम्मेदार|जिम्मेदार|\bzimmedar\b|\bjimmedar\b/i, "owner responsible"],
+  [/बाक़ी|बाकी|लंबित|\bbaaki\b|\blambit\b/i, "pending open"],
+];
+/** English search terms for a Hindi / Hinglish question ("" when none apply). */
+export function bridgeToEnglish(text) {
+  const t = String(text ?? "");
+  const out = new Set();
+  for (const [re, en] of BRIDGE)
+    if (re.test(t)) for (const w of en.split(" ")) out.add(w);
+  return [...out].join(" ");
+}

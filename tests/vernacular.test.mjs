@@ -184,3 +184,16 @@ test("ordinary English words are not snapped to test names", () => {
   assert.equal(repairTestNames("creatnine", v), "Creatinine");
   assert.equal(repairTestNames("fertin", v), "Ferritin");
 });
+
+test("cross-lingual bridge adds English search terms only for Hindi domain words", async () => {
+  const { bridgeToEnglish } = await import("../src/vernacular.mjs");
+  assert.equal(
+    bridgeToEnglish("भुगतान की आखिरी तारीख क्या है?"),
+    "payment deadline date",
+  );
+  assert.equal(
+    bridgeToEnglish("contract pe hastakshar hua?"),
+    "signed signature",
+  );
+  assert.equal(bridgeToEnglish("What is the engagement fee?"), "");
+});
