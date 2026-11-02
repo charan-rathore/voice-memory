@@ -68,35 +68,43 @@ try {
     await page.locator(".pipe").scrollIntoViewIfNeeded();
     await page.waitForTimeout(1600);
     await page.screenshot({ path: `${out}/${name}-pipeline.png` });
-    // Drill-down: clicking a strip opens the test's timeline, tiles, source
-    // lines and follow-up questions; Escape closes it again.
-    const strip = page
-      .locator('.vz-row[data-test="hemoglobin"] .vz-strip')
-      .first();
-    if (await strip.count()) {
-      await strip.scrollIntoViewIfNeeded();
-      await strip.click();
-      await page.waitForTimeout(700);
+    // Report charts: clicking a range row, then a donut segment, fills the
+    // detail panel with that test's readings and source lines.
+    const row = page.locator('.rr-row[data-sel="test:hemoglobin"]').first();
+    if (await row.count()) {
+      await row.scrollIntoViewIfNeeded();
+      await row.click();
+      await page.waitForTimeout(500);
       const dd = await page.evaluate(() => {
-        const row = document.querySelector('.vz-row[data-test="hemoglobin"]');
-        const p = row?.querySelector(".vz-dd");
+        const p = document.querySelector(".rp-detail");
         return {
-          open: !!p && !p.hidden,
-          tiles: p?.querySelectorAll(".dd-tile").length ?? 0,
-          points: p?.querySelectorAll(".dd-pt").length ?? 0,
-          asks: p?.querySelectorAll(".dd-ask[data-q]").length ?? 0,
+          picked: !p?.querySelector(".rp-pick"),
+          text: (p?.textContent ?? "").length,
+          selected: document.querySelectorAll(
+            '[data-sel="test:hemoglobin"].sel',
+          ).length,
         };
       });
-      if (!dd.open || dd.tiles < 2 || dd.points < 2 || dd.asks < 1)
+      if (!dd.picked || dd.text < 40 || dd.selected < 1)
         errors.push(
-          `${name}: drill-down did not open fully ${JSON.stringify(dd)}`,
+          `${name}: report detail did not open ${JSON.stringify(dd)}`,
         );
+      const seg = page.locator(".dn-leg:not([disabled])").first();
+      if (await seg.count()) {
+        await seg.click();
+        await page.waitForTimeout(400);
+        const n = await page.evaluate(
+          () =>
+            document.querySelectorAll(".rp-detail .dt-item, .rp-detail li")
+              .length,
+        );
+        if (n < 1) errors.push(`${name}: donut segment opened no detail`);
+      } else errors.push(`${name}: no donut legend on the report`);
       await page
-        .locator('.vz-row[data-test="hemoglobin"]')
+        .locator(".vz-report")
         .first()
-        .screenshot({ path: `${out}/${name}-drilldown.png` });
-      await page.keyboard.press("Escape");
-    } else errors.push(`${name}: no hemoglobin strip on the board`);
+        .screenshot({ path: `${out}/${name}-report.png` });
+    } else errors.push(`${name}: no hemoglobin row on the report`);
     await page.locator(".graph-band").scrollIntoViewIfNeeded();
     await page.waitForTimeout(3500);
     if (!(await page.locator(".graph-3d").count()))

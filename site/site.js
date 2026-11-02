@@ -1513,7 +1513,13 @@
     cv.height = H * dpr;
     ctx.scale(dpr, dpr);
     const load = async () =>
-      snap.graphs?.health ?? (await api("/graph/health").catch(() => null));
+      (await (window.VM_SNAPSHOT_GRAPHS
+        ? Promise.resolve()
+        : loadScript("snapshot-graphs.js")
+      ).then(
+        () => window.VM_SNAPSHOT_GRAPHS?.health,
+        () => null,
+      )) ?? (await api("/graph/health").catch(() => null));
     const COLORS = {
       patient: "#f4dc4a",
       document: "#8fa3ff",
