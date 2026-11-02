@@ -39,6 +39,12 @@ import {
   QUERY_PREFIX,
 } from "../src/paraphrase.mjs";
 import { warmDense, embedTextsReady, DENSE_MODEL_ID } from "../src/dense.mjs";
+import {
+  warmRerank,
+  rerankUnits,
+  rerankEnabled,
+  RERANK_MODEL_ID,
+} from "../src/rerank.mjs";
 
 const DATA = process.env.VM_OUTSIDE_DATA || ".cache/outside";
 const LIMIT = {
@@ -169,6 +175,10 @@ if (process.env.VM_DENSE !== "off") {
   dense = !!probe;
 }
 if (dense) for (const b of bundles) await warmUnits(b);
+// second stage (VM_RERANK=on): a cross-encoder over the fused top 20
+const rerank = dense && rerankEnabled() && (await warmRerank());
+if (rerankEnabled() && !rerank)
+  console.error("reranker requested but not resident; skipping it");
 
 const rows = [];
 for (const it of items) {
@@ -202,6 +212,18 @@ for (const it of items) {
           : null,
       right: it.answerable ? overlaps(top.unit, it.spans) : false,
     };
+    if (rerank) {
+      const rr = await rerankUnits(it.q, hyb, 20);
+      if (rr) {
+        row.rerank = it.answerable ? score(rr, it) : null;
+        row.rtop = {
+          prob: +rr[0].ce.toFixed(4),
+          margin: +(rr[0].ce - (rr[1]?.ce ?? 0)).toFixed(4),
+          fusedRank: rr[0].fusedRank,
+          right: it.answerable ? overlaps(rr[0].unit, it.spans) : false,
+        };
+      }
+    }
     const d = discoveryGate(hyb, DISCOVERY);
     row.discovery = d
       ? {
@@ -247,6 +269,12 @@ function summarize(rs) {
       mrr10: +mean(A.map((r) => r.hybrid.rr10)).toFixed(3),
     };
     s.denseOnly = { top1: m("dense", "hit1"), top3: m("dense", "hit3") };
+    if (rs[0]?.rerank !== undefined)
+      s.reranked = {
+        top1: m("rerank", "hit1"),
+        top3: m("rerank", "hit3"),
+        mrr10: +mean(A.map((r) => r.rerank?.rr10 ?? 0)).toFixed(3),
+      };
     const shownA = A.filter((r) => r.gate.shown);
     s.gate = {
       shownOnAnswerable: pct(shownA.length / (A.length || 1)),
@@ -351,13 +379,88 @@ function calibrate(rows) {
     };
   return { ...best, held: evalRule(held, best.rule), frontier };
 }
+// The same protocol for the cross-encoder gate: features of the reranked top
+// line (probability, lead over the runner-up, its rank before reranking).
+function evalRerank(rs, rule) {
+  const pass = (r) =>
+    r.rtop &&
+    r.rtop.prob >= rule.minProb &&
+    r.rtop.margin >= rule.minMargin &&
+    (rule.maxFusedRank == null || r.rtop.fusedRank <= rule.maxFusedRank);
+  const A = rs.filter((r) => r.answerable);
+  const U = rs.filter((r) => !r.answerable);
+  const shown = A.filter(pass);
+  return {
+    shown: shown.length,
+    answerable: A.length,
+    right: shown.filter((r) => r.rtop.right).length,
+    absentShown: U.filter(pass).length,
+    absent: U.length,
+  };
+}
+function calibrateRerank(rows) {
+  const dev = [],
+    held = [];
+  for (const set of ["qmsum", "cuad"])
+    rows
+      .filter((r) => r.set === set)
+      .forEach((r, i) => (i % 2 ? held : dev).push(r));
+  const rules = [];
+  for (let p = 0.02; p <= 0.99; p += 0.01)
+    for (let m = 0; m <= 0.6; m += 0.02)
+      for (const maxFusedRank of [null, 10, 5, 3])
+        rules.push({
+          minProb: +p.toFixed(2),
+          minMargin: +m.toFixed(2),
+          maxFusedRank,
+        });
+  let best = null;
+  for (const rule of rules) {
+    const e = evalRerank(dev, rule);
+    const prec = e.shown ? e.right / e.shown : 0;
+    const absent = e.absent ? e.absentShown / e.absent : 0;
+    if (e.shown < 5 || prec < 0.9 || absent > 0.1) continue;
+    if (!best || e.shown > best.dev.shown) best = { rule, dev: e };
+  }
+  const frontier = [0.05, 0.1, 0.2, 0.3, 0.4].map((cov) => {
+    let pick = null;
+    for (const rule of rules) {
+      const e = evalRerank(dev, rule);
+      if (
+        e.shown < cov * e.answerable ||
+        (e.absent && e.absentShown / e.absent > 0.1)
+      )
+        continue;
+      const prec = e.right / e.shown;
+      if (!pick || prec > pick.prec) pick = { rule, prec, dev: e };
+    }
+    return pick
+      ? {
+          coverage: cov,
+          rule: pick.rule,
+          dev: pick.dev,
+          held: evalRerank(held, pick.rule),
+        }
+      : { coverage: cov, rule: null };
+  });
+  if (!best)
+    return {
+      rule: null,
+      note: "no reranker rule reaches 90% right with <= 10% absent shown on dev",
+      frontier,
+    };
+  return { ...best, held: evalRerank(held, best.rule), frontier };
+}
 const summary = {
   qmsum: summarize(rows.filter((r) => r.set === "qmsum")),
   cuad: summarize(rows.filter((r) => r.set === "cuad")),
 };
 const calibration = dense ? calibrate(rows) : null;
+const rerankCalibration = rerank ? calibrateRerank(rows) : null;
 const out = {
   calibration,
+  rerankCalibration,
+  reranker: rerank ? RERANK_MODEL_ID : null,
   discovery: DISCOVERY,
   date: new Date().toISOString().slice(0, 10),
   sha: sha("."),
@@ -370,7 +473,7 @@ const out = {
 mkdirSync(new URL("./results/", import.meta.url), { recursive: true });
 writeFileSync(
   new URL(
-    `./results/outside-${dense ? "dense" : "keyword"}.json`,
+    `./results/outside-${rerank ? "rerank" : dense ? "dense" : "keyword"}.json`,
     import.meta.url,
   ),
   JSON.stringify(out, null, 1),
@@ -400,6 +503,35 @@ if (dense) {
     c.rule
       ? `\n**Calibrated on dev** ${JSON.stringify(c.rule)}: dev ${fmt(c.dev)}; held-out ${fmt(c.held)}`
       : `\n**Calibration:** ${c.note}`,
+  );
+  console.log(
+    "\n| min coverage (dev) | best rule on dev | dev | held-out |\n| --- | --- | --- | --- |",
+  );
+  for (const f of c.frontier)
+    console.log(
+      f.rule
+        ? `| ${100 * f.coverage}% | ${JSON.stringify(f.rule)} | ${fmt(f.dev)} | ${fmt(f.held)} |`
+        : `| ${100 * f.coverage}% | none | - | - |`,
+    );
+}
+if (rerank) {
+  const fmt = (e) =>
+    `${e.shown}/${e.answerable} shown, ${e.shown ? ((100 * e.right) / e.shown).toFixed(1) : 0}% right, absent shown ${e.absentShown}/${e.absent}`;
+  const r = (n, x) =>
+    `| ${n} | ${x.hybrid.top1}% / ${x.hybrid.top3}% | ${x.reranked.top1}% / ${x.reranked.top3}% | ${x.hybrid.mrr10} → ${x.reranked.mrr10} |`;
+  console.log(
+    `\n### Cross-encoder rerank of the fused top 20 (${RERANK_MODEL_ID})\n`,
+  );
+  console.log(
+    "| Set | hybrid top-1 / top-3 | reranked top-1 / top-3 | MRR@10 |\n| --- | --- | --- | --- |",
+  );
+  console.log(r("QMSum", summary.qmsum));
+  console.log(r("CUAD", summary.cuad));
+  const c = rerankCalibration;
+  console.log(
+    c.rule
+      ? `\n**Reranker gate, calibrated on dev** ${JSON.stringify(c.rule)}: dev ${fmt(c.dev)}; held-out ${fmt(c.held)}`
+      : `\n**Reranker gate:** ${c.note}`,
   );
   console.log(
     "\n| min coverage (dev) | best rule on dev | dev | held-out |\n| --- | --- | --- | --- |",

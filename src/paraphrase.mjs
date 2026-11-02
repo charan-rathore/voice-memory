@@ -26,6 +26,7 @@ import { extractClaims, resolveClaims } from "../dist/engine.mjs";
 import { embedTextsReady } from "./dense.mjs";
 import { bridgeToEnglish } from "./vernacular.mjs";
 import { layExpand } from "./lay-terms.mjs";
+import { rerankEnabled, rerankUnits, rerankGate } from "./rerank.mjs";
 
 export const QUERY_INSTRUCTION =
   "Represent this sentence for searching relevant passages: ";
@@ -444,7 +445,11 @@ export async function closestLine(
   const ranked = rankUnits(searched, bundle, qv).filter(
     (r) => !replacedSource(bundle, r.unit.src),
   );
-  const hit = discoveryGate(ranked, thresholds);
+  // second stage when enabled: a cross-encoder over the fused top 20 and
+  // its own calibrated gate (src/rerank.mjs); a null RERANK_GATE never opens
+  const hit = rerankEnabled()
+    ? rerankGate(await rerankUnits(searched, ranked, 20))
+    : discoveryGate(ranked, thresholds);
   if (!hit) return null;
   const { src, sent } = hit.unit;
   if (Q_STRONG_ACTION.test(question) && SENT_WEAK_STATUS.test(sent.text))

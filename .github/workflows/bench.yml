@@ -13,6 +13,7 @@ on:
       - "evaluation/paraphrase-*"
       - "evaluation/outside*"
       - "src/paraphrase.mjs"
+      - "src/rerank.mjs"
       - "evaluation/retrieval-*"
       - ".github/workflows/bench.yml"
 permissions:
@@ -31,7 +32,8 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .cache/models
-          key: dense-models-bge-small-en-v1.5
+          key: dense-models-bge-small-en-v1.5-rerank-v1
+          restore-keys: dense-models-bge-small-en-v1.5
       - run: npm ci
       - run: npm run build
       - name: Paraphrase bench (keyword vs hybrid vs dense, dev + held-out)
@@ -51,6 +53,22 @@ jobs:
         env:
           VM_DENSE_CACHE: .cache/models
           VM_MEMORY_LIMIT_MB: "4096"
+      # Second stage for reworded questions: a cross-encoder over the fused
+      # top 20, its own gate calibrated on the dev half, reported held-out.
+      - name: Outside-authored bench, cross-encoder rerank (ms-marco MiniLM-L6)
+        run: node evaluation/outside-bench.mjs | sed -n '/Cross-encoder rerank/,$p' | tee rerank-minilm.md | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          VM_DENSE_CACHE: .cache/models
+          VM_MEMORY_LIMIT_MB: "4096"
+          VM_RERANK: "on"
+      - name: Outside-authored bench, cross-encoder rerank (jina reranker v1 tiny)
+        continue-on-error: true
+        run: node evaluation/outside-bench.mjs | sed -n '/Cross-encoder rerank/,$p' | tee rerank-jina.md | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          VM_DENSE_CACHE: .cache/models
+          VM_MEMORY_LIMIT_MB: "4096"
+          VM_RERANK: "on"
+          VM_RERANK_MODEL: jinaai/jina-reranker-v1-tiny-en
       # A/B: the same bench with bare chunk embeddings (the default) and with
       # contextual chunk headers (VM_DENSE_CONTEXT=on, an experiment), so a
       # retrieval change is always judged against its baseline on one runner.
@@ -82,5 +100,6 @@ jobs:
             require("fs").writeFileSync("comment.md", body);
           ' "$f"
           { echo; cat outside.md; } >> comment.md
+          for f in rerank-minilm.md rerank-jina.md; do [ -s "$f" ] && { echo; cat "$f"; } >> comment.md; done
           { echo; echo "### Hybrid retrieval A/B"; echo; echo "Bare chunk embeddings:"; echo '```'; cat ab-bare.txt; echo '```'; echo "Contextual chunk headers:"; echo '```'; cat ab-context.txt; echo '```'; } >> comment.md
           gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments -F body=@comment.md >/dev/null
