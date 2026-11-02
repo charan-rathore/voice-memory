@@ -170,9 +170,11 @@ function dateAnchor(question) {
   let m = ANCHOR_ISO.exec(question);
   if (m) return { y: +m[1], mo: +m[2], d: +m[3], said: m[0] };
   m = ANCHOR_DMY.exec(question);
-  if (m) return { y: +m[3], mo: MONTHS[m[2].toLowerCase()], d: +m[1], said: m[0] };
+  if (m)
+    return { y: +m[3], mo: MONTHS[m[2].toLowerCase()], d: +m[1], said: m[0] };
   m = ANCHOR_MDY.exec(question);
-  if (m) return { y: +m[3], mo: MONTHS[m[1].toLowerCase()], d: +m[2], said: m[0] };
+  if (m)
+    return { y: +m[3], mo: MONTHS[m[1].toLowerCase()], d: +m[2], said: m[0] };
   m = ANCHOR_MY.exec(question);
   if (m) return { y: +m[2], mo: MONTHS[m[1].toLowerCase()], said: m[0] };
   m = ANCHOR_M.exec(question);
@@ -947,9 +949,26 @@ function findGroup(question, reports) {
 const TEST_SHAPED_RE =
   /\b(?:my|the)\s+([a-z][a-z' -]{1,28}?)\s+(?:level|levels|result|results|reading|readings|value|values|count|counts)\b/i;
 const GENERIC_MEASURE = new Set([
-  "blood", "test", "tests", "lab", "labs", "report", "reports", "health",
-  "body", "overall", "final", "latest", "new", "old", "first", "last",
-  "recent", "current", "full", "complete",
+  "blood",
+  "test",
+  "tests",
+  "lab",
+  "labs",
+  "report",
+  "reports",
+  "health",
+  "body",
+  "overall",
+  "final",
+  "latest",
+  "new",
+  "old",
+  "first",
+  "last",
+  "recent",
+  "current",
+  "full",
+  "complete",
 ]);
 function unmatchedTestCandidate(question, reports) {
   const m = TEST_SHAPED_RE.exec(question);
