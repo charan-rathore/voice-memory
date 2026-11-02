@@ -148,6 +148,7 @@
   // ------------------------------------------------------------ verdicts
   const VERDICT = {
     LATEST: ["v-latest", "Latest value"],
+    VALUE: ["v-latest", "Requested report"],
     COMPARED: ["v-ok", "Compared"],
     OVERVIEW: ["v-ok", "Summary"],
     NOT_COMPARABLE: ["v-no", "Won't compare"],

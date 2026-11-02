@@ -153,6 +153,10 @@ const ANCHOR_DMY = new RegExp(
   `(?:^|[^\d])(\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(${MONTH_NAME})\\s*,?\\s*(\\d{4})`,
   "i",
 );
+const ANCHOR_MDY = new RegExp(
+  `(?<![\\p{L}])(${MONTH_NAME})\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s*,?\\s*(\\d{4})`,
+  "iu",
+);
 const ANCHOR_MY = new RegExp(
   `(?<![\\p{L}])(${MONTH_NAME})\\s*,?\\s*(\\d{4})(?![\\p{L}\\d])`,
   "iu",
@@ -167,6 +171,8 @@ function dateAnchor(question) {
   if (m) return { y: +m[1], mo: +m[2], d: +m[3], said: m[0] };
   m = ANCHOR_DMY.exec(question);
   if (m) return { y: +m[3], mo: MONTHS[m[2].toLowerCase()], d: +m[1], said: m[0] };
+  m = ANCHOR_MDY.exec(question);
+  if (m) return { y: +m[3], mo: MONTHS[m[1].toLowerCase()], d: +m[2], said: m[0] };
   m = ANCHOR_MY.exec(question);
   if (m) return { y: +m[2], mo: MONTHS[m[1].toLowerCase()], said: m[0] };
   m = ANCHOR_M.exec(question);

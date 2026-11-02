@@ -379,3 +379,79 @@ test("Hindi month anchors resolve the same way, answered in Hindi", async () => 
   assert.equal(t2.verdict, "VALUE");
   assert.equal(t2.used[0].raw, "0.5");
 });
+
+// Month-day-year order ("September 3, 2026") is an explicit date anchor: it
+// must resolve that exact report or be an honest miss - never silently
+// degrade to a bare month. Multi-September fixture makes the distinctions
+// observable: bare month lands on 2026-09-20, the explicit day on 2026-09-03.
+function mkLabReport(title, collected, rows) {
+  const doc = {
+    text: `Patient: Test Person A (synthetic), ID SYN-0001\nCollected: ${collected}  Reported: ${collected}\nReport status: FINAL`,
+    elements: [
+      { id: "t", type: "table" },
+      {
+        id: "h",
+        parent: "t",
+        type: "table-header",
+        cells: ["Test", "Result", "Unit", "Reference range", "Flag"],
+      },
+      ...rows.map((cells, i) => ({
+        id: "r" + i,
+        parent: "t",
+        type: "table-row",
+        cells,
+        start: 0,
+        end: 1,
+      })),
+    ],
+  };
+  return { title, sourceId: title, ...extractReport(doc) };
+}
+const MULTIYEAR = () => [
+  mkLabReport("s2025.pdf", "5 September 2025", [
+    ["Creatinine", "1.1", "mg/dL", "0.7-1.3", ""],
+  ]),
+  mkLabReport("s2026a.pdf", "3 September 2026", [
+    ["Creatinine", "1.2", "mg/dL", "0.7-1.3", ""],
+  ]),
+  mkLabReport("s2026b.pdf", "20 September 2026", [
+    ["Creatinine", "1.25", "mg/dL", "0.7-1.3", ""],
+  ]),
+  mkLabReport("o2026.pdf", "12 October 2026", [
+    ["Creatinine", "106", "µmol/L", "62-115", ""],
+  ]),
+];
+
+test("month-day-year anchors resolve the exact date, never degrade to bare month", () => {
+  const reports = MULTIYEAR();
+  const t = clinicalTurn("What was the creatinine on September 3, 2026?", reports);
+  assert.ok(t, "answered");
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "1.2", "the 3 September 2026 report, not the 20 September one");
+  assert.equal(t.used[0].report.title, "s2026a.pdf");
+  assert.match(t.spoken, /3 September 2026/);
+});
+
+test("an explicit date with no matching report is an honest miss", () => {
+  const reports = MULTIYEAR();
+  const t = clinicalTurn("What was the creatinine on September 9, 2026?", reports);
+  assert.ok(t, "answered");
+  assert.equal(t.verdict, "NOT_IN_REPORT");
+  assert.doesNotMatch(t.spoken, /1\.25|106/);
+});
+
+test("a month-year anchor picks that year's report", () => {
+  const reports = MULTIYEAR();
+  const t = clinicalTurn("What was the creatinine in the September 2025 report?", reports);
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "1.1");
+  assert.match(t.spoken, /5 September 2025/);
+});
+
+test("a bare month with several years names the most recent, and says which", () => {
+  const reports = MULTIYEAR();
+  const t = clinicalTurn("What was my creatinine in September?", reports);
+  assert.equal(t.verdict, "VALUE");
+  assert.equal(t.used[0].raw, "1.25");
+  assert.match(t.spoken, /20 September 2026/, "the date is disclosed in the answer");
+});
