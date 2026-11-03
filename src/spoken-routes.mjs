@@ -298,7 +298,26 @@ const STOPQ = new Set(
   ),
 );
 
+const NO_REJ_S =
+  /\bno rejection\b|\bnot rejected\b|\bnever rejected\b|\bno record of (?:a )?rejection\b|\bmissing signature is not rejection\b/i;
 export function rejectionLookup(question, bundle) {
+  // An explicit "no rejection is recorded" statement answers a rejection
+  // question directly - and a quoted question ("Was the fee rejected?") is
+  // never itself a rejection record.
+  if (/reject/i.test(question)) {
+    for (const src of bundle.sources)
+      for (const s of sentencesOf(src)) {
+        if (/\?\s*$/.test(s.text)) continue;
+        if (NO_REJ_S.test(s.text))
+          return {
+            spoken: `No. Per ${docLabelOf(src)}: ${s.text}`,
+            verdict: "NO-RECORD",
+            intent: "REJECTED",
+            field: null,
+            citations: [cite(src, s)],
+          };
+      }
+  }
   const qTok = (
     question.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []
   ).filter((t) => !STOPQ.has(t));
@@ -313,6 +332,7 @@ export function rejectionLookup(question, bundle) {
   let best = null;
   for (const src of bundle.sources)
     for (const s of sentencesOf(src)) {
+      if (/\?\s*$/.test(s.text)) continue;
       if (!REJ_S.test(s.text)) continue;
       const low = s.text.toLowerCase();
       let score = qTok.filter((t) => new RegExp(`\\b${t}\\b`).test(low)).length;

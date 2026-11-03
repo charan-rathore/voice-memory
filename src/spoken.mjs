@@ -286,7 +286,7 @@ function statusOfLine(line) {
 
 // extractClaims (shared core) plus gap-filling line scans. Deduped on
 // field+title+normalized value; shared-core claims always win.
-function mergedClaims(bundle, fields) {
+export function mergedClaims(bundle, fields) {
   const base = extractClaims(bundle, fields);
   const seen = new Set(
     base.map(
@@ -472,6 +472,7 @@ function verdictFor(field, resolved, claims, question, intent, bundle) {
   // questions (never a flat "no" on an amount).
   if (
     neg &&
+    intent === "FINALIZED" &&
     (field !== "fee" || /\bsigned|agreement|countersign\b/i.test(question))
   )
     return "NO-RECORD";
@@ -496,7 +497,15 @@ function render({
   const disp = (v) => (v ? v.replace(/(\S)\(/, "$1 (") : v);
   const value = current ? disp(current.value) : null;
   const label = current ? docLabel(current) : null;
-  const earlier = history.length ? history[history.length - 1] : null;
+  // "Originally/first proposed" asks for the EARLIEST record; "what was it
+  // before" asks for the latest superseded one.
+  const earlier = history.length
+    ? /\b(original(?:ly)?|first|initial(?:ly)?)\b/i.test(question)
+      ? [...history].sort((a, b) =>
+          (a.docDate || "").localeCompare(b.docDate || ""),
+        )[0]
+      : history[history.length - 1]
+    : null;
   const earlierVal = earlier ? disp(earlier.value) : null;
   const neg =
     verdict === "NO-RECORD" ? scopedNegative(field, citations, question) : null;
@@ -532,7 +541,7 @@ function render({
     return intent === "REJECTED"
       ? `No record shows a rejection. The terms need ${current.value} sign-off, and that sign-off is not recorded yet.`
       : `The terms need ${current.value} sign-off, and that sign-off is not recorded yet.`;
-  if (field === "scope" && current)
+  if (field === "scope" && current && intent !== "HISTORY")
     return `The current working scope is ${value}.`;
   if (field === "reporting" && current) {
     const cadence = (current.quote + " " + (current.value ?? "")).match(
@@ -563,7 +572,7 @@ function render({
         return `No. ${cap(value)} is the latest proposal, and it is not approved.${old}`;
       }
       if (current?.status === "internal-target")
-        return `${cap(value ?? "It")} is the current internal target, not an approved or contractual date.`;
+        return `${cap(value ?? "It")} is the current internal target, not an approved or contractual ${field === "deadline" ? "date" : field === "fee" ? "fee" : field === "paymentSplit" ? "split" : "figure"}.`;
       return `${cap(value ?? "It")} is the latest proposal, and it is not approved.`;
     }
     case "FINALIZED:CONFIRMED":
@@ -633,6 +642,8 @@ function render({
     case "REJECTED:PROPOSED":
     case "REJECTED:UNKNOWN":
       return `No record shows a rejection. Approval is pending, which is not the same thing.`;
+    case "REJECTED:CONFIRMED":
+      return `No record shows a rejection. ${cap(value)} is approved, per ${label}.`;
     case "REJECTED:REJECTED-EXPLICIT":
       return `Yes. ${cap(label)} records the rejection.`;
     default:
@@ -719,7 +730,7 @@ function guard(spoken, citations, verdict) {
     if (
       verdict !== "CONFIRMED" &&
       verdict !== "NO-RECORD" &&
-      !/\bnot approved|no approval|not final|isn't approved|not recorded|stays? a proposal|still not approved|is not final|neither is approved\b/i.test(
+      !/\bnot approved|not an approved|no approval|not final|isn't approved|not recorded|stays? a proposal|still not approved|is not final|neither is approved\b/i.test(
         spoken,
       )
     )
@@ -1139,6 +1150,65 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
     };
   }
   let fieldClaims = claims.filter((c) => c.field === field);
+  // Month-intent ("What was the revised fee in August?"): answer from the
+  // records of that month, year-bound like the engine - the asked year wins,
+  // otherwise the latest year on record, disclosed in the answer.
+  const monthM = question.match(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
+  );
+  if (monthM && fieldClaims.some((c) => c.docDate)) {
+    const MONTHS12 =
+      "january|february|march|april|may|june|july|august|september|october|november|december";
+    const mi = MONTHS12.split("|").indexOf(monthM[1].toLowerCase());
+    const monthNum = String(mi + 1).padStart(2, "0");
+    const askYear = question.match(/\b(20\d{2})\b/)?.[1] ?? null;
+    const inMonth = fieldClaims.filter(
+      (c) =>
+        c.docDate?.slice(5, 7) === monthNum &&
+        (!askYear || c.docDate.startsWith(askYear)),
+    );
+    const years = [
+      ...new Set(inMonth.map((c) => c.docDate.slice(0, 4))),
+    ].sort();
+    const yearUsed = askYear ?? years[years.length - 1] ?? null;
+    let chosen = inMonth.filter((c) => c.docDate.startsWith(yearUsed));
+    // A descriptor in the question ("the revised fee") binds to the records
+    // whose own sentence carries it - later same-month changes with other
+    // wording stay out.
+    if (chosen.length > 1) {
+      const dm = /\b([a-z][a-z-]{3,})\s+(?:fees?|retainer|price|rate)\b/i.exec(
+        question,
+      );
+      if (dm && dm[1].toLowerCase() !== "revised") {
+        // fall through: generic descriptor binding below covers it
+      } else if (/\brevis/i.test(question)) {
+        const rev = chosen.filter((c) => /\brevis/i.test(c.quote ?? ""));
+        if (rev.length) chosen = rev;
+      }
+    }
+    if (chosen.length) {
+      const latest = [...chosen].sort((a, b) =>
+        (b.docDate || "").localeCompare(a.docDate || ""),
+      )[0];
+      const monthName =
+        monthM[1][0].toUpperCase() + monthM[1].slice(1).toLowerCase();
+      const resolvedNow = resolveClaims(claims);
+      const currentApproved =
+        (resolvedNow.approved.get(field) ?? []).find(
+          (c) => !chosen.includes(c),
+        ) ?? null;
+      const tail = currentApproved
+        ? ` It was later replaced; the current approved record is ${currentApproved.value}.`
+        : "";
+      return {
+        spoken: `In ${monthName}${yearUsed ? " " + yearUsed : ""}, the recorded ${field === "fee" ? "fee" : field} was ${latest.value}, ${latest.status === "approved" ? "approved" : "proposed, not approved"}.${tail}`,
+        verdict: "QUOTED",
+        field,
+        intent: "HISTORY",
+        citations: [latest, ...(currentApproved ? [currentApproved] : [])],
+      };
+    }
+  }
   // Descriptor binding: "the retainer", "the retainer fee", "the engagement
   // fee" ask about the figure the documents attach to that descriptor.
   // Answer only from claims whose own sentence uses the descriptor; with no

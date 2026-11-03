@@ -885,7 +885,11 @@ export function resolveClaims(claims: Claim[]): {
   // vs Northstar Logistics). When identity cannot be established there is no
   // supersession - the records compete and the answer stays unresolved.
   const sharesEngagement = (a: Claim, b: Claim) => {
-    if (!a.scopeEntities.length || !b.scopeEntities.length) return false;
+    // Entities come from the document title and H1, so two claims from one
+    // document always carry the same list: when it is empty (no named
+    // entity), one document is one engagement context and they share it.
+    if (!a.scopeEntities.length || !b.scopeEntities.length)
+      return a.sourceId === b.sourceId;
     const shared = a.scopeEntities.some((e) => b.scopeEntities.includes(e));
     if (!shared) return false;
     const aOnly = a.scopeEntities.some((e) => !b.scopeEntities.includes(e));
