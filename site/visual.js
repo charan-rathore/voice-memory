@@ -1343,16 +1343,21 @@
     host?.closest(".desk")?.classList.toggle("has-stage", !!wide);
     if (slot) slot.hidden = !!wide;
   }
+  // The visitor's hide/show choice outlives re-renders: the engine
+  // connecting, a case or language switch, or a workspace refresh each build
+  // a fresh stage, and the choice must survive all of them - "Hide chart"
+  // that springs back open reads as broken and keeps the viewer covered.
+  let stageMin = false;
   function mountStage(board) {
     const rep = REPORTS.get(board.dataset.rep);
     if (!rep) return;
     for (const old of document.querySelectorAll(".stage")) if (old !== rep.stage) old.remove();
     const rw = R(rep.lang);
     const st = document.createElement("aside");
-    st.className = "stage";
+    st.className = stageMin ? "stage min" : "stage";
     st.dataset.lang = rep.lang;
     st.setAttribute("aria-label", rw.stageK);
-    st.innerHTML = `<header class="st-bar"><button type="button" class="st-back" aria-label="${esc(rw.back)}" disabled>←</button><nav class="st-crumbs" aria-label="${esc(rw.stageK)}"></nav><button type="button" class="st-min" aria-expanded="true">${esc(rw.hide)}</button></header><div class="st-body"></div>`;
+    st.innerHTML = `<header class="st-bar"><button type="button" class="st-back" aria-label="${esc(rw.back)}" disabled>←</button><nav class="st-crumbs" aria-label="${esc(rw.stageK)}"></nav><button type="button" class="st-min" aria-expanded="${stageMin ? "false" : "true"}">${esc(stageMin ? rw.showChart : rw.hide)}</button></header><div class="st-body"></div>`;
     rep.stage = st;
     rep.stack = [];
     st.querySelector(".st-back").addEventListener("click", () => {
@@ -1362,6 +1367,7 @@
     });
     st.querySelector(".st-min").addEventListener("click", (e) => {
       const min = st.classList.toggle("min");
+      stageMin = min;
       e.currentTarget.setAttribute("aria-expanded", String(!min));
       e.currentTarget.textContent = min ? rw.showChart : rw.hide;
     });
@@ -1370,6 +1376,7 @@
       const d = e.target.closest("[data-doc]");
       if (d && rep.opts.stageHost && !narrow.matches) {
         st.classList.add("min");
+        stageMin = true;
         const b = st.querySelector(".st-min");
         b.setAttribute("aria-expanded", "false");
         b.textContent = rw.showChart;
