@@ -262,6 +262,9 @@ test("a real-layout report answers the questions people actually ask", () => {
   const tsh = clinicalAnswer("What is my TSH?", R);
   assert.equal(tsh.verdict, "NOT_IN_REPORT");
   assert.match(tsh.spoken, /^I don't see a TSH result in these reports\./);
+  // "an" only for vowel sounds: a ferritin, an ESR, an SGOT.
+  const fer = clinicalAnswer("Is his ferritin in the report?", R);
+  assert.match(fer.spoken, /^I don't see a ferritin result/);
   const hi = clinicalAnswer("मेरी रिपोर्ट में क्या गड़बड़ है?", R);
   assert.match(hi.spoken, /लैब की सीमा से बाहर हैं/);
   const hinglish = clinicalAnswer("kya meri report mein sab theek hai?", R);
@@ -292,9 +295,15 @@ test("a named ratio is its own result even with no unit or range", () => {
   const ans = clinicalAnswer("What is the BUN creatinine ratio?", R);
   assert.match(ans.spoken, /BUN\/Creatinine Ratio result is 14/);
   assert.doesNotMatch(ans.spoken, /0\.86/, "never substitutes creatinine");
-  // The noise guard still stands.
+  // The noise guard still stands: a bare "Ratio"/"Score" with nothing it
+  // belongs to is the same junk as "Age 23".
   assert.equal(readLabLine("Age 23"), null);
   assert.equal(readLabLine("Bill 189455"), null);
+  assert.equal(readLabLine("Ratio 2"), null);
+  assert.equal(readLabLine("Score 5"), null);
+  // Named dimensionless results read clean.
+  assert.equal(readLabLine("Body Mass Index 27.2").value, 27.2);
+  assert.equal(readLabLine("CD4/CD8 Ratio 1.8").value, 1.8);
 });
 
 test("risk-category table bleed never becomes an observation", () => {

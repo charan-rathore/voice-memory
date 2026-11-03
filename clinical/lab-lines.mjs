@@ -362,8 +362,12 @@ export function readLabLine(line) {
   if (!v) return null;
   const t = tail(rest ?? "");
   // A named ratio, index or score is dimensionless by convention
-  // ("BUN/Creatinine Ratio 14", "INR 1.1"): the name carries the meaning.
-  const dimensionless = /\b(ratio|index|score)\b/i.test(test);
+  // ("BUN/Creatinine Ratio 14"): the name carries the meaning. The name
+  // must say what it is a ratio OF - a bare "Ratio 2" or "Score 5" is
+  // the same noise class as "Age 23".
+  const dimensionless =
+    /\b(ratio|index|score)\b/i.test(test) &&
+    /[a-z]/i.test(test.replace(/\b(ratio|index|score)\b/gi, ""));
   // A number with neither a unit nor a range is too weak to call a result
   // ("Age 23", "Bill 189455"); a qualitative result needs no unit.
   if (v.qual == null && !t.unit && !t.range && !dimensionless) return null;

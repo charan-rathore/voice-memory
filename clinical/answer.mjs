@@ -864,7 +864,7 @@ const SAY = {
       ` This report is for a child (age ${age}), and ${m} of the printed ranges are adult ranges, so I haven't judged those results against them.`,
     missing: (what, have) =>
       // "an HbA1c", "an LDL": a spelled-out letter that starts with a vowel sound
-      `I don't see ${String(what).replace(/^a (?=[FHLMNRSX][A-Z0-9]|[aeiou])/i, "an ")} in these reports. They include ${have}.`,
+      `I don't see ${String(what).replace(/^a (?=[FHLMNRSX][A-Z0-9])/, "an ").replace(/^a (?=[aeiou])/i, "an ")} in these reports. They include ${have}.`,
     critical: (o) =>
       ` The lab marked ${nameOf(o)} as critical, so please contact your doctor or clinic today.`,
     soon: (o) =>
