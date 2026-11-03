@@ -750,6 +750,16 @@ html:not(.voice-on) .voice-off { display: block; }
 .file-card:hover i { color: var(--mark); }
 @media (max-width: 620px) { .file-grid { grid-template-columns: 1fr; } .file-card { min-height: 0; } }
 
+/* the viewer fills the right column: documents first, then the latest
+   report on record, so a hidden chart never leaves dead space */
+.viewer-body { display: flex; flex-direction: column; }
+.viewer-body > .case-files { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.case-latest { margin-top: 14px; display: block; width: 100%; padding: 12px; text-align: left; cursor: pointer; border: 1px solid rgba(236, 234, 224, 0.1); border-radius: 12px; background: rgba(255, 255, 255, 0.03); color: var(--ink); transition: border-color 200ms; }
+.case-latest:hover, .case-latest:focus-visible { border-color: rgba(244, 220, 74, 0.5); }
+.case-latest img { display: block; width: 100%; border-radius: 8px; margin-bottom: 8px; }
+.case-latest .cl-cap { font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.case-latest .cl-cap b { color: var(--mark); font-weight: 500; }
+
 /* ---------------------------------------------------------------- hero replay (data-step states) */
 
 /* ---------------------------------------------------------------- desk colour: each case has its own hue */

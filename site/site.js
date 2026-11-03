@@ -521,6 +521,13 @@
     ["hi", "हिन्दी"],
     ["hinglish", "Hinglish"],
   ];
+  // Saved answers and document texts for the cold-boot path load only when
+  // the live engine could not answer (snapshot-answers.js), never eagerly.
+  let snapAnswersP = null;
+  const loadSnapshotAnswers = () =>
+    (snapAnswersP ??= window.VM_SNAPSHOT_ANSWERS
+      ? Promise.resolve()
+      : loadScript("snapshot-answers.js").catch(() => (snapAnswersP = null)));
   async function overviewFor(id, lang) {
     const k = `${id}|${lang}`;
     if (state.visuals[k]) return state.visuals[k];
@@ -630,7 +637,9 @@
         throw new Error("Upload a document first, then ask about it.");
       result = await askEngine(caseId, question, state.context[caseId]);
     } catch (e) {
-      const saved = snap.answers?.[`${caseId}|${question}`];
+      if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
+      const saved =
+        window.VM_SNAPSHOT_ANSWERS?.answers?.[`${caseId}|${question}`];
       if (saved) {
         result = saved;
         source = "saved";
@@ -761,6 +770,9 @@
       showEmptyViewer(
         "No passage supports an answer, so nothing is highlighted.",
       );
+    // the right column is never blank: if whatever ran above left the
+    // viewer empty, fall back to the documents of the case
+    if (!$("#viewer-body").firstElementChild) showEmptyViewer();
     runAction(lead?.action);
   }
 
@@ -870,6 +882,13 @@
     health: {
       intro:
         "Four synthetic lab reports for two fictional people. One result was printed wrong and corrected; one test changed units between visits; a second person has their own TSH.",
+      latest: {
+        doc: "a-2026-10-amended.pdf",
+        img: "pages/a-2026-10-amended.png",
+        alt: "First page of the amended 15 Oct report for SYN-0001",
+        caption:
+          "Latest on record: the amended report replaces the preliminary; ferritin corrected 5 to 50 ng/mL, creatinine now in µmol/L.",
+      },
       docs: {
         "a-2026-09.pdf": [
           "SYN-0001 · 3 Sep 2026 · final",
@@ -892,6 +911,11 @@
     deal: {
       intro:
         "Seven fictional records of one consulting deal. The fee was revised, the payment split was discussed two ways, and nothing was ever signed.",
+      latest: {
+        doc: "07_Internal_Action_Log.md",
+        caption:
+          "Latest on record: the 9 Oct action log; open decisions, no signed agreement exists.",
+      },
       docs: {
         "01_Northstar_Proposal_v1.md": [
           "Proposal v1 · 4 Sep",
@@ -949,9 +973,16 @@
         </button>`;
       })
       .join("");
+    const latest = meta.latest
+      ? `<button type="button" class="case-latest" data-doc="${esc(meta.latest.doc)}">
+        ${meta.latest.img ? `<img src="${esc(meta.latest.img)}" alt="${esc(meta.latest.alt ?? "")}" loading="lazy" />` : ""}
+        <span class="cl-cap">${esc(meta.latest.caption)} <b>Open</b></span>
+      </button>`
+      : "";
     return `<div class="case-files">
       <p class="case-files-intro"><b>${docs.length} documents in this case.</b> ${esc(meta.intro)}</p>
       <div class="file-grid">${cards}</div>
+      ${latest}
     </div>`;
   }
   function showEmptyViewer(msg = null) {
@@ -1300,7 +1331,6 @@
   async function docText(title) {
     if (state.docText[title] && state.case !== "own")
       return state.docText[title];
-    const saved = snap.docs?.[title];
     try {
       // Visitor documents come from their workspace, not the demo cases:
       // don't gate them on demo-case readiness either (see ask()).
@@ -1313,6 +1343,8 @@
       const { document } = await api(`/doc/${apiCase(cid)}/${d.id}`);
       state.docText[title] = document.text;
     } catch {
+      if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
+      const saved = window.VM_SNAPSHOT_ANSWERS?.docs?.[title];
       if (saved) state.docText[title] = saved;
     }
     return state.docText[title] ?? null;

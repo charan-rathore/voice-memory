@@ -3,7 +3,8 @@
 //   - 68.6%: exactly 686 of 1,000 dots, lit by a noisy wavefront (distance
 //     field + smoothstep), the frontier briefly marked in highlighter yellow;
 //   - 1 in 3: three real result rows, the third one blurred like a result
-//     nobody explained, focus-pulling to readable once when scrolled to;
+//     nobody explained, breathing in and out of focus on a slow cycle and
+//     always settling back on the exact printed values;
 //   - 40M+ a day: questions travel Bézier streamlines into one point at
 //     constant speed (arc-length parameterisation, not t), with a live count;
 //   - catch cards: CSS keyframe scenes whose easing is a real damped spring,
@@ -87,6 +88,10 @@ function waffle(cv) {
     pointer.x = expDecay(pointer.x, pointer.tx, 12, dt);
     pointer.y = expDecay(pointer.y, pointer.ty, 12, dt);
     const R = (dMax + 2.5) * easeOutCubic(clamp01((t - 0.15) / 2.2));
+    // once the wavefront has landed the lit field keeps breathing: a slow
+    // wave travels out through the dots, strongest at the frontier, so the
+    // 686 stay alive without the count ever changing
+    const landed = clamp01((t - 2.6) / 1.4);
     // after the wave lands: now and then one more person opens their results
     if (!still && t > nextFlash) {
       const lit = order.slice(0, LIT);
@@ -102,7 +107,9 @@ function waffle(cv) {
       const near = smoothstep(1 - Math.hypot(px - pointer.x, py - pointer.y) / 46);
       let fl = 0;
       if (flash && flash.c === c) fl = Math.max(0, 1 - (t - flash.t) / 0.9);
-      const rr = r0 * (1 + 0.55 * front + 0.45 * near + 0.7 * fl);
+      const edge = smoothstep(1 - Math.abs(c.d - dMax) / 6);
+      const br = landed * Math.sin(t * 1.5 - c.d * 0.85) * (0.15 + 0.85 * edge) * (c.lit ? 1 : 0.6);
+      const rr = r0 * (1 + 0.55 * front + 0.45 * near + 0.7 * fl + 0.14 * br);
       ctx.beginPath();
       ctx.arc(px, py, rr, 0, Math.PI * 2);
       if (front > 0.15 || fl > 0.05) {
@@ -110,7 +117,7 @@ function waffle(cv) {
         ctx.globalAlpha = 1;
       } else {
         ctx.fillStyle = ink;
-        ctx.globalAlpha = 0.13 + 0.87 * a;
+        ctx.globalAlpha = clamp01(Math.max(0.06, (0.13 + 0.87 * a) * (1 + 0.24 * br)));
       }
       ctx.fill();
     }
@@ -121,23 +128,33 @@ function waffle(cv) {
 
 // ------------------------------------------------------------ 1 in 3: a result nobody explained
 // The third row is a real result whose unit and range changed between
-// reports. It stays still and readable: one soft focus-pull when it first
-// scrolls into view (blur eases out on a critically damped curve), then the
-// question a reader is left with is underlined. No per-frame text swaps, so
-// nothing reflows or flickers.
+// reports. It breathes on a slow cycle: it drifts out of focus, then
+// settles back onto the exact printed values (Creatinine 106 µmol/L,
+// 62–115). Only the staggered CSS focus transition replays - the text is
+// never swapped - so the motion stays smooth and nothing shakes or
+// reflows. The question the changed unit and range leave stays underlined.
 function scramble(root) {
   const row = root.querySelector(".rr-lost");
   if (!row) return;
   if (still) return void row.classList.add("clear");
-  const stop = onVisible(
-    row,
-    (vis) => {
-      if (!vis) return;
-      stop();
+  let phase = 0, // 0 first resolve, 1 readable hold, 2 defocused hold
+    timer = 0;
+  whileVisible(row, (dt) => {
+    timer += dt;
+    if (phase === 0 && timer > 0.35) {
       row.classList.add("clear");
-    },
-    "-15% 0px",
-  );
+      phase = 1;
+      timer = 0;
+    } else if (phase === 1 && timer > 4.2) {
+      row.classList.remove("clear");
+      phase = 2;
+      timer = 0;
+    } else if (phase === 2 && timer > 2.2) {
+      row.classList.add("clear");
+      phase = 1;
+      timer = 0;
+    }
+  });
 }
 
 // ------------------------------------------------------------ 40M+ a day: streams into one point

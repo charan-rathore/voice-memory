@@ -218,13 +218,22 @@ test("first load stays inside its weight budget (3D graph, call library and film
     /snapshot-visuals/,
     "narrated overviews load with the lazy visual chunk",
   );
+  assert.doesNotMatch(
+    html,
+    /snapshot-answers/,
+    "saved cold-boot answers load only when the live engine cannot",
+  );
   // index.html + CSS + preloaded fonts + site.js + snapshot + motion bundle.
   // 560 KB -> 572 KB (2026-11-02): the hero tells three stories and the
   // answer panel carries the neural-voice controls.
   // 572 KB -> 530 KB (2026-11-02): the saved memory graphs (~69 KB) moved
   // out of snapshot.js into snapshot-graphs.js, loaded with the graph band;
   // the hero (white evidence card, gauges, funnel) and page actions fit in
-  // what that freed. snapshot.js (~49 KB of saved answers) is next if needed.
+  // what that freed.
+  // 2026-11-03: the saved cold-boot answers and document texts (~47 KB)
+  // moved out of snapshot.js into snapshot-answers.js, loaded only when the
+  // live engine could not answer; snapshot.js keeps the case metadata the
+  // first paint needs. Same cold-boot behavior, ~47 KB off the first load.
   assert.ok(bytes < 530_000, `first load is ${bytes} bytes`);
 });
 

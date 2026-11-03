@@ -15,7 +15,13 @@ vm.runInNewContext(
   readFileSync(new URL("../site/snapshot.js", import.meta.url), "utf8"),
   sandbox,
 );
+vm.runInNewContext(
+  // answers moved to the lazy cold-boot chunk; read them from there
+  readFileSync(new URL("../site/snapshot-answers.js", import.meta.url), "utf8"),
+  sandbox,
+);
 const snap = sandbox.window.VM_SNAPSHOT;
+const snapAnswers = sandbox.window.VM_SNAPSHOT_ANSWERS;
 const KEYS = [
   "health|What is SYN-0001's ferritin result?",
   "health|Has creatinine gone up since September?",
@@ -52,7 +58,7 @@ for (const k of KEYS) {
   const { body, cache } = await get(
     `/api/public/answer?${new URLSearchParams({ case: c, q })}`,
   );
-  const want = snap.answers[k].lead,
+  const want = snapAnswers.answers[k].lead,
     got = body.lead;
   const quotes = (l) => (l?.citations ?? []).map((x) => x.quote);
   if (got?.text !== want.text)
