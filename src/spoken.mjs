@@ -254,17 +254,32 @@ const SUPPLEMENT_PATTERNS = [
 ];
 
 function statusOfLine(line) {
-  if (/open decision|not resolved/i.test(line)) return "unresolved";
   if (
-    /\bnot\b[^.;]{0,25}\bapproved\b|\bno\b[^.;]{0,40}\b(approved|agreement|exists|signed|recorded|authorized)\b/i.test(
+    /open decision|not resolved|no vote or agreement|does not constitute|does not establish|has not accepted/i.test(
       line,
     )
   )
     return "unresolved";
-  if (/internal (delivery )?target/i.test(line)) return "internal-target";
-  if (/confirmed|approved/i.test(line)) return "approved";
+  if (
+    /\bnot\b[^.;]{0,25}\b(approved|accepted|agreed|signed)\b|\bno\b[^.;]{0,40}\b(approved|agreement|exists|signed|recorded|authorized)\b/i.test(
+      line,
+    )
+  )
+    return "unresolved";
+  if (
+    /internal (delivery )?target|\binternal(?:ly)?(?:\s+[a-z-]+){0,2}\s+target\b/i.test(
+      line,
+    )
+  )
+    return "internal-target";
+  if (
+    /\bapprov(?:e|es|ed)\b|confirmed|\baccept(?:s|ed)?\b|\bagreed\b|authorized/i.test(
+      line,
+    )
+  )
+    return "approved";
   if (/asks|requested|retain/i.test(line)) return "requested";
-  if (/proposed/i.test(line)) return "proposed";
+  if (/proposed|floated|suggested|draft\b/i.test(line)) return "proposed";
   return "discussed";
 }
 
@@ -292,9 +307,12 @@ function mergedClaims(bundle, fields) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
+      if (!/[a-z]/.test(line)) continue; // ALL-CAPS banner lines mint nothing
       for (const sentence of line.split(/(?<=[.!?])\s+/)) {
         const sent = sentence.replace(/^\s*\d+\.\s*/, "").trim();
         if (!sent) continue;
+        // A quoted question records what someone ASKED, never an assertion.
+        if (/\?\s*$/.test(sent)) continue;
         for (const p of SUPPLEMENT_PATTERNS) {
           if (!wanted.has(p.field) || !p.cue.test(sent)) continue;
           p.re.lastIndex = 0;
@@ -420,6 +438,13 @@ function verdictFor(field, resolved, claims, question, intent, bundle) {
   const actives = active.get(field) ?? [];
   const neg = scopedNegative(field, claims, question, bundle);
   if (!actives.length) return neg ? "NO-RECORD" : "UNKNOWN";
+  // Agreement-existence: several recorded negatives ("no signed agreement",
+  // "no signed addendum") are one answer, not competing values.
+  if (
+    field === "signedAgreement" &&
+    actives.every((c) => c.status === "unresolved")
+  )
+    return "NO-RECORD";
   // A "did X approve <specific value>?" question with an explicit scoped
   // negative on record is a denial of that value, not an open decision.
   if (intent === "FINALIZED" && neg && namesSpecificValue(question, actives))
@@ -522,6 +547,8 @@ function render({
             : "";
         return `No. ${cap(value)} is the latest proposal, and it is not approved.${old}`;
       }
+      if (current?.status === "internal-target")
+        return `${cap(value ?? "It")} is the current internal target, not an approved or contractual date.`;
       return `${cap(value ?? "It")} is the latest proposal, and it is not approved.`;
     }
     case "FINALIZED:CONFIRMED":
@@ -598,7 +625,9 @@ function render({
       if (verdict === "OPEN")
         return `That is still open: ${dedupeValues(citations.map((c) => c.value)).join(" versus ")} are both on record.`;
       if (verdict === "PROPOSED" && value)
-        return `${cap(value)} is the current proposal; approval is not recorded.`;
+        return current?.status === "internal-target"
+          ? `${cap(value)} is the current internal target, not an approved or contractual date.`
+          : `${cap(value)} is the current proposal; approval is not recorded.`;
       if (verdict === "CONFIRMED" && value)
         return `${cap(value)} is approved, per ${label}.`;
       return null;
@@ -756,6 +785,8 @@ function unknownNamedEntity(question, bundle) {
   }
   return null;
 }
+
+const lowerFirstTxt = (t) => (t ? t[0].toLowerCase() + t.slice(1) : t);
 
 const pack = (c) => ({
   title: c.title,
@@ -1148,6 +1179,93 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
       if (sub) return sub;
     }
   }
+  // Actor-scoped approval questions ("Did steering approve the fee?"): the
+  // verdict comes from claims carrying THAT authority. Another authority's
+  // approval of the same field, or the actor's approval of another subject,
+  // never answers it.
+  const actorM = question.match(
+    /\b(steering|committee|board|customer|client|finance|legal)\b/i,
+  );
+  const yesNoAppr =
+    /^(?:did|has|have|was|were|is|are|does|do)\b[^?]*\b(approv|accept|sign|agree|authoriz)/i.test(
+      question,
+    );
+  if (actorM && yesNoAppr && intent !== "MUTATE") {
+    const actor = /steering|committee|board/i.test(actorM[1])
+      ? "body"
+      : /customer|client/i.test(actorM[1])
+        ? "client"
+        : "internal";
+    const actorApproved = fieldClaims.filter(
+      (c) =>
+        (c.authority ?? "unspecified") === actor && c.status === "approved",
+    );
+    if (!actorApproved.length) {
+      const neg = fieldClaims.find(
+        (c) =>
+          (c.authority ?? "unspecified") === actor && c.status === "unresolved",
+      );
+      const agNeg =
+        !neg && /sign|agree|accept/i.test(question)
+          ? claims.find(
+              (c) =>
+                c.field === "signedAgreement" &&
+                c.status === "unresolved" &&
+                (actor !== "client" || /client|customer/i.test(c.quote)),
+            )
+          : null;
+      const actorScope = claims.find(
+        (c) =>
+          (c.authority ?? "unspecified") === actor &&
+          c.status === "approved" &&
+          c.field !== field,
+      );
+      const otherAppr = fieldClaims.find(
+        (c) =>
+          c.status === "approved" && (c.authority ?? "unspecified") !== actor,
+      );
+      const negC = neg ?? agNeg ?? null;
+      if (negC || actorScope) {
+        const parts = ["No."];
+        if (negC)
+          parts.push(
+            `Per ${docLabel(negC)}: ${lowerFirstTxt(trimQuote(negC.quote.replace(/^\s*\d+\.\s*/, ""), 110))}`,
+          );
+        else
+          parts.push(
+            `No ${actorM[1].toLowerCase()} approval of that is recorded.`,
+          );
+        if (actorScope)
+          parts.push(
+            `${cap(actorM[1].toLowerCase())} approval covers ${actorScope.field === "scope" ? "the scope" : `the ${actorScope.field}`} only.`,
+          );
+        if (otherAppr)
+          parts.push(
+            `The recorded approval is ${otherAppr.authority === "internal" ? "internal" : (otherAppr.authority ?? "unspecified")}, per ${docLabel(otherAppr)}.`,
+          );
+        return {
+          spoken: parts.join(" "),
+          verdict: "NO-RECORD",
+          field,
+          intent,
+          citations: [negC, actorScope, otherAppr].filter(Boolean).map(pack),
+        };
+      }
+    }
+  }
+  // signedAgreement: answer the asked instrument (addendum vs agreement/
+  // contract) from ITS records, never a neighbor's.
+  if (field === "signedAgreement") {
+    const noun = /addendum/i.test(question)
+      ? /addendum/i
+      : /contract|agreement/i.test(question)
+        ? /agreement|contract/i
+        : null;
+    if (noun) {
+      const hit = fieldClaims.filter((c) => noun.test(c.quote));
+      if (hit.length) fieldClaims = hit;
+    }
+  }
   const resolved = resolveClaims(fieldClaims);
   if (intent !== "MUTATE") {
     const vv = valueVerdict(question, field, fieldClaims, resolved, intent);
@@ -1169,9 +1287,12 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   }
   const verdict = verdictFor(field, resolved, claims, question, intent, bundle);
   const actives = resolved.active.get(field) ?? [];
+  const approvedSorted = [...(resolved.approved.get(field) ?? [])].sort(
+    (a, b) => Number(/\band\b/.test(b.value)) - Number(/\band\b/.test(a.value)),
+  );
   const current =
     verdict === "CONFIRMED"
-      ? ((resolved.approved.get(field) ?? [])[0] ?? actives[0] ?? null)
+      ? (approvedSorted[0] ?? actives[0] ?? null)
       : (actives[0] ?? null);
   const supersededForField = resolved.superseded.filter(
     (c) => c.field === field,
@@ -1217,6 +1338,37 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
     claims,
     question,
   });
+  // An internal/body approval is not client acceptance: say whose approval
+  // it is, and what the client side still owes, whenever the record says so.
+  if (
+    spoken &&
+    verdict === "CONFIRMED" &&
+    current &&
+    (current.authority === "internal" || current.authority === "body")
+  ) {
+    const bits = [
+      current.authority === "internal"
+        ? "approved internally"
+        : "approved at committee level",
+    ];
+    if (
+      claims.some(
+        (c) =>
+          c.field === field &&
+          c.authority === "client" &&
+          c.status === "unresolved",
+      )
+    )
+      bits.push("the client has not accepted");
+    if (
+      (field === "fee" || field === "paymentSplit") &&
+      claims.some(
+        (c) => c.field === "signedAgreement" && c.status === "unresolved",
+      )
+    )
+      bits.push("no signed agreement is on record");
+    spoken = spoken.replace(/\s*\.$/, "") + ". " + cap(bits.join("; ")) + ".";
+  }
   if (!guard(spoken, citations, verdict)) {
     spoken = current
       ? `${cap(docLabel(current))} records ${current.value}, with no approval recorded.`

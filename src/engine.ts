@@ -4,6 +4,7 @@ import {
   extractClaims,
   questionFields,
   resolveClaims,
+  countKeyOf,
   type Claim,
   scopeEntitiesOf,
 } from "./claim-check";
@@ -378,7 +379,17 @@ export function answer(
   // by a condition.
   let claimsVerdict = false;
   if (fields.length) {
-    const allClaims = extractClaims(bundle, fields);
+    const extractedClaims = extractClaims(bundle, [
+      ...new Set([...fields, "signedAgreement" as const]),
+    ]);
+    // Agreement-existence negatives feed the unsigned qualifier only; they
+    // join the verdict pool when the question itself asks about agreements.
+    const agNegClaims = extractedClaims.filter(
+      (c) => c.field === "signedAgreement" && c.status === "unresolved",
+    );
+    const allClaims = fields.includes("signedAgreement")
+      ? extractedClaims
+      : extractedClaims.filter((c) => c.field !== "signedAgreement");
     allClaims.forEach((c) => validateEvidence(c, bundle));
     // Phase isolation for scope claims: an approved 2027-expansion scope is
     // reported as a separate-phase record, never as the answer to a pilot
@@ -449,7 +460,7 @@ export function answer(
     // response guard) decides - a claims verdict must never answer a
     // neighboring question ("solar array funding" is not the renewal fee).
     const FIELD_TOKEN = new Set(
-      "fee fees invoice invoiced invoicing cost costs bill billed billing charg charge charged charging money commercial commercials paid pay payment payments split upfront installment installments deadline due pilot signoff launch approve approved approval authorize authorized authorization region regions scope area areas cover covers covered weekly daily biweekly monthly cadence progress report reporting status update current record records ask asked asking funding funded finance financed financing amount amounts price prices value values discount discounts structure terms revised final agree agreed proposal propose proposed quote quoted sign signing signed off timing expected date change changed discuss discussed decided decide decision".split(
+      "fee fees invoice invoiced invoicing cost costs bill billed billing charg charge charged charging money commercial commercials paid pay payment payments split upfront installment installments deadline due pilot signoff launch approve approved approval authorize authorized authorization region regions scope area areas cover covers covered weekly daily biweekly monthly cadence progress report reporting status update current record records ask asked asking funding funded finance financed financing amount amounts price prices value values discount discounts structure terms revised final agree agreed proposal propose proposed quote quoted sign signing signed off timing expected date change changed discuss discussed decided decide decision steering committee board customer client legal finance internal original initially opening earlier previously history historical contract contracts addendum addenda signature signatory".split(
         " ",
       ),
     );
@@ -457,7 +468,7 @@ export function answer(
     // this list "How will we bill them?" anchors on "them" and every plain
     // paraphrase would fall silent.
     const FILLER_Q = new Set(
-      "anyone anybody someone somebody everyone everybody anything something nothing them they their theirs there here himself herself itself myself ourselves yourself finally currently initially originally now yet still already just really actually ever never always often much many more most less least very only even also back again once twice about into over under with without from this that these those what which when where whom whose while does doing done have having had been being were will would shall should may might must".split(
+      "anyone anybody someone somebody everyone everybody anything something nothing them they their theirs there here himself herself itself myself ourselves yourself finally currently initially originally now yet still already just really actually ever never always often much many more most less least very only even also back again once twice about into over under with without from this that these those what which when where whom whose while does doing done have having had been being were will would shall should may might must latest newest".split(
         " ",
       ),
     );
@@ -488,8 +499,166 @@ export function answer(
       if (!claims.some((c) => TEMPORAL.test(c.quote))) claims = [];
     }
     const { active, superseded, approved } = resolveClaims(claims);
+    // "approval-limited-*" claims are negation records for actor-scoped
+    // verdicts, never candidate VALUES in conflicts or history lists.
+    const isLimitClaim = (c: Claim) => /^approval-limited-/.test(c.value);
     const claimInfo = (c: Claim) =>
-      `${c.value} (${c.title}${c.docDate ? ", " + c.docDate : ""}; status: ${c.status})`;
+      `${c.value} (${c.title}${c.docDate ? ", " + c.docDate : ""}; status: ${c.status}${
+        c.authority && c.authority !== "unspecified"
+          ? "; authority: " + c.authority
+          : ""
+      })`;
+    const valueKey = (c: Claim) =>
+      c.field === "scope"
+        ? (countKeyOf(c.value) ?? c.value.toLowerCase().replace(/\s+/g, " "))
+        : c.value.toLowerCase().replace(/\s+/g, " ");
+
+    // Actor-scoped approval questions ("Did steering approve the fee?"): the
+    // verdict comes from claims carrying THAT authority. Another authority's
+    // approval of the same field, or the actor's approval of another field,
+    // never answers it.
+    const actorM = question.match(
+      /\b(steering|committee|board|customer|client|finance|legal)\b/i,
+    );
+    const yesNoQ =
+      /^(?:did|has|have|was|were|is|are|does|do)\b[^?]*\b(approv|accept|sign|agree|authoriz)/i.test(
+        question,
+      );
+    if (actorM && yesNoQ) {
+      const actor = /steering|committee|board/i.test(actorM[1])
+        ? "body"
+        : /customer|client/i.test(actorM[1])
+          ? "client"
+          : "internal";
+      const relevant = claims.filter((c) => fields.includes(c.field));
+      const actorClaims = relevant.filter(
+        (c) => (c.authority ?? "unspecified") === actor,
+      );
+      const actorApproved = actorClaims.filter(
+        (c) => c.status === "approved" && !isLimitClaim(c),
+      );
+      if (!actorApproved.length) {
+        let negs = actorClaims.filter((c) => c.status === "unresolved");
+        // Sign-off/signature asks with no actor claims: a recorded negative
+        // agreement-existence fact on the client side is the answer.
+        if (
+          !negs.length &&
+          (fields.includes("signoffWho") ||
+            fields.includes("signedAgreement") ||
+            fields.includes("signoffTiming"))
+        )
+          negs = claims.filter(
+            (c) =>
+              c.field === "signedAgreement" &&
+              c.status === "unresolved" &&
+              (actor !== "client" || /client|customer/i.test(c.value)),
+          );
+        const didApprove = claims.filter(
+          (c) =>
+            (c.authority ?? "unspecified") === actor &&
+            c.status === "approved" &&
+            !isLimitClaim(c) &&
+            !fields.includes(c.field),
+        );
+        const otherApproved = fields
+          .flatMap((f) => approved.get(f) ?? [])
+          .filter((c) => !isLimitClaim(c));
+        if (negs.length || didApprove.length) {
+          claimsVerdict = true;
+          result.refused = false;
+          result.supported = true;
+          result.unresolved = false;
+          result.partial = false;
+          result.partialNotice = null;
+          result.evidenceStatus = "positive";
+          result.evidence = [
+            ...negs,
+            ...didApprove,
+            ...otherApproved.slice(0, 1),
+          ] as unknown as typeof result.evidence;
+          const negTxt = negs.length
+            ? ` The record states: "${negs[0].quote}" (${negs[0].title}${negs[0].docDate ? ", " + negs[0].docDate : ""}).`
+            : ` No ${actorM[1].toLowerCase()} approval of the asked item is recorded.`;
+          const scopeTxt = didApprove.length
+            ? ` ${actorM[1][0].toUpperCase() + actorM[1].slice(1).toLowerCase()} approval is recorded for ${[...new Set(didApprove.map((c) => c.field))].join(" and ")} only.`
+            : "";
+          const otherTxt = otherApproved.length
+            ? ` The recorded approval here is ${otherApproved[0].authority ?? "unspecified"}: "${otherApproved[0].quote}" (${otherApproved[0].title}${otherApproved[0].docDate ? ", " + otherApproved[0].docDate : ""}).`
+            : "";
+          result.answer = "No." + negTxt + scopeTxt + otherTxt;
+          result.spoken = result.answer;
+        }
+      }
+    }
+
+    // History intent ("What was the original fee?", "the revised fee in
+    // August"): answer from the record's own chronology - earliest record or
+    // the asked month's records - with status and supersession attached.
+    const MONTH_NAMES =
+      "january|february|march|april|may|june|july|august|september|october|november|december";
+    const histAsk =
+      /\b(original|originally|initial|initially|opening|earlier|previously|at the very beginning|first proposed|first propos)\b/i.test(
+        question,
+      );
+    const monthAsk = question.match(
+      new RegExp("\\b(" + MONTH_NAMES + ")\\b", "i"),
+    );
+    if (!claimsVerdict && (histAsk || monthAsk) && fields.length) {
+      const pool: Claim[] = [[...active.values()].flat(), ...superseded].flat();
+      const fieldClaims = pool.filter(
+        (c) => fields.includes(c.field) && !isLimitClaim(c),
+      );
+      if (fieldClaims.length) {
+        let chosen: Claim[] = [];
+        let lead = "";
+        if (monthAsk) {
+          const mi = MONTH_NAMES.split("|").indexOf(monthAsk[1].toLowerCase());
+          const prefix = `2026-${String(mi + 1).padStart(2, "0")}`;
+          chosen = fieldClaims.filter((c) => c.docDate?.startsWith(prefix));
+          lead = chosen.length
+            ? `Records from ${monthAsk[1][0].toUpperCase() + monthAsk[1].slice(1).toLowerCase()}`
+            : "";
+        }
+        if (!chosen.length && histAsk) {
+          const sorted = [...fieldClaims].sort((a, b) =>
+            (a.docDate || "").localeCompare(b.docDate || ""),
+          );
+          const firstKey = valueKey(sorted[0]);
+          chosen = sorted.filter((c) => valueKey(c) === firstKey);
+          lead = "The earliest record";
+        }
+        if (chosen.length) {
+          claimsVerdict = true;
+          const latest = [...fieldClaims].sort((a, b) =>
+            (b.docDate || "").localeCompare(a.docDate || ""),
+          )[0];
+          const chosenKey = valueKey(chosen[0]);
+          const laterNote =
+            valueKey(latest) !== chosenKey
+              ? ` Later record: ${claimInfo(latest)}.`
+              : "";
+          claimsVerdict = true;
+          result.refused = false;
+          result.supported = true;
+          result.unresolved = false;
+          result.partial = false;
+          result.partialNotice = null;
+          result.evidenceStatus = "positive";
+          result.evidence = chosen as unknown as typeof result.evidence;
+          result.answer =
+            `${lead}: ` +
+            chosen
+              .map(
+                (c) =>
+                  `${claimInfo(c)} - "${c.quote}" (${c.title}${c.docDate ? ", " + c.docDate : ""})`,
+              )
+              .join("; ") +
+            "." +
+            laterNote;
+          result.spoken = result.answer;
+        }
+      }
+    }
     const phaseNote = offPhase.length
       ? " Separate-phase record(s): " +
         [
@@ -520,7 +689,9 @@ export function answer(
         offYear.filter((c) => !c.year),
         "Undated-period record(s)",
       );
-    if (
+    if (claimsVerdict) {
+      // An actor-scoped or history verdict above already owns the result.
+    } else if (
       qYear &&
       fields.includes("scope") &&
       offYear.length &&
@@ -646,18 +817,42 @@ export function answer(
       const conflicts: string[] = [];
       const histories: string[] = [];
       const approvedNotes: string[] = [];
-      for (const [field, list] of active) {
-        const appr = (approved.get(field) ?? []).filter((c) =>
-          list.includes(c),
+      const agNeg = agNegClaims;
+      const clientQualifier = (field: string, list: Claim[]) => {
+        let out = "";
+        const clientNeg = list.filter(
+          (c) => c.authority === "client" && c.status === "unresolved",
         );
-        const apprValues = [...new Set(appr.map((c) => normValue(c.value)))];
+        if (clientNeg.length)
+          out += `; client acceptance: not recorded - "${clientNeg[0].quote}" (${clientNeg[0].title}${clientNeg[0].docDate ? ", " + clientNeg[0].docDate : ""})`;
+        if (
+          (field === "fee" || field === "paymentSplit") &&
+          agNeg.length &&
+          !/unsigned|not signed|no signed/i.test(out)
+        )
+          out += `; no client-signed agreement is on record - "${agNeg[0].quote}" (${agNeg[0].title}${agNeg[0].docDate ? ", " + agNeg[0].docDate : ""})`;
+        return out;
+      };
+      for (const [field, rawList] of active) {
+        const list = rawList.filter((c) => !isLimitClaim(c));
+        if (!list.length) continue;
+        const apprAll = (approved.get(field) ?? []).filter(
+          (c) => list.includes(c) && !isLimitClaim(c),
+        );
+        // Prefer the most informative written form of an approved value
+        // (a named list over a bare count).
+        const appr = [...apprAll].sort(
+          (a, b) =>
+            Number(/\band\b/.test(b.value)) - Number(/\band\b/.test(a.value)),
+        );
+        const apprValues = [...new Set(appr.map((c) => valueKey(c)))];
         // Only an ESTABLISHED foreign engagement conflicts: a claim whose
         // document names distinctive entities sharing none with the approved
         // record. Entity-less claims cannot establish foreign-ness.
         const crossEngagementConflict =
           apprValues.length === 1 &&
           list.some((c) => {
-            if (normValue(c.value) === apprValues[0] || shareTok(appr[0], c))
+            if (valueKey(c) === apprValues[0] || shareTok(appr[0], c))
               return false;
             return (c.scopeEntities ?? []).some(
               (e) =>
@@ -696,11 +891,12 @@ export function answer(
                       ]),
                     ).values(),
                   ].join("; ")
-                : ""),
+                : "") +
+              clientQualifier(field, list),
           );
           continue;
         }
-        const values = [...new Set(list.map((c) => normValue(c.value)))];
+        const values = [...new Set(list.map((c) => valueKey(c)))];
         if (apprValues.length > 1 || values.length > 1) {
           conflicts.push(`${field}: ` + list.map(claimInfo).join(" vs "));
         } else if (values.length === 1) {
@@ -725,7 +921,8 @@ export function answer(
               `${field}: current record ${claimInfo(cur)} - status ${cur.status}; approval is not established by this check` +
                 (sup.length
                   ? "; earlier superseded record(s): " + supInfo
-                  : ""),
+                  : "") +
+                clientQualifier(field, list),
             );
           }
         }

@@ -23424,22 +23424,40 @@ function expandQuery(question) {
 
 // src/claim-check.ts
 function statusOf(line) {
-  if (/pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) approved|no decision (was )?taken|not [^.;]{0,20}(approved|signed|countersign|confirmed)|no\s+(signed|countersigned|executed)\s/i.test(
+  if (/pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) (approved|agreed)|no decision (was )?taken|no vote or agreement|not [^.;]{0,20}(approved|signed|countersign|confirmed|accepted|agreed|authorized|executed)|no\s+(signed|countersigned|executed)\s|\bno\s+(?:[a-z-]+\s+){0,2}[a-z-]*(?:signed|countersigned|executed)\b|does not (constitute|establish)|does not mean [^.;]{0,50}(accept|sign|approv|agree)|has not accepted|not been accepted/i.test(
     line
   ))
     return "unresolved";
   if (/subject to|provided that|conditional|only when/i.test(line))
     return "proposed";
-  if (/approved|signed|countersign|confirmed/i.test(line)) return "approved";
-  if (/internal (delivery )?target|targeted for/i.test(line))
+  if (/\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\baccept(?:s|ed)?\b|\bagreed\b|\bauthoriz(?:e|es|ed)\b/i.test(
+    line
+  ))
+    return "approved";
+  if (/internal (delivery )?target|targeted for|\binternal(?:ly)?(?:\s+[a-z-]+){0,2}\s+target\b/i.test(
+    line
+  ))
     return "internal-target";
-  if (/propos|revis|offer\b/i.test(line)) return "proposed";
+  if (/propos|revis|offer\b|floated|suggested|draft\b/i.test(line)) return "proposed";
   if (/asks|requested|retain/i.test(line)) return "requested";
   return "discussed";
 }
+function authorityOf(clause) {
+  if (/both parties|mutually/i.test(clause)) return "mutual";
+  if (/\b(?:customer|client)\s+(?:has|have|had|did|does|will|would|not|accepted|accepts|signed|signs|rejected|rejects|approved|approves)\b/i.test(
+    clause
+  ) && !/client liaison|customer liaison/i.test(clause))
+    return "client";
+  if (/\b(?:committee|steering|board)\b/i.test(clause)) return "body";
+  if (/\binternal(?:ly)?\b|\b(?:finance|security|legal|engineering|delivery|pmo)\s+(?:team\s+)?(?:approv|sign|target|request|reject)/i.test(
+    clause
+  ))
+    return "internal";
+  return "unspecified";
+}
 function questionFields(q) {
   const out = /* @__PURE__ */ new Set();
-  if (/\bfee|retainer|\brate\b|\bprice|invoic|how much|cost|bill|charg|money|commercial|paid|pay\b/i.test(
+  if (/\bfee|retainer|\brate\b|\bprice|how much|cost|charg|money|commercial|paid|pay\b/i.test(
     q
   ))
     out.add("fee");
@@ -23447,11 +23465,11 @@ function questionFields(q) {
     q
   ))
     out.add("paymentSplit");
-  if (/deadline|due date|pilot date|when is the pilot|go-?live|going live|launch date|when (?:do|will|are) we (?:go|launch)/i.test(
+  if (/deadline|due date|pilot date|when is the pilot|go-?live|going live|launch date|launch target|readiness target|operational target|when (?:do|will|are) we (?:go|launch)/i.test(
     q
   ))
     out.add("deadline");
-  if (/(signed|countersigned|executed)\b[^?]{0,40}\b(agreement|contract|statement of work)\b|\b(agreement|contract|statement of work)\b[^?]{0,40}\b(signed|countersigned|executed)\b|\bsigned anything\b|\bsigned (?:it|the deal)\b|\b(?:contract|agreement) in place\b/i.test(
+  if (/(signed|countersigned|executed)\b[^?]{0,40}\b(agreement|contract|statement of work|addendum)\b|\b(agreement|contract|statement of work|addendum)\b[^?]{0,40}\b(signed|countersigned|executed)\b|\bsigned anything\b|\bsigned (?:it|the deal)\b|\b(?:contract|agreement|addendum) in place\b/i.test(
     q
   ))
     out.add("signedAgreement");
@@ -23461,7 +23479,9 @@ function questionFields(q) {
   }
   if (/launch/i.test(q) && /approv|authoriz|signed off|sign-?off|who/i.test(q))
     out.add("launchApproval");
-  if (/\bregion|\bscope\b|\bareas?\b|\bcover(?:s|age|ed|ing)?\b/i.test(q))
+  if (/\bregions?\b|\bscope\b|\bareas?\b|\bsites?\b|\bdepots?\b|\bstores?\b|\blocations?\b|\bcover(?:s|age|ed|ing)?\b/i.test(
+    q
+  ))
     out.add("scope");
   if (/\b(?:weekly|daily|biweekly|fortnightly|cadence|progress report|reporting|status update|status reports?)/i.test(
     q
@@ -23531,200 +23551,365 @@ function clauseAround(line, idx) {
   }
   return line.slice(start, end);
 }
+function utterancesOf(line) {
+  const out = [];
+  const re = /(?<=[.!?])\s+(?=[A-Z(])/g;
+  let last = 0;
+  let m;
+  while (m = re.exec(line)) {
+    out.push({ text: line.slice(last, m.index), at: last });
+    last = m.index + m[0].length;
+  }
+  out.push({ text: line.slice(last), at: last });
+  return out.filter((u) => u.text.trim());
+}
+function isQuestionUtterance(text) {
+  const stripped = text.replace(/^\s*[A-Z][A-Za-z.'-]*(?:\s+\([a-z][a-z ]+\))?:\s*/, "").trim();
+  if (/\?\s*$/.test(stripped)) return true;
+  return /^(?:who|what|when|where|which|whose|why|how|is|are|was|were|do|does|did|has|have|had|can|could|would|should|shall|may)\b[^.]*$/i.test(
+    stripped
+  );
+}
+var MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December";
+var MONTH_ABBR = {
+  jan: "01",
+  feb: "02",
+  mar: "03",
+  apr: "04",
+  may: "05",
+  jun: "06",
+  jul: "07",
+  aug: "08",
+  sep: "09",
+  oct: "10",
+  nov: "11",
+  dec: "12"
+};
+var AMOUNT_RE = /(?:[$€£₹]\s?\d(?:[\d,]*\d)?(?:\.\d+)?|\b(?:USD|EUR|GBP|INR|AUD|CAD|NZD|SGD|AED|CHF|JPY)\s?[$€£₹]?\s?\d(?:[\d,]*\d)?(?:\.\d+)?)/g;
+var UNIT = "(?:retail\\s+)?(?:regions?|sites?|depots?|stores?|locations?|branches?|markets?|countries|offices?|warehouses?|areas?)";
+var UNIT_RE = new RegExp("\\b" + UNIT + "\\b", "i");
+var NUMWORD_RE = "\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve";
+function sectionDateOf(line) {
+  if (/\bDate:\s*20\d{2}/.test(line)) return null;
+  if (line.length > 160) return null;
+  const iso = line.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+  if (iso && (line.includes("|") || line.length < 60)) return iso[1];
+  const mon = line.match(
+    /^\s*(?:[A-Z][A-Z ]{2,30}?\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2})(?:,)?\s+(20\d{2})\b/i
+  );
+  if (mon)
+    return mon[3] + "-" + MONTH_ABBR[mon[1].slice(0, 3).toLowerCase()] + "-" + mon[2].padStart(2, "0");
+  return null;
+}
 function extractClaims(bundle, fields) {
   const claims = [];
   for (const source of bundle.sources) {
     const dateMatch = source.text.match(/Date:\s*([0-9-]+)/);
-    const docDate = dateMatch ? dateMatch[1] : "";
+    const docDateHeader = dateMatch ? dateMatch[1] : "";
     const h1 = source.text.split("\n").find((l) => l.startsWith("#"))?.replace(/^#+\s*/, "") ?? "";
     const scopeEntities = scopeEntitiesOf(source.title, h1);
     const docExecuted = /Type:\s*(?:signed|executed|countersigned)\b/i.test(source.text) || /\b(?:was|were|has been)\s+(?:counter)?signed by both parties\b/i.test(
       source.text
     ) && /\bin force\b/i.test(source.text) && !/\bnot (?:been )?(?:counter)?signed\b/i.test(source.text);
     let offset = 0;
+    let sectionDate = null;
     for (const line of source.text.split("\n")) {
-      const start = offset;
+      const lineStart = offset;
       offset += line.length + 1;
+      const sd = sectionDateOf(line);
+      if (sd) sectionDate = sd;
+      const docDate = sectionDate ?? docDateHeader;
       if (!line.trim() || line.startsWith("#")) continue;
-      const base = {
-        sourceId: source.id,
-        title: source.title,
-        hash: source.hash,
-        start,
-        end: start + line.length,
-        firstLine: source.text.slice(0, start).split("\n").length,
-        lastLine: source.text.slice(0, start).split("\n").length,
-        quote: line,
-        docDate,
-        scopeEntities
-      };
-      const push = (field, value, anchorIdx = 0) => {
-        if (!fields.includes(field)) return;
-        const clause = clauseAround(line, anchorIdx);
-        let status = statusOf(clause);
-        if (docExecuted && status === "discussed") status = "approved";
-        if (negationBinds(field, value, line)) status = "unresolved";
-        const supersedes = /revis|supersed|replaces|narrow/i.test(clause) && status !== "unresolved" && !/\bvs\b|open decision|disput/i.test(clause);
-        claims.push({ field, value, status, supersedes, ...base });
-      };
-      for (const m of line.matchAll(/\$\d[\d,]*\d/g)) {
-        const window = line.slice(
-          Math.max(0, m.index - 45),
-          m.index + m[0].length + 45
-        );
-        if (/\bfee\b|\bretainer\b/i.test(window)) push("fee", m[0], m.index);
-      }
-      const pct = line.match(/(\d{1,2})%[^.\n]*?(\d{1,2})%/);
-      const split = (pct && Number(pct[1]) + Number(pct[2]) === 100 ? pct : null) || line.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
-      if (split && /payment|upfront|schedule|split/i.test(line))
-        push("paymentSplit", `${split[1]}/${split[2]}`, split.index);
-      for (const dm of line.matchAll(
-        /\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+20\d{2})?)\b/gi
-      )) {
-        const at = dm.index ?? 0;
-        const sentStart = Math.max(line.lastIndexOf(". ", at) + 1, 0);
-        const sentEndIdx = line.indexOf(". ", at);
-        const sentence = line.slice(
-          sentStart,
-          sentEndIdx < 0 ? line.length : sentEndIdx
-        );
-        if (!/\b(?:deadline|(?:delivery|internal|pilot) target|targeted for|readiness|go-?live|launch date|due date)\b/i.test(
-          sentence
-        ))
-          continue;
-        const before = line.slice(sentStart, at);
-        if (/\b(plan|submit|submission|reply|respond|report)\b[^.]*$/i.test(
-          before
-        ))
-          continue;
-        if (/\b(countersigned|signed|dated|reported)\s+(?:by [^.]{0,40}\s+)?on\s*$/i.test(
-          before
-        ))
-          continue;
-        push("deadline", dm[1], at);
-      }
-      if (/sign-?off|signed off|signing off/i.test(line)) {
-        const who = line.match(
-          /([A-Za-z]+(?: [A-Za-z]+){0,3}?)\s+(?:(?:had|has|have|not|yet|already|formally|been)\s+)*sign(?:ed)?[- ]?off/i
-        );
-        push(
-          "signoffWho",
-          who ? who[1].trim().toLowerCase().replace(
-            /^(?:to|of|for|by|the|a|an|that|subject|noted|noting|said|says|mentioned|asked|confirmed|whether)\s+/i,
-            ""
-          ).replace(
-            /^(?:to|of|for|by|the|a|an|that|subject|noted|noting|said|says|mentioned|asked|confirmed|whether)\s+/i,
-            ""
-          ) : "unspecified",
-          who?.index ?? 0
-        );
-        const tm = line.match(
-          /\b\d{1,2}\s+(November|October|December)|date|by\s+\w+\s+\d/i
-        );
-        if (tm) push("signoffTiming", "stated", tm.index);
-      }
-      const ag = line.match(
-        /\bno\s+(?:signed|countersigned|executed)\s+(?:[a-z-]+\s+){0,3}(?:agreement|contract)\b[^.;]*/i
-      );
-      if (ag) push("signedAgreement", ag[0].trim(), ag.index ?? 0);
-      const signedPos = line.match(
-        /\b(?:was|were|has been|have been)\s+(?:counter)?signed\s+by\b[^.;]*|\bcountersigned by both parties\b[^.;]*/i
-      );
-      if (!ag && signedPos)
-        push("signedAgreement", "signed", signedPos.index ?? 0);
-      if (/regions?\b/i.test(line)) {
-        const scopePhase = /expansion|national\b|\b20\d{2}\b|phase\s*(2|two|ii)\b/i.test(line) ? "expansion" : /\bpilot\b|first phase|phase\s*(1|one)\b/i.test(line) ? "pilot" : null;
-        const lineYear = line.match(/\b(20\d{2})\b/)?.[1];
-        const pushScope = (value, idx) => {
-          if (scopeRejected(value)) return;
-          const before = claims.length;
-          push("scope", value, idx);
-          if (claims.length > before) {
-            claims[claims.length - 1].phase = scopePhase;
-            if (lineYear) claims[claims.length - 1].year = lineYear;
-          }
+      if (!/[a-z]/.test(line)) continue;
+      for (const utt of utterancesOf(line)) {
+        const seg = utt.text;
+        const start = lineStart + utt.at;
+        if (isQuestionUtterance(seg)) continue;
+        const base = {
+          sourceId: source.id,
+          title: source.title,
+          hash: source.hash,
+          start,
+          end: start + seg.length,
+          firstLine: source.text.slice(0, start).split("\n").length,
+          lastLine: source.text.slice(0, start).split("\n").length,
+          quote: seg,
+          docDate,
+          scopeEntities
         };
-        const scopeRejected = (value) => {
-          const R = /reject\w*|rule out|ruled out|declined/gi;
-          let m;
-          while (m = R.exec(line)) {
-            const cl = clauseAround(line, m.index);
-            if (/region|scope/i.test(cl) || cl.toLowerCase().includes(value.toLowerCase()))
-              return true;
-          }
-          return false;
+        const push = (field, value, anchorIdx = 0, force) => {
+          if (!fields.includes(field)) return;
+          const clause = clauseAround(seg, anchorIdx);
+          let status = force?.status ?? statusOf(clause);
+          if (docExecuted && status === "discussed") status = "approved";
+          if (negationBinds(field, value, seg)) status = "unresolved";
+          const supersededByWording = /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(clause) || /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(seg);
+          const supersedes = force?.supersedes ?? (/revis|supersed|replaces|narrow|instead of|\bcurrent\b/i.test(clause) && !supersededByWording && status !== "unresolved" && !/\bvs\b|open decision|disput/i.test(clause));
+          claims.push({
+            field,
+            value,
+            status,
+            supersedes,
+            supersededByWording,
+            authority: force?.authority ?? authorityOf(clause),
+            ...base
+          });
         };
-        {
-          const narrowing = line.match(
-            /narrow[^.]*?\bto\s+(\w+)\s+regions?\s*(\([^)]*\))?/i
+        const lim = seg.match(
+          /\bapproval applies to\s+([^.,;]+?),?\s+NOT\s+(?:the\s+)?([^.;]+)/i
+        );
+        if (lim) {
+          const auth = /committee|steering|board/i.test(seg) ? "body" : /client|customer/i.test(seg) ? "client" : "internal";
+          const negated = lim[2];
+          const LIMITED = [
+            [/fee|commercial|price|cost|rate/i, "fee"],
+            [/payment|split|installment|upfront/i, "paymentSplit"],
+            [/scope|site|region|depot|store|location/i, "scope"],
+            [/deadline|launch|date|go-?live|timeline/i, "deadline"],
+            [/report|cadence/i, "reporting"]
+          ];
+          for (const [re, f] of LIMITED)
+            if (re.test(negated))
+              push(f, `approval-limited-${f}`, lim.index ?? 0, {
+                status: "unresolved",
+                authority: auth,
+                supersedes: false
+              });
+        }
+        AMOUNT_RE.lastIndex = 0;
+        for (const m of seg.matchAll(AMOUNT_RE)) {
+          const window = seg.slice(
+            Math.max(0, m.index - 45),
+            m.index + m[0].length + 45
           );
-          if (narrowing) {
-            pushScope(
-              `${narrowing[1]} regions${narrowing[2] ?? ""}`,
-              narrowing.index ?? 0
+          if (/\bfee\b|\bretainer\b|\bcommercial (proposal|terms|offer)\b|\bfinance approval\b|\bprice\b|\bquote\b/i.test(
+            window
+          ))
+            push("fee", m[0], m.index);
+        }
+        const pct = seg.match(/(\d{1,2})%[^.\n]*?(\d{1,2})%/) || seg.match(/(\d{1,2})\s*percent\b[^.\n]{0,60}?\b(\d{1,2})\s*percent\b/i);
+        const split = (pct && Number(pct[1]) + Number(pct[2]) === 100 ? pct : null) || seg.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\b/);
+        if (split && /payment|upfront|schedule|split|on signing|on signature|after acceptance|plan|draft/i.test(seg))
+          push("paymentSplit", `${split[1]}/${split[2]}`, split.index);
+        const DATE_RES = [
+          new RegExp("\\b(\\d{1,2}\\s+(?:" + MONTHS + ")(?:\\s+20\\d{2})?)\\b", "gi"),
+          new RegExp("\\b((?:" + MONTHS + ")\\s+\\d{1,2}(?:,\\s*20\\d{2})?)\\b", "gi")
+        ];
+        for (const DATE_RE of DATE_RES) {
+          for (const dm of seg.matchAll(DATE_RE)) {
+            const at = dm.index ?? 0;
+            const sentStart = Math.max(seg.lastIndexOf(". ", at) + 1, 0);
+            const sentEndIdx = seg.indexOf(". ", at);
+            const sentence = seg.slice(
+              sentStart,
+              sentEndIdx < 0 ? seg.length : sentEndIdx
             );
-          } else {
-            const before = claims.length;
-            for (const m of line.matchAll(
-              /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:retail\s+)?regions?\s*(\([^)]*\))?/gi
-            )) {
-              pushScope(`${m[1]} regions${m[2] ?? ""}`, m.index);
+            if (!/\b(?:deadline|(?:delivery|internal|pilot|operational|readiness|launch|go-?live)\s+target|targeted for|readiness|go-?live|launch date|due date)\b/i.test(
+              sentence
+            ))
+              continue;
+            const before = seg.slice(sentStart, at);
+            if (/\b(plan|submit|submission|reply|respond|report)\b[^.]*$/i.test(
+              before
+            ))
+              continue;
+            if (/\b(countersigned|signed|dated|reported)\s+(?:by [^.]{0,40}\s+)?on\s*$/i.test(
+              before
+            ))
+              continue;
+            push("deadline", dm[1], at);
+          }
+        }
+        if (/sign-?off|signed off|signing off/i.test(seg)) {
+          const who = seg.match(
+            /([A-Za-z]+(?: [A-Za-z]+){0,3}?)\s+(?:(?:had|has|have|not|yet|already|formally|been)\s+)*sign(?:ed)?[- ]?off/i
+          );
+          push(
+            "signoffWho",
+            who ? who[1].trim().toLowerCase().replace(
+              /^(?:to|of|for|by|the|a|an|that|subject|noted|noting|said|says|mentioned|asked|confirmed|whether)\s+/i,
+              ""
+            ).replace(
+              /^(?:to|of|for|by|the|a|an|that|subject|noted|noting|said|says|mentioned|asked|confirmed|whether)\s+/i,
+              ""
+            ) : "unspecified",
+            who?.index ?? 0
+          );
+          const tm = seg.match(
+            /\b\d{1,2}\s+(November|October|December)|date|by\s+\w+\s+\d/i
+          );
+          if (tm) push("signoffTiming", "stated", tm.index);
+        }
+        const agRaw = seg.match(
+          /\bno\s+(?:[a-z-]+\s+){0,4}(?:agreement|contract|addendum)\b[^.;]*/i
+        );
+        const ag = agRaw && /sign|execut/i.test(agRaw[0]) ? agRaw : null;
+        if (ag) push("signedAgreement", ag[0].trim(), ag.index ?? 0);
+        const nc = seg.match(
+          /\bdoes not constitute\b[^.;]{0,60}(?:agreement|signature|contract)[^.;]*/i
+        );
+        if (!ag && nc) push("signedAgreement", nc[0].trim(), nc.index ?? 0);
+        const signedPos = seg.match(
+          /\b(?:was|were|has been|have been)\s+(?:counter)?signed\s+by\b[^.;]*|\bcountersigned by both parties\b[^.;]*/i
+        );
+        if (!ag && signedPos)
+          push("signedAgreement", "signed", signedPos.index ?? 0);
+        if (UNIT_RE.test(seg)) {
+          const scopePhase = /expansion|national\b|\b20\d{2}\b|phase\s*(2|two|ii)\b/i.test(seg) ? "expansion" : /\bpilot\b|first phase|phase\s*(1|one)\b/i.test(seg) ? "pilot" : null;
+          const lineYear = seg.match(/\b(20\d{2})\b/)?.[1];
+          const scopeRejected = (value) => {
+            const R = /reject\w*|rule out|ruled out|declined/gi;
+            let m;
+            while (m = R.exec(seg)) {
+              const cl = clauseAround(seg, m.index);
+              if (UNIT_RE.test(cl) || /scope/i.test(cl) || cl.toLowerCase().includes(value.toLowerCase()))
+                return true;
             }
-            if (claims.length === before) {
-              const raw = line.match(
-                /\b([a-z]+)\s+(?:retail\s+)?regions?\s*(\([^)]*\))?/i
+            return false;
+          };
+          const pushScope = (value, idx) => {
+            if (scopeRejected(value)) return;
+            const before = claims.length;
+            push("scope", value, idx);
+            if (claims.length > before) {
+              claims[claims.length - 1].phase = scopePhase;
+              if (lineYear) claims[claims.length - 1].year = lineYear;
+            }
+          };
+          {
+            const narrowing = seg.match(
+              new RegExp(
+                "narrow[^.]*?\\bto\\s+(\\w+)\\s+" + UNIT + "\\s*(\\([^)]*\\))?",
+                "i"
+              )
+            );
+            if (narrowing) {
+              pushScope(
+                `${narrowing[1]} ${narrowing[0].match(new RegExp(UNIT, "i"))?.[0] ?? "sites"}${narrowing[2] ?? ""}`,
+                narrowing.index ?? 0
               );
-              const RAW_STOP = new Set(
-                "the a an all these those both some many any our their its few more other each every which that this no".split(
-                  " "
+            } else {
+              const before = claims.length;
+              for (const m of seg.matchAll(
+                new RegExp(
+                  "\\b(" + NUMWORD_RE + ")-(" + UNIT + ")\\b",
+                  "gi"
                 )
-              );
-              if (raw && !RAW_STOP.has(raw[1].toLowerCase()) && /confirm|approv|agree|decid|narrow|cover|expan|pilot|scope|phase/i.test(
-                line
               ))
+                pushScope(`${m[1]} ${m[2]}`, m.index);
+              for (const m of seg.matchAll(
+                new RegExp(
+                  "\\b([A-Z][a-z]+(?:\\s+and\\s+[A-Z][a-z]+)+)\\s+(?:[a-z][a-z-]*\\s+){0,4}(" + UNIT + ")\\b",
+                  "g"
+                )
+              ))
+                pushScope(`${m[1]} ${m[2]}`, m.index);
+              for (const m of seg.matchAll(
+                new RegExp(
+                  "\\b(" + NUMWORD_RE + ")\\b((?:\\s+[a-z][a-z-]*){0,3})\\s+(" + UNIT + ")\\b(\\s*\\([^)]*\\))?",
+                  "gi"
+                )
+              )) {
+                const before2 = seg.slice(Math.max(0, (m.index ?? 0) - 8), m.index ?? 0);
+                if (/(?:^|[^a-z])phase-\s*$/i.test(before2) || /-$/.test(before2))
+                  continue;
                 pushScope(
-                  `${raw[1].toLowerCase()} regions${raw[2] ?? ""}`,
-                  raw.index ?? 0
+                  `${m[1]}${m[2]} ${m[3]}${m[4] ?? ""}`.replace(/\s+/g, " ").trim(),
+                  m.index
                 );
+              }
+              if (claims.length === before) {
+                const raw = seg.match(
+                  new RegExp(
+                    "\\b([a-z]+)\\s+" + UNIT + "\\s*(\\([^)]*\\))?",
+                    "i"
+                  )
+                );
+                const RAW_STOP = new Set(
+                  "the a an all these those both some many any our their its few more other each every which that this no only".split(
+                    " "
+                  )
+                );
+                if (raw && !RAW_STOP.has(raw[1].toLowerCase()) && /confirm|approv|agree|decid|narrow|cover|expan|pilot|scope|phase/i.test(
+                  seg
+                ))
+                  pushScope(
+                    `${raw[1].toLowerCase()} ${raw[0].split(/\s+/).slice(1).join(" ")}`.trim(),
+                    raw.index ?? 0
+                  );
+              }
             }
           }
         }
-      }
-      const CAD = "weekly|daily|biweekly|monthly";
-      const fwd = line.match(
-        new RegExp(
-          `\\b(${CAD})\\b[^.]{0,50}?\\breplac\\w+[^.]{0,50}?\\b(${CAD})\\s+(?:progress\\s+)?report`,
-          "i"
-        )
-      );
-      const rev = line.match(
-        new RegExp(
-          `\\b(${CAD})\\s+(?:progress\\s+)?report\\b[^.]{0,50}?\\breplac\\w+\\s+by\\b[^.]{0,50}?\\b(${CAD})\\b`,
-          "i"
-        )
-      );
-      const replacedCad = fwd ? fwd[2].toLowerCase() : rev ? rev[1].toLowerCase() : null;
-      const replacingCad = fwd ? fwd[1] : rev ? rev[2] : null;
-      if (replacingCad)
-        push("reporting", replacingCad.toLowerCase(), (fwd ?? rev).index ?? 0);
-      for (const m of line.matchAll(
-        /\b(weekly|daily|biweekly|monthly)\s+(?:progress\s+)?report/gi
-      )) {
-        if (replacedCad && m[1].toLowerCase() === replacedCad) continue;
-        push("reporting", m[1].toLowerCase(), m.index);
-      }
-      const lm = line.match(/production launch|launch authorization/i);
-      if (lm) {
-        push(
-          "launchApproval",
-          /not recorded|not approved|outstanding|no signed/i.test(line) ? "none-recorded" : "recorded",
-          lm.index
+        const CAD = "weekly|daily|biweekly|monthly";
+        const fwd = seg.match(
+          new RegExp(
+            `\\b(${CAD})\\b[^.]{0,50}?\\breplac\\w+[^.]{0,50}?\\b(${CAD})\\s+(?:progress\\s+)?report`,
+            "i"
+          )
         );
+        const rev = seg.match(
+          new RegExp(
+            `\\b(${CAD})\\s+(?:progress\\s+)?report\\b[^.]{0,50}?\\breplac\\w+\\s+by\\b[^.]{0,50}?\\b(${CAD})\\b`,
+            "i"
+          )
+        );
+        const replacedCad = fwd ? fwd[2].toLowerCase() : rev ? rev[1].toLowerCase() : null;
+        const replacingCad = fwd ? fwd[1] : rev ? rev[2] : null;
+        if (replacingCad)
+          push("reporting", replacingCad.toLowerCase(), (fwd ?? rev).index ?? 0);
+        for (const m of seg.matchAll(
+          /\b(weekly|daily|biweekly|monthly)\s+(?:progress\s+)?report/gi
+        )) {
+          if (replacedCad && m[1].toLowerCase() === replacedCad) continue;
+          push("reporting", m[1].toLowerCase(), m.index);
+        }
+        const lm = seg.match(/production launch|launch authorization/i);
+        if (lm) {
+          push(
+            "launchApproval",
+            /not recorded|not approved|outstanding|no signed/i.test(seg) ? "none-recorded" : "recorded",
+            lm.index
+          );
+        }
       }
     }
   }
   return claims;
 }
+var NUMWORD_TO_DIGIT = {
+  one: "1",
+  two: "2",
+  three: "3",
+  four: "4",
+  five: "5",
+  six: "6",
+  seven: "7",
+  eight: "8",
+  nine: "9",
+  ten: "10",
+  eleven: "11",
+  twelve: "12"
+};
+var canonClaimValue = (v) => String(v ?? "").toLowerCase().replace(/[^a-z0-9/]+/g, " ").trim();
+var countKeyOf = (v) => {
+  const s = String(v ?? "").toLowerCase();
+  const m = s.match(
+    /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b[\s-]?(?:[a-z-]+[\s-]){0,3}?(regions?|sites?|depots?|stores?|locations?|branches?|markets?|countries|offices?|warehouses?|areas?)\b/
+  );
+  if (m) {
+    const n = NUMWORD_TO_DIGIT[m[1]] ?? m[1];
+    return n + " " + m[2].replace(/s$/, "");
+  }
+  const named = s.match(
+    /\b([a-z]+(?:\s+and\s+[a-z]+)+)\s+(?:[a-z-]+\s+){0,4}?(regions?|sites?|depots?|stores?|locations?|branches?|markets?|countries|offices?|warehouses?|areas?)\b/
+  );
+  if (named) {
+    const n = named[1].split(/\s+and\s+/).length;
+    return n + " " + named[2].replace(/s$/, "");
+  }
+  return null;
+};
 function resolveClaims(claims) {
   const superseded = [];
   const approved = /* @__PURE__ */ new Map();
@@ -23743,6 +23928,19 @@ function resolveClaims(claims) {
   };
   const active = /* @__PURE__ */ new Map();
   for (const [field, list] of byField) {
+    for (const self of list.filter((c) => c.supersededByWording)) {
+      const cSelf = canonClaimValue(self.value);
+      const kSelf = countKeyOf(self.value);
+      const dSelf = self.value.replace(/[^\d]/g, "");
+      for (const c of list) {
+        if (superseded.includes(c)) continue;
+        if (c.docDate && self.docDate && c.docDate > self.docDate) continue;
+        if (c.sourceId !== self.sourceId && !sharesEngagement(self, c))
+          continue;
+        const sameValue = canonClaimValue(c.value) === cSelf || kSelf !== null && countKeyOf(c.value) === kSelf || dSelf.length > 2 && c.value.replace(/[^\d]/g, "") === dSelf;
+        if (sameValue) superseded.push(c);
+      }
+    }
     const superseding = list.filter((c) => c.supersedes);
     for (const sup of superseding) {
       const supDate = sup.docDate || null;
@@ -30315,10 +30513,10 @@ function distinctiveTerms(query) {
 }
 
 // vendor/web/src/lib/rag/evidence.ts
-var MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+var MONTHS2 = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 function extractQueryDates(query) {
   const forms = [];
-  const monthAlt = MONTHS.join("|");
+  const monthAlt = MONTHS2.join("|");
   const dmy = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthAlt})\\s+(\\d{4})\\b`, "gi");
   let m;
   while (m = dmy.exec(query)) {
@@ -30330,13 +30528,13 @@ function extractQueryDates(query) {
   }
   const iso = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
   while (m = iso.exec(query)) {
-    forms.push(dateForms(Number(m[3]), MONTHS[Number(m[2]) - 1] ?? "", m[1]));
+    forms.push(dateForms(Number(m[3]), MONTHS2[Number(m[2]) - 1] ?? "", m[1]));
   }
   return forms;
 }
 function dateForms(day, month, year) {
   if (!month) return [];
-  const mm = String(MONTHS.indexOf(month) + 1).padStart(2, "0");
+  const mm = String(MONTHS2.indexOf(month) + 1).padStart(2, "0");
   const dd = String(day).padStart(2, "0");
   return [
     `${day} ${month} ${year}`,
@@ -31485,7 +31683,14 @@ function answer(question, bundle, dense) {
   );
   let claimsVerdict = false;
   if (fields.length) {
-    const allClaims = extractClaims(bundle, fields);
+    const extractedClaims = extractClaims(
+      bundle,
+      [.../* @__PURE__ */ new Set([...fields, "signedAgreement"])]
+    );
+    const agNegClaims = extractedClaims.filter(
+      (c) => c.field === "signedAgreement" && c.status === "unresolved"
+    );
+    const allClaims = fields.includes("signedAgreement") ? extractedClaims : extractedClaims.filter((c) => c.field !== "signedAgreement");
     allClaims.forEach((c) => validateEvidence(c, bundle));
     const qPhase = /expansion|national\b|\b20\d{2}\b|phase\s*(2|two|ii)\b/i.test(question) ? "expansion" : /\bpilot\b|first phase|phase\s*(1|one)\b/i.test(question) ? "pilot" : null;
     const offPhase = qPhase ? allClaims.filter(
@@ -31516,12 +31721,12 @@ function answer(question, bundle, dense) {
       });
     }
     const FIELD_TOKEN = new Set(
-      "fee fees invoice invoiced invoicing cost costs bill billed billing charg charge charged charging money commercial commercials paid pay payment payments split upfront installment installments deadline due pilot signoff launch approve approved approval authorize authorized authorization region regions scope area areas cover covers covered weekly daily biweekly monthly cadence progress report reporting status update current record records ask asked asking funding funded finance financed financing amount amounts price prices value values discount discounts structure terms revised final agree agreed proposal propose proposed quote quoted sign signing signed off timing expected date change changed discuss discussed decided decide decision".split(
+      "fee fees invoice invoiced invoicing cost costs bill billed billing charg charge charged charging money commercial commercials paid pay payment payments split upfront installment installments deadline due pilot signoff launch approve approved approval authorize authorized authorization region regions scope area areas cover covers covered weekly daily biweekly monthly cadence progress report reporting status update current record records ask asked asking funding funded finance financed financing amount amounts price prices value values discount discounts structure terms revised final agree agreed proposal propose proposed quote quoted sign signing signed off timing expected date change changed discuss discussed decided decide decision steering committee board customer client legal finance internal original initially opening earlier previously history historical contract contracts addendum addenda signature signatory".split(
         " "
       )
     );
     const FILLER_Q = new Set(
-      "anyone anybody someone somebody everyone everybody anything something nothing them they their theirs there here himself herself itself myself ourselves yourself finally currently initially originally now yet still already just really actually ever never always often much many more most less least very only even also back again once twice about into over under with without from this that these those what which when where whom whose while does doing done have having had been being were will would shall should may might must".split(
+      "anyone anybody someone somebody everyone everybody anything something nothing them they their theirs there here himself herself itself myself ourselves yourself finally currently initially originally now yet still already just really actually ever never always often much many more most less least very only even also back again once twice about into over under with without from this that these those what which when where whom whose while does doing done have having had been being were will would shall should may might must latest newest".split(
         " "
       )
     );
@@ -31540,7 +31745,102 @@ function answer(question, bundle, dense) {
       if (!claims.some((c) => TEMPORAL.test(c.quote))) claims = [];
     }
     const { active, superseded, approved } = resolveClaims(claims);
-    const claimInfo = (c) => `${c.value} (${c.title}${c.docDate ? ", " + c.docDate : ""}; status: ${c.status})`;
+    const isLimitClaim = (c) => /^approval-limited-/.test(c.value);
+    const claimInfo = (c) => `${c.value} (${c.title}${c.docDate ? ", " + c.docDate : ""}; status: ${c.status}${c.authority && c.authority !== "unspecified" ? "; authority: " + c.authority : ""})`;
+    const valueKey = (c) => c.field === "scope" ? countKeyOf(c.value) ?? c.value.toLowerCase().replace(/\s+/g, " ") : c.value.toLowerCase().replace(/\s+/g, " ");
+    const actorM = question.match(
+      /\b(steering|committee|board|customer|client|finance|legal)\b/i
+    );
+    const yesNoQ = /^(?:did|has|have|was|were|is|are|does|do)\b[^?]*\b(approv|accept|sign|agree|authoriz)/i.test(
+      question
+    );
+    if (actorM && yesNoQ) {
+      const actor = /steering|committee|board/i.test(actorM[1]) ? "body" : /customer|client/i.test(actorM[1]) ? "client" : "internal";
+      const relevant = claims.filter((c) => fields.includes(c.field));
+      const actorClaims = relevant.filter(
+        (c) => (c.authority ?? "unspecified") === actor
+      );
+      const actorApproved = actorClaims.filter(
+        (c) => c.status === "approved" && !isLimitClaim(c)
+      );
+      if (!actorApproved.length) {
+        let negs = actorClaims.filter((c) => c.status === "unresolved");
+        if (!negs.length && (fields.includes("signoffWho") || fields.includes("signedAgreement") || fields.includes("signoffTiming")))
+          negs = claims.filter(
+            (c) => c.field === "signedAgreement" && c.status === "unresolved" && (actor !== "client" || /client|customer/i.test(c.value))
+          );
+        const didApprove = claims.filter(
+          (c) => (c.authority ?? "unspecified") === actor && c.status === "approved" && !isLimitClaim(c) && !fields.includes(c.field)
+        );
+        const otherApproved = fields.flatMap((f) => approved.get(f) ?? []).filter((c) => !isLimitClaim(c));
+        if (negs.length || didApprove.length) {
+          claimsVerdict = true;
+          result.refused = false;
+          result.supported = true;
+          result.unresolved = false;
+          result.partial = false;
+          result.partialNotice = null;
+          result.evidenceStatus = "positive";
+          result.evidence = [...negs, ...didApprove, ...otherApproved.slice(0, 1)];
+          const negTxt = negs.length ? ` The record states: "${negs[0].quote}" (${negs[0].title}${negs[0].docDate ? ", " + negs[0].docDate : ""}).` : ` No ${actorM[1].toLowerCase()} approval of the asked item is recorded.`;
+          const scopeTxt = didApprove.length ? ` ${actorM[1][0].toUpperCase() + actorM[1].slice(1).toLowerCase()} approval is recorded for ${[...new Set(didApprove.map((c) => c.field))].join(" and ")} only.` : "";
+          const otherTxt = otherApproved.length ? ` The recorded approval here is ${otherApproved[0].authority ?? "unspecified"}: "${otherApproved[0].quote}" (${otherApproved[0].title}${otherApproved[0].docDate ? ", " + otherApproved[0].docDate : ""}).` : "";
+          result.answer = "No." + negTxt + scopeTxt + otherTxt;
+          result.spoken = result.answer;
+        }
+      }
+    }
+    const MONTH_NAMES = "january|february|march|april|may|june|july|august|september|october|november|december";
+    const histAsk = /\b(original|originally|initial|initially|opening|earlier|previously|at the very beginning|first proposed|first propos)\b/i.test(
+      question
+    );
+    const monthAsk = question.match(
+      new RegExp("\\b(" + MONTH_NAMES + ")\\b", "i")
+    );
+    if (!claimsVerdict && (histAsk || monthAsk) && fields.length) {
+      const pool = [[...active.values()].flat(), ...superseded].flat();
+      const fieldClaims = pool.filter(
+        (c) => fields.includes(c.field) && !isLimitClaim(c)
+      );
+      if (fieldClaims.length) {
+        let chosen = [];
+        let lead = "";
+        if (monthAsk) {
+          const mi = MONTH_NAMES.split("|").indexOf(monthAsk[1].toLowerCase());
+          const prefix = `2026-${String(mi + 1).padStart(2, "0")}`;
+          chosen = fieldClaims.filter((c) => c.docDate?.startsWith(prefix));
+          lead = chosen.length ? `Records from ${monthAsk[1][0].toUpperCase() + monthAsk[1].slice(1).toLowerCase()}` : "";
+        }
+        if (!chosen.length && histAsk) {
+          const sorted = [...fieldClaims].sort(
+            (a, b) => (a.docDate || "").localeCompare(b.docDate || "")
+          );
+          const firstKey = valueKey(sorted[0]);
+          chosen = sorted.filter((c) => valueKey(c) === firstKey);
+          lead = "The earliest record";
+        }
+        if (chosen.length) {
+          claimsVerdict = true;
+          const latest = [...fieldClaims].sort(
+            (a, b) => (b.docDate || "").localeCompare(a.docDate || "")
+          )[0];
+          const chosenKey = valueKey(chosen[0]);
+          const laterNote = valueKey(latest) !== chosenKey ? ` Later record: ${claimInfo(latest)}.` : "";
+          claimsVerdict = true;
+          result.refused = false;
+          result.supported = true;
+          result.unresolved = false;
+          result.partial = false;
+          result.partialNotice = null;
+          result.evidenceStatus = "positive";
+          result.evidence = chosen;
+          result.answer = `${lead}: ` + chosen.map(
+            (c) => `${claimInfo(c)} - "${c.quote}" (${c.title}${c.docDate ? ", " + c.docDate : ""})`
+          ).join("; ") + "." + laterNote;
+          result.spoken = result.answer;
+        }
+      }
+    }
     const phaseNote = offPhase.length ? " Separate-phase record(s): " + [
       ...new Map(
         offPhase.map((c) => [c.value + "|" + c.title, claimInfo(c)])
@@ -31558,7 +31858,8 @@ function answer(question, bundle, dense) {
       offYear.filter((c) => !c.year),
       "Undated-period record(s)"
     );
-    if (qYear && fields.includes("scope") && offYear.length && !claims.some((c) => c.field === "scope")) {
+    if (claimsVerdict) {
+    } else if (qYear && fields.includes("scope") && offYear.length && !claims.some((c) => c.field === "scope")) {
       result.refused = true;
       result.supported = false;
       result.unresolved = false;
@@ -31643,13 +31944,30 @@ function answer(question, bundle, dense) {
       const conflicts = [];
       const histories = [];
       const approvedNotes = [];
-      for (const [field, list] of active) {
-        const appr = (approved.get(field) ?? []).filter(
-          (c) => list.includes(c)
+      const agNeg = agNegClaims;
+      const clientQualifier = (field, list) => {
+        let out = "";
+        const clientNeg = list.filter(
+          (c) => c.authority === "client" && c.status === "unresolved"
         );
-        const apprValues = [...new Set(appr.map((c) => normValue(c.value)))];
+        if (clientNeg.length)
+          out += `; client acceptance: not recorded - "${clientNeg[0].quote}" (${clientNeg[0].title}${clientNeg[0].docDate ? ", " + clientNeg[0].docDate : ""})`;
+        if ((field === "fee" || field === "paymentSplit") && agNeg.length && !/unsigned|not signed|no signed/i.test(out))
+          out += `; no client-signed agreement is on record - "${agNeg[0].quote}" (${agNeg[0].title}${agNeg[0].docDate ? ", " + agNeg[0].docDate : ""})`;
+        return out;
+      };
+      for (const [field, rawList] of active) {
+        const list = rawList.filter((c) => !isLimitClaim(c));
+        if (!list.length) continue;
+        const apprAll = (approved.get(field) ?? []).filter(
+          (c) => list.includes(c) && !isLimitClaim(c)
+        );
+        const appr = [...apprAll].sort(
+          (a, b) => Number(/\band\b/.test(b.value)) - Number(/\band\b/.test(a.value))
+        );
+        const apprValues = [...new Set(appr.map((c) => valueKey(c)))];
         const crossEngagementConflict = apprValues.length === 1 && list.some((c) => {
-          if (normValue(c.value) === apprValues[0] || shareTok(appr[0], c))
+          if (valueKey(c) === apprValues[0] || shareTok(appr[0], c))
             return false;
           return (c.scopeEntities ?? []).some(
             (e) => e.split(" ").filter((t) => t.length > 2 && !GENERIC_TOK.has(t)).length > 0
@@ -31672,11 +31990,11 @@ function answer(question, bundle, dense) {
                   claimInfo(c)
                 ])
               ).values()
-            ].join("; ") : "")
+            ].join("; ") : "") + clientQualifier(field, list)
           );
           continue;
         }
-        const values = [...new Set(list.map((c) => normValue(c.value)))];
+        const values = [...new Set(list.map((c) => valueKey(c)))];
         if (apprValues.length > 1 || values.length > 1) {
           conflicts.push(`${field}: ` + list.map(claimInfo).join(" vs "));
         } else if (values.length === 1) {
@@ -31693,7 +32011,7 @@ function answer(question, bundle, dense) {
               return true;
             }).map(claimInfo).join("; ");
             histories.push(
-              `${field}: current record ${claimInfo(cur)} - status ${cur.status}; approval is not established by this check` + (sup.length ? "; earlier superseded record(s): " + supInfo : "")
+              `${field}: current record ${claimInfo(cur)} - status ${cur.status}; approval is not established by this check` + (sup.length ? "; earlier superseded record(s): " + supInfo : "") + clientQualifier(field, list)
             );
           }
         }
