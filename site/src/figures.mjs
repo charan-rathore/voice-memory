@@ -145,11 +145,11 @@ function scramble(root) {
       row.classList.add("clear");
       phase = 1;
       timer = 0;
-    } else if (phase === 1 && timer > 3.6) {
+    } else if (phase === 1 && timer > 4.2) {
       row.classList.remove("clear");
       phase = 2;
       timer = 0;
-    } else if (phase === 2 && timer > 2.6) {
+    } else if (phase === 2 && timer > 2.2) {
       row.classList.add("clear");
       phase = 1;
       timer = 0;

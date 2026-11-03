@@ -521,6 +521,13 @@
     ["hi", "हिन्दी"],
     ["hinglish", "Hinglish"],
   ];
+  // Saved answers and document texts for the cold-boot path load only when
+  // the live engine could not answer (snapshot-answers.js), never eagerly.
+  let snapAnswersP = null;
+  const loadSnapshotAnswers = () =>
+    (snapAnswersP ??= window.VM_SNAPSHOT_ANSWERS
+      ? Promise.resolve()
+      : loadScript("snapshot-answers.js").catch(() => (snapAnswersP = null)));
   async function overviewFor(id, lang) {
     const k = `${id}|${lang}`;
     if (state.visuals[k]) return state.visuals[k];
@@ -630,7 +637,9 @@
         throw new Error("Upload a document first, then ask about it.");
       result = await askEngine(caseId, question, state.context[caseId]);
     } catch (e) {
-      const saved = snap.answers?.[`${caseId}|${question}`];
+      if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
+      const saved =
+        window.VM_SNAPSHOT_ANSWERS?.answers?.[`${caseId}|${question}`];
       if (saved) {
         result = saved;
         source = "saved";
@@ -873,14 +882,13 @@
     health: {
       intro:
         "Four synthetic lab reports for two fictional people. One result was printed wrong and corrected; one test changed units between visits; a second person has their own TSH.",
-      changesK: "What the reports changed",
-      changes: [
-        ["3 Sep", "final", "6 results reported; creatinine 1.2 mg/dL, ferritin 0.5 ng/mL", "a-2026-09.pdf"],
-        ["12 Oct", "preliminary", "Preliminary report issued; ferritin printed as 5, creatinine now in µmol/L", "a-2026-10-prelim.pdf"],
-        ["15 Oct", "amended", "Amended report replaces the preliminary; ferritin corrected 5 → 50 ng/mL", "a-2026-10-amended.pdf"],
-        ["15 Oct", "amended", "Creatinine now in µmol/L (was mg/dL); 3 results outside the printed range", "a-2026-10-amended.pdf"],
-        ["Oct", "final", "SYN-0003 has their own TSH 2.10, so “the TSH” is ambiguous", "c-2026-10.pdf"],
-      ],
+      latest: {
+        doc: "a-2026-10-amended.pdf",
+        img: "pages/a-2026-10-amended.png",
+        alt: "First page of the amended 15 Oct report for SYN-0001",
+        caption:
+          "Latest on record: the amended report replaces the preliminary; ferritin corrected 5 to 50 ng/mL, creatinine now in µmol/L.",
+      },
       docs: {
         "a-2026-09.pdf": [
           "SYN-0001 · 3 Sep 2026 · final",
@@ -903,14 +911,11 @@
     deal: {
       intro:
         "Seven fictional records of one consulting deal. The fee was revised, the payment split was discussed two ways, and nothing was ever signed.",
-      changesK: "Where the deal stands on record",
-      changes: [
-        ["4 Sep", "proposed", "Proposal v1: $48,000, 50/50 billing — an offer, not an agreement", "01_Northstar_Proposal_v1.md"],
-        ["18 Sep", "proposed", "Fee revised to $42,000, 40% upfront / 60% after — subject to sign-off", "03_Commercial_Revision.md"],
-        ["25 Sep", "open", "50/50 split discussed in steering; no vote taken", "04_Steering_Committee_Notes.md"],
-        ["2–6 Oct", "open", "Two dates on record: the client's 15 Nov deadline vs the 22 Nov internal target", "06_Client_Email_Extract.md"],
-        ["9 Oct", "open", "Action log: open decisions; no signed agreement exists", "07_Internal_Action_Log.md"],
-      ],
+      latest: {
+        doc: "07_Internal_Action_Log.md",
+        caption:
+          "Latest on record: the 9 Oct action log; open decisions, no signed agreement exists.",
+      },
       docs: {
         "01_Northstar_Proposal_v1.md": [
           "Proposal v1 · 4 Sep",
@@ -968,19 +973,16 @@
         </button>`;
       })
       .join("");
-    const changes = (meta.changes ?? [])
-      .map(
-        ([date, st, text, doc], i) => `<li class="case-change" style="--i:${i}">
-          <span class="cc-date">${esc(date)}</span><span class="cc-st cc-${esc(st)}">${esc(st)}</span>
-          <span class="cc-tx">${esc(text)}</span>
-          ${doc ? `<button type="button" class="cc-go" data-doc="${esc(doc)}">Open</button>` : ""}
-        </li>`,
-      )
-      .join("");
+    const latest = meta.latest
+      ? `<button type="button" class="case-latest" data-doc="${esc(meta.latest.doc)}">
+        ${meta.latest.img ? `<img src="${esc(meta.latest.img)}" alt="${esc(meta.latest.alt ?? "")}" loading="lazy" />` : ""}
+        <span class="cl-cap">${esc(meta.latest.caption)} <b>Open</b></span>
+      </button>`
+      : "";
     return `<div class="case-files">
       <p class="case-files-intro"><b>${docs.length} documents in this case.</b> ${esc(meta.intro)}</p>
       <div class="file-grid">${cards}</div>
-      ${changes ? `<div class="case-changes"><p class="cc-k">${esc(meta.changesK ?? "What changed")}</p><ol>${changes}</ol></div>` : ""}
+      ${latest}
     </div>`;
   }
   function showEmptyViewer(msg = null) {
@@ -1329,7 +1331,6 @@
   async function docText(title) {
     if (state.docText[title] && state.case !== "own")
       return state.docText[title];
-    const saved = snap.docs?.[title];
     try {
       // Visitor documents come from their workspace, not the demo cases:
       // don't gate them on demo-case readiness either (see ask()).
@@ -1342,6 +1343,8 @@
       const { document } = await api(`/doc/${apiCase(cid)}/${d.id}`);
       state.docText[title] = document.text;
     } catch {
+      if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
+      const saved = window.VM_SNAPSHOT_ANSWERS?.docs?.[title];
       if (saved) state.docText[title] = saved;
     }
     return state.docText[title] ?? null;

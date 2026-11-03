@@ -750,24 +750,15 @@ html:not(.voice-on) .voice-off { display: block; }
 .file-card:hover i { color: var(--mark); }
 @media (max-width: 620px) { .file-grid { grid-template-columns: 1fr; } .file-card { min-height: 0; } }
 
-/* the viewer fills the right column: documents first, then what each one
-   changed, so a hidden chart never leaves dead space */
+/* the viewer fills the right column: documents first, then the latest
+   report on record, so a hidden chart never leaves dead space */
 .viewer-body { display: flex; flex-direction: column; }
 .viewer-body > .case-files { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.case-changes { flex: 1; display: flex; flex-direction: column; min-height: 0; margin-top: 14px; }
-.cc-k { margin: 0 0 8px; font: 600 11px/1 var(--sans); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
-.case-changes ol { flex: 1; display: grid; gap: 8px; grid-auto-rows: minmax(64px, auto); align-content: space-evenly; margin: 0; padding: 0; list-style: none; }
-.case-change { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; border: 1px solid rgba(236, 234, 224, 0.09); border-radius: 10px; background: rgba(255, 255, 255, 0.025); animation: rise 420ms var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms); }
-.cc-date { flex: 0 0 auto; min-width: 46px; font-size: 12px; color: var(--ink-3); }
-.cc-st { flex: 0 0 auto; font: 600 10px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 7px; border-radius: 5px; }
-.cc-final, .cc-amended { color: var(--teal-ink); background: rgba(98, 213, 195, 0.12); }
-.cc-preliminary { color: var(--red-ink); background: rgba(255, 143, 124, 0.12); }
-.cc-proposed { color: var(--amber-ink); background: rgba(240, 194, 94, 0.12); }
-.cc-open { color: var(--blue-ink); background: rgba(156, 176, 255, 0.12); }
-.cc-tx { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
-.cc-go { flex: 0 0 auto; border: 0; background: transparent; padding: 4px 6px; font: 500 12px/1 var(--sans); color: var(--ink-3); cursor: pointer; border-radius: 6px; transition: color 200ms; }
-.cc-go:hover, .cc-go:focus-visible { color: var(--mark); }
-@media (max-width: 620px) { .case-changes ol { grid-auto-rows: auto; } }
+.case-latest { margin-top: 14px; display: block; width: 100%; padding: 12px; text-align: left; cursor: pointer; border: 1px solid rgba(236, 234, 224, 0.1); border-radius: 12px; background: rgba(255, 255, 255, 0.03); color: var(--ink); transition: border-color 200ms; }
+.case-latest:hover, .case-latest:focus-visible { border-color: rgba(244, 220, 74, 0.5); }
+.case-latest img { display: block; width: 100%; border-radius: 8px; margin-bottom: 8px; }
+.case-latest .cl-cap { font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.case-latest .cl-cap b { color: var(--mark); font-weight: 500; }
 
 /* ---------------------------------------------------------------- hero replay (data-step states) */
 
