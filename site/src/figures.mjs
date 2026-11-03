@@ -2,20 +2,30 @@
 // drawn from real numbers, with the math doing the work:
 //   - 68.6%: exactly 686 of 1,000 dots, lit by a noisy wavefront (distance
 //     field + smoothstep), the frontier briefly marked in highlighter yellow;
-//   - 1 in 3: three real result rows, the third one blurred like a result
-//     nobody explained, breathing in and out of focus on a slow cycle and
-//     always settling back on the exact printed values;
+//   - 1 in 3: three real result rows, the third one drifting through other
+//     plausible readings the way the changed record feels, always settling
+//     back on the exact printed values and holding there, readable;
 //   - 40M+ a day: questions travel Bézier streamlines into one point at
 //     constant speed (arc-length parameterisation, not t), with a live count;
 //   - catch cards: CSS keyframe scenes whose easing is a real damped spring,
 //     sampled into a CSS linear() function (springCSS in motion-math).
 // Everything pauses off-screen; reduced motion gets a single still frame.
-import { springCSS, noise2, smoothstep, easeOutCubic, arcTable, pointAtDistance, expDecay, clamp01 } from "../motion-math.mjs";
+import {
+  springCSS,
+  noise2,
+  smoothstep,
+  easeOutCubic,
+  arcTable,
+  pointAtDistance,
+  expDecay,
+  clamp01,
+} from "../motion-math.mjs";
 import { animate, reducedMotion, onVisible } from "../motion-loop.mjs";
 
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const still = reducedMotion();
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const css = (name) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 function canvasFor(cv) {
   const dpr = Math.min(2, devicePixelRatio || 1);
@@ -67,7 +77,14 @@ function waffle(cv) {
     oy = ROWS * 0.55;
   const cells = [];
   for (let y = 0; y < ROWS; y++)
-    for (let x = 0; x < COLS; x++) cells.push({ x, y, d: Math.hypot(x - ox, (y - oy) * 1.15) + 3.2 * noise2(x * 0.18, y * 0.18, 7) });
+    for (let x = 0; x < COLS; x++)
+      cells.push({
+        x,
+        y,
+        d:
+          Math.hypot(x - ox, (y - oy) * 1.15) +
+          3.2 * noise2(x * 0.18, y * 0.18, 7),
+      });
   const order = [...cells].sort((a, b) => a.d - b.d);
   order.forEach((c, i) => (c.lit = i < LIT));
   const dMax = order[LIT - 1].d;
@@ -77,7 +94,10 @@ function waffle(cv) {
     pointer.tx = e.clientX - r.left;
     pointer.ty = e.clientY - r.top;
   });
-  cv.closest(".stat")?.addEventListener("pointerleave", () => (pointer.tx = pointer.ty = -1e3));
+  cv.closest(".stat")?.addEventListener(
+    "pointerleave",
+    () => (pointer.tx = pointer.ty = -1e3),
+  );
   let flash = null,
     nextFlash = 3.2;
   whileVisible(cv, (dt, t) => {
@@ -104,11 +124,17 @@ function waffle(cv) {
         py = c.y * pitch + pitch / 2;
       const a = c.lit ? smoothstep((R - c.d) / 2.2) : 0;
       const front = a * (1 - a) * 4; // 1 at the middle of the transition
-      const near = smoothstep(1 - Math.hypot(px - pointer.x, py - pointer.y) / 46);
+      const near = smoothstep(
+        1 - Math.hypot(px - pointer.x, py - pointer.y) / 46,
+      );
       let fl = 0;
       if (flash && flash.c === c) fl = Math.max(0, 1 - (t - flash.t) / 0.9);
       const edge = smoothstep(1 - Math.abs(c.d - dMax) / 6);
-      const br = landed * Math.sin(t * 1.5 - c.d * 0.85) * (0.15 + 0.85 * edge) * (c.lit ? 1 : 0.6);
+      const br =
+        landed *
+        Math.sin(t * 1.5 - c.d * 0.85) *
+        (0.15 + 0.85 * edge) *
+        (c.lit ? 1 : 0.6);
       const rr = r0 * (1 + 0.55 * front + 0.45 * near + 0.7 * fl + 0.14 * br);
       ctx.beginPath();
       ctx.arc(px, py, rr, 0, Math.PI * 2);
@@ -117,7 +143,9 @@ function waffle(cv) {
         ctx.globalAlpha = 1;
       } else {
         ctx.fillStyle = ink;
-        ctx.globalAlpha = clamp01(Math.max(0.06, (0.13 + 0.87 * a) * (1 + 0.24 * br)));
+        ctx.globalAlpha = clamp01(
+          Math.max(0.06, (0.13 + 0.87 * a) * (1 + 0.24 * br)),
+        );
       }
       ctx.fill();
     }
@@ -128,20 +156,46 @@ function waffle(cv) {
 
 // ------------------------------------------------------------ 1 in 3: a result nobody explained
 // The third row is a real result whose unit and range changed between
-// reports. It breathes on a slow cycle: it drifts out of focus, then
-// settles back onto the exact printed values (Creatinine 106 µmol/L,
-// 62–115). Only the staggered CSS focus transition replays - the text is
-// never swapped - so the motion stays smooth and nothing shakes or
-// reflows. The question the changed unit and range leave stays underlined.
+// reports. It cycles the way the record feels: the printed reading keeps
+// drifting through other plausible values, then the row settles back onto
+// the exact printed values (Creatinine 106 µmol/L, 62–115) and holds
+// there, readable, before drifting again. Whole readings swap - never
+// per-glyph flicker, nothing reflows - and the question the changed unit
+// and range leave stays underlined.
 function scramble(root) {
   const row = root.querySelector(".rr-lost");
   if (!row) return;
   if (still) return void row.classList.add("clear");
-  let phase = 0, // 0 first resolve, 1 readable hold, 2 defocused hold
-    timer = 0;
+  const cells = row.querySelectorAll("[data-scramble]");
+  const exact = [
+    cells[1].textContent,
+    cells[2].textContent,
+    cells[3].textContent,
+  ];
+  // plausible creatinine readings in both units - the same kind of line a
+  // changed report could have printed
+  const driftPool = [
+    ["1.2", "mg/dL", "0.7–1.3"],
+    ["98", "µmol/L", "62–115"],
+    ["1.1", "mg/dL", "0.6–1.2"],
+    ["121", "µmol/L", "62–115"],
+    ["0.9", "mg/dL", "0.7–1.3"],
+    ["88", "µmol/L", "50–110"],
+    ["1.4", "mg/dL", "0.6–1.2"],
+  ];
+  const set = ([v, u, r]) => {
+    cells[1].textContent = v;
+    cells[2].textContent = u;
+    cells[3].textContent = r;
+  };
+  let phase = 0, // 0 first resolve, 1 readable hold, 2 drifting
+    timer = 0,
+    swap = 0,
+    last = -1;
   whileVisible(row, (dt) => {
     timer += dt;
     if (phase === 0 && timer > 0.35) {
+      set(exact);
       row.classList.add("clear");
       phase = 1;
       timer = 0;
@@ -149,10 +203,23 @@ function scramble(root) {
       row.classList.remove("clear");
       phase = 2;
       timer = 0;
-    } else if (phase === 2 && timer > 2.2) {
-      row.classList.add("clear");
-      phase = 1;
-      timer = 0;
+      swap = 0;
+    } else if (phase === 2) {
+      if (timer > 3.6) {
+        phase = 0;
+        timer = 0;
+        return;
+      }
+      swap -= dt;
+      if (swap <= 0) {
+        swap = 0.24;
+        let i;
+        do {
+          i = (Math.random() * driftPool.length) | 0;
+        } while (i === last);
+        last = i;
+        set(driftPool[i]);
+      }
     }
   });
 }
@@ -181,7 +248,11 @@ function streams(cv) {
   };
   // particles carry a distance along their curve, not a t: equal speed on
   // every curve regardless of how the control points bunch up
-  const parts = Array.from({ length: 46 }, (_, i) => ({ c: i % 22, s: Math.random(), v: 0.75 + Math.random() * 0.5 }));
+  const parts = Array.from({ length: 46 }, (_, i) => ({
+    c: i % 22,
+    s: Math.random(),
+    v: 0.75 + Math.random() * 0.5,
+  }));
   let ring = 0;
   whileVisible(cv, (dt) => {
     if (!size.w) {
@@ -247,7 +318,10 @@ function sinceCounter() {
   if (!el) return;
   const t0 = performance.now(),
     perSecond = 40e6 / 86400;
-  const tick = () => (el.textContent = Math.floor(((performance.now() - t0) / 1000) * perSecond).toLocaleString("en-US"));
+  const tick = () =>
+    (el.textContent = Math.floor(
+      ((performance.now() - t0) / 1000) * perSecond,
+    ).toLocaleString("en-US"));
   tick();
   let timer = null;
   onVisible(el, (vis) => {
