@@ -66,10 +66,10 @@ export function buildDocument({
   let n = 0;
   for (const b of blocks) {
     const id = "e" + ++n;
-    if (b.type === "furniture") {
+    if (b.type === "furniture" || b.type === "overlay") {
       elements.push({
         id,
-        type: "furniture",
+        type: b.type,
         text: b.text,
         page: b.page ?? null,
         bbox: b.bbox ?? null,

@@ -419,6 +419,8 @@ const T = {
   en: {
     value: (o, date) =>
       `Your ${nameOf(o)} result is ${valueText(o, "en")}, from ${date}.`,
+    valueEmbedded: (o, date) =>
+      `The report's embedded text reads ${valueText(o, "en")} for ${nameOf(o)}, from ${date}.`,
     notInPeriod: (test, period) =>
       `These reports have no ${test} result from ${period}. The results that are here are on screen.`,
     within: (r) => `That's within this lab's range of ${span(r, "en")}.`,
@@ -466,10 +468,18 @@ const T = {
       `I can't tell which of these reports is newer, because their dates aren't printed in a form I can read, so I won't call ${nameOf(o)} up or down. Both values are on screen.`,
     flagConflict: (o) =>
       `One thing to check: the report's ${o.flag} flag doesn't match its own range, so it's worth confirming with the lab.`,
+    obscured: (o, date) =>
+      `The report's embedded text reads ${o.raw} for ${nameOf(o)}, from ${date}. An overlaid stamp or watermark crosses that row, so the value may not be what is visibly printed; I can't confirm it from the page, and I won't judge it against the printed range.`,
+    stampNote: `One caveat: this copy carries an overlaid stamp, so some printed cells may not be readable on the page itself; it's worth confirming against the original report.`,
   },
   hi: {
     value: (o, date) =>
       `आपका ${nameOf(o)} नतीजा ${valueText(o, "hi")} है, ${date} की जांच से।`,
+    valueEmbedded: (o, date) =>
+      `रिपोर्ट के एम्बेडेड टेक्स्ट में ${nameOf(o)} का नतीजा ${valueText(o, "hi")} लिखा है, ${date} से।`,
+    obscured: (o, date) =>
+      `रिपोर्ट के एम्बेडेड टेक्स्ट में ${date} की ${nameOf(o)} जांच का नतीजा ${o.raw} लिखा है। उस पंक्ति पर स्टैम्प या वॉटरमार्क आ रहा है, इसलिए मैं पेज पर छपे नतीजे की पुष्टि नहीं कर सकती, और इसे रेंज से भी नहीं तौलूँगी।`,
+    stampNote: `एक बात: इस कॉपी पर स्टैम्प लगी है, इसलिए कुछ छपे हुए सेल पेज पर पढ़े नहीं जा सकते; मूल रिपोर्ट से जाँच लेना ठीक रहेगा।`,
     notInPeriod: (test, period) =>
       `इन रिपोर्ट्स में ${period} का कोई ${test} नतीजा नहीं है। जो नतीजे हैं वे स्क्रीन पर हैं।`,
     within: (r) => `यह इस लैब की सीमा (${span(r, "hi")}) के अंदर है।`,
@@ -522,6 +532,11 @@ const T = {
   hinglish: {
     value: (o, date) =>
       `Aapka ${nameOf(o)} result ${valueText(o, "hinglish")} hai, ${date} ki jaanch se.`,
+    valueEmbedded: (o, date) =>
+      `Report ke embedded text mein ${nameOf(o)} ka result ${valueText(o, "hinglish")} likha hai, ${date} se.`,
+    obscured: (o, date) =>
+      `Report ke embedded text mein ${date} ka ${nameOf(o)} result ${o.raw} likha hai. Us row par stamp ya watermark aa raha hai, isliye main page par chhape result ki confirm nahi kar sakti, aur ise range se bhi nahi tolungi.`,
+    stampNote: `Ek baat: is copy par overlaid stamp hai, isliye kuch printed cells page par padhe nahi ja sakte; original report se confirm kar lena.`,
     notInPeriod: (test, period) =>
       `In reports mein ${period} ka koi ${test} result nahi hai. Jo results hain wo screen par hain.`,
     within: (r) => `Yeh is lab ki range (${span(r, "hinglish")}) ke andar hai.`,
@@ -589,18 +604,30 @@ const QUAL_HI = {
 /** Explain one observation: value, position, general meaning, next step. */
 export function explainOne(o, date, lang) {
   const t = T[lang];
+  // Suspected stamp/watermark cover: provenance and uncertainty first,
+  // no range judgement, no unit assertion.
+  if (o.suspectObscured) return t.obscured(o, sayDate(date, lang));
   const pos = position(o);
   if (o.qual) {
-    const parts = [t.qualValue(o, sayDate(date, lang))];
+    const parts = [
+      o.stampedCopy
+        ? t.valueEmbedded(o, sayDate(date, lang))
+        : t.qualValue(o, sayDate(date, lang)),
+    ];
     if (pos === "qual_differs") parts.push(t.qual_differs(o));
     else if (pos === "within") parts.push(t.qual_within(o));
     const g = GLOSSARY[o.canon ?? o.key];
     if (g) parts.push(t.general(g[lang]));
     if (pos !== "within") parts.push(t.doctor);
+    if (o.stampedCopy) parts.push(t.stampNote);
     return parts.join(" ");
   }
   const r = rangeOf(o);
-  const parts = [t.value(o, sayDate(date, lang))];
+  const parts = [
+    o.stampedCopy
+      ? t.valueEmbedded(o, sayDate(date, lang))
+      : t.value(o, sayDate(date, lang)),
+  ];
   if (CRITICAL_FLAG.test(o.flag ?? "")) parts.push(t.critical);
   else if (o.ref?.adultOnly) parts.push(t.adultOnly);
   else parts.push(r && pos !== "unknown" ? t[pos](r) : t.unknown());
@@ -608,11 +635,20 @@ export function explainOne(o, date, lang) {
   const g = GLOSSARY[o.canon ?? o.key];
   if (g) parts.push(t.general(g[lang]));
   if (pos !== "within") parts.push(t.doctor);
+  if (o.stampedCopy) parts.push(t.stampNote);
   return parts.join(" ");
 }
 
 /** Explain a change between two comparable observations. */
 export function explainChange(prev, curr, da, db, direction, lang, amended) {
+  // A comparison against a stamp-covered row is unqualified data: fall
+  // back to the provenance-qualified reading of the newer row.
+  if (prev.suspectObscured || curr.suspectObscured)
+    return T[lang ?? "en"].obscured(
+      curr.suspectObscured ? curr : prev,
+      sayDate(db, lang),
+    );
+
   const t = T[lang];
   const parts = [
     t.went(curr, prev, curr, sayDate(da, lang), sayDate(db, lang)),

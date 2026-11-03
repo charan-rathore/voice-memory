@@ -1299,12 +1299,21 @@ const HOW_FAR_RE =
 function howFar(t, question) {
   const o = t?.used?.length === 1 ? t.used[0] : null;
   if (!HOW_FAR_RE.test(question) || !o || typeof o.value !== "number") return t;
+  // No distance math against a limit a stamp may be covering.
+  if (o.suspectObscured) return t;
   const { lowN = null, highN = null } = o.ref ?? {};
   const dp = (x) => (String(x).split(".")[1] ?? "").length;
   const places = Math.max(dp(o.raw ?? o.value), dp(highN ?? lowN ?? 0));
   const fmt = (x) => x.toFixed(places);
   const u = o.unit ? ` ${o.unit}` : "";
   const lang = t.lang ?? "en";
+  const embed = o.stampedCopy
+    ? {
+        en: "By the report's embedded text, ",
+        hi: "रिपोर्ट के एम्बेडेड टेक्स्ट के मुताबिक, ",
+        hinglish: "Report ke embedded text ke mutabik, ",
+      }[lang]
+    : "";
   let lead = null;
   if (highN != null && o.value > highN) {
     const d = fmt(o.value - highN);
@@ -1327,7 +1336,8 @@ function howFar(t, question) {
       hinglish: "Yeh lab ki range se bahar nahi hai.",
     }[lang];
   }
-  return lead ? { ...t, spoken: `${lead} ${t.spoken}` } : t;
+  if (lead && embed) lead = lead.charAt(0).toLowerCase() + lead.slice(1);
+  return lead ? { ...t, spoken: `${embed}${lead} ${t.spoken}` } : t;
 }
 
 export function clinicalAnswer(question, reports) {

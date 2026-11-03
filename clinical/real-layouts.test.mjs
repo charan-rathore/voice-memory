@@ -310,3 +310,204 @@ test("risk-category table bleed never becomes an observation", () => {
   // WM14's LDL risk table bleeds "| Moderate | 100 | <130 ≥100 ≥130 |".
   assert.equal(readLabLine("| Moderate | 100 | <130 ≥100 ≥130 |"), null);
 });
+
+test("a row an overlaid stamp crosses answers with provenance, never certainty", () => {
+  // WM14 shape: the "Sample Report" stamp crosses the BUN/Creatinine Ratio
+  // row. The text layer holds a value; the page does not show it readably.
+  const elements = [
+    {
+      id: "e1",
+      type: "table",
+      page: 1,
+      bbox: [40, 420, 535, 470],
+      method: "pdf-text",
+    },
+    {
+      id: "e1.r0",
+      parent: "e1",
+      type: "table-header",
+      cells: ["Test Name", "Results", "Units", "Bio. Ref. Interval"],
+      page: 1,
+      bbox: [40, 420, 535, 430],
+      method: "pdf-text",
+      start: 0,
+      end: 10,
+    },
+    {
+      id: "e1.r1",
+      parent: "e1",
+      type: "table-row",
+      cells: ["BUN/Creatinine Ratio", "14", "", ""],
+      page: 1,
+      bbox: [40, 425, 282, 436],
+      method: "pdf-text",
+      start: 11,
+      end: 30,
+    },
+    {
+      id: "e1.r2",
+      parent: "e1",
+      type: "table-row",
+      cells: ["Creatinine", "0.86", "mg/dL", "0.67 - 1.17"],
+      page: 1,
+      bbox: [40, 445, 535, 455],
+      method: "pdf-text",
+      start: 31,
+      end: 50,
+    },
+    {
+      id: "w1",
+      type: "overlay",
+      text: "Sample Report",
+      page: 1,
+      bbox: [232, 376, 377, 430],
+      method: "pdf-text",
+    },
+  ];
+  const rep = extractReport({ text: "", elements });
+  const ratio = rep.observations.find((o) => /ratio/i.test(o.test));
+  const creat = rep.observations.find((o) => o.test === "Creatinine");
+  assert.equal(ratio.suspectObscured, true, "stamp-crossed row flagged");
+  assert.equal(creat.suspectObscured, undefined, "clear row untouched");
+  const R = [
+    { ...rep, title: "stamped.pdf", sourceId: "s1", haystack: " creatinine bun ratio " },
+  ];
+  const ans = clinicalAnswer("What is the BUN creatinine ratio?", R);
+  assert.match(ans.spoken, /embedded text reads 14/);
+  assert.match(ans.spoken, /can't confirm it from the page/);
+  assert.doesNotMatch(ans.spoken, /Your BUN\/Creatinine Ratio result is 14/);
+  assert.doesNotMatch(ans.spoken, /range/i && /within this lab's range/);
+  // An unobscured row in the same report answers exactly as before.
+  const c = clinicalAnswer("What is the creatinine result?", R);
+  assert.match(c.spoken, /Your Creatinine result is 0.86 mg\/dL/);
+  assert.match(c.spoken, /within this lab's range/);
+});
+
+test("no distance math against a limit a stamp may be covering", () => {
+  const elements = [
+    {
+      id: "e1",
+      type: "table",
+      page: 1,
+      bbox: [40, 340, 535, 365],
+      method: "pdf-text",
+    },
+    {
+      id: "e1.r0",
+      parent: "e1",
+      type: "table-header",
+      cells: ["Test Name", "Results", "Units", "Bio. Ref. Interval"],
+      page: 1,
+      bbox: [40, 340, 535, 350],
+      method: "pdf-text",
+      start: 0,
+      end: 10,
+    },
+    {
+      id: "e1.r1",
+      parent: "e1",
+      type: "table-row",
+      cells: ["LDL Cholesterol, Calculated", "160.20", "mg/dL", "<100.00"],
+      page: 1,
+      bbox: [40, 352, 535, 362],
+      method: "pdf-text",
+      start: 11,
+      end: 40,
+    },
+    {
+      id: "w1",
+      type: "overlay",
+      text: "Sample Report",
+      page: 1,
+      bbox: [232, 350, 556, 420],
+      method: "pdf-text",
+    },
+  ];
+  const rep = extractReport({ text: "", elements });
+  const R = [
+    { ...rep, title: "stamped.pdf", sourceId: "s1", haystack: " ldl cholesterol " },
+  ];
+  const ans = clinicalAnswer("How far above the LDL limit is it?", R);
+  assert.doesNotMatch(ans.spoken, /above the lab's upper limit/);
+  assert.match(ans.spoken, /can't confirm it from the page/);
+});
+
+test("a stamped copy answers with embedded-text provenance and a caveat", () => {
+  // LalPath WM14 shape: a declared Watermark annotation on the page whose
+  // appearance stream the text layer cannot see, so any cell may be
+  // covered: values are spoken as embedded-text reads, never as print.
+  const elements = [
+    {
+      id: "e1",
+      type: "table",
+      page: 1,
+      bbox: [40, 340, 535, 365],
+      method: "pdf-text",
+    },
+    {
+      id: "e1.r0",
+      parent: "e1",
+      type: "table-header",
+      cells: ["Test Name", "Results", "Units", "Bio. Ref. Interval"],
+      page: 1,
+      bbox: [40, 340, 535, 350],
+      method: "pdf-text",
+      start: 0,
+      end: 10,
+    },
+    {
+      id: "e1.r1",
+      parent: "e1",
+      type: "table-row",
+      cells: ["BUN/Creatinine Ratio", "14", "", ""],
+      page: 1,
+      bbox: [40, 352, 282, 362],
+      method: "pdf-text",
+      start: 11,
+      end: 40,
+    },
+  ];
+  const pages = [{ number: 1, watermark: true }];
+  const rep = extractReport({ text: "", elements, pages });
+  const ratio = rep.observations[0];
+  assert.equal(ratio.stampedCopy, true);
+  assert.equal(ratio.suspectObscured, undefined, "no visible stamp text");
+  const R = [
+    { ...rep, title: "stamped.pdf", sourceId: "s1", haystack: " bun ratio " },
+  ];
+  const ans = clinicalAnswer("What is the BUN creatinine ratio?", R);
+  assert.match(ans.spoken, /^The report's embedded text reads 14/);
+  assert.match(ans.spoken, /overlaid stamp/);
+  assert.doesNotMatch(ans.spoken, /Your BUN\/Creatinine Ratio result is 14/);
+  // The unit is not asserted as printed fact either.
+  assert.doesNotMatch(ans.spoken, /reads 14 mg\/dL/);
+  // Hinglish keeps the same provenance and caveat.
+  const hg = clinicalAnswer("Cholesterol kitna hai?", [
+    {
+      ...extractReport({
+        text: "Cholesterol, Total 250.70 mg/dL <200.00\n",
+        elements: [],
+        pages,
+      }),
+      title: "stamped2.pdf",
+      sourceId: "s2",
+      haystack: " cholesterol ",
+    },
+  ]);
+  assert.match(hg.spoken, /embedded text mein Cholesterol, Total ka result 250.70 mg\/dL likha hai/);
+  assert.match(hg.spoken, /overlaid stamp/);
+});
+
+test("an unstamped report keeps the plain printed-value wording", () => {
+  const rep = extractReport({
+    text: "Creatinine, Serum 0.86 mg/dL 0.67 - 1.17\n",
+    elements: [],
+    pages: [{ number: 1 }],
+  });
+  const R = [
+    { ...rep, title: "plain.pdf", sourceId: "s1", haystack: " creatinine " },
+  ];
+  const ans = clinicalAnswer("What is the creatinine result?", R);
+  assert.match(ans.spoken, /Your Creatinine, Serum result is 0.86 mg\/dL/);
+  assert.doesNotMatch(ans.spoken, /overlaid stamp|embedded text/);
+});

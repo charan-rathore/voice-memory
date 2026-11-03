@@ -278,6 +278,18 @@ export async function parsePdf(buf) {
           size,
         };
       });
+    // A declared Watermark annotation is a stamp layered OVER the page
+    // text (LalPath "Sample Report" copies). pdf.js does not put its
+    // appearance text into the text content, and encrypted documents
+    // cannot be raw-parsed, so which cells it covers is unknown here:
+    // the page is flagged, and answers qualify provenance accordingly.
+    let watermark = false;
+    try {
+      const anns = await page.getAnnotations();
+      watermark = anns.some((a) => a?.subtype === "Watermark");
+    } catch {
+      watermark = false;
+    }
     const info = {
       number: n,
       width: r1(vp.width),
@@ -285,6 +297,7 @@ export async function parsePdf(buf) {
       rotation: page.rotate,
       textSource: "pdf",
       columns: 1,
+      watermark,
     };
     if (!items.length) {
       info.textSource = "none";
@@ -427,7 +440,29 @@ export async function parsePdf(buf) {
       table = null;
     };
     let prev = null;
+    // Overlay-scale text (a "Sample Report" stamp or watermark) is far
+    // bigger than any heading and crosses rows it is not part of. Keep it
+    // out of the reading flow; its box later marks rows whose printed
+    // cells are SUSPECTED covered - a heuristic signal, never proof.
+    const overlaySize = Math.max(24, body * 4);
     for (const l of lines) {
+      // Margin text (barcodes, big folios) is furniture, never an overlay.
+      if (
+        l.size >= overlaySize &&
+        !(l.y < l.pageHeight * 0.08 || l.y > l.pageHeight * 0.92)
+      ) {
+        flushPara();
+        flushTable();
+        blocks.push({
+          type: "overlay",
+          text: l.text,
+          page: l.page,
+          bbox: l.bbox,
+          method: "pdf-text",
+        });
+        prev = null;
+        continue;
+      }
       if (
         furniture.has(furnitureKey(l.text)) ||
         (/^(page\s*)?\d+(\s*(of|\/)\s*\d+)?$/i.test(l.text.trim()) &&

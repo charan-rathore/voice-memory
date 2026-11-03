@@ -298,6 +298,41 @@ export function extractReport(doc) {
       },
     });
   }
+  // A row an overlay-scale stamp crosses is suspected-covered: whatever
+  // sits under the stamp (value, unit or range) comes from the embedded
+  // text layer alone and cannot be confirmed from the page. Conservative
+  // heuristic, fail-closed: axis-aligned boxes over-cover rotated stamp
+  // text, so suspicion is flagged, never visibility or invisibility.
+  const overlays = (doc.elements ?? []).filter(
+    (e) => e.type === "overlay" && e.bbox && e.page != null,
+  );
+  if (overlays.length)
+    for (const o of observations) {
+      const b = o.source?.bbox;
+      if (
+        b &&
+        overlays.some(
+          (w) =>
+            w.page === o.source.page &&
+            w.bbox[0] < b[2] &&
+            b[0] < w.bbox[2] &&
+            w.bbox[1] < b[3] &&
+            b[1] < w.bbox[3],
+        )
+      )
+        o.suspectObscured = true;
+    }
+  // Declared watermark annotation on the page: the report is a stamped
+  // copy, so any printed cell may be unreadable on the page itself.
+  const stampedPages = new Set(
+    (doc.pages ?? []).filter((pg) => pg.watermark).map((pg) => pg.number),
+  );
+  if (stampedPages.size)
+    for (const o of observations) {
+      // Unknown page: the stamp could be on the page the row came from.
+      if (o.source?.page == null || stampedPages.has(o.source.page))
+        o.stampedCopy = true;
+    }
   return { meta, observations };
 }
 
