@@ -31779,6 +31779,14 @@ function answer(question, bundle, dense) {
     }
     if (quantitative && hasQuantity && metricQ) {
       const asked = metricQ[1].toLowerCase();
+      const BILLING_GENERIC = /* @__PURE__ */ new Set([
+        "amount",
+        "cost",
+        "price",
+        "fee",
+        "charge"
+      ]);
+      const billingOwner = BILLING_GENERIC.has(asked);
       quantOk = false;
       for (const sentence of exText.split(/[.!?\n]/)) {
         for (const q of sentence.matchAll(
@@ -31787,10 +31795,12 @@ function answer(question, bundle, dense) {
           const left = sentence.slice(0, q.index);
           const nouns = [
             ...left.matchAll(
-              /(revenue|budget|turnover|profit|margin|sales|cost|price|amount|spend|fee|charge)/gi
+              /(revenue|budget|turnover|profit|margin|sales|cost|price|amount|spend|fee|charge|total|due|balance|payable|invoice|bill)/gi
             )
           ];
-          if (nouns.length && nouns[nouns.length - 1][1].toLowerCase() === asked) {
+          if (nouns.length && (nouns[nouns.length - 1][1].toLowerCase() === asked || billingOwner && /^(total|due|balance|payable|invoice|bill)$/i.test(
+            nouns[nouns.length - 1][1]
+          ))) {
             quantOk = true;
             break;
           }

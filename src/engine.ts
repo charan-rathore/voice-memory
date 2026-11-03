@@ -864,6 +864,20 @@ export function answer(
       // the left of a quantity in its sentence must be that metric, so
       // "marketing spend was $2,000,000" never answers a revenue question.
       const asked = metricQ[1].toLowerCase();
+      // Billing-generic asks ("amount", "cost", "price", "fee", "charge")
+      // are also owned by invoice phrasing that never names a metric noun:
+      // "Invoice total due: 18,500 INR" answers an amount question even
+      // though its only quantity-owners are "total"/"due". Strict metrics
+      // (revenue, budget, margin, ...) keep the exact-noun rule, so
+      // "marketing spend was $2,000,000" still never answers revenue.
+      const BILLING_GENERIC = new Set([
+        "amount",
+        "cost",
+        "price",
+        "fee",
+        "charge",
+      ]);
+      const billingOwner = BILLING_GENERIC.has(asked);
       quantOk = false;
       for (const sentence of exText.split(/[.!?\n]/)) {
         for (const q of sentence.matchAll(
@@ -872,12 +886,16 @@ export function answer(
           const left = sentence.slice(0, q.index);
           const nouns = [
             ...left.matchAll(
-              /(revenue|budget|turnover|profit|margin|sales|cost|price|amount|spend|fee|charge)/gi,
+              /(revenue|budget|turnover|profit|margin|sales|cost|price|amount|spend|fee|charge|total|due|balance|payable|invoice|bill)/gi,
             ),
           ];
           if (
             nouns.length &&
-            nouns[nouns.length - 1][1].toLowerCase() === asked
+            (nouns[nouns.length - 1][1].toLowerCase() === asked ||
+              (billingOwner &&
+                /^(total|due|balance|payable|invoice|bill)$/i.test(
+                  nouns[nouns.length - 1][1],
+                )))
           ) {
             quantOk = true;
             break;
