@@ -457,12 +457,15 @@ export function answer(
     // this list "How will we bill them?" anchors on "them" and every plain
     // paraphrase would fall silent.
     const FILLER_Q = new Set(
-      "anyone anybody someone somebody everyone everybody anything something nothing them they their theirs there here himself herself itself myself ourselves yourself finally currently now yet still already just really actually ever never always often much many more most less least very only even also back again once twice about into over under with without from this that these those what which when where whom whose while does doing done have having had been being were will would shall should may might must".split(
+      "anyone anybody someone somebody everyone everybody anything something nothing them they their theirs there here himself herself itself myself ourselves yourself finally currently initially originally now yet still already just really actually ever never always often much many more most less least very only even also back again once twice about into over under with without from this that these those what which when where whom whose while does doing done have having had been being were will would shall should may might must".split(
         " ",
       ),
     );
+    // Tokenize on hyphens too: a hyphenated compound carries its parts'
+    // vocabulary, so "status-update" is the field words "status update",
+    // not an unmatched subject that silences the claims layer.
     const qSubjects = (
-      question.toLowerCase().match(/\b[a-z][a-z-]{3,}\b/g) ?? []
+      question.toLowerCase().match(/\b[a-z]{4,}\b/g) ?? []
     ).filter(
       (t) => !GENERIC_Q.has(t) && !FIELD_TOKEN.has(t) && !FILLER_Q.has(t),
     );
