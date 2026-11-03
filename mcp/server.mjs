@@ -23,9 +23,9 @@
 // (path-delimiter separated); it accepts only the document types the engine
 // reads, under 4 MB, never inside a hidden folder, judged by the real path.
 // Each upload is also confirmed by the person: through MCP elicitation when
-// the client supports it; a client without elicitation is refused unless
-// the operator sets VM_MCP_UPLOAD_CONFIRM=off (the roots are then the only
-// consent). The remote transport has no local files and never offers it.
+// the client supports it; a client without elicitation is refused.
+// Text imports need the same confirmation. The stateless remote transport
+// cannot elicit consent and does not offer either import tool.
 import { readFile, realpath, stat } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { basename, isAbsolute, sep, delimiter } from "node:path";
@@ -111,7 +111,7 @@ const TOOLS = [
     name: "add_document_text",
     title: "Add a text document",
     description:
-      "Add a document by its text (notes, a contract clause, an email) to a workspace, as a .txt or .md file. Works on the remote server too.",
+      "Add a document by its text (notes, a contract clause, an email) to a workspace, as a .txt or .md file. Requires person confirmation through local stdio elicitation.",
     inputSchema: {
       type: "object",
       required: ["workspace", "name", "text"],
@@ -231,8 +231,8 @@ export const uploadsEnabled = () => !!process.env.VM_MCP_UPLOAD_ROOTS;
 
 /**
  * Ask the person before a file leaves their computer. Elicitation
- * (MCP 2025-06-18) when the client offers it; otherwise refuse, unless the
- * operator turned the prompt off and the upload roots are the consent.
+ * (MCP 2025-06-18) when the client offers it; otherwise refuse. The legacy
+ * confirmation-off environment variable never authorizes a disclosure.
  */
 async function confirmUpload(ctx, file, size, workspace) {
   if (ctx.elicit) {
@@ -254,7 +254,7 @@ async function confirmUpload(ctx, file, size, workspace) {
       .catch(() => null);
     return r?.action === "accept" && r?.content?.confirm === true;
   }
-  return process.env.VM_MCP_UPLOAD_CONFIRM === "off";
+  return false;
 }
 
 async function call(name, args = {}, ctx = {}) {
@@ -304,6 +304,10 @@ async function call(name, args = {}, ctx = {}) {
       });
     }
     case "add_document_text": {
+      if (ctx.remote)
+        throw new Error(
+          "remote document import is unavailable: this transport cannot ask for confirmation",
+        );
       if (!/^w_[0-9a-f]{32}$/.test(String(args.workspace)))
         throw new Error("workspace must be an id from create_workspace");
       if (
@@ -314,6 +318,26 @@ async function call(name, args = {}, ctx = {}) {
       if (!text.trim()) throw new Error("text is empty");
       if (text.length > 200000)
         throw new Error("text is over 200,000 characters");
+      if (!ctx.elicit)
+        throw new Error(
+          "text import not confirmed by the user; nothing was sent",
+        );
+      const consent = await ctx
+        .elicit(
+          `Send the following document ${args.name} to Voice Memory at ${new URL(ctx.base ?? BASE).host}, workspace ${args.workspace}? It leaves this computer. Workspace expires after 30 idle minutes or a server restart.\n\n${text}`,
+          {
+            type: "object",
+            properties: {
+              confirm: { type: "boolean", title: "Send this text document" },
+            },
+            required: ["confirm"],
+          },
+        )
+        .catch(() => null);
+      if (consent?.action !== "accept" || consent?.content?.confirm !== true)
+        throw new Error(
+          "text import not confirmed by the user; nothing was sent",
+        );
       return a(`/workspace/${args.workspace}/upload`, {
         method: "POST",
         headers: {
@@ -355,7 +379,11 @@ export async function handle(msg, ctx = {}) {
     return {
       tools:
         ctx.remote || !uploadsEnabled()
-          ? TOOLS.filter((t) => t.name !== "upload_document")
+          ? TOOLS.filter(
+              (t) =>
+                t.name !== "upload_document" &&
+                (!ctx.remote || t.name !== "add_document_text"),
+            )
           : TOOLS,
     };
   if (method === "tools/call") {

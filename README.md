@@ -167,15 +167,16 @@ pointer, never the answer. It stays off because on outside data it is right
 
 ### As an MCP server
 
-Two transports, the same tools (`ask_records`, `list_cases`,
-`create_workspace`, `add_document_text`, `workspace_status`, and, locally,
-`upload_document`). No keys.
+Both transports offer `ask_records`, `list_cases`, `create_workspace` and
+`workspace_status`. Local stdio also offers `add_document_text` and, when
+allowed folders are configured, `upload_document`. No keys.
 
 **Remote (nothing to install):** add
 `https://voice-memory-beige.vercel.app/api/public/mcp` as a custom connector
 (Streamable HTTP, MCP 2025-06-18, stateless JSON). It calls the engine's own
-public API, so the same rate limits and refusals apply. It does not offer
-`upload_document`: a remote server has no files of yours to read.
+public API, so the same rate limits and refusals apply. It does not offer document imports: this stateless transport cannot ask
+the person to confirm a disclosure. It can ask the fictional demo cases or
+an existing workspace; it cannot add documents through MCP HTTP.
 
 **Local (stdio):** `mcp/server.mjs`, zero dependencies.
 
@@ -197,9 +198,10 @@ then it only accepts PDF, DOCX, PNG, JPEG, TXT and MD files under 4 MB, never
 from a hidden folder (`.ssh`, `.aws`, ...), judged by the real path after
 symlinks, and it asks the person before each file leaves the computer
 (MCP elicitation: file name, size, path and destination). A client that
-cannot ask is refused; an operator who wants the folder list to be the only
-consent sets `VM_MCP_UPLOAD_CONFIRM=off`. `VM_API_BASE` points it at another
-deployment.
+cannot ask is refused, including when the legacy `VM_MCP_UPLOAD_CONFIRM=off`
+variable is set. `add_document_text` also requires elicitation, showing the
+text, name, destination and short-lived retention before anything is sent.
+`VM_API_BASE` points it at another deployment.
 
 Checked with the official MCP SDK client over stdio (direct and through a
 symlink) and Streamable HTTP, and with Claude Code (`claude mcp list`:

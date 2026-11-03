@@ -355,7 +355,7 @@
     },
     "/mcp": {
       "post": {
-        "summary": "Model Context Protocol, Streamable HTTP (2025-06-18), stateless JSON-RPC. Tools: ask_records, list_cases, create_workspace, add_document_text, workspace_status.",
+        "summary": "Model Context Protocol, Streamable HTTP (2025-06-18), stateless JSON-RPC. Tools: ask_records, list_cases, create_workspace, workspace_status (document imports require local stdio with person confirmation).",
         "requestBody": {
           "required": true,
           "content": {
@@ -394,7 +394,7 @@
     },
     "/llm/key": {
       "post": {
-        "summary": "Issue a custom-LLM key for your own voice platform (Bolna, Vapi, Retell, ElevenLabs Agents), bound to one case or your workspace, valid 24 hours",
+        "summary": "Issue a custom-LLM key for your own voice platform (Bolna, Vapi, Retell, ElevenLabs Agents), bound to one case or your workspace, valid up to 24 hours; workspace keys expire with the workspace and all keys expire on server restart",
         "requestBody": {
           "required": true,
           "content": {

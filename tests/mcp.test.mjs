@@ -10,6 +10,7 @@ import {
   checkUploadPath,
   negotiate,
   SUPPORTED,
+  handle,
 } from "../mcp/server.mjs";
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -215,7 +216,7 @@ test("MCP: an upload needs allowed folders and the person's yes", async () => {
     assert.equal(r3.isError, true);
     assert.match(r3.content[0].text, /not confirmed/);
 
-    // a client that cannot ask is refused unless the operator opted out
+    // A client that cannot ask is refused, even with the legacy bypass flag.
     const mute = mk({ VM_MCP_UPLOAD_ROOTS: ok });
     await init(mute);
     assert.match(
@@ -227,7 +228,7 @@ test("MCP: an upload needs allowed folders and the person's yes", async () => {
       VM_MCP_UPLOAD_CONFIRM: "off",
     });
     await init(optOut);
-    assert.equal((await upload(optOut, join(ok, "notes.txt"))).isError, false);
+    assert.equal((await upload(optOut, join(ok, "notes.txt"))).isError, true);
   } finally {
     clients.forEach((c) => c.close());
     srv.close();
@@ -297,5 +298,61 @@ test("MCP over Streamable HTTP: the engine serves the same tools at /api/public/
     assert.equal((await fetch(url)).status, 405);
   } finally {
     srv.close();
+  }
+});
+
+test("MCP text imports require a person, and remote imports are unavailable", async () => {
+  const original = globalThis.fetch;
+  let sent = 0;
+  globalThis.fetch = async () => {
+    sent++;
+    return new Response(JSON.stringify({ accepted: true }), { status: 200 });
+  };
+  const msg = {
+    id: 1,
+    method: "tools/call",
+    params: {
+      name: "add_document_text",
+      arguments: {
+        workspace: "w_" + "a".repeat(32),
+        name: "notes.txt",
+        text: "Synthetic test note only.",
+      },
+    },
+  };
+  try {
+    for (const ctx of [
+      {},
+      { elicit: async () => ({ action: "decline" }) },
+      {
+        remote: true,
+        elicit: async () => ({ action: "accept", content: { confirm: true } }),
+      },
+      {
+        elicit: async () => {
+          throw Error("timeout");
+        },
+      },
+    ]) {
+      const result = await handle(msg, ctx);
+      assert.equal(result.isError, true);
+      assert.equal(sent, 0, "no document text sent before consent");
+    }
+    const list = await handle({ method: "tools/list" }, { remote: true });
+    assert.ok(!list.tools.some((t) => t.name === "add_document_text"));
+    let prompt = "";
+    const result = await handle(msg, {
+      elicit: async (message) => {
+        prompt = message;
+        return { action: "accept", content: { confirm: true } };
+      },
+    });
+    assert.equal(result.isError, false);
+    assert.equal(sent, 1);
+    assert.match(prompt, /notes\.txt/);
+    assert.match(prompt, /Synthetic test note only/);
+    assert.match(prompt, /voice-memory-beige\.vercel\.app/);
+  } finally {
+    globalThis.fetch = original;
   }
 });

@@ -269,3 +269,17 @@ test("the range-assessment tile names the reading it judges", () => {
     "the 'To the printed range' tile must say which reading it assesses",
   );
 });
+
+test("BYO controls load on intent and hidden key details stay hidden", () => {
+  assert.doesNotMatch(html, /id="byo-bolna-key"/);
+  const panel = readFileSync(site("byo-panel.html"), "utf8");
+  const css = readFileSync(site("byo.css"), "utf8");
+  const js = readFileSync(site("site.js"), "utf8");
+  assert.match(panel, /id="byo-bolna-key"/);
+  assert.match(panel, /id="byo-llm" hidden/);
+  assert.match(css, /\.byo-llm\[hidden\]\s*\{\s*display:\s*none/);
+  assert.ok(
+    js.indexOf('root.addEventListener("toggle", opened)') <
+      js.indexOf('fetch("byo-panel.html")'),
+  );
+});

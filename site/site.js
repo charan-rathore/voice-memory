@@ -1899,9 +1899,28 @@
   })();
 
   // Your own voice keys: the panel under the call bar.
-  (() => {
+  (async () => {
     const root = $("#byo");
     if (!root) return;
+    // Provider controls are not needed until this panel is opened.
+    await new Promise((resolve) => {
+      if (root.open) return resolve();
+      const opened = () => {
+        if (!root.open) return;
+        root.removeEventListener("toggle", opened);
+        resolve();
+      };
+      root.addEventListener("toggle", opened);
+    });
+    try {
+      const response = await fetch("byo-panel.html");
+      if (!response.ok) throw Error("Voice controls could not load. Reload to retry.");
+      root.insertAdjacentHTML("beforeend", await response.text());
+      document.head.append(Object.assign(document.createElement("link"), { rel: "stylesheet", href: "byo.css" }));
+    } catch (error) {
+      $("#byo-state").textContent = error.message;
+      return;
+    }
     const f = {
       bolnaKey: $("#byo-bolna-key"),
       bolnaAgent: $("#byo-bolna-agent"),

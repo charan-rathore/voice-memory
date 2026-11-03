@@ -1093,6 +1093,8 @@ export function createLocalServer({
     libraryOf(w.s).length = 0; // frees the global document budget
     w.s.bundle = null;
     workspaces.delete(id);
+    // Drop voice bundle references at the same time, not on the next key sweep.
+    for (const [token, key] of byoKeys) if (key.scope === id) byoRevoke(token);
   };
   const sweepWorkspaces = () => {
     for (const [id, w] of workspaces)
@@ -1100,6 +1102,11 @@ export function createLocalServer({
     while (workspaces.size >= WS_MAX)
       dropWorkspace(workspaces.keys().next().value);
   };
+  const workspaceSweepTimer = setInterval(() => {
+    for (const [id, w] of workspaces)
+      if (Date.now() - w.at > WS_IDLE_MS) dropWorkspace(id);
+  }, 1000);
+  workspaceSweepTimer.unref?.();
   const rebuildWorkspace = (ws) => {
     const docsIn = indexable(ws);
     for (const e of libraryOf(ws))
@@ -1132,6 +1139,10 @@ export function createLocalServer({
     get(id) {
       const w = workspaces.get(id);
       if (!w) return null;
+      if (Date.now() - w.at > WS_IDLE_MS) {
+        dropWorkspace(id);
+        return null;
+      }
       w.at = Date.now();
       return w.s;
     },
@@ -1223,8 +1234,11 @@ export function createLocalServer({
         (scope === "demo" ? voiceCase.bundle : caseSessions[scope]?.bundle) ??
         null
       );
-    if (/^w_[0-9a-f]{32}$/.test(String(scope)))
+    if (/^w_[0-9a-f]{32}$/.test(String(scope))) {
+      const w = workspaces.get(scope);
+      if (w && Date.now() - w.at > WS_IDLE_MS) dropWorkspace(scope);
       return workspaces.get(scope)?.s?.bundle ?? null;
+    }
     return null;
   };
   // A key is live while it is under 24 hours old and its scope still
@@ -2363,6 +2377,7 @@ export function createLocalServer({
     }
   });
   server.loadPublicCases = loadPublicCases;
+  server.once("close", () => clearInterval(workspaceSweepTimer));
   return server;
 }
 export const server = createLocalServer();

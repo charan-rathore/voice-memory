@@ -78,35 +78,36 @@
           <p class="fine">Illustrative synthetic records only. Not a diagnostic or clinically validated product.</p>
         </div>
 
-        <figure class="hero-card" aria-label="Three questions the engine answers from fictional records: a corrected ferritin result, creatinine in two units, and a proposal that was never approved">
+        <figure class="hero-card hx" aria-label="Three questions the engine answers from fictional records: a corrected ferritin result, creatinine in two units, and a proposal that was never approved">
           <div class="hc-tabs" role="tablist" aria-label="Examples">
-            <button type="button" role="tab" class="hc-tab" data-scene="fix" aria-selected="true"><i aria-hidden="true"></i><span>Correction</span></button>
-            <button type="button" role="tab" class="hc-tab" data-scene="units" aria-selected="false"><i aria-hidden="true"></i><span>Units</span></button>
-            <button type="button" role="tab" class="hc-tab" data-scene="deal" aria-selected="false"><i aria-hidden="true"></i><span>Approval</span></button>
+            <span class="hx-ind" aria-hidden="true"></span>
+            <button type="button" role="tab" class="hc-tab" data-scene="fix" aria-selected="true"><span>Correction</span><i aria-hidden="true"></i></button>
+            <button type="button" role="tab" class="hc-tab" data-scene="units" aria-selected="false"><span>Units</span><i aria-hidden="true"></i></button>
+            <button type="button" role="tab" class="hc-tab" data-scene="deal" aria-selected="false"><span>Approval</span><i aria-hidden="true"></i></button>
           </div>
           <div class="hc-stage">
             <!-- scene 1: a corrected value (English) -->
             <div class="hc-scene on" data-scene="fix" data-case="health" data-q="What is SYN-0001's ferritin result?">
-              <div class="hc-head">
-                <span class="hc-patient">SYN-0001 · Ferritin · collected 12 Oct</span>
-                <span class="hc-ask"><span class="hc-lang">EN</span><span class="hc-q">“What's my ferritin?”</span></span>
-              </div>
-              <div class="hc-row">
-                <div class="hc-val prelim">
-                  <span class="hc-tag">Preliminary · 13 Oct</span>
-                  <span class="hc-num"><s>5</s></span>
-                  <span class="hc-unit">ng/mL</span>
+              <div class="hx-ask"><span class="hc-lang">EN</span><span class="hc-q">What's my ferritin?</span></div>
+              <p class="hs"><svg class="hs-ic" viewBox="0 0 16 16" aria-hidden="true"><circle class="hs-spin" cx="8" cy="8" r="6" /><path class="hs-ok" d="M4.6 8.3l2.2 2.2 4.6-4.8" /></svg><span data-at="ask">Listening</span><span data-at="scan">Reading 2 reports for SYN-0001</span><span data-at="fix">Amendment found · 15 Oct</span><span data-at="answer">Using the amended value</span></p>
+              <div class="hx-panel">
+                <div class="hc-row">
+                  <div class="hc-val prelim">
+                    <span class="hc-tag">Preliminary · 13 Oct</span>
+                    <span class="hc-num"><s>5</s></span>
+                    <span class="hc-unit">ng/mL</span>
+                  </div>
+                  <svg class="hc-arrow" viewBox="0 0 40 16" aria-hidden="true"><path d="M2 8h32" /><path d="M29 3l5 5-5 5" /></svg>
+                  <div class="hc-val amended">
+                    <span class="hc-tag">Amended · 15 Oct</span>
+                    <span class="hc-num"><span class="hc-d5">5</span><span class="hc-d0">0</span></span>
+                    <span class="hc-unit">ng/mL</span>
+                  </div>
                 </div>
-                <svg class="hc-arrow" viewBox="0 0 80 24" aria-hidden="true"><path d="M2 12h70" /><path d="M64 4l10 8-10 8" /></svg>
-                <div class="hc-val amended">
-                  <span class="hc-tag">Amended · 15 Oct</span>
-                  <span class="hc-num"><span class="hc-d5">5</span><span class="hc-d0">0</span></span>
-                  <span class="hc-unit">ng/mL</span>
+                <div class="hc-source">
+                  <span class="hc-file">a-2026-10-amended.pdf · p.1</span>
+                  <p><mark>Amended 15 October 2026: ferritin result corrected from 5 to 50</mark> (transcription error).</p>
                 </div>
-              </div>
-              <div class="hc-source">
-                <span class="hc-file">a-2026-10-amended.pdf · page 1</span>
-                <p><mark>Amended 15 October 2026: ferritin result corrected from 5 to 50</mark> (transcription error).</p>
               </div>
               <p class="hc-answer">
                 <span class="verdict-chip v-latest">Corrected value</span>
@@ -116,24 +117,21 @@
             </div>
             <!-- scene 2: two units, never compared (Hinglish) -->
             <div class="hc-scene" data-scene="units" data-case="health" data-q="creatinine september se badha kya?" aria-hidden="true">
-              <div class="hc-head">
-                <span class="hc-patient">SYN-0001 · Creatinine · Sep and Oct</span>
-                <span class="hc-ask"><span class="hc-lang">Hinglish</span><span class="hc-q">“creatinine september se badha kya?”</span></span>
-              </div>
-              <div class="hc-row hc-units">
-                <div class="hc-val sep">
-                  <span class="hc-tag">3 Sep · final</span>
-                  <span class="hc-num">1.2</span>
-                  <span class="hc-unit">mg/dL</span>
+              <div class="hx-ask"><span class="hc-lang">Hinglish</span><span class="hc-q">creatinine september se badha kya?</span></div>
+              <p class="hs"><svg class="hs-ic" viewBox="0 0 16 16" aria-hidden="true"><circle class="hs-spin" cx="8" cy="8" r="6" /><path class="hs-ok" d="M4.6 8.3l2.2 2.2 4.6-4.8" /></svg><span data-at="ask">Listening</span><span data-at="scan">Reading Creatinine · 3 Sep and 12 Oct</span><span data-at="fix">Different units · not comparable</span><span data-at="answer">Declining the comparison</span></p>
+              <div class="hx-panel hx-gauges">
+                <div class="hg g1" data-min="0" data-max="2" data-v="1.2">
+                  <svg viewBox="0 0 160 92" aria-hidden="true"><path class="hg-track" d="M16 84 A64 64 0 0 1 144 84" /><path class="hg-fill" pathLength="100" d="M16 84 A64 64 0 0 1 144 84" /><g class="hg-ticks"></g><g class="hg-needle"><path d="M80 84 L80 52" /><circle cx="80" cy="84" r="4.5" /></g></svg>
+                  <b class="hg-val">1.2<small>mg/dL</small></b>
+                  <span class="hg-cap">3 Sep · final</span>
                 </div>
-                <svg class="hc-tear" viewBox="0 0 40 90" aria-hidden="true"><path d="M20 4 l-10 10 l20 12 l-20 12 l20 12 l-20 12 l20 12 l-10 10" /></svg>
-                <div class="hc-val oct">
-                  <span class="hc-tag">12 Oct · amended</span>
-                  <span class="hc-num">106</span>
-                  <span class="hc-unit">µmol/L</span>
+                <span class="hx-neq" aria-hidden="true">≠</span>
+                <div class="hg g2" data-min="0" data-max="180" data-v="106">
+                  <svg viewBox="0 0 160 92" aria-hidden="true"><path class="hg-track" d="M16 84 A64 64 0 0 1 144 84" /><path class="hg-fill" pathLength="100" d="M16 84 A64 64 0 0 1 144 84" /><g class="hg-ticks"></g><g class="hg-needle"><path d="M80 84 L80 52" /><circle cx="80" cy="84" r="4.5" /></g></svg>
+                  <b class="hg-val">106<small>µmol/L</small></b>
+                  <span class="hg-cap">12 Oct · amended</span>
                 </div>
               </div>
-              <div class="hc-stamp no" aria-hidden="true">Not compared <span>mg/dL ≠ µmol/L</span></div>
               <p class="hc-answer">
                 <span class="verdict-chip v-no">Won't compare</span>
                 “Main aapke dono Creatinine results ki tulna nahi kar sakti: 3 September 2026 wala mg/dL mein hai aur 12
@@ -142,16 +140,16 @@
             </div>
             <!-- scene 3: proposed is not approved (Hindi) -->
             <div class="hc-scene" data-scene="deal" data-case="deal" data-q="क्या 42,000 वाला प्रस्ताव मंजूर हुआ?" aria-hidden="true">
-              <div class="hc-head">
-                <span class="hc-patient">Northstar · engagement fee</span>
-                <span class="hc-ask"><span class="hc-lang">हिंदी</span><span class="hc-q">“क्या 42,000 वाला प्रस्ताव मंजूर हुआ?”</span></span>
+              <div class="hx-ask"><span class="hc-lang">हिंदी</span><span class="hc-q">क्या 42,000 वाला प्रस्ताव मंजूर हुआ?</span></div>
+              <p class="hs"><svg class="hs-ic" viewBox="0 0 16 16" aria-hidden="true"><circle class="hs-spin" cx="8" cy="8" r="6" /><path class="hs-ok" d="M4.6 8.3l2.2 2.2 4.6-4.8" /></svg><span data-at="ask">Listening</span><span data-at="scan">Reading the Northstar fee history</span><span data-at="fix">No finance sign-off on record</span><span data-at="answer">Proposed, not approved</span></p>
+              <div class="hx-panel hx-funnel">
+                <div class="hf-steps">
+                  <div class="hc-rec old"><span class="hc-tag">Proposal v1 · 4 Sep</span><b>$48,000</b><em>Superseded</em></div>
+                  <div class="hc-rec new"><span class="hc-tag">Revision · 18 Sep</span><b>$42,000</b><em>Proposed</em></div>
+                  <div class="hc-rec sign"><span class="hc-tag">Finance sign-off</span><b class="hc-blank" aria-label="not recorded">—</b><em>Not on record</em></div>
+                </div>
+                <div class="hf-bar" aria-hidden="true"><span class="hf-seg"></span><span class="hf-seg"></span><span class="hf-seg hf-empty"></span><span class="hf-fill"></span><span class="hf-knob"></span></div>
               </div>
-              <div class="hc-deal">
-                <div class="hc-rec old"><span class="hc-tag">Proposal v1 · 4 Sep</span><b>$48,000</b><em>superseded</em></div>
-                <div class="hc-rec new"><span class="hc-tag">Revision · 18 Sep</span><b>$42,000</b><em>proposed</em></div>
-                <div class="hc-rec sign"><span class="hc-tag">Client finance sign-off</span><b class="hc-blank" aria-label="not recorded"><i></i></b><em>not on record</em></div>
-              </div>
-              <div class="hc-stamp warn" aria-hidden="true">Proposed is not approved</div>
               <p class="hc-answer">
                 <span class="verdict-chip v-warn">Not approved</span>
                 “$42,000 सबसे नया प्रस्ताव है, और यह अभी मंज़ूर नहीं हुआ है।”
@@ -186,6 +184,7 @@
               <span class="rr"><span>Ferritin</span><b>50</b><span>ng/mL</span><span>30–400</span></span>
               <span class="rr"><span>TSH</span><b>2.10</b><span>mIU/L</span><span>0.40–4.00</span></span>
               <span class="rr rr-lost"><span data-scramble>Creatinine</span><b data-scramble>106</b><span data-scramble>µmol/L</span><span data-scramble>62–115</span></span>
+              <span class="fig-cap">In September this lab printed creatinine in mg/dL. Same test, new unit and range, no explanation.</span>
             </span>
             <span class="stat-num" data-count="1" data-prefix="" data-suffix=" in 3">1 in 3</span>
             <span class="stat-text">of them said they understood those results only fairly well or poorly.</span>
@@ -269,36 +268,6 @@
 
             <details class="byo" id="byo">
               <summary><b>Use your own voice keys</b><span id="byo-state"></span></summary>
-              <div class="byo-body">
-                <p class="byo-lede">Your account pays for the voice; this engine still decides every reply and the line it rests on.</p>
-                <fieldset>
-                  <legend>Call on your Bolna account</legend>
-                  <label>Bolna API key<input id="byo-bolna-key" type="password" autocomplete="off" spellcheck="false" placeholder="bn-…" /></label>
-                  <label>Agent id<input id="byo-bolna-agent" autocomplete="off" spellcheck="false" placeholder="53863b64-…" /></label>
-                  <p class="byo-fine">The agent's LLM must be Voice Memory: set it to a custom, OpenAI-compatible LLM with the URL and key below.</p>
-                </fieldset>
-                <fieldset>
-                  <legend>Custom LLM for any voice platform</legend>
-                  <p class="byo-fine">Bolna, Vapi, Retell or ElevenLabs Agents: choose a custom / OpenAI-compatible LLM and paste these. The key answers only the documents you are viewing (or your own workspace), for 24 hours.</p>
-                  <button type="button" class="tool" id="byo-llm-get">Get a URL and key</button>
-                  <dl class="byo-llm" id="byo-llm" hidden>
-                    <dt>Base URL</dt><dd><code data-k="url"></code><button type="button" class="tool" data-copy>Copy</button></dd>
-                    <dt>API key</dt><dd><code data-k="key"></code><button type="button" class="tool" data-copy>Copy</button></dd>
-                    <dt>Model</dt><dd><code data-k="model"></code><button type="button" class="tool" data-copy>Copy</button></dd>
-                    <dt>Valid until</dt><dd><span data-k="until"></span></dd>
-                  </dl>
-                </fieldset>
-                <fieldset>
-                  <legend>Listen with your voice provider</legend>
-                  <label>Provider<select id="byo-tts-provider"><option value="">This server's voice</option><option value="sarvam">Sarvam Bulbul</option><option value="elevenlabs">ElevenLabs</option></select></label>
-                  <label>API key<input id="byo-tts-key" type="password" autocomplete="off" spellcheck="false" /></label>
-                </fieldset>
-                <div class="byo-foot">
-                  <label class="byo-check"><input id="byo-remember" type="checkbox" /> Remember on this device</label>
-                  <button type="button" class="tool" id="byo-clear">Forget my keys</button>
-                </div>
-                <p class="byo-fine">Keys stay in this browser (this tab, unless you tick Remember). Each is sent to this server only with the call or Listen request that needs it, used for that request only, and never stored or logged. Forget my keys also revokes any URL key issued here.</p>
-              </div>
             </details>
 
             <div class="answer" id="answer" aria-live="polite">
@@ -497,7 +466,7 @@ https://voice-memory-beige.vercel.app/api/public/mcp
 <span>// or local, over stdio</span>
 { "mcpServers": { "voice-memory": {
     "command": "node", "args": ["voice-memory/mcp/server.mjs"] } } }
-<span>// tools: ask_records, list_cases, create_workspace, add_document_text</span></code></pre>
+<span>// remote tools: ask_records, list_cases, create_workspace, workspace_status</span></code></pre>
           <pre class="tm-code" data-plug="bolna" hidden><code>Agent → LLM → Custom LLM (OpenAI-compatible)
   URL:   https://&lt;your-deployment&gt;/v1
   Key:   your voice capability token

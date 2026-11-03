@@ -14,7 +14,7 @@ Use it when you need an answer about a document that must not guess: it refuses 
 
 ## As an MCP tool
 
-- Remote MCP endpoint (Streamable HTTP, stateless JSON): `https://voice-memory-beige.vercel.app/api/public/mcp`. Tools: `ask_records`, `list_cases`, `create_workspace`, `add_document_text`, `workspace_status`.
+- Remote MCP endpoint (Streamable HTTP, stateless JSON): `https://voice-memory-beige.vercel.app/api/public/mcp`. Tools: `ask_records`, `list_cases`, `create_workspace`, `workspace_status`. Document imports require local stdio with person confirmation.
 
 ## How to use the answer
 

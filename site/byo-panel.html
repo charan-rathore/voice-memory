@@ -1,0 +1,30 @@
+              <div class="byo-body">
+                <p class="byo-lede">Your account pays for the voice; this engine still decides every reply and the line it rests on.</p>
+                <fieldset>
+                  <legend>Call on your Bolna account</legend>
+                  <label>Bolna API key<input id="byo-bolna-key" type="password" autocomplete="off" spellcheck="false" placeholder="bn-…" /></label>
+                  <label>Agent id<input id="byo-bolna-agent" autocomplete="off" spellcheck="false" placeholder="53863b64-…" /></label>
+                  <p class="byo-fine">The agent's LLM must be Voice Memory: set it to a custom, OpenAI-compatible LLM with the URL and key below.</p>
+                </fieldset>
+                <fieldset>
+                  <legend>Custom LLM for any voice platform</legend>
+                  <p class="byo-fine">Bolna, Vapi, Retell or ElevenLabs Agents: choose a custom / OpenAI-compatible LLM and paste these. The key answers only the documents you are viewing (or your own workspace), for up to 24 hours. Workspace keys also expire with the workspace or a server restart.</p>
+                  <button type="button" class="tool" id="byo-llm-get">Get a URL and key</button>
+                  <dl class="byo-llm" id="byo-llm" hidden>
+                    <dt>Base URL</dt><dd><code data-k="url"></code><button type="button" class="tool" data-copy>Copy</button></dd>
+                    <dt>API key</dt><dd><code data-k="key"></code><button type="button" class="tool" data-copy>Copy</button></dd>
+                    <dt>Model</dt><dd><code data-k="model"></code><button type="button" class="tool" data-copy>Copy</button></dd>
+                    <dt>Valid until</dt><dd><span data-k="until"></span></dd>
+                  </dl>
+                </fieldset>
+                <fieldset>
+                  <legend>Listen with your voice provider</legend>
+                  <label>Provider<select id="byo-tts-provider"><option value="">This server's voice</option><option value="sarvam">Sarvam Bulbul</option><option value="elevenlabs">ElevenLabs</option></select></label>
+                  <label>API key<input id="byo-tts-key" type="password" autocomplete="off" spellcheck="false" /></label>
+                </fieldset>
+                <div class="byo-foot">
+                  <label class="byo-check"><input id="byo-remember" type="checkbox" /> Remember on this device</label>
+                  <button type="button" class="tool" id="byo-clear">Forget my keys</button>
+                </div>
+                <p class="byo-fine">Provider keys stay in this browser (this tab, unless you tick Remember). Only save keys on a device you trust. Each provider key is sent to this server only with the call or Listen request that needs it and is used for that request only; server code does not persist it or include it in application logs. Provider account terms and charges still apply. Forget my keys also revokes any URL key issued here.</p>
+              </div>

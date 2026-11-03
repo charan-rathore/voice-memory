@@ -198,3 +198,36 @@ test("spring easing starts at 0, overshoots when underdamped, settles at 1", () 
   assert.equal(easing.split(",").length, 21);
   assert.ok(ms > 400 && ms < 1200, `${ms} ms`);
 });
+
+test("minimum-jerk profile starts and ends at rest", async () => {
+  const { minJerk } = await import("../site/motion-math.mjs");
+  assert.equal(minJerk(0), 0);
+  assert.equal(minJerk(1), 1);
+  assert.ok(Math.abs(minJerk(0.5) - 0.5) < 1e-12);
+  const h = 1e-4;
+  const v = (t) => (minJerk(t + h) - minJerk(t - h)) / (2 * h);
+  assert.ok(Math.abs(v(h)) < 1e-3 && Math.abs(v(1 - h)) < 1e-3);
+  assert.ok(Math.abs(v(0.5) - 1.875) < 1e-3); // peak speed 15/8
+});
+
+test("spring impulse peaks at 1 and settles back to 0", async () => {
+  const { springImpulse } = await import("../site/motion-math.mjs");
+  let max = -Infinity;
+  for (let t = 0; t < 2; t += 0.001)
+    max = Math.max(max, springImpulse(14, 0.32, t));
+  assert.ok(Math.abs(max - 1) < 1e-3);
+  assert.equal(springImpulse(14, 0.32, 0), 0);
+  assert.ok(Math.abs(springImpulse(14, 0.32, 3)) < 1e-3);
+});
+
+test("critically damped springTo reaches the target without overshoot", async () => {
+  const { springTo } = await import("../site/motion-math.mjs");
+  const s = { x: 0, v: 0 };
+  let over = false;
+  for (let i = 0; i < 240; i++) {
+    springTo(s, 100, 260, 1, 1 / 120);
+    if (s.x > 100.01) over = true;
+  }
+  assert.ok(!over);
+  assert.ok(Math.abs(s.x - 100) < 0.5);
+});

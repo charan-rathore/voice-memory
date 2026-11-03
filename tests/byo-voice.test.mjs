@@ -192,3 +192,70 @@ test("keys issued across all visitors have an hourly ceiling", async () => {
     srv.close();
   }
 });
+
+test("idle expiry rejects workspace reads before refreshing its lifetime", async () => {
+  const old = process.env.VM_WS_IDLE_MIN;
+  process.env.VM_WS_IDLE_MIN = "0.0001";
+  const { srv, base } = await boot();
+  try {
+    const workspace = await (
+      await fetch(`${base}/workspace`, { method: "POST" })
+    ).json();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const result = await fetch(`${base}/workspace/${workspace.id}`);
+    assert.equal(result.status, 404);
+  } finally {
+    if (old === undefined) delete process.env.VM_WS_IDLE_MIN;
+    else process.env.VM_WS_IDLE_MIN = old;
+    srv.close();
+  }
+});
+
+test("expired workspace revokes its BYO key without creating another workspace", async () => {
+  const { srv, base } = await boot();
+  const realNow = Date.now;
+  try {
+    const workspace = await (
+      await fetch(`${base}/workspace`, { method: "POST" })
+    ).json();
+    await fetch(`${base}/workspace/${workspace.id}/upload`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/octet-stream",
+        "x-file-name": "synthetic.txt",
+      },
+      body: "# Synthetic agreement\n\nThe synthetic renewal fee is $9,000 for the project. Payment is due within thirty days after the invoice. No amendment has been signed. This fixture contains no real personal information.",
+    });
+    for (let i = 0; i < 100; i++) {
+      const status = await (
+        await fetch(`${base}/workspace/${workspace.id}`)
+      ).json();
+      if (status.ready) break;
+      if (i === 99) assert.fail(JSON.stringify(status));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const response = await fetch(`${base}/llm/key`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ case: workspace.id }),
+    });
+    assert.equal(response.status, 200);
+    const key = await response.json();
+    Date.now = () => realNow() + 31 * 60000;
+    assert.equal(
+      (
+        await fetch(`${base}/llm/v1/models`, {
+          headers: { authorization: `Bearer ${key.apiKey}` },
+        })
+      ).status,
+      401,
+    );
+    assert.equal(
+      (await fetch(`${base}/workspace/${workspace.id}`)).status,
+      404,
+    );
+  } finally {
+    Date.now = realNow;
+    srv.close();
+  }
+});
