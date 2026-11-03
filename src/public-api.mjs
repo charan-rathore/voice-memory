@@ -59,6 +59,14 @@ const num = (v, d) => {
   return Number.isFinite(n) && n > 0 ? n : d;
 };
 
+/** A call's scope as the page names it: a demo case, all of them, or a workspace. */
+export const voiceScopeOf = (v) => {
+  const x = String(v ?? "");
+  return /^(health|deal|demo)$/.test(x) || /^w_[0-9a-f]{32}$/.test(x)
+    ? x
+    : null;
+};
+
 /** Sliding-window counter keyed by string. */
 function limiter(max, windowMs) {
   const hits = new Map();
@@ -88,6 +96,10 @@ export function clientAddress(req) {
  * @param {(s:any, question:string, ctx:string) => Promise<any>} deps.resolve deterministic answer for a session
  * @param {() => Promise<object>} deps.mintVoice mints a Bolna session
  * @param {() => object} deps.voiceState {configured, ready}
+ * @param {(since:number, call:string) => any[]} [deps.voiceTurns] verified turns of ONE call
+ * @param {{open:(call:string, scope:string)=>void, setScope:(call:string, scope:string)=>boolean}} [deps.voiceCalls]
+ *   per-call scope registry: the case or workspace the page has open is the
+ *   one voice answers from, and the page can move its own call
  */
 export function createPublicApi({
   cases,
@@ -104,6 +116,7 @@ export function createPublicApi({
   sarvam = null,
   voice = null,
   voiceIn = null,
+  voiceCalls = null,
 }) {
   // Neural voice out: a provider chain (voice-providers.mjs) or, for older
   // callers, the bare Sarvam adapter. Either way null means "not configured"
@@ -133,7 +146,7 @@ export function createPublicApi({
       });
     return null;
   };
-  const tickets = new Map(); // ticket -> mint time (call evidence feed)
+  const tickets = new Map(); // ticket -> {at, call} (one call's evidence feed)
   const askLimit = limiter(num(process.env.VM_PUBLIC_ASK_PER_MIN, 40), 60000);
   const globalAsk = limiter(
     num(process.env.VM_PUBLIC_ASK_GLOBAL_PER_MIN, 600),
@@ -619,7 +632,7 @@ export function createPublicApi({
           );
         const ctx =
           typeof data.context === "string" &&
-          /^[A-Za-z]{1,40}$/.test(data.context)
+          /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(data.context)
             ? data.context
             : "";
         const shown = await resolve(s, q, ctx, {
@@ -853,7 +866,7 @@ export function createPublicApi({
           return (send(res, 400, { error: "Ask a question first." }), true);
         const ctx =
           typeof data.context === "string" &&
-          /^[A-Za-z]{1,40}$/.test(data.context)
+          /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(data.context)
             ? data.context
             : "";
         const shown = await resolve(s, q, ctx, {
@@ -1114,6 +1127,18 @@ export function createPublicApi({
           );
         }
         const data = await readJson(req).catch(() => ({}));
+        // What the page has open is what this call answers from: a demo
+        // case, or the visitor's own workspace. The scope rides in vm_ws (the
+        // one variable the Bolna agent prompt substitutes), with a fresh
+        // per-call handle after it, so every turn of this call can be tied
+        // back to this ticket and this ticket only. Anything else the page
+        // sends is dropped: the vendor prompt is not a place for free text.
+        const ud =
+          data?.user_data && typeof data.user_data === "object"
+            ? data.user_data
+            : {};
+        const scope = voiceScopeOf(ud.vm_ws) ?? "demo";
+        const call = "c" + randomBytes(12).toString("hex");
         // Vendor-supported request correlation: the reservation id rides in
         // user_data so a later reconcile can attribute the vendor's own
         // execution record to THIS reservation (requires the vendor record
@@ -1127,9 +1152,10 @@ export function createPublicApi({
         let session;
         try {
           session = await mintVoice({
-            ...(data?.user_data && typeof data.user_data === "object"
-              ? data.user_data
+            ...(typeof ud.page === "string"
+              ? { page: ud.page.slice(0, 40) }
               : {}),
+            vm_ws: `${scope}.${call}`,
             vm_res: adm.reservation,
           });
         } catch (e) {
@@ -1159,9 +1185,10 @@ export function createPublicApi({
         // goes out behind it (normal-path enforcement, not a verified
         // billing cutoff).
         const ticket = randomBytes(16).toString("hex");
-        tickets.set(ticket, now());
-        for (const [t, at] of tickets)
-          if (now() - at > voiceMaxCallMs) tickets.delete(t);
+        tickets.set(ticket, { at: now(), call });
+        voiceCalls?.open(call, scope);
+        for (const [t, v] of tickets)
+          if (now() - v.at > voiceMaxCallMs) tickets.delete(t);
         const cutoff = setTimeout(() => {
           tickets.delete(ticket);
           if (stopVoice)
@@ -1224,10 +1251,36 @@ export function createPublicApi({
         return true;
       }
       if (req.method === "GET" && path === "/voice/turns") {
-        const at = tickets.get(url.searchParams.get("ticket") ?? "");
-        if (!at || now() - at > Math.min(15 * 60000, voiceMaxCallMs))
+        const t = tickets.get(url.searchParams.get("ticket") ?? "");
+        if (!t || now() - t.at > Math.min(15 * 60000, voiceMaxCallMs))
           return (send(res, 403, { error: "This call has ended." }), true);
-        send(res, 200, { turns: voiceTurns(at - 5000) });
+        // Only this call's turns: the fixed operator credential is shared by
+        // every caller, so a time window alone showed one visitor another
+        // visitor's questions and cited passages.
+        send(res, 200, { turns: voiceTurns(t.at - 5000, t.call) });
+        return true;
+      }
+      // The page switched case (or opened its workspace) mid-call: move this
+      // call, and only this call, so the next spoken answer comes from what
+      // is on screen. The ticket is the caller's own secret; a workspace id
+      // is itself an unguessable capability.
+      if (req.method === "POST" && path === "/voice/scope") {
+        const data = await readJson(req).catch(() => ({}));
+        const t = tickets.get(String(data?.ticket ?? ""));
+        if (!t || now() - t.at > Math.min(15 * 60000, voiceMaxCallMs))
+          return (send(res, 403, { error: "This call has ended." }), true);
+        const scope = voiceScopeOf(data?.case);
+        if (!scope || scope === "demo")
+          return (
+            send(res, 400, { error: "Pick health, deal or a workspace id." }),
+            true
+          );
+        if (!voiceCalls?.setScope(t.call, scope))
+          return (
+            send(res, 404, { error: "That workspace has expired." }),
+            true
+          );
+        send(res, 200, { case: scope });
         return true;
       }
       send(res, 404, { error: "Not found." });

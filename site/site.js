@@ -27,6 +27,8 @@
     docText: {},
     call: null,
     ticket: null,
+    callScope: null, // scope the live call answers from
+    askSeq: 0, // typed answers older than the latest ask or case switch are dropped
     seenTurns: new Set(),
     lang: /^hi\b/i.test(navigator.language || "") ? "hi" : "en",
     visuals: {},
@@ -295,6 +297,7 @@
     try {
       sessionStorage.setItem("vm_ws", w.id);
     } catch {}
+    syncCallScope();
     return w.id;
   }
   async function uploadFiles(list) {
@@ -451,7 +454,9 @@
       state.cases.own ??= { ...OWN, documents: [] };
       refreshWorkspace();
     }
+    if (state.case !== id) state.askSeq++; // an answer still arriving is stale
     state.case = id;
+    syncCallScope();
     $$(".case-tab").forEach((b) =>
       b.setAttribute("aria-selected", String(b.dataset.case === id)),
     );
@@ -468,6 +473,26 @@
       renderOverview(id);
       showEmptyViewer();
     }
+  }
+
+  // The case or workspace on screen is the one a live call answers from.
+  // On a switch, the page moves its own call (the ticket is its secret);
+  // turns answered for the old scope are then dropped, not shown here.
+  const scopeOf = (id) => (id === "own" ? state.ws : id);
+  function syncCallScope() {
+    const scope = scopeOf(state.case);
+    if (!state.ticket || !state.call || !scope || state.callScope === scope)
+      return;
+    state.callScope = scope;
+    api("/voice/scope", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ticket: state.ticket, case: scope }),
+    }).catch(() => {
+      // The call keeps its old scope; its turns for that scope stay off
+      // this screen (pollTurns), so nothing from the wrong records shows.
+      state.callScope = null;
+    });
   }
 
   // ------------------------------------------------------------ lazy parts
@@ -635,6 +660,9 @@
     question = String(question ?? "").trim();
     if (!question) return;
     if (caseId !== state.case) setCase(caseId, { quiet: true });
+    const seq = ++state.askSeq;
+    // A slow answer must never land on a newer question or another case.
+    const stale = () => seq !== state.askSeq || caseId !== state.case;
     $("#q").value = "";
     const btn = $(".ask-go");
     btn.disabled = true;
@@ -654,6 +682,7 @@
         throw new Error("Upload a document first, then ask about it.");
       result = await askEngine(caseId, question, state.context[caseId]);
     } catch (e) {
+      if (stale()) return;
       if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
       const saved =
         window.VM_SNAPSHOT_ANSWERS?.answers?.[`${caseId}|${question}`];
@@ -671,6 +700,7 @@
         return;
       }
     }
+    if (stale()) return;
     btn.disabled = false;
     if (result.lead?.field) state.context[caseId] = result.lead.field;
     if (result.semantic?.lang) state.lang = result.semantic.lang;
@@ -1605,10 +1635,12 @@
     const call = new window.BolnaWebCall({
       ...(audio ? { audio } : {}),
       getSession: async () => {
+        // The open case or workspace: voice answers from what is on screen.
         const user_data = {
           page: "landing",
-          vm_ws: state.case === "own" && state.ws ? state.ws : "demo",
+          vm_ws: scopeOf(state.case) || "demo",
         };
+        state.callScope = user_data.vm_ws;
         // your own Bolna account pays for the call; no server allowance used
         const r = own
           ? await fetch("/api/public/voice/byo/session", {
@@ -1685,6 +1717,7 @@
     if (reason && reason !== "failed")
       callState("Call ended. The answers stay on screen with their sources.");
     state.call = null;
+    state.callScope = null;
     setTimeout(() => (state.ticket = null), 20000);
   }
   function stopCall() {
@@ -1703,14 +1736,21 @@
           const key = t.at + t.question;
           if (state.seenTurns.has(key)) continue;
           state.seenTurns.add(key);
-          const caseId = (t.lead?.citations ?? []).some((c) =>
-            /\.pdf$/i.test(c.title ?? ""),
-          )
-            ? "health"
-            : t.lead
-              ? "deal"
-              : state.case;
-          if (caseId !== state.case) setCase(caseId, { quiet: true });
+          // The server says which case answered. A turn answered for a
+          // scope this page has since left is dropped, never drawn over the
+          // case now on screen (nor guessed from citation file names).
+          // (An engine older than the page sends no case: show it on the
+          // open case, as before, rather than dropping every turn.)
+          const caseId =
+            t.case === undefined
+              ? state.case
+              : /^w_/.test(t.case ?? "")
+                ? "own"
+                : t.case === "health" || t.case === "deal"
+                  ? t.case
+                  : null;
+          if (!caseId || scopeOf(caseId) !== scopeOf(state.case)) continue;
+          state.askSeq++; // supersede any typed answer still arriving
           renderAnswer(
             { lead: t.lead, evidence: [] },
             { via: "call", source: "live", question: t.question, caseId },

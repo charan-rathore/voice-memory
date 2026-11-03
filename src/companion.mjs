@@ -98,6 +98,14 @@ export function openerFor(lead, lang = "en") {
   let kind = KIND[lead.verdict];
   if (!kind) return null;
   const l = ["en", "hi", "hinglish"].includes(lang) ? lang : "en";
+  // An answer that already opens with the correction (the question was
+  // about it) needs no opener saying so: answer first, nothing repeated.
+  if (
+    /^(Before the correction|Two earlier values|Yes\. The \d|The \d{1,2} \w+ \d{4} .* was corrected|These reports show no correction|सुधार से पहले|आपके मतलब के हिसाब से|हां। \d|इन रिपोर्ट्स में आपके .* कोई सुधार नहीं|Correction se pehle|Aapke matlab ke hisaab se|Haan\. \d|In reports mein aapke .* koi correction nahi)/.test(
+      lead.text,
+    )
+  )
+    return null;
   if (kind === "value" && /corrected|sudhaar|sudhar|सुधार/i.test(lead.text))
     kind = "corrected";
   const options = O[kind][l];

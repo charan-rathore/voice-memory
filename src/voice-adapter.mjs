@@ -326,10 +326,21 @@ export function createVoiceAdapter({
       // A visitor's own uploaded workspace, named by the session variable
       // Bolna substitutes into the agent prompt (vm_ws=<id>). The bearer
       // still authenticates; the id only selects among public workspaces.
+      // The resolver answers with a bundle (older callers) or with
+      // {bundle, call, caseId, expired}: the scope this call's page has
+      // open, its per-call handle, and whether a workspace it names is gone.
       let bundle = grant.bundle;
+      let callTag = null;
+      let caseId = null;
+      let scopeGone = false;
       try {
         const ws = resolveBundle?.(data.messages);
-        if (ws) bundle = ws;
+        if (ws?.expired) scopeGone = true;
+        if (ws && ("bundle" in ws || "expired" in ws)) {
+          callTag = ws.call ?? null;
+          caseId = ws.caseId ?? null;
+          if (ws.bundle) bundle = ws.bundle;
+        } else if (ws) bundle = ws;
       } catch {
         bundle = grant.bundle;
       }
@@ -360,6 +371,14 @@ export function createVoiceAdapter({
           },
           { status: 400 },
         );
+      }
+      if (scopeGone) {
+        // Their workspace expired (30 idle minutes) or was replaced. Say so
+        // plainly; never answer from the fictional demo records instead.
+        const gone =
+          "Your uploaded documents have expired, so I can't answer from them. Upload them again on the page and ask me once more.";
+        logTurn({ transcript: askedRaw, outcome: "scope_expired" });
+        return sseOnce(gone);
       }
       const transcript = askedRaw;
       // Repair recogniser damage (patient ids, misheard test names) and, for
@@ -500,7 +519,13 @@ export function createVoiceAdapter({
         if (g) asked = normalizeSpoken(g) || g;
       }
       // Two questions in one breath: answer the first here, the second below.
-      const [firstQ, secondQ0] = splitCompound(asked);
+      // Only what the caller said in THIS utterance is split. A candidate
+      // joined from earlier turns ("ferritin result? what was it before the
+      // correction?") is one follow-up, and splitting it re-answered the
+      // previous question instead of the one just asked.
+      const ownCompound =
+        splitCompound(normalizeSpoken(transcript) || transcript).length > 1;
+      const [firstQ, secondQ0] = ownCompound ? splitCompound(asked) : [asked];
       const secondQ = mixedTurn ? null : secondQ0;
       if (secondQ) asked = firstQ;
       const streaming = true;
@@ -806,10 +831,49 @@ export function createVoiceAdapter({
       // A cut-off fragment gets a helpful prompt, not a flat abstention.
       if (refusal(spoken) && isFragment(transcript))
         spoken = fragmentReply(lang) ?? FRAGMENT_REPLY;
+      // The page has one demo case open and the caller asked about the other
+      // one: point to it instead of a bare "I don't see that". No facts from
+      // the case that is not on screen are spoken.
+      let pointed = false;
+      if (
+        !social &&
+        !mixedTurn &&
+        (refusal(spoken) ||
+          /^I (don't|do not) see .{1,80} in these documents\.?$/i.test(
+            spoken,
+          )) &&
+        (caseId === "health" || caseId === "deal")
+      ) {
+        const d = domainOf(normalizeVernacular(transcript));
+        const want =
+          caseId === "health" && (deal || d === "deal")
+            ? "deal"
+            : caseId === "deal" && !deal && d === "lab"
+              ? "lab"
+              : null;
+        if (want) {
+          pointed = true;
+          spoken = isHindi(lang)
+            ? want === "deal"
+              ? "यह Northstar deal के बारे में है, जो अभी स्क्रीन पर खुला नहीं है। Northstar टैब खोलिए और मुझसे फिर पूछिए।"
+              : "यह लैब रिपोर्ट्स के बारे में है, जो अभी स्क्रीन पर खुली नहीं हैं। Lab reports टैब खोलिए और मुझसे फिर पूछिए।"
+            : want === "deal"
+              ? "That's about the Northstar deal, which isn't open on screen right now. Switch to the Northstar tab and ask me again."
+              : "That's about the lab reports, which aren't open on screen right now. Switch to the lab reports tab and ask me again.";
+          turn = {
+            spokenTurn: {
+              intent: "OTHER_CASE",
+              verdict: "UNKNOWN",
+              spoken,
+              citations: [],
+            },
+          };
+        }
+      }
       // Hindi on request or when spoken to in Hindi. Clinical answers are
       // already rendered in the caller's language; deal templates are
       // rendered here, with record quotes kept verbatim.
-      if (isHindi(lang) && !clinicalHit && !social && !mixedTurn)
+      if (isHindi(lang) && !clinicalHit && !social && !mixedTurn && !pointed)
         spoken = toHindi(spoken);
       releaseBusy();
       const id = "local-contract-" + randomBytes(8).toString("hex");
@@ -839,6 +903,8 @@ export function createVoiceAdapter({
                 : null,
               result: turn?.result ?? null,
               scope: bundle?.scope ?? null,
+              call: callTag,
+              caseId,
             });
           } catch {
             /* memory is best-effort; never break the call */
@@ -933,6 +999,28 @@ function latestUser(messages) {
   const text = messageText(m.content).trim();
   if (!text || text.length > 4000) return null;
   return text;
+}
+
+/** One fixed spoken sentence as a complete OpenAI-style SSE stream. */
+function sseOnce(content) {
+  const id = "local-contract-" + randomBytes(8).toString("hex");
+  const chunk = (delta, finish_reason = null) =>
+    "data: " +
+    JSON.stringify({
+      id,
+      object: "chat.completion.chunk",
+      choices: [{ index: 0, delta, finish_reason }],
+    }) +
+    "\n\n";
+  return new Response(
+    chunk({ content }) + chunk({}, "stop") + "data: [DONE]\n\n",
+    {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }
 
 function completionJson(content) {

@@ -33,6 +33,10 @@ jobs:
         run: node tests/site-check.mjs
         env:
           CHROME_PATH: /usr/bin/google-chrome
+      - name: Voice and screen stay one conversation (real page, stubbed call transport)
+        run: node tests/voice-sync-check.mjs .shots
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
       - name: Landing page in a real browser (desktop and phone)
         run: node scripts/site-shots.mjs .shots
         env:

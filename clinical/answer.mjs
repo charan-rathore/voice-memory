@@ -23,11 +23,30 @@ import {
   span,
   GLOSSARY,
   CRITICAL_FLAG,
+  valueText,
 } from "./explain.mjs";
 import { GROUPS } from "./glossary-more.mjs";
 
 const CHANGE_RE =
   /\b(chang\w*|increas\w*|decreas\w*|went (up|down)|go(ne)? (up|down)|higher|lower|ris(e|en)|rose|f[ae]ll|fallen|drop\w*|compar\w*|trend\w*|since|previous|last time|before|improv\w*|wors\w*|better|badl\w*|badh\w*|ghat\w*|pichhl\w*|pehle|tulna)\b|बदल|बढ़|घट|पिछल|पहले|तुलना/i;
+
+// "Before the correction", "was it amended", "the original value": a
+// question about a corrected record, answered from the superseded and the
+// correcting rows of the same collection date. Never from the previous
+// report, which is a different measurement (that was September's 0.5 ng/mL
+// being read out as the pre-correction ferritin).
+const CORRECTION_RE =
+  /\b(correct(ed|ion|ions)?|amend\w*|revis(ed|ion)|re-?issued|original(ly)?|initial(ly)?|prelim\w*|first reported|sudh?aar\w*|sudhar\w*)\b|सुधार|संशोधन|प्रारंभिक/i;
+const PRIOR_RE =
+  /\b(before|prior|original(ly)?|initial(ly)?|first|prelim\w*|old|earlier|pehle|pahle)\b|पहले/i;
+// A bare "before" with no other comparison word: after a corrected result it
+// can mean either the pre-correction value or the previous report, so both
+// are named, each with its own row, instead of guessing one.
+const YES_NO_RE =
+  /^\s*(was|is|were|did|does|has|have|had|kya)\b|^\s*क्या|\bkya\s*$|क्या\s*[?।]?\s*$/i;
+const BARE_BEFORE_RE = /\b(before|pehle|pahle)\b|पहले/i;
+const OTHER_CHANGE_RE =
+  /\b(chang\w*|increas\w*|decreas\w*|went|gone|go (up|down)|higher|lower|ris(e|en)|rose|f[ae]ll\w*|drop\w*|compar\w*|trend\w*|since|improv\w*|wors\w*|better|badl\w*|badh\w*|ghat\w*|tulna)\b|बदल|बढ़|घट|तुलना/i;
 
 const norm = (s) =>
   ` ${String(s)
@@ -260,6 +279,19 @@ export function clinicalTurn(question, reports) {
     ? { from: latest.superseded[0].raw, to: latest.current.raw }
     : null;
 
+  const correctionAsk = CORRECTION_RE.test(question);
+  const bareBefore =
+    !correctionAsk &&
+    BARE_BEFORE_RE.test(question) &&
+    !OTHER_CHANGE_RE.test(question) &&
+    !dateAnchor(question) &&
+    latest.superseded.length > 0;
+  if (correctionAsk || bareBefore)
+    return correctionTurn(question, series, hit, base, lang, {
+      bareBefore,
+      prior: bareBefore || PRIOR_RE.test(question),
+    });
+
   if (intent === "LOOKUP" || series.length === 1) {
     const anchor = intent === "LOOKUP" ? dateAnchor(question) : null;
     if (anchor) {
@@ -344,6 +376,151 @@ export function clinicalTurn(question, reports) {
     verdict: "COMPARED",
     direction: c.direction,
     used,
+  };
+}
+
+const STATUS_WORD = {
+  en: {
+    preliminary: "preliminary",
+    amended: "amended",
+    corrected: "corrected",
+    final: "final",
+  },
+  hi: {
+    preliminary: "प्रारंभिक",
+    amended: "संशोधित",
+    corrected: "सुधारी गई",
+    final: "अंतिम",
+  },
+  hinglish: {
+    preliminary: "preliminary",
+    amended: "amended",
+    corrected: "corrected",
+    final: "final",
+  },
+};
+const CORRECTION_SAY = {
+  en: {
+    report: (o) => {
+      const st = STATUS_WORD.en[o.report.meta.status];
+      const on = /^\d{4}-\d{2}-\d{2}$/.test(o.report.meta.reported ?? "")
+        ? ` of ${sayDate(o.report.meta.reported, "en")}`
+        : "";
+      return st ? `the ${st} report${on}` : `the report${on}`;
+    },
+    prior: (test, date, oldO, newO, r) =>
+      `Before the correction, the ${date} ${test} result was ${valueText(oldO, "en")}, on ${r(oldO)}. ${cap(r(newO))} corrected it to ${valueText(newO, "en")}, and that is the value to use.`,
+    yes: (test, date, oldO, newO, r) =>
+      `Yes. The ${date} ${test} result was first reported as ${valueText(oldO, "en")} on ${r(oldO)}, then corrected to ${valueText(newO, "en")} on ${r(newO)}. ${valueText(newO, "en")} is the value to use.`,
+    both: (test, date, oldO, newO, prevDate, prevO, r) =>
+      `Two earlier values, depending on what you mean: before the correction, the ${date} ${test} result was ${valueText(oldO, "en")} on ${r(oldO)}; and on the earlier report, from ${prevDate}, it was ${valueText(prevO, "en")}. The current, corrected value is ${valueText(newO, "en")}.`,
+    stated: (test, date, oldO, newO, r) =>
+      `The ${date} ${test} result was corrected from ${valueText(oldO, "en")} on ${r(oldO)} to ${valueText(newO, "en")} on ${r(newO)}. ${valueText(newO, "en")} is the value to use.`,
+    none: (test, latestO, date) =>
+      `These reports show no correction to your ${test}. The latest result is ${valueText(latestO, "en")}, from ${date}.`,
+  },
+  hi: {
+    report: (o) => {
+      const st = STATUS_WORD.hi[o.report.meta.status];
+      const on = /^\d{4}-\d{2}-\d{2}$/.test(o.report.meta.reported ?? "")
+        ? `${sayDate(o.report.meta.reported, "hi")} की `
+        : "";
+      return `${on}${st ? st + " " : ""}रिपोर्ट`;
+    },
+    prior: (test, date, oldO, newO, r) =>
+      `सुधार से पहले, ${date} की ${test} जांच का नतीजा ${valueText(oldO, "hi")} था (${r(oldO)})। ${r(newO)} में इसे सुधारकर ${valueText(newO, "hi")} किया गया, और वही नतीजा मान्य है।`,
+    yes: (test, date, oldO, newO, r) =>
+      `हां। ${date} की ${test} जांच पहले ${valueText(oldO, "hi")} बताई गई थी (${r(oldO)}), फिर ${r(newO)} में सुधारकर ${valueText(newO, "hi")} की गई। ${valueText(newO, "hi")} ही मान्य नतीजा है।`,
+    both: (test, date, oldO, newO, prevDate, prevO, r) =>
+      `आपके मतलब के हिसाब से दो पुराने नतीजे हैं: सुधार से पहले, ${date} का ${test} ${valueText(oldO, "hi")} था (${r(oldO)}); और ${prevDate} की पिछली रिपोर्ट में यह ${valueText(prevO, "hi")} था। अभी का, सुधरा हुआ नतीजा ${valueText(newO, "hi")} है।`,
+    stated: (test, date, oldO, newO, r) =>
+      `${date} की ${test} जांच ${valueText(oldO, "hi")} (${r(oldO)}) से सुधारकर ${valueText(newO, "hi")} (${r(newO)}) की गई। ${valueText(newO, "hi")} ही मान्य नतीजा है।`,
+    none: (test, latestO, date) =>
+      `इन रिपोर्ट्स में आपके ${test} में कोई सुधार नहीं दिखता। सबसे नया नतीजा ${valueText(latestO, "hi")} है, ${date} का।`,
+  },
+  hinglish: {
+    report: (o) => {
+      const st = STATUS_WORD.hinglish[o.report.meta.status];
+      const on = /^\d{4}-\d{2}-\d{2}$/.test(o.report.meta.reported ?? "")
+        ? `${sayDate(o.report.meta.reported, "hinglish")} ki `
+        : "";
+      return `${on}${st ? st + " " : ""}report`;
+    },
+    prior: (test, date, oldO, newO, r) =>
+      `Correction se pehle, ${date} ka ${test} result ${valueText(oldO, "hinglish")} tha (${r(oldO)}). ${cap(r(newO))} mein isse sudhaar kar ${valueText(newO, "hinglish")} kiya gaya, aur wahi result maanya hai.`,
+    yes: (test, date, oldO, newO, r) =>
+      `Haan. ${date} ka ${test} result pehle ${valueText(oldO, "hinglish")} bataya gaya tha (${r(oldO)}), phir ${r(newO)} mein sudhaar kar ${valueText(newO, "hinglish")} kiya gaya. ${valueText(newO, "hinglish")} hi maanya result hai.`,
+    both: (test, date, oldO, newO, prevDate, prevO, r) =>
+      `Aapke matlab ke hisaab se do purane results hain: correction se pehle, ${date} ka ${test} ${valueText(oldO, "hinglish")} tha (${r(oldO)}); aur ${prevDate} ki pichhli report mein yeh ${valueText(prevO, "hinglish")} tha. Abhi ka, sudhra hua result ${valueText(newO, "hinglish")} hai.`,
+    stated: (test, date, oldO, newO, r) =>
+      `${date} ka ${test} result ${valueText(oldO, "hinglish")} (${r(oldO)}) se sudhaar kar ${valueText(newO, "hinglish")} (${r(newO)}) kiya gaya. ${valueText(newO, "hinglish")} hi maanya result hai.`,
+    none: (test, latestO, date) =>
+      `In reports mein aapke ${test} mein koi correction nahi dikhta. Sabse naya result ${valueText(latestO, "hinglish")} hai, ${date} ka.`,
+  },
+};
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * A question about a corrected record. The corrected entry is the dated
+ * entry the question anchors to, else the latest entry that has a
+ * superseded row. Values, units and statuses come only from those rows.
+ */
+function correctionTurn(
+  question,
+  series,
+  hit,
+  base,
+  lang,
+  { bareBefore, prior },
+) {
+  const say = CORRECTION_SAY[lang] ?? CORRECTION_SAY.en;
+  const test = nameOf(hit);
+  const anchor = dateAnchor(question);
+  const anchored = anchor ? anchorEntry(series, anchor) : null;
+  const entry =
+    anchored ?? [...series].reverse().find((s) => s.superseded.length > 0);
+  if (!entry || !entry.superseded.length) {
+    const last = anchored ?? series[series.length - 1];
+    return {
+      ...base,
+      intent: "CORRECTION",
+      spoken: say.none(test, last.current, sayDate(last.date, lang)),
+      verdict: "VALUE",
+      used: [last.current],
+    };
+  }
+  const oldO = entry.superseded[0];
+  const newO = entry.current;
+  const date = sayDate(entry.date, lang);
+  const idx = series.indexOf(entry);
+  const prevEntry = idx > 0 ? series[idx - 1] : null;
+  if (bareBefore && prevEntry) {
+    return {
+      ...base,
+      intent: "CORRECTION",
+      spoken: say.both(
+        test,
+        date,
+        oldO,
+        newO,
+        sayDate(prevEntry.date, lang),
+        prevEntry.current,
+        say.report,
+      ),
+      verdict: "VALUE",
+      used: [newO, oldO, prevEntry.current],
+    };
+  }
+  return {
+    ...base,
+    intent: "CORRECTION",
+    spoken: (prior
+      ? say.prior
+      : YES_NO_RE.test(question)
+        ? say.yes
+        : say.stated)(test, date, oldO, newO, say.report),
+    verdict: "VALUE",
+    used: [newO, oldO],
   };
 }
 

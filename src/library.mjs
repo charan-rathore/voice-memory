@@ -448,6 +448,11 @@ function focusOf(doc, loc, question) {
     })
     .filter((x) => x.n > 0)
     .sort((a, b) => b.n - a.n);
+  // A citation that is exactly one line (a lab row) is its own focus, even
+  // when the question shares no word with it ("what was it before the
+  // correction?"): the evidence already names the line.
+  if (!scored.length && leaves.length === 1)
+    scored.push({ e: leaves[0], n: 1 });
   if (!scored.length) return null;
   // A table's header row labels the answer; it is never the answer itself
   // when a data row also matches. Naming a row's first cell is the strongest

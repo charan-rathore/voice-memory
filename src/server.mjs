@@ -44,10 +44,12 @@ import {
   clinicalAnswer,
   clinicalReportsFor,
   observationEvidence,
+  findTest,
+  subjectsFor,
 } from "../clinical/answer.mjs";
 import { extractReport } from "../clinical/observations.mjs";
 import { sectionAnswer, fieldAnswer } from "./doc-sections.mjs";
-import { detectLang, aliasesFor } from "../clinical/explain.mjs";
+import { detectLang, aliasesFor, nameOf } from "../clinical/explain.mjs";
 import { labVocabulary, repairTestNames } from "./spoken-repair.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
 import {
@@ -154,11 +156,37 @@ for (const f of readdirSync(
 // the voice call would speak (claim renderer, else one verbatim quote), so
 // screen and voice never tell different stories. Null when the spoken layer
 // abstains or disagrees; the full engine text is always returned too.
+// A typed follow-up about the lab result just shown ("what was it before
+// the correction?") names no test of its own. The page sends back the
+// previous lead's field (patient and test, see labField), and the question
+// is read with it, exactly as the voice path reads a follow-up joined to the
+// caller's previous utterance. Bounded: one field, only for a question with
+// no test of its own that reads as a follow-up.
+const LAB_FOLLOWUP_RE =
+  /\b(it|its|that|this|those|them|before|previous|earlier|again|same|then|correct\w*|amend\w*|original\w*|prelim\w*|units?|range|normal|high|low|why|mean\w*)\b|पहले|वो|यह|इसका|उसका|इसे/i;
+function withLabContext(question, reports, prevField) {
+  if (!prevField || !LAB_FOLLOWUP_RE.test(question)) return question;
+  if (findTest(question, reports) || !findTest(prevField, reports))
+    return question;
+  const test = prevField.replace(/^[A-Z]{2,5}-\d{3,6}\s+/, "");
+  const ownSubject = subjectsFor(question, reports).some(
+    (id) => !/^(doc|name):/.test(id),
+  );
+  return `${question} ${ownSubject ? test : prevField}`;
+}
+const labField = (c) => {
+  const o = c?.used?.[0];
+  if (!o) return null;
+  const pid = o.report?.meta?.patient?.id;
+  const f = `${/^[A-Z]{2,5}-\d{3,6}$/.test(pid ?? "") ? pid + " " : ""}${nameOf(o)}`;
+  return /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(f) ? f : null;
+};
 function leadFor(question, result, bundle, prevField) {
   try {
     // Lab results across reports first (synthetic-data research prototype):
     // typed observations, comparability checks, no clinical judgement.
     if (bundle.clinical?.length) {
+      question = withLabContext(question, bundle.clinical, prevField);
       // What kind of answer would answer this? A "why" gets a reason, a
       // "what is X" a definition, an absent measurement an honest "not here".
       const il = intentLead(question, bundle, (ev) =>
@@ -170,7 +198,7 @@ function leadFor(question, result, bundle, prevField) {
         return {
           text: c.spoken,
           verdict: c.verdict,
-          field: null,
+          field: labField(c),
           used: c.used,
           citations: c.used
             .map((o) => observationEvidence(o, bundle))
@@ -483,13 +511,46 @@ export function createLocalServer({
   // Verified turns of public calls (every fictional case answers on the
   // fixed credential), read back only by the caller holding the ticket.
   const publicTurns = [];
+  // Live public calls on the fixed credential, by the per-call handle the
+  // mint put in vm_ws: which case or workspace each call answers from right
+  // now. The page owns its call's scope (POST /api/public/voice/scope);
+  // Bolna's request can only name a handle, never pick another scope.
+  const voiceCalls = new Map(); // call -> {scope, at}
+  const VOICE_CALL_MS = 20 * 60000;
+  const voiceCallsApi = {
+    open(call, scope) {
+      const t = Date.now();
+      for (const [c, v] of voiceCalls)
+        if (t - v.at > VOICE_CALL_MS) voiceCalls.delete(c);
+      voiceCalls.set(call, { scope, at: t });
+    },
+    setScope(call, scope) {
+      const v = voiceCalls.get(call);
+      if (!v) return false;
+      if (scope.startsWith("w_") && !liveWorkspace(scope)) return false;
+      v.scope = scope;
+      return true;
+    },
+  };
+  const liveWorkspace = (id) => {
+    const w = workspaces.get(id);
+    if (w && Date.now() - w.at > WS_IDLE_MS) {
+      dropWorkspace(id);
+      return null;
+    }
+    if (w) w.at = Date.now(); // a voice question is activity too
+    return w ?? null;
+  };
   voice.setOnTurn?.((token, t) => {
     const feedCase =
       token === fixedCap
-        ? voiceCase.bundle && t.scope === voiceCase.bundle.scope
-          ? voiceCase
-          : [...workspaces.values()].find((w) => w.s.bundle?.scope === t.scope)
-              ?.s
+        ? t.caseId === "health" || t.caseId === "deal"
+          ? caseSessions[t.caseId]
+          : voiceCase.bundle && t.scope === voiceCase.bundle.scope
+            ? voiceCase
+            : [...workspaces.values()].find(
+                (w) => w.s.bundle?.scope === t.scope,
+              )?.s
         : null;
     if (feedCase) {
       const lead = t.lead
@@ -504,8 +565,17 @@ export function createLocalServer({
           }
         : null;
       if (lead && t.lead.action) lead.action = t.lead.action;
-      publicTurns.push({ at: Date.now(), question: t.question, lead });
-      if (publicTurns.length > 20) publicTurns.shift();
+      // Tied to its call and its case: a ticket reads only its own call's
+      // turns, and the page is told which case answered, never left to
+      // guess it from citation file names.
+      publicTurns.push({
+        at: Date.now(),
+        question: t.question,
+        lead,
+        call: t.call ?? null,
+        case: t.caseId ?? "demo",
+      });
+      if (publicTurns.length > 200) publicTurns.shift();
     }
     for (const ss of sessions.values())
       if (ss.voiceToken === token && ss.bundle?.scope === t.scope) {
@@ -1191,14 +1261,36 @@ export function createLocalServer({
   };
   // Calls that carry a workspace id (Bolna substitutes {vm_ws} into the
   // agent prompt) answer from that visitor's documents.
+  // Only the agent's own system prompt names the scope. A caller who says
+  // "vm_ws=w_..." out loud (or a transcript that contains it) is asking a
+  // question, not choosing whose documents to read.
   voice.setBundleResolver?.((messages) => {
     for (const m of messages ?? []) {
+      if (m?.role !== "system") continue;
       const text =
         typeof m?.content === "string"
           ? m.content
           : JSON.stringify(m?.content ?? "");
-      const id = /vm_ws=(w_[0-9a-f]{32})/.exec(text)?.[1];
-      if (id) return workspaces.get(id)?.s?.bundle ?? null;
+      const hit =
+        /vm_ws=(w_[0-9a-f]{32}|health|deal|demo)(?:\.(c[0-9a-f]{24}))?(?![0-9a-z_])/.exec(
+          text,
+        );
+      if (!hit) continue;
+      const call = hit[2] ?? null;
+      // A live public call's scope is what its page has open now.
+      const scope = (call && voiceCalls.get(call)?.scope) || hit[1];
+      if (scope.startsWith("w_")) {
+        const w = liveWorkspace(scope);
+        // Never fall back to the fictional records for someone who was
+        // asking about their own documents.
+        if (!w?.s?.bundle) return { expired: true, call, caseId: scope };
+        return { bundle: w.s.bundle, call, caseId: scope };
+      }
+      if (scope === "health" || scope === "deal") {
+        const b = caseSessions[scope]?.bundle;
+        return b ? { bundle: b, call, caseId: scope } : null;
+      }
+      return { bundle: null, call, caseId: "demo" };
     }
     return null;
   });
@@ -1431,9 +1523,10 @@ export function createLocalServer({
     mintVoice: mintBolna,
     stopVoice: stopBolna,
     counters: callCounters,
-    voiceTurns: (since) =>
+    voiceCalls: voiceCallsApi,
+    voiceTurns: (since, call) =>
       publicTurns
-        .filter((t) => t.at >= since)
+        .filter((t) => t.at >= since && !!call && t.call === call)
         .map((t) => ({
           ...t,
           lead: t.lead && publicAnswer({ lead: t.lead }).lead,
@@ -2136,7 +2229,7 @@ export function createLocalServer({
           data.context === null
             ? ""
             : typeof data.context === "string" &&
-                /^[A-Za-z]{1,40}$/.test(data.context)
+                /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(data.context)
               ? data.context
               : (s.lastField ?? "");
         const bundle = s.bundle;
