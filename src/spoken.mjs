@@ -9,6 +9,7 @@ import {
   extractClaims,
   resolveClaims,
   questionFields,
+  authorityOf,
 } from "../dist/engine.mjs";
 import {
   OPEN_ITEMS_RE,
@@ -344,6 +345,7 @@ function mergedClaims(bundle, fields) {
               status: statusOfLine(sent),
               hash: null,
               scopeEntities: entities,
+              authority: authorityOf(sent),
               supersedes: /narrow|revis|supersed|instead of|retain/i.test(sent),
             });
           }
@@ -639,7 +641,7 @@ function render({
         return `That is still open: ${dedupeValues(citations.map((c) => c.value)).join(" versus ")} are both on record.`;
       if (verdict === "PROPOSED" && value)
         return current?.status === "internal-target"
-          ? `${cap(value)} is the current internal target, not an approved or contractual date.`
+          ? `${cap(value)} is the current internal target, not an approved or contractual ${field === "deadline" ? "date" : field === "fee" ? "fee" : field === "paymentSplit" ? "split" : "figure"}.`
           : `${cap(value)} is the current proposal; approval is not recorded.`;
       if (verdict === "CONFIRMED" && value)
         return `${cap(value)} is approved, per ${label}.`;

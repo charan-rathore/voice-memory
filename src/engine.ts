@@ -5,13 +5,20 @@ import {
   questionFields,
   resolveClaims,
   countKeyOf,
+  authorityOf,
   type Claim,
   scopeEntitiesOf,
 } from "./claim-check";
 
 // Re-exported for the spoken renderer layer (spoken.mjs): the claim graph is
 // the renderer's only source of facts. Additive; no behaviour change.
-export { extractClaims, questionFields, resolveClaims, retrieveIndexStats };
+export {
+  extractClaims,
+  questionFields,
+  resolveClaims,
+  authorityOf,
+  retrieveIndexStats,
+};
 
 export type QueryTransformInfo = {
   original: string;
@@ -222,7 +229,16 @@ function uniqueClaimEvidence(
         end = next >= 0 ? next + 1 : source.text.length;
       }
     }
-    out.push({ ...c, start, end, quote: source.text.slice(start, end) });
+    // A span widened past the claim's own sentence is a broad citation: it
+    // proves the source, not a pinpoint location. Mark it so renderers never
+    // present it as a pinpoint quote.
+    out.push({
+      ...c,
+      start,
+      end,
+      quote: source.text.slice(start, end),
+      broadCitation: true,
+    } as Claim);
   }
   return out;
 }
@@ -660,10 +676,25 @@ export function answer(
         let lead = "";
         if (monthAsk) {
           const mi = MONTH_NAMES.split("|").indexOf(monthAsk[1].toLowerCase());
-          const prefix = `2026-${String(mi + 1).padStart(2, "0")}`;
-          chosen = fieldClaims.filter((c) => c.docDate?.startsWith(prefix));
+          const monthNum = String(mi + 1).padStart(2, "0");
+          // Year binding: an explicit year in the question wins; otherwise,
+          // when records span years, the latest year's records answer and the
+          // answer names the year - a hardcoded year never silently selects.
+          const askYear = question.match(/\b(20\d{2})\b/)?.[1] ?? null;
+          const inMonth = fieldClaims.filter(
+            (c) =>
+              c.docDate?.slice(5, 7) === monthNum &&
+              (!askYear || c.docDate.startsWith(askYear)),
+          );
+          const years = [
+            ...new Set(inMonth.map((c) => c.docDate!.slice(0, 4))),
+          ].sort();
+          const yearUsed = askYear ?? years[years.length - 1] ?? null;
+          chosen = yearUsed
+            ? inMonth.filter((c) => c.docDate!.startsWith(yearUsed))
+            : [];
           lead = chosen.length
-            ? `Records from ${monthAsk[1][0].toUpperCase() + monthAsk[1].slice(1).toLowerCase()}`
+            ? `Records from ${monthAsk[1][0].toUpperCase() + monthAsk[1].slice(1).toLowerCase()}${yearUsed ? " " + yearUsed : ""}`
             : "";
         }
         if (!chosen.length && histAsk) {

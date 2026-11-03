@@ -2,7 +2,8 @@
 // citation-evidence binding over conversational records (transcripts,
 // minutes, decision logs). Built against two SYNTHETIC fictional corpora:
 // Mariner (examples/corpus-mariner.mjs) and Harbor (examples/corpus-harbor.mjs,
-// a held-out conversation written independently to catch overfitting).
+// an AUTHORED synthetic control conversation - same author, written to catch
+// overfitting; it is NOT independent or unseen held-out validation).
 // Expectations follow the independent human answer key for Mariner.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -434,4 +435,104 @@ test("routing: launch target questions reach the deadline field", () => {
 
 test("routing: invoice questions do not alias to the fee field", () => {
   assert.ok(!questionFields("What is the invoice amount?").includes("fee"));
+});
+
+test("content sentences with dates never become section dates (F1)", () => {
+  const docs = [
+    {
+      title: "Minutes",
+      text: "# Minutes\nDeadline is 2026-09-01.\nSee the 2026-08-05 minutes.\nThe fee was agreed on 2026-09-05 in writing and recorded.\nJordan: The pilot fee is proposed at USD 10,000.\n",
+    },
+  ];
+  const claims = extractClaims(toBundle(docs), ALL_FIELDS);
+  const fee = claims.find((c) => c.field === "fee");
+  assert.ok(fee, "fee claim minted");
+  assert.equal(
+    fee.docDate,
+    "",
+    "content-sentence dates must not date the claim",
+  );
+});
+
+test("bare fractions with plan/draft cues are not payment splits (F2)", () => {
+  const docs = [
+    {
+      title: "Plan",
+      text: "# Plan\nDev: The rollout plan covers 2/3 of the depots.\nMira: The draft milestone table shows phase 1/2 complete.\nJordan: Finance internally approves a 30 percent upfront / 70 percent after acceptance split.\n",
+    },
+  ];
+  const claims = extractClaims(toBundle(docs), ALL_FIELDS);
+  const splits = claims.filter((c) => c.field === "paymentSplit");
+  assert.deepEqual(
+    splits.map((c) => c.value),
+    ["30/70"],
+  );
+});
+
+test("modal capability is not approval (F4)", () => {
+  const docs = [
+    {
+      title: "Ops",
+      text: "# Ops\nDev: We can accept delivery in October.\nJordan: We can accept the pilot fee of USD 50,000 in October.\n",
+    },
+  ];
+  const claims = extractClaims(toBundle(docs), ALL_FIELDS);
+  assert.equal(
+    claims.filter((c) => c.status === "approved").length,
+    0,
+    "'can accept' is capability, never approval",
+  );
+  const fee = claims.find((c) => c.field === "fee");
+  assert.ok(fee, "fee claim still minted");
+  assert.notEqual(
+    fee.status,
+    "approved",
+    "modal accept is not an approved fee",
+  );
+});
+
+test("dated supersession never demotes an undated record across documents (F9)", () => {
+  const docs = [
+    {
+      title: "Acme pilot note",
+      text: "# Acme pilot\nJordan: The fee is USD 40,000, proposed.\n",
+    },
+    {
+      title: "Acme pilot revision",
+      text: "# Acme pilot\nDate: 2026-09-01\nJordan: The earlier USD 40,000 fee proposal is superseded; the fee is USD 45,000.\n",
+    },
+  ];
+  const claims = extractClaims(toBundle(docs), ALL_FIELDS);
+  const { active, superseded } = resolveClaims(claims);
+  const fees = active.get("fee") ?? [];
+  const old = claims.find((c) => c.value.includes("40,000") && !c.docDate);
+  assert.ok(old, "undated 40k claim exists");
+  assert.ok(
+    !superseded.includes(old),
+    "undated record is not silently demoted by a dated statement",
+  );
+  assert.ok(
+    fees.some((c) => c.value.includes("40,000")) &&
+      fees.some((c) => c.value.includes("45,000")),
+    "undated and dated records compete honestly",
+  );
+});
+
+test("month questions bind the asked or latest year, never a hardcoded one (F6)", () => {
+  const docs = [
+    {
+      title: "Acme pilot 2025",
+      text: "# Acme pilot\nDate: 2025-08-10\nJordan: The pilot fee is proposed at USD 30,000.\n",
+    },
+    {
+      title: "Acme pilot 2026",
+      text: "# Acme pilot\nDate: 2026-08-10\nJordan: The pilot fee is proposed at USD 36,000.\n",
+    },
+  ];
+  const b = importBundle(docs);
+  const r26 = answer("What was the fee in August?", b);
+  assert.match(r26.answer, /36,000/, "latest year's August record answers");
+  assert.match(r26.answer, /2026/, "the year is disclosed");
+  const r25 = answer("What was the fee in August 2025?", b);
+  assert.match(r25.answer, /30,000/, "explicit year is honored");
 });

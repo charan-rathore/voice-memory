@@ -48,6 +48,7 @@ export type Claim = {
   /** The claim's own wording declares it superseded ("the earlier fee
    * proposal is superseded"): demoted regardless of date guards. */
   supersededByWording?: boolean;
+  broadCitation?: boolean;
   authority?: ClaimAuthority;
   sourceId: string;
   title: string;
@@ -73,11 +74,18 @@ function statusOf(line: string): ClaimStatus {
   if (/subject to|provided that|conditional|only when/i.test(line))
     return "proposed";
   // Approval wording is authoritative over revision/proposal wording in the
-  // same sentence; check it BEFORE propos|revis.
-  if (
-    /\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\baccept(?:s|ed)?\b|\bagreed\b|\bauthoriz(?:e|es|ed)\b/i.test(
+  // same sentence; check it BEFORE propos|revis. A modal "accept" states
+  // capability or willingness ("we can accept delivery"), never approval.
+  const acceptVerb =
+    /\baccept(?:s|ed)?\b/i.test(line) &&
+    !/\b(?:can|could|may|might|shall|should|will|would|must|willing|ready|prepared|able)\s+(?:to\s+)?(?:[a-z-]+\s+){0,2}accept(?:s|ed)?\b/i.test(
       line,
-    )
+    );
+  if (
+    /\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\bagreed\b|\bauthoriz(?:e|es|ed)\b/i.test(
+      line,
+    ) ||
+    acceptVerb
   )
     return "approved";
   if (
@@ -95,12 +103,15 @@ function statusOf(line: string): ClaimStatus {
 /** The authority behind a status-bearing clause. Client verbs bind tighter
  * than an internal mention elsewhere in the clause ("internal finance
  * approval does not mean the client accepted it" is a CLIENT-side record). */
-function authorityOf(clause: string): ClaimAuthority {
+export function authorityOf(clause: string): ClaimAuthority {
   if (/both parties|mutually/i.test(clause)) return "mutual";
   if (
-    /\b(?:customer|client)\s+(?:has|have|had|did|does|will|would|not|accepted|accepts|signed|signs|rejected|rejects|approved|approves)\b/i.test(
+    (/\b(?:customer|client)\s+(?:has|have|had|did|does|will|would|not|accepted|accepts|signed|signs|rejected|rejects|approved|approves)\b/i.test(
       clause,
-    ) &&
+    ) ||
+      /\b(?:customer|client)(?:'s|')\s+(?:acceptance|approval|sign-?off|signature|rejection)\b/i.test(
+        clause,
+      )) &&
     !/client liaison|customer liaison/i.test(clause)
   )
     return "client";
@@ -313,11 +324,24 @@ const NUMWORD_RE =
  * document (transcripts, minutes, decision logs): "… | 2026-08-05" header
  * lines and "AUG 05 2026 - KICKOFF" banners. Document "Date:" author lines
  * are not section headers. */
+const DATE_RES_HOISTED = [
+  new RegExp("\\b(\\d{1,2}\\s+(?:" + MONTHS + ")(?:\\s+20\\d{2})?)\\b", "gi"),
+  new RegExp("\\b((?:" + MONTHS + ")\\s+\\d{1,2}(?:,\\s*20\\d{2})?)\\b", "gi"),
+];
+
+const BARE_DATE_LINE_RE =
+  /^\s*(?:[-=*_\s]|SECTION|MINUTES|MEETING|PAGE)*\s*20\d{2}-\d{2}-\d{2}\s*(?:[-=*_\s]|SECTION|MINUTES|MEETING|PAGE)*\s*$/i;
+
 function sectionDateOf(line: string): string | null {
   if (/\bDate:\s*20\d{2}/.test(line)) return null;
   if (line.length > 160) return null;
+  // An ISO date marks a section only in header structure: a pipe-separated
+  // banner ("Title | Minutes | 2026-08-05") or a bare date line. A date
+  // inside a content sentence ("Deadline is 2026-09-01.") is content - it
+  // never dates the claims that follow it.
   const iso = line.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
-  if (iso && (line.includes("|") || line.length < 60)) return iso[1];
+  if (iso && (line.includes("|") || BARE_DATE_LINE_RE.test(line)))
+    return iso[1];
   const mon = line.match(
     /^\s*(?:[A-Z][A-Z ]{2,30}?\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2})(?:,)?\s+(20\d{2})\b/i,
   );
@@ -418,9 +442,11 @@ export function extractClaims(
           // A record whose own wording declares it superseded ("the earlier
           // USD 58,000 fee proposal is superseded") demotes ITSELF and its
           // value siblings; it never supersedes others.
+          // The wording binds to the claim's own clause only: "...is
+          // superseded; the fee is USD 45,000" demotes the old value, never
+          // the new record minted from the next clause.
           const supersededByWording =
-            /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(clause) ||
-            /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(seg);
+            /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(clause);
           // An unresolved/open-decision line that merely REFERENCES a revision
           // never supersedes anything; neither does a line listing alternatives.
           const supersedes =
@@ -494,12 +520,16 @@ export function extractClaims(
           seg.match(
             /(\d{1,2})\s*percent\b[^.\n]{0,60}?\b(\d{1,2})\s*percent\b/i,
           );
+        // A bare fraction is a payment split only with a payment cue AND a
+        // 100-sum: "rollout plan covers 2/3 of the depots" and "phase 1/2
+        // complete" are coverage/progress, never payment terms.
+        const bare = seg.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\b/);
         const split =
           (pct && Number(pct[1]) + Number(pct[2]) === 100 ? pct : null) ||
-          seg.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\b/);
+          (bare && Number(bare[1]) + Number(bare[2]) === 100 ? bare : null);
         if (
           split &&
-          /payment|upfront|schedule|split|on signing|on signature|after acceptance|plan|draft/i.test(
+          /payment|upfront|installment|split|schedule|on signing|on signature|after acceptance|payable|invoice|billing/i.test(
             seg,
           )
         )
@@ -509,16 +539,7 @@ export function extractClaims(
         // A date that is the due date of some OTHER deliverable ("submit a
         // revised go-live plan by 30 September") is not a deadline claim: a
         // plan/submission/reply noun between cue and date breaks it.
-        const DATE_RES = [
-          new RegExp(
-            "\\b(\\d{1,2}\\s+(?:" + MONTHS + ")(?:\\s+20\\d{2})?)\\b",
-            "gi",
-          ),
-          new RegExp(
-            "\\b((?:" + MONTHS + ")\\s+\\d{1,2}(?:,\\s*20\\d{2})?)\\b",
-            "gi",
-          ),
-        ];
+        const DATE_RES = DATE_RES_HOISTED;
         for (const DATE_RE of DATE_RES) {
           for (const dm of seg.matchAll(DATE_RE)) {
             const at = dm.index ?? 0;
@@ -883,6 +904,12 @@ export function resolveClaims(claims: Claim[]): {
       for (const c of list) {
         if (superseded.includes(c)) continue;
         if (c.docDate && self.docDate && c.docDate > self.docDate) continue;
+        // Without a date pair, only same-document position establishes
+        // "earlier": an undated record in another document may be LATER than
+        // the supersession statement and is never silently demoted by it.
+        if (!c.docDate || !self.docDate) {
+          if (c.sourceId !== self.sourceId || c.start > self.start) continue;
+        }
         if (c.sourceId !== self.sourceId && !sharesEngagement(self, c))
           continue;
         const sameValue =

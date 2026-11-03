@@ -23430,9 +23430,12 @@ function statusOf(line) {
     return "unresolved";
   if (/subject to|provided that|conditional|only when/i.test(line))
     return "proposed";
-  if (/\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\baccept(?:s|ed)?\b|\bagreed\b|\bauthoriz(?:e|es|ed)\b/i.test(
+  const acceptVerb = /\baccept(?:s|ed)?\b/i.test(line) && !/\b(?:can|could|may|might|shall|should|will|would|must|willing|ready|prepared|able)\s+(?:to\s+)?(?:[a-z-]+\s+){0,2}accept(?:s|ed)?\b/i.test(
     line
-  ))
+  );
+  if (/\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\bagreed\b|\bauthoriz(?:e|es|ed)\b/i.test(
+    line
+  ) || acceptVerb)
     return "approved";
   if (/internal (delivery )?target|targeted for|\binternal(?:ly)?(?:\s+[a-z-]+){0,2}\s+target\b/i.test(
     line
@@ -23445,9 +23448,11 @@ function statusOf(line) {
 }
 function authorityOf(clause) {
   if (/both parties|mutually/i.test(clause)) return "mutual";
-  if (/\b(?:customer|client)\s+(?:has|have|had|did|does|will|would|not|accepted|accepts|signed|signs|rejected|rejects|approved|approves)\b/i.test(
+  if ((/\b(?:customer|client)\s+(?:has|have|had|did|does|will|would|not|accepted|accepts|signed|signs|rejected|rejects|approved|approves)\b/i.test(
     clause
-  ) && !/client liaison|customer liaison/i.test(clause))
+  ) || /\b(?:customer|client)(?:'s|')\s+(?:acceptance|approval|sign-?off|signature|rejection)\b/i.test(
+    clause
+  )) && !/client liaison|customer liaison/i.test(clause))
     return "client";
   if (/\b(?:committee|steering|board)\b/i.test(clause)) return "body";
   if (/\binternal(?:ly)?\b|\b(?:finance|security|legal|engineering|delivery|pmo)\s+(?:team\s+)?(?:approv|sign|target|request|reject)/i.test(
@@ -23590,11 +23595,17 @@ var AMOUNT_RE = /(?:[$€£₹]\s?\d(?:[\d,]*\d)?(?:\.\d+)?|\b(?:USD|EUR|GBP|INR
 var UNIT = "(?:retail\\s+)?(?:regions?|sites?|depots?|stores?|locations?|branches?|markets?|countries|offices?|warehouses?|areas?)";
 var UNIT_RE = new RegExp("\\b" + UNIT + "\\b", "i");
 var NUMWORD_RE = "\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve";
+var DATE_RES_HOISTED = [
+  new RegExp("\\b(\\d{1,2}\\s+(?:" + MONTHS + ")(?:\\s+20\\d{2})?)\\b", "gi"),
+  new RegExp("\\b((?:" + MONTHS + ")\\s+\\d{1,2}(?:,\\s*20\\d{2})?)\\b", "gi")
+];
+var BARE_DATE_LINE_RE = /^\s*(?:[-=*_\s]|SECTION|MINUTES|MEETING|PAGE)*\s*20\d{2}-\d{2}-\d{2}\s*(?:[-=*_\s]|SECTION|MINUTES|MEETING|PAGE)*\s*$/i;
 function sectionDateOf(line) {
   if (/\bDate:\s*20\d{2}/.test(line)) return null;
   if (line.length > 160) return null;
   const iso = line.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
-  if (iso && (line.includes("|") || line.length < 60)) return iso[1];
+  if (iso && (line.includes("|") || BARE_DATE_LINE_RE.test(line)))
+    return iso[1];
   const mon = line.match(
     /^\s*(?:[A-Z][A-Z ]{2,30}?\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2})(?:,)?\s+(20\d{2})\b/i
   );
@@ -23644,7 +23655,7 @@ function extractClaims(bundle, fields) {
           let status = force?.status ?? statusOf(clause);
           if (docExecuted && status === "discussed") status = "approved";
           if (negationBinds(field, value, seg)) status = "unresolved";
-          const supersededByWording = /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(clause) || /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(seg);
+          const supersededByWording = /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(clause);
           const supersedes = force?.supersedes ?? (/revis|supersed|replaces|narrow|instead of|\bcurrent\b/i.test(
             clause
           ) && !supersededByWording && status !== "unresolved" && !/\bvs\b|open decision|disput/i.test(clause));
@@ -23693,21 +23704,13 @@ function extractClaims(bundle, fields) {
         const pct = seg.match(/(\d{1,2})%[^.\n]*?(\d{1,2})%/) || seg.match(
           /(\d{1,2})\s*percent\b[^.\n]{0,60}?\b(\d{1,2})\s*percent\b/i
         );
-        const split = (pct && Number(pct[1]) + Number(pct[2]) === 100 ? pct : null) || seg.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\b/);
-        if (split && /payment|upfront|schedule|split|on signing|on signature|after acceptance|plan|draft/i.test(
+        const bare = seg.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\b/);
+        const split = (pct && Number(pct[1]) + Number(pct[2]) === 100 ? pct : null) || (bare && Number(bare[1]) + Number(bare[2]) === 100 ? bare : null);
+        if (split && /payment|upfront|installment|split|schedule|on signing|on signature|after acceptance|payable|invoice|billing/i.test(
           seg
         ))
           push("paymentSplit", `${split[1]}/${split[2]}`, split.index);
-        const DATE_RES = [
-          new RegExp(
-            "\\b(\\d{1,2}\\s+(?:" + MONTHS + ")(?:\\s+20\\d{2})?)\\b",
-            "gi"
-          ),
-          new RegExp(
-            "\\b((?:" + MONTHS + ")\\s+\\d{1,2}(?:,\\s*20\\d{2})?)\\b",
-            "gi"
-          )
-        ];
+        const DATE_RES = DATE_RES_HOISTED;
         for (const DATE_RE of DATE_RES) {
           for (const dm of seg.matchAll(DATE_RE)) {
             const at = dm.index ?? 0;
@@ -23959,6 +23962,9 @@ function resolveClaims(claims) {
       for (const c of list) {
         if (superseded.includes(c)) continue;
         if (c.docDate && self.docDate && c.docDate > self.docDate) continue;
+        if (!c.docDate || !self.docDate) {
+          if (c.sourceId !== self.sourceId || c.start > self.start) continue;
+        }
         if (c.sourceId !== self.sourceId && !sharesEngagement(self, c))
           continue;
         const sameValue = canonClaimValue(c.value) === cSelf || kSelf !== null && countKeyOf(c.value) === kSelf || dSelf.length > 2 && c.value.replace(/[^\d]/g, "") === dSelf;
@@ -31599,7 +31605,13 @@ function uniqueClaimEvidence(claims, bundle) {
         end = next >= 0 ? next + 1 : source.text.length;
       }
     }
-    out.push({ ...c, start, end, quote: source.text.slice(start, end) });
+    out.push({
+      ...c,
+      start,
+      end,
+      quote: source.text.slice(start, end),
+      broadCitation: true
+    });
   }
   return out;
 }
@@ -31863,9 +31875,17 @@ function answer(question, bundle, dense) {
         let lead = "";
         if (monthAsk) {
           const mi = MONTH_NAMES.split("|").indexOf(monthAsk[1].toLowerCase());
-          const prefix = `2026-${String(mi + 1).padStart(2, "0")}`;
-          chosen = fieldClaims.filter((c) => c.docDate?.startsWith(prefix));
-          lead = chosen.length ? `Records from ${monthAsk[1][0].toUpperCase() + monthAsk[1].slice(1).toLowerCase()}` : "";
+          const monthNum = String(mi + 1).padStart(2, "0");
+          const askYear = question.match(/\b(20\d{2})\b/)?.[1] ?? null;
+          const inMonth = fieldClaims.filter(
+            (c) => c.docDate?.slice(5, 7) === monthNum && (!askYear || c.docDate.startsWith(askYear))
+          );
+          const years = [
+            ...new Set(inMonth.map((c) => c.docDate.slice(0, 4)))
+          ].sort();
+          const yearUsed = askYear ?? years[years.length - 1] ?? null;
+          chosen = yearUsed ? inMonth.filter((c) => c.docDate.startsWith(yearUsed)) : [];
+          lead = chosen.length ? `Records from ${monthAsk[1][0].toUpperCase() + monthAsk[1].slice(1).toLowerCase()}${yearUsed ? " " + yearUsed : ""}` : "";
         }
         if (!chosen.length && histAsk) {
           const sorted = [...fieldClaims].sort(
@@ -32374,6 +32394,7 @@ export {
   MAX_DOC_CHARS,
   answer,
   answerFromRetrieval,
+  authorityOf,
   draft,
   extractClaims,
   importBundle,
