@@ -1068,14 +1068,10 @@
       // images land, and a taller row fits more of the continuation
       more.querySelectorAll(".cite-more-doc").forEach((d) => d.remove());
       more.append(...all.map((d) => d.cloneNode(true)));
-      more.classList.remove("compact");
-      for (let guard = 0; guard < 6 && over() > 160; guard++) {
+      for (let guard = 0; guard < 6 && over() > 8; guard++) {
         const docs = more.querySelectorAll(".cite-more-doc");
         if (docs.length > 1) docs[docs.length - 1].remove();
-        else {
-          more.classList.add("compact");
-          break;
-        }
+        else break;
       }
     };
     let t = 0;
