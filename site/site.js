@@ -1049,6 +1049,55 @@
       .join("");
   }
 
+  // The cited pages rarely fill the column the answer leaves open. Grow
+  // the keep-reading continuation to fit the room: full-width report pages
+  // while they fit (a small internal scroll is fine), a compact grid when
+  // even one full page would overflow hard. Re-runs as images land and on
+  // resize, since the room depends on the answer's own height.
+  function adaptCiteMore() {
+    const vb = $("#viewer-body");
+    const more = vb?.querySelector(".cite-more");
+    if (!more) return;
+    const all = [...more.querySelectorAll(".cite-more-doc")].map((d) =>
+      d.cloneNode(true),
+    );
+    const fit = () => {
+      if (!vb.clientHeight) return;
+      const over = () => vb.scrollHeight - vb.clientHeight;
+      // restore everything first: the room can grow as the answer's own
+      // images land, and a taller row fits more of the continuation
+      more.querySelectorAll(".cite-more-doc").forEach((d) => d.remove());
+      more.append(...all.map((d) => d.cloneNode(true)));
+      more.classList.remove("compact");
+      for (let guard = 0; guard < 6 && over() > 160; guard++) {
+        const docs = more.querySelectorAll(".cite-more-doc");
+        if (docs.length > 1) docs[docs.length - 1].remove();
+        else {
+          more.classList.add("compact");
+          break;
+        }
+      }
+    };
+    let t = 0;
+    const run = () => {
+      clearTimeout(t);
+      t = setTimeout(fit, 120);
+    };
+    more
+      .querySelectorAll("img")
+      .forEach((i) =>
+        i.complete ? run() : i.addEventListener("load", run, { once: true }),
+      );
+    run();
+  }
+  let citeMoreRo = null;
+  if (!citeMoreRo && "ResizeObserver" in window)
+    citeMoreRo = new ResizeObserver(() => {
+      const m = $("#viewer-body")?.querySelector(".cite-more");
+      if (m) adaptCiteMore();
+    });
+  citeMoreRo?.observe($("#viewer-body"));
+
   function openCitation(i) {
     const cites = state.currentCites ?? [];
     const c = cites[i];
@@ -1085,12 +1134,12 @@
         )?.documents ?? [];
       const rest = caseDocs.filter((d) => !order.includes(d.title));
       const more = rest.length
-        ? `<div class="cite-more"><p class="cite-more-h">Keep reading - the other report${rest.length === 1 ? "" : "s"} in this case</p><div class="cite-more-grid">${rest
+        ? `<div class="cite-more"><p class="cite-more-h">Keep reading - the other report${rest.length === 1 ? "" : "s"} in this case</p>${rest
             .map((d) => {
               const base = d.title.replace(/\.pdf$/i, "");
               return `<button type="button" class="cite-more-doc" data-doc="${esc(d.title)}"><img src="pages/${esc(base)}.png" alt="First page of ${esc(d.title)}, a synthetic lab report" loading="lazy" /><span>${esc(shortTitle(d.title))}</span></button>`;
             })
-            .join("")}</div></div>`
+            .join("")}</div>`
         : "";
       $("#viewer-body").innerHTML =
         order
@@ -1103,6 +1152,7 @@
             ),
           )
           .join("") + more;
+      adaptCiteMore();
       return;
     }
     const samePage = cites.filter((x) => x.title === c.title);

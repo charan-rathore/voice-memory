@@ -4829,18 +4829,21 @@ html:not(.voice-on) .voice-off {
 }
 .cite-more {
   margin-top: 22px;
+  display: grid;
+  gap: 12px;
 }
 .cite-more-h {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-3);
 }
-.cite-more-grid {
-  display: grid;
+.cite-more.compact {
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+}
+.cite-more.compact .cite-more-h {
+  grid-column: 1 / -1;
 }
 .cite-more-doc {
   display: block;
