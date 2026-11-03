@@ -55,10 +55,21 @@
   let byoEnabled = false;
   const byo = (() => {
     const K = "vm-byo";
-    const empty = { bolnaKey: "", bolnaAgent: "", ttsProvider: "", ttsKey: "", remember: false };
+    const empty = {
+      bolnaKey: "",
+      bolnaAgent: "",
+      ttsProvider: "",
+      ttsKey: "",
+      remember: false,
+    };
     let v = { ...empty };
     try {
-      v = { ...empty, ...JSON.parse(localStorage.getItem(K) || sessionStorage.getItem(K) || "{}") };
+      v = {
+        ...empty,
+        ...JSON.parse(
+          localStorage.getItem(K) || sessionStorage.getItem(K) || "{}",
+        ),
+      };
     } catch {
       /* storage blocked: keys live for this page only */
     }
@@ -66,7 +77,10 @@
       try {
         localStorage.removeItem(K);
         sessionStorage.removeItem(K);
-        (v.remember ? localStorage : sessionStorage).setItem(K, JSON.stringify(v));
+        (v.remember ? localStorage : sessionStorage).setItem(
+          K,
+          JSON.stringify(v),
+        );
       } catch {
         /* storage blocked */
       }
@@ -106,7 +120,9 @@
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
     try {
-      const own = /^\/(speak|narrate-audio\/)/.test(path) ? byo.ttsHeaders() : {};
+      const own = /^\/(speak|narrate-audio\/)/.test(path)
+        ? byo.ttsHeaders()
+        : {};
       const r = await fetch("/api/public" + path, {
         ...opts,
         headers: { ...(opts.headers ?? {}), ...own },
@@ -473,7 +489,8 @@
   // loads as #how approaches (same pattern as the desk chunk below).
   const howNear = new Promise((ok) => {
     const how = $("#how");
-    if (!how || !("IntersectionObserver" in window)) return ok(loadCss("flow.css"));
+    if (!how || !("IntersectionObserver" in window))
+      return ok(loadCss("flow.css"));
     const io = new IntersectionObserver(
       (es) => {
         if (es.some((e) => e.isIntersecting)) {
@@ -758,7 +775,8 @@
     state.currentLang = r.semantic?.lang ?? state.lang;
     if (r.visual)
       loadVisual().then(() => {
-        if (state.current?._src !== r || !$("#a-visual") || !window.VMVisual) return;
+        if (state.current?._src !== r || !$("#a-visual") || !window.VMVisual)
+          return;
         window.VMVisual.render($("#a-visual"), r.visual, {
           lang: state.currentLang,
           narrateButton: false,
@@ -805,15 +823,21 @@
       setCase("own", { quiet: true });
       showEmptyViewer();
       const drop = $("#drop");
-      drop?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+      drop?.scrollIntoView({
+        behavior: reduced ? "auto" : "smooth",
+        block: "center",
+      });
       coach(drop, "Drop PDFs, Word files or photos here, or click to choose");
       coach($('.case-tab[data-case="own"]'));
     } else if (a.type === "switch" && a.case && a.question) {
-      setTimeout(() => {
-        setCase(a.case, { quiet: true });
-        coach($(`.case-tab[data-case="${a.case}"]`));
-        ask(a.question);
-      }, reduced ? 0 : 900);
+      setTimeout(
+        () => {
+          setCase(a.case, { quiet: true });
+          coach($(`.case-tab[data-case="${a.case}"]`));
+          ask(a.question);
+        },
+        reduced ? 0 : 900,
+      );
     }
   }
   // The half of a question that belongs to the other demo case.
@@ -1052,16 +1076,33 @@
       $("#viewer-meta").textContent = order
         .map((t) => shortTitle(t))
         .join(" · ");
-      $("#viewer-body").innerHTML = order
-        .map((t, k) =>
-          pageHtml(
-            t,
-            cites.filter((x) => x.title === t),
-            k === 0 ? c : cites.find((x) => x.title === t),
-            k,
-          ),
-        )
-        .join("");
+      // Cited pages rarely fill the column; continue with the case's
+      // other reports so the space keeps reading instead of going blank.
+      const caseDocs =
+        (
+          state.cases[state.case] ??
+          snap.cases?.find((x) => x.id === state.case)
+        )?.documents ?? [];
+      const rest = caseDocs.filter((d) => !order.includes(d.title));
+      const more = rest.length
+        ? `<div class="cite-more"><p class="cite-more-h">Keep reading - the other report${rest.length === 1 ? "" : "s"} in this case</p><div class="cite-more-grid">${rest
+            .map((d) => {
+              const base = d.title.replace(/\.pdf$/i, "");
+              return `<button type="button" class="cite-more-doc" data-doc="${esc(d.title)}"><img src="pages/${esc(base)}.png" alt="First page of ${esc(d.title)}, a synthetic lab report" loading="lazy" /><span>${esc(shortTitle(d.title))}</span></button>`;
+            })
+            .join("")}</div></div>`
+        : "";
+      $("#viewer-body").innerHTML =
+        order
+          .map((t, k) =>
+            pageHtml(
+              t,
+              cites.filter((x) => x.title === t),
+              k === 0 ? c : cites.find((x) => x.title === t),
+              k,
+            ),
+          )
+          .join("") + more;
       return;
     }
     const samePage = cites.filter((x) => x.title === c.title);
@@ -1108,7 +1149,11 @@
     return A.length ? A.filter((w) => B.has(w)).length / A.length : 0;
   };
   const findSpan = (html, quote) => {
-    const q = esc(String(quote ?? "").trim().replace(/^\d+\.\s*/, ""));
+    const q = esc(
+      String(quote ?? "")
+        .trim()
+        .replace(/^\d+\.\s*/, ""),
+    );
     if (q.length < 8 || q.length > 600) return null;
     const re = new RegExp(
       q
@@ -1626,9 +1671,10 @@
     cv.height = H * dpr;
     ctx.scale(dpr, dpr);
     const load = async () =>
-      (await (window.VM_SNAPSHOT_GRAPHS
-        ? Promise.resolve()
-        : loadScript("snapshot-graphs.js")
+      (await (
+        window.VM_SNAPSHOT_GRAPHS
+          ? Promise.resolve()
+          : loadScript("snapshot-graphs.js")
       ).then(
         () => window.VM_SNAPSHOT_GRAPHS?.health,
         () => null,
@@ -1788,8 +1834,12 @@
       return ask(t.dataset.q, { caseId: t.dataset.case || state.case });
     if (t.matches("[data-cite]")) return openCitation(Number(t.dataset.cite));
     if (t.matches(".tm-tabs [data-plug]")) {
-      $$(".tm-tabs [data-plug]").forEach((b) => b.setAttribute("aria-selected", String(b === t)));
-      $$(".tm-code[data-plug]").forEach((c) => (c.hidden = c.dataset.plug !== t.dataset.plug));
+      $$(".tm-tabs [data-plug]").forEach((b) =>
+        b.setAttribute("aria-selected", String(b === t)),
+      );
+      $$(".tm-code[data-plug]").forEach(
+        (c) => (c.hidden = c.dataset.plug !== t.dataset.plug),
+      );
       return;
     }
     if (t.matches("[data-closest]") && state.closest?.title)
@@ -1949,9 +1999,15 @@
     });
     try {
       const response = await fetch("byo-panel.html");
-      if (!response.ok) throw Error("Voice controls could not load. Reload to retry.");
+      if (!response.ok)
+        throw Error("Voice controls could not load. Reload to retry.");
       root.insertAdjacentHTML("beforeend", await response.text());
-      document.head.append(Object.assign(document.createElement("link"), { rel: "stylesheet", href: "byo.css" }));
+      document.head.append(
+        Object.assign(document.createElement("link"), {
+          rel: "stylesheet",
+          href: "byo.css",
+        }),
+      );
     } catch (error) {
       $("#byo-state").textContent = error.message;
       return;
@@ -1966,10 +2022,15 @@
     const fill = () => {
       const v = byo.get();
       for (const [k, el] of Object.entries(f))
-        if (el) el.type === "checkbox" ? (el.checked = !!v[k]) : (el.value = v[k] ?? "");
+        if (el)
+          el.type === "checkbox"
+            ? (el.checked = !!v[k])
+            : (el.value = v[k] ?? "");
       $("#byo-state").textContent = [
         byo.hasCall() ? "Calls use your Bolna account" : "",
-        byo.hasTts() ? `Listen uses your ${v.ttsProvider === "sarvam" ? "Sarvam" : "ElevenLabs"} key` : "",
+        byo.hasTts()
+          ? `Listen uses your ${v.ttsProvider === "sarvam" ? "Sarvam" : "ElevenLabs"} key`
+          : "",
       ]
         .filter(Boolean)
         .join(" · ");
@@ -1977,7 +2038,10 @@
     const save = () => {
       byo.set(
         Object.fromEntries(
-          Object.entries(f).map(([k, el]) => [k, el.type === "checkbox" ? el.checked : el.value.trim()]),
+          Object.entries(f).map(([k, el]) => [
+            k,
+            el.type === "checkbox" ? el.checked : el.value.trim(),
+          ]),
         ),
       );
       syncVoiceClasses();
@@ -1997,7 +2061,10 @@
     const shownKeys = new Set();
     const revokeShown = () => {
       for (const key of shownKeys)
-        fetch("/api/public/llm/key", { method: "DELETE", headers: { authorization: `Bearer ${key}` } }).catch(() => {});
+        fetch("/api/public/llm/key", {
+          method: "DELETE",
+          headers: { authorization: `Bearer ${key}` },
+        }).catch(() => {});
       shownKeys.clear();
     };
     $("#byo-llm-get")?.addEventListener("click", async (e) => {
@@ -2015,7 +2082,9 @@
         shownKeys.add(k.apiKey);
         box.querySelector('[data-k="key"]').textContent = k.apiKey;
         box.querySelector('[data-k="model"]').textContent = k.model;
-        box.querySelector('[data-k="until"]').textContent = new Date(k.expiresAt).toLocaleString();
+        box.querySelector('[data-k="until"]').textContent = new Date(
+          k.expiresAt,
+        ).toLocaleString();
         box.hidden = false;
       } catch (err) {
         $("#byo-state").textContent = err.message;

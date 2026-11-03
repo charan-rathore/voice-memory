@@ -4827,3 +4827,41 @@ html:not(.voice-on) .voice-off {
     grid-row: auto;
   }
 }
+.cite-more {
+  margin-top: 22px;
+}
+.cite-more-h {
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.cite-more-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.cite-more-doc {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  color: var(--ink-2);
+}
+.cite-more-doc img {
+  display: block;
+  width: 100%;
+}
+.cite-more-doc span {
+  display: block;
+  padding: 8px 10px;
+  font-size: 12.5px;
+}
+.cite-more-doc:hover {
+  border-color: var(--ink-3);
+}
