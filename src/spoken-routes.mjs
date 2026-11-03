@@ -301,26 +301,13 @@ const STOPQ = new Set(
 const NO_REJ_S =
   /\bno rejection\b|\bnot rejected\b|\bnever rejected\b|\bno record of (?:a )?rejection\b|\bmissing signature is not rejection\b/i;
 export function rejectionLookup(question, bundle) {
-  // An explicit "no rejection is recorded" statement answers a rejection
-  // question directly - and a quoted question ("Was the fee rejected?") is
-  // never itself a rejection record.
-  if (/reject/i.test(question)) {
-    for (const src of bundle.sources)
-      for (const s of sentencesOf(src)) {
-        if (/\?\s*$/.test(s.text)) continue;
-        if (NO_REJ_S.test(s.text))
-          return {
-            spoken: `No. Per ${docLabelOf(src)}: ${s.text}`,
-            verdict: "NO-RECORD",
-            intent: "REJECTED",
-            field: null,
-            citations: [cite(src, s)],
-          };
-      }
-  }
   const qTok = (
     question.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []
   ).filter((t) => !STOPQ.has(t));
+  const sharesSubject = (text) => {
+    const low = text.toLowerCase();
+    return qTok.some((t) => new RegExp(`\\b${t}\\b`).test(low));
+  };
   const named = DOC_KINDS.filter(([q]) => q.test(question)).map(([, t]) => t);
   const ids = new Set();
   for (const src of bundle.sources) {
@@ -338,16 +325,47 @@ export function rejectionLookup(question, bundle) {
       let score = qTok.filter((t) => new RegExp(`\\b${t}\\b`).test(low)).length;
       for (const m of s.text.matchAll(/\b([A-Z]{2,}-?\d+)\b/g))
         if (ids.has(m[1].replace("-", "").toLowerCase())) score += 2;
-      if (score >= 2 && (!best || score > best.score)) best = { score, src, s };
+      // Subject binding: two content words, or the single asked subject
+      // when the question names only one ("Was the fee rejected?").
+      const need = Math.min(2, qTok.length);
+      if (score >= need && (!best || score > best.score))
+        best = { score, src, s };
     }
-  if (!best) return null;
-  return {
-    spoken: `Yes. Per ${docLabelOf(best.src)}: ${best.s.text}`,
-    verdict: "REJECTED-EXPLICIT",
-    intent: "REJECTED",
-    field: null,
-    citations: [cite(best.src, best.s)],
-  };
+  if (best)
+    return {
+      spoken: `Yes. Per ${docLabelOf(best.src)}: ${best.s.text}`,
+      verdict: "REJECTED-EXPLICIT",
+      intent: "REJECTED",
+      field: null,
+      citations: [cite(best.src, best.s)],
+    };
+  // No subject-bound explicit rejection. A "no rejection is recorded"
+  // statement answers only when it is about the asked subject: it shares
+  // content words with the question, or it directly answers a quoted
+  // question in the record that does ("Mira: Was the fee rejected? Owen:
+  // No rejection is recorded."). Subject-blind matches stay silent.
+  if (/reject/i.test(question)) {
+    for (const src of bundle.sources) {
+      const sents = sentencesOf(src);
+      for (let i = 0; i < sents.length; i++) {
+        const s = sents[i];
+        if (/\?\s*$/.test(s.text)) continue;
+        if (!NO_REJ_S.test(s.text)) continue;
+        const prevQ =
+          i > 0 && /\?\s*$/.test(sents[i - 1].text) ? sents[i - 1] : null;
+        if (!sharesSubject(s.text) && !(prevQ && sharesSubject(prevQ.text)))
+          continue;
+        return {
+          spoken: `No. Per ${docLabelOf(src)}: ${s.text}`,
+          verdict: "NO-RECORD",
+          intent: "REJECTED",
+          field: null,
+          citations: [cite(src, s)],
+        };
+      }
+    }
+  }
+  return null;
 }
 
 // "How much is X?" where the record says no price was agreed for X.

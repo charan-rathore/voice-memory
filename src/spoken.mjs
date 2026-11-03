@@ -446,6 +446,16 @@ function namesSpecificValue(question, actives) {
   });
 }
 
+// Speech normalization may reorder "December 10" to "10 December" - a named
+// value matches in either month-day order.
+function valueNamedIn(v, question) {
+  const low = String(v).toLowerCase();
+  const q = question.toLowerCase();
+  if (q.includes(low)) return true;
+  const m = low.match(/^(\p{L}+)\s+(\d{1,2})$/u);
+  return !!m && q.includes(`${m[2]} ${m[1]}`);
+}
+
 function verdictFor(field, resolved, claims, question, intent, bundle) {
   const { active, approved } = resolved;
   const approvedClaims = approved.get(field) ?? [];
@@ -462,17 +472,33 @@ function verdictFor(field, resolved, claims, question, intent, bundle) {
     return "NO-RECORD";
   // A "did X approve <specific value>?" question with an explicit scoped
   // negative on record is a denial of that value, not an open decision.
-  if (intent === "FINALIZED" && neg && namesSpecificValue(question, actives))
-    return "NO-RECORD";
+  // But when the question names THE current active value (a single value
+  // stands), lead with that record and its disclosed status - an internal
+  // target answers "not approved" itself; quoting an older negative would
+  // mislead. With several values in force the denial stays.
   const values = new Set(actives.map((c) => canonValue(c.value)));
+  const namesCurrent =
+    values.size === 1 && actives.some((c) => valueNamedIn(c.value, question));
+  if (
+    intent === "FINALIZED" &&
+    neg &&
+    namesSpecificValue(question, actives) &&
+    !namesCurrent
+  )
+    return "NO-RECORD";
   if (values.size > 1) return "OPEN";
   const current = actives[0];
   // Amount-bearing claims stay grounded PROPOSED; an explicit field-scoped
   // negative upgrades to NO-RECORD only for non-amount fields or signing
   // questions (never a flat "no" on an amount).
+  // The scoped negative upgrade does not apply when the question names the
+  // current value: its own record already discloses the non-approval
+  // ("December 10 is the current internal target, not approved"), and
+  // leading with an older negative would bury the record asked about.
   if (
     neg &&
     intent === "FINALIZED" &&
+    !namesCurrent &&
     (field !== "fee" || /\bsigned|agreement|countersign\b/i.test(question))
   )
     return "NO-RECORD";
@@ -1130,7 +1156,21 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   }
   // A real invoice document on file makes an invoice/bill amount question a
   // fee-field question; the absence guard above owns the no-invoice case.
+  // A question naming a recorded value ("Is the December 10 target
+  // approved?") is about that value's field - stronger evidence than any
+  // keyword guess.
+  // Speech normalization may reorder "December 10" to "10 December" - a
+  // named value matches in either month-day order.
+  const namedValueField =
+    claims.find(
+      (c) =>
+        typeof c.value === "string" &&
+        c.value.length >= 6 &&
+        /\d|\s/.test(c.value) &&
+        valueNamedIn(c.value, question),
+    )?.field ?? null;
   const field =
+    namedValueField ??
     resolveField(question, claims, null) ??
     (prevField ? resolveField(question, claims, prevField) : null) ??
     (invoiceAsk ? "fee" : null);
@@ -1166,9 +1206,16 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   // Month-intent ("What was the revised fee in August?"): answer from the
   // records of that month, year-bound like the engine - the asked year wins,
   // otherwise the latest year on record, disclosed in the answer.
-  const monthM = question.match(
-    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
-  );
+  // Temporal use only: "fee in August", "August 2026" - never the modal
+  // "May I ask...". The month must follow a temporal preposition or precede
+  // a year.
+  const monthM =
+    question.match(
+      /\b(?:in|of|during|from|for|since|before|after|by)\s+(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
+    ) ??
+    question.match(
+      /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(?:\d{4}|\d{1,2}\b)/i,
+    );
   if (monthM && fieldClaims.some((c) => c.docDate)) {
     const MONTHS12 =
       "january|february|march|april|may|june|july|august|september|october|november|december";
@@ -1200,8 +1247,13 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
       }
     }
     if (chosen.length) {
-      const latest = [...chosen].sort((a, b) =>
-        (b.docDate || "").localeCompare(a.docDate || ""),
+      // An approved record answers over a later cautionary mention of the
+      // same value; otherwise the latest dated record leads.
+      const rank = (c) =>
+        c.status === "approved" ? 0 : c.status === "proposed" ? 1 : 2;
+      const latest = [...chosen].sort(
+        (a, b) =>
+          rank(a) - rank(b) || (b.docDate || "").localeCompare(a.docDate || ""),
       )[0];
       const monthName =
         monthM[1][0].toUpperCase() + monthM[1].slice(1).toLowerCase();
@@ -1215,13 +1267,22 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
           ? ` It was later replaced; the current record is ${currentApproved.value}, approved internally (the client has not accepted).`
           : ` It was later replaced; the current approved record is ${currentApproved.value}.`
         : "";
-      return {
-        spoken: `In ${monthName}${yearUsed ? " " + yearUsed : ""}, the recorded ${field === "fee" ? "fee" : field} was ${latest.value}, ${latest.status === "approved" ? "approved" : "proposed, not approved"}.${tail}`,
-        verdict: "QUOTED",
-        field,
-        intent: "HISTORY",
-        citations: [latest, ...(currentApproved ? [currentApproved] : [])],
-      };
+      const monthSpoken = `In ${monthName}${yearUsed ? " " + yearUsed : ""}, the recorded ${field === "fee" ? "fee" : field} was ${latest.value}, ${latest.status === "approved" ? "approved" : "proposed, not approved"}.${tail}`;
+      const monthCites = [
+        latest,
+        ...(currentApproved ? [currentApproved] : []),
+      ];
+      // Same invariants as every other return: the guard must accept the
+      // wording and citations are packed; otherwise fall through to the
+      // standard path.
+      if (guard(monthSpoken, monthCites, "QUOTED"))
+        return {
+          spoken: monthSpoken,
+          verdict: "QUOTED",
+          field,
+          intent: "HISTORY",
+          citations: monthCites.map(pack),
+        };
     }
   }
   // Descriptor binding: "the retainer", "the retainer fee", "the engagement

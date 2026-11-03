@@ -24,9 +24,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/zod/v4/core/util.cjs
+// ../vm49/node_modules/zod/v4/core/util.cjs
 var require_util = __commonJS({
-  "node_modules/zod/v4/core/util.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/util.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CONSTANT_CATCH = exports.Class = exports.BIGINT_FORMAT_RANGES = exports.NUMBER_FORMAT_RANGES = exports.primitiveTypes = exports.propertyKeyTypes = exports.getParsedType = exports.allowsEval = exports.captureStackTrace = void 0;
@@ -893,9 +893,9 @@ var require_util = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/core.cjs
+// ../vm49/node_modules/zod/v4/core/core.cjs
 var require_core = __commonJS({
-  "node_modules/zod/v4/core/core.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/core.cjs"(exports) {
     "use strict";
     var _a;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -1042,9 +1042,9 @@ var require_core = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/errors.cjs
+// ../vm49/node_modules/zod/v4/core/errors.cjs
 var require_errors = __commonJS({
-  "node_modules/zod/v4/core/errors.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/errors.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -1291,9 +1291,9 @@ var require_errors = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/parse.cjs
+// ../vm49/node_modules/zod/v4/core/parse.cjs
 var require_parse = __commonJS({
-  "node_modules/zod/v4/core/parse.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/parse.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -1517,9 +1517,9 @@ var require_parse = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/regexes.cjs
+// ../vm49/node_modules/zod/v4/core/regexes.cjs
 var require_regexes = __commonJS({
-  "node_modules/zod/v4/core/regexes.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/regexes.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -1683,9 +1683,9 @@ var require_regexes = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/checks.cjs
+// ../vm49/node_modules/zod/v4/core/checks.cjs
 var require_checks = __commonJS({
-  "node_modules/zod/v4/core/checks.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/checks.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -2212,9 +2212,9 @@ var require_checks = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/doc.cjs
+// ../vm49/node_modules/zod/v4/core/doc.cjs
 var require_doc = __commonJS({
-  "node_modules/zod/v4/core/doc.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/doc.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Doc = void 0;
@@ -2277,9 +2277,9 @@ ${content.join("\n")}
   }
 });
 
-// node_modules/zod/v4/core/versions.cjs
+// ../vm49/node_modules/zod/v4/core/versions.cjs
 var require_versions = __commonJS({
-  "node_modules/zod/v4/core/versions.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/versions.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.version = void 0;
@@ -2307,9 +2307,9 @@ var require_versions = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/schemas.cjs
+// ../vm49/node_modules/zod/v4/core/schemas.cjs
 var require_schemas = __commonJS({
-  "node_modules/zod/v4/core/schemas.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/schemas.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -4827,9 +4827,9 @@ var require_schemas = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/memoizer.cjs
+// ../vm49/node_modules/zod/v4/core/memoizer.cjs
 var require_memoizer = __commonJS({
-  "node_modules/zod/v4/core/memoizer.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/memoizer.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -5159,9 +5159,9 @@ var require_memoizer = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ar.cjs
+// ../vm49/node_modules/zod/v4/locales/ar.cjs
 var require_ar = __commonJS({
-  "node_modules/zod/v4/locales/ar.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ar.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -5307,9 +5307,9 @@ var require_ar = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/az.cjs
+// ../vm49/node_modules/zod/v4/locales/az.cjs
 var require_az = __commonJS({
-  "node_modules/zod/v4/locales/az.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/az.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -5454,9 +5454,9 @@ var require_az = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/be.cjs
+// ../vm49/node_modules/zod/v4/locales/be.cjs
 var require_be = __commonJS({
-  "node_modules/zod/v4/locales/be.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/be.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -5659,9 +5659,9 @@ var require_be = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/bg.cjs
+// ../vm49/node_modules/zod/v4/locales/bg.cjs
 var require_bg = __commonJS({
-  "node_modules/zod/v4/locales/bg.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/bg.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -5821,9 +5821,9 @@ var require_bg = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/bn.cjs
+// ../vm49/node_modules/zod/v4/locales/bn.cjs
 var require_bn = __commonJS({
-  "node_modules/zod/v4/locales/bn.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/bn.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -5971,9 +5971,9 @@ var require_bn = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ca.cjs
+// ../vm49/node_modules/zod/v4/locales/ca.cjs
 var require_ca = __commonJS({
-  "node_modules/zod/v4/locales/ca.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ca.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -6121,9 +6121,9 @@ var require_ca = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ckb.cjs
+// ../vm49/node_modules/zod/v4/locales/ckb.cjs
 var require_ckb = __commonJS({
-  "node_modules/zod/v4/locales/ckb.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ckb.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -6290,9 +6290,9 @@ var require_ckb = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/cs.cjs
+// ../vm49/node_modules/zod/v4/locales/cs.cjs
 var require_cs = __commonJS({
-  "node_modules/zod/v4/locales/cs.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/cs.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -6443,9 +6443,9 @@ var require_cs = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/da.cjs
+// ../vm49/node_modules/zod/v4/locales/da.cjs
 var require_da = __commonJS({
-  "node_modules/zod/v4/locales/da.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/da.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -6600,9 +6600,9 @@ var require_da = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/de.cjs
+// ../vm49/node_modules/zod/v4/locales/de.cjs
 var require_de = __commonJS({
-  "node_modules/zod/v4/locales/de.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/de.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -6750,9 +6750,9 @@ var require_de = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/el.cjs
+// ../vm49/node_modules/zod/v4/locales/el.cjs
 var require_el = __commonJS({
-  "node_modules/zod/v4/locales/el.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/el.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -6899,9 +6899,9 @@ var require_el = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/en.cjs
+// ../vm49/node_modules/zod/v4/locales/en.cjs
 var require_en = __commonJS({
-  "node_modules/zod/v4/locales/en.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/en.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -7060,9 +7060,9 @@ var require_en = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/eo.cjs
+// ../vm49/node_modules/zod/v4/locales/eo.cjs
 var require_eo = __commonJS({
-  "node_modules/zod/v4/locales/eo.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/eo.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -7211,9 +7211,9 @@ var require_eo = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/es.cjs
+// ../vm49/node_modules/zod/v4/locales/es.cjs
 var require_es = __commonJS({
-  "node_modules/zod/v4/locales/es.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/es.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -7384,9 +7384,9 @@ var require_es = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/fa.cjs
+// ../vm49/node_modules/zod/v4/locales/fa.cjs
 var require_fa = __commonJS({
-  "node_modules/zod/v4/locales/fa.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/fa.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -7540,9 +7540,9 @@ var require_fa = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/fi.cjs
+// ../vm49/node_modules/zod/v4/locales/fi.cjs
 var require_fi = __commonJS({
-  "node_modules/zod/v4/locales/fi.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/fi.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -7694,9 +7694,9 @@ var require_fi = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/fr.cjs
+// ../vm49/node_modules/zod/v4/locales/fr.cjs
 var require_fr = __commonJS({
-  "node_modules/zod/v4/locales/fr.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/fr.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -7860,9 +7860,9 @@ var require_fr = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/fr-CA.cjs
+// ../vm49/node_modules/zod/v4/locales/fr-CA.cjs
 var require_fr_CA = __commonJS({
-  "node_modules/zod/v4/locales/fr-CA.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/fr-CA.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -8009,9 +8009,9 @@ var require_fr_CA = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/gu.cjs
+// ../vm49/node_modules/zod/v4/locales/gu.cjs
 var require_gu = __commonJS({
-  "node_modules/zod/v4/locales/gu.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/gu.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -8159,9 +8159,9 @@ var require_gu = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/he.cjs
+// ../vm49/node_modules/zod/v4/locales/he.cjs
 var require_he = __commonJS({
-  "node_modules/zod/v4/locales/he.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/he.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -8397,9 +8397,9 @@ var require_he = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/hi.cjs
+// ../vm49/node_modules/zod/v4/locales/hi.cjs
 var require_hi = __commonJS({
-  "node_modules/zod/v4/locales/hi.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/hi.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -8545,9 +8545,9 @@ var require_hi = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/hr.cjs
+// ../vm49/node_modules/zod/v4/locales/hr.cjs
 var require_hr = __commonJS({
-  "node_modules/zod/v4/locales/hr.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/hr.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -8708,9 +8708,9 @@ var require_hr = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/hu.cjs
+// ../vm49/node_modules/zod/v4/locales/hu.cjs
 var require_hu = __commonJS({
-  "node_modules/zod/v4/locales/hu.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/hu.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -8858,9 +8858,9 @@ var require_hu = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/hy.cjs
+// ../vm49/node_modules/zod/v4/locales/hy.cjs
 var require_hy = __commonJS({
-  "node_modules/zod/v4/locales/hy.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/hy.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -9053,9 +9053,9 @@ var require_hy = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/id.cjs
+// ../vm49/node_modules/zod/v4/locales/id.cjs
 var require_id = __commonJS({
-  "node_modules/zod/v4/locales/id.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/id.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -9201,9 +9201,9 @@ var require_id = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/is.cjs
+// ../vm49/node_modules/zod/v4/locales/is.cjs
 var require_is = __commonJS({
-  "node_modules/zod/v4/locales/is.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/is.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -9352,9 +9352,9 @@ var require_is = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/it.cjs
+// ../vm49/node_modules/zod/v4/locales/it.cjs
 var require_it = __commonJS({
-  "node_modules/zod/v4/locales/it.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/it.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -9502,9 +9502,9 @@ var require_it = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ja.cjs
+// ../vm49/node_modules/zod/v4/locales/ja.cjs
 var require_ja = __commonJS({
-  "node_modules/zod/v4/locales/ja.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ja.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -9651,9 +9651,9 @@ var require_ja = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ka.cjs
+// ../vm49/node_modules/zod/v4/locales/ka.cjs
 var require_ka = __commonJS({
-  "node_modules/zod/v4/locales/ka.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ka.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -9805,9 +9805,9 @@ var require_ka = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/km.cjs
+// ../vm49/node_modules/zod/v4/locales/km.cjs
 var require_km = __commonJS({
-  "node_modules/zod/v4/locales/km.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/km.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -9957,9 +9957,9 @@ var require_km = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/kh.cjs
+// ../vm49/node_modules/zod/v4/locales/kh.cjs
 var require_kh = __commonJS({
-  "node_modules/zod/v4/locales/kh.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/kh.cjs"(exports, module) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -9974,9 +9974,9 @@ var require_kh = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/kn.cjs
+// ../vm49/node_modules/zod/v4/locales/kn.cjs
 var require_kn = __commonJS({
-  "node_modules/zod/v4/locales/kn.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/kn.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -10126,9 +10126,9 @@ var require_kn = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ko.cjs
+// ../vm49/node_modules/zod/v4/locales/ko.cjs
 var require_ko = __commonJS({
-  "node_modules/zod/v4/locales/ko.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ko.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -10279,9 +10279,9 @@ var require_ko = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/lt.cjs
+// ../vm49/node_modules/zod/v4/locales/lt.cjs
 var require_lt = __commonJS({
-  "node_modules/zod/v4/locales/lt.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/lt.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -10523,9 +10523,9 @@ var require_lt = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/mk.cjs
+// ../vm49/node_modules/zod/v4/locales/mk.cjs
 var require_mk = __commonJS({
-  "node_modules/zod/v4/locales/mk.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/mk.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -10674,9 +10674,9 @@ var require_mk = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ms.cjs
+// ../vm49/node_modules/zod/v4/locales/ms.cjs
 var require_ms = __commonJS({
-  "node_modules/zod/v4/locales/ms.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ms.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -10823,9 +10823,9 @@ var require_ms = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ne.cjs
+// ../vm49/node_modules/zod/v4/locales/ne.cjs
 var require_ne = __commonJS({
-  "node_modules/zod/v4/locales/ne.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ne.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -10971,9 +10971,9 @@ var require_ne = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/nl.cjs
+// ../vm49/node_modules/zod/v4/locales/nl.cjs
 var require_nl = __commonJS({
-  "node_modules/zod/v4/locales/nl.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/nl.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11123,9 +11123,9 @@ var require_nl = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/nn.cjs
+// ../vm49/node_modules/zod/v4/locales/nn.cjs
 var require_nn = __commonJS({
-  "node_modules/zod/v4/locales/nn.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/nn.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11273,9 +11273,9 @@ var require_nn = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/no.cjs
+// ../vm49/node_modules/zod/v4/locales/no.cjs
 var require_no = __commonJS({
-  "node_modules/zod/v4/locales/no.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/no.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11423,9 +11423,9 @@ var require_no = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ota.cjs
+// ../vm49/node_modules/zod/v4/locales/ota.cjs
 var require_ota = __commonJS({
-  "node_modules/zod/v4/locales/ota.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ota.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11574,9 +11574,9 @@ var require_ota = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ps.cjs
+// ../vm49/node_modules/zod/v4/locales/ps.cjs
 var require_ps = __commonJS({
-  "node_modules/zod/v4/locales/ps.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ps.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11730,9 +11730,9 @@ var require_ps = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/pl.cjs
+// ../vm49/node_modules/zod/v4/locales/pl.cjs
 var require_pl = __commonJS({
-  "node_modules/zod/v4/locales/pl.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/pl.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -11881,9 +11881,9 @@ var require_pl = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/pt.cjs
+// ../vm49/node_modules/zod/v4/locales/pt.cjs
 var require_pt = __commonJS({
-  "node_modules/zod/v4/locales/pt.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/pt.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -12061,9 +12061,9 @@ var require_pt = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/pt-BR.cjs
+// ../vm49/node_modules/zod/v4/locales/pt-BR.cjs
 var require_pt_BR = __commonJS({
-  "node_modules/zod/v4/locales/pt-BR.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/pt-BR.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -12242,9 +12242,9 @@ var require_pt_BR = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ro.cjs
+// ../vm49/node_modules/zod/v4/locales/ro.cjs
 var require_ro = __commonJS({
-  "node_modules/zod/v4/locales/ro.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ro.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -12401,9 +12401,9 @@ var require_ro = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ru.cjs
+// ../vm49/node_modules/zod/v4/locales/ru.cjs
 var require_ru = __commonJS({
-  "node_modules/zod/v4/locales/ru.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ru.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -12606,9 +12606,9 @@ var require_ru = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/sk.cjs
+// ../vm49/node_modules/zod/v4/locales/sk.cjs
 var require_sk = __commonJS({
-  "node_modules/zod/v4/locales/sk.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/sk.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -12759,9 +12759,9 @@ var require_sk = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/sl.cjs
+// ../vm49/node_modules/zod/v4/locales/sl.cjs
 var require_sl = __commonJS({
-  "node_modules/zod/v4/locales/sl.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/sl.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -12910,9 +12910,9 @@ var require_sl = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/sv.cjs
+// ../vm49/node_modules/zod/v4/locales/sv.cjs
 var require_sv = __commonJS({
-  "node_modules/zod/v4/locales/sv.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/sv.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -13062,9 +13062,9 @@ var require_sv = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ta.cjs
+// ../vm49/node_modules/zod/v4/locales/ta.cjs
 var require_ta = __commonJS({
-  "node_modules/zod/v4/locales/ta.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ta.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -13214,9 +13214,9 @@ var require_ta = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/tg.cjs
+// ../vm49/node_modules/zod/v4/locales/tg.cjs
 var require_tg = __commonJS({
-  "node_modules/zod/v4/locales/tg.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/tg.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -13367,9 +13367,9 @@ var require_tg = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/th.cjs
+// ../vm49/node_modules/zod/v4/locales/th.cjs
 var require_th = __commonJS({
-  "node_modules/zod/v4/locales/th.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/th.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -13519,9 +13519,9 @@ var require_th = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/tk.cjs
+// ../vm49/node_modules/zod/v4/locales/tk.cjs
 var require_tk = __commonJS({
-  "node_modules/zod/v4/locales/tk.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/tk.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -13663,9 +13663,9 @@ var require_tk = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/tr.cjs
+// ../vm49/node_modules/zod/v4/locales/tr.cjs
 var require_tr = __commonJS({
-  "node_modules/zod/v4/locales/tr.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/tr.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -13810,9 +13810,9 @@ var require_tr = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/uk.cjs
+// ../vm49/node_modules/zod/v4/locales/uk.cjs
 var require_uk = __commonJS({
-  "node_modules/zod/v4/locales/uk.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/uk.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -13960,9 +13960,9 @@ var require_uk = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ua.cjs
+// ../vm49/node_modules/zod/v4/locales/ua.cjs
 var require_ua = __commonJS({
-  "node_modules/zod/v4/locales/ua.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ua.cjs"(exports, module) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -13977,9 +13977,9 @@ var require_ua = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/ur.cjs
+// ../vm49/node_modules/zod/v4/locales/ur.cjs
 var require_ur = __commonJS({
-  "node_modules/zod/v4/locales/ur.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/ur.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -14129,9 +14129,9 @@ var require_ur = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/uz.cjs
+// ../vm49/node_modules/zod/v4/locales/uz.cjs
 var require_uz = __commonJS({
-  "node_modules/zod/v4/locales/uz.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/uz.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -14279,9 +14279,9 @@ var require_uz = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/vi.cjs
+// ../vm49/node_modules/zod/v4/locales/vi.cjs
 var require_vi = __commonJS({
-  "node_modules/zod/v4/locales/vi.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/vi.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -14429,9 +14429,9 @@ var require_vi = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/zh-CN.cjs
+// ../vm49/node_modules/zod/v4/locales/zh-CN.cjs
 var require_zh_CN = __commonJS({
-  "node_modules/zod/v4/locales/zh-CN.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/zh-CN.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -14580,9 +14580,9 @@ var require_zh_CN = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/zh-TW.cjs
+// ../vm49/node_modules/zod/v4/locales/zh-TW.cjs
 var require_zh_TW = __commonJS({
-  "node_modules/zod/v4/locales/zh-TW.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/zh-TW.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -14729,9 +14729,9 @@ var require_zh_TW = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/yo.cjs
+// ../vm49/node_modules/zod/v4/locales/yo.cjs
 var require_yo = __commonJS({
-  "node_modules/zod/v4/locales/yo.cjs"(exports, module) {
+  "../vm49/node_modules/zod/v4/locales/yo.cjs"(exports, module) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -14878,9 +14878,9 @@ var require_yo = __commonJS({
   }
 });
 
-// node_modules/zod/v4/locales/index.cjs
+// ../vm49/node_modules/zod/v4/locales/index.cjs
 var require_locales = __commonJS({
-  "node_modules/zod/v4/locales/index.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/locales/index.cjs"(exports) {
     "use strict";
     var __importDefault = exports && exports.__importDefault || function(mod) {
       return mod && mod.__esModule ? mod : { "default": mod };
@@ -15159,9 +15159,9 @@ var require_locales = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/registries.cjs
+// ../vm49/node_modules/zod/v4/core/registries.cjs
 var require_registries = __commonJS({
-  "node_modules/zod/v4/core/registries.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/registries.cjs"(exports) {
     "use strict";
     var _a;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -15234,9 +15234,9 @@ var require_registries = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/compile.cjs
+// ../vm49/node_modules/zod/v4/core/compile.cjs
 var require_compile = __commonJS({
-  "node_modules/zod/v4/core/compile.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/compile.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -16905,9 +16905,9 @@ ${code}
   }
 });
 
-// node_modules/zod/v4/core/api.cjs
+// ../vm49/node_modules/zod/v4/core/api.cjs
 var require_api = __commonJS({
-  "node_modules/zod/v4/core/api.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/api.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -18141,9 +18141,9 @@ var require_api = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/to-json-schema.cjs
+// ../vm49/node_modules/zod/v4/core/to-json-schema.cjs
 var require_to_json_schema = __commonJS({
-  "node_modules/zod/v4/core/to-json-schema.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/to-json-schema.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.createStandardJSONSchemaMethod = exports.createToJSONSchemaMethod = void 0;
@@ -18706,9 +18706,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
 });
 
-// node_modules/zod/v4/core/json-schema-processors.cjs
+// ../vm49/node_modules/zod/v4/core/json-schema-processors.cjs
 var require_json_schema_processors = __commonJS({
-  "node_modules/zod/v4/core/json-schema-processors.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/json-schema-processors.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -19549,9 +19549,9 @@ var require_json_schema_processors = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/json-schema-generator.cjs
+// ../vm49/node_modules/zod/v4/core/json-schema-generator.cjs
 var require_json_schema_generator = __commonJS({
-  "node_modules/zod/v4/core/json-schema-generator.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/json-schema-generator.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.JSONSchemaGenerator = void 0;
@@ -19653,9 +19653,9 @@ var require_json_schema_generator = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/json-schema.cjs
+// ../vm49/node_modules/zod/v4/core/json-schema.cjs
 var require_json_schema = __commonJS({
-  "node_modules/zod/v4/core/json-schema.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/json-schema.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     (function() {
@@ -19677,9 +19677,9 @@ var require_json_schema = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/index.cjs
+// ../vm49/node_modules/zod/v4/core/index.cjs
 var require_core2 = __commonJS({
-  "node_modules/zod/v4/core/index.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/index.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -19760,9 +19760,9 @@ var require_core2 = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/checks.cjs
+// ../vm49/node_modules/zod/v4/classic/checks.cjs
 var require_checks2 = __commonJS({
-  "node_modules/zod/v4/classic/checks.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/checks.cjs"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.slugify = exports.toUpperCase = exports.toLowerCase = exports.trim = exports.normalize = exports.overwrite = exports.mime = exports.properties = exports.property = exports.endsWith = exports.startsWith = exports.includes = exports.uppercase = exports.lowercase = exports.regex = exports.length = exports.minLength = exports.maxLength = exports.size = exports.minSize = exports.maxSize = exports.multipleOf = exports.nonnegative = exports.nonpositive = exports.negative = exports.positive = exports.gte = exports.gt = exports.lte = exports.lt = void 0;
@@ -19876,9 +19876,9 @@ var require_checks2 = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/errors.cjs
+// ../vm49/node_modules/zod/v4/classic/errors.cjs
 var require_errors2 = __commonJS({
-  "node_modules/zod/v4/classic/errors.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/errors.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -19975,9 +19975,9 @@ var require_errors2 = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/parse.cjs
+// ../vm49/node_modules/zod/v4/classic/parse.cjs
 var require_parse2 = __commonJS({
-  "node_modules/zod/v4/classic/parse.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/parse.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -20048,9 +20048,9 @@ var require_parse2 = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/schemas.cjs
+// ../vm49/node_modules/zod/v4/classic/schemas.cjs
 var require_schemas2 = __commonJS({
-  "node_modules/zod/v4/classic/schemas.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/schemas.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -21674,9 +21674,9 @@ var require_schemas2 = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/compat.cjs
+// ../vm49/node_modules/zod/v4/classic/compat.cjs
 var require_compat = __commonJS({
-  "node_modules/zod/v4/classic/compat.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/compat.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -21760,9 +21760,9 @@ var require_compat = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/iso.cjs
+// ../vm49/node_modules/zod/v4/classic/iso.cjs
 var require_iso = __commonJS({
-  "node_modules/zod/v4/classic/iso.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/iso.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -21843,9 +21843,9 @@ var require_iso = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/from-json-schema.cjs
+// ../vm49/node_modules/zod/v4/classic/from-json-schema.cjs
 var require_from_json_schema = __commonJS({
-  "node_modules/zod/v4/classic/from-json-schema.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/from-json-schema.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -22631,9 +22631,9 @@ var require_from_json_schema = __commonJS({
   }
 });
 
-// node_modules/zod/v4/core/visit.cjs
+// ../vm49/node_modules/zod/v4/core/visit.cjs
 var require_visit = __commonJS({
-  "node_modules/zod/v4/core/visit.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/core/visit.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -22838,9 +22838,9 @@ var require_visit = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/deep-partial.cjs
+// ../vm49/node_modules/zod/v4/classic/deep-partial.cjs
 var require_deep_partial = __commonJS({
-  "node_modules/zod/v4/classic/deep-partial.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/deep-partial.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -22902,9 +22902,9 @@ var require_deep_partial = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/in-out.cjs
+// ../vm49/node_modules/zod/v4/classic/in-out.cjs
 var require_in_out = __commonJS({
-  "node_modules/zod/v4/classic/in-out.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/in-out.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -22986,9 +22986,9 @@ var require_in_out = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/coerce.cjs
+// ../vm49/node_modules/zod/v4/classic/coerce.cjs
 var require_coerce = __commonJS({
-  "node_modules/zod/v4/classic/coerce.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/coerce.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -23059,9 +23059,9 @@ var require_coerce = __commonJS({
   }
 });
 
-// node_modules/zod/v4/classic/external.cjs
+// ../vm49/node_modules/zod/v4/classic/external.cjs
 var require_external = __commonJS({
-  "node_modules/zod/v4/classic/external.cjs"(exports) {
+  "../vm49/node_modules/zod/v4/classic/external.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -23225,9 +23225,9 @@ var require_external = __commonJS({
   }
 });
 
-// node_modules/zod/index.cjs
+// ../vm49/node_modules/zod/index.cjs
 var require_zod = __commonJS({
-  "node_modules/zod/index.cjs"(exports) {
+  "../vm49/node_modules/zod/index.cjs"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -23945,8 +23945,45 @@ function resolveClaims(claims) {
     if (!byField.has(c.field)) byField.set(c.field, []);
     byField.get(c.field).push(c);
   }
+  const FIELD_NOUNS = {
+    fee: /\bfee|price|rate|retainer|amount|cost\b/i,
+    paymentSplit: /\bsplit|percent|payment|upfront\b/i,
+    signedAgreement: /\bagreement|contract|signed\b/i,
+    retention: /\bretention|retain|keep\b/i,
+    scope: /\bscope|site|region|phase\b/i,
+    deadline: /\btarget|deadline|launch|date|timeline\b/i,
+    signedAddendum: /\baddendum|dpa|processing\b/i,
+    signatory: /\bsignatory|signs|signature\b/i,
+    invoice: /\binvoice\b/i,
+    termination: /\bterminat|cancel|exit\b/i
+  };
+  const LOCAL_STOP = /^(the|this|that|internal|approved|approval|current|proposed|revised|committee|finance|legal|security|action|outcome|status|date|note|yes|no|not|steering|customer|client|project|pilot|meeting|transcript|fictional|evaluation|only)$/i;
+  const MONTH_DAY = /^(january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i;
+  const localScopeOf = (quote) => {
+    const body = (quote ?? "").replace(
+      /^\s*[A-Z][a-z]{1,20}(?:\s*\([^)]*\))?\s*:\s*/,
+      ""
+    );
+    const out = [];
+    for (const m of body.matchAll(
+      /\b([A-Z][a-z]{2,}(?:\s+[a-z]{2,}){1,2})\b/g
+    )) {
+      const phrase = m[1].toLowerCase();
+      const words = phrase.split(/\s+/);
+      if (words.some((w) => LOCAL_STOP.test(w) || MONTH_DAY.test(w))) continue;
+      out.push(phrase);
+    }
+    const GENERIC_MOD = /^(operational|current|revised|proposed|internal|tentative|commercial|opening|pilot|upfront|lower|earlier|formal|original|annual|monthly|quarterly|standard|regular|final|initial|new|old|first|second)$/i;
+    const dm = /\b([a-z][a-z-]{3,})\s+(?:fees?|retainer|price|rate|split|scope|retention|target|deadline)\b/i.exec(
+      body
+    );
+    if (dm && !LOCAL_STOP.test(dm[1]) && !MONTH_DAY.test(dm[1]) && !GENERIC_MOD.test(dm[1]))
+      out.push("desc:" + dm[1].toLowerCase());
+    return [...new Set(out)];
+  };
   const sharesEngagement = (a, b) => {
-    if (!a.scopeEntities.length || !b.scopeEntities.length) return false;
+    if (!a.scopeEntities.length || !b.scopeEntities.length)
+      return a.sourceId === b.sourceId;
     const shared = a.scopeEntities.some((e) => b.scopeEntities.includes(e));
     if (!shared) return false;
     const aOnly = a.scopeEntities.some((e) => !b.scopeEntities.includes(e));
@@ -23978,6 +24015,13 @@ function resolveClaims(claims) {
       for (const c of list) {
         if (c === sup || c.supersedes) continue;
         if (!sharesEngagement(sup, c)) continue;
+        if (sup.sourceId === c.sourceId && !sup.scopeEntities.length) {
+          if (!(FIELD_NOUNS[field] ?? /$^/).test(sup.quote ?? "")) continue;
+          const supScope = localScopeOf(sup.quote ?? "");
+          const cScope = localScopeOf(c.quote ?? "");
+          if (supScope.length && cScope.length && !supScope.some((x) => cScope.includes(x)))
+            continue;
+        }
         const ambiguous = list.some(
           (o) => o !== c && o !== sup && sharesEngagement(sup, o) && !sharesEngagement(c, o)
         );

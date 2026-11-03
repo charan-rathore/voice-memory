@@ -884,10 +884,67 @@ export function resolveClaims(claims: Claim[]): {
   // engagement, and neither are namesakes sharing one word (Northstar Retail
   // vs Northstar Logistics). When identity cannot be established there is no
   // supersession - the records compete and the answer stays unresolved.
+  // Field-noun binding: with no named entities to establish the engagement,
+  // a superseding statement must name the field it governs ("the current
+  // launch target", "the revised fee"). Without that binding the records
+  // compete - one PDF can hold several engagements and an unbound "current"
+  // must not silently demote another engagement's values.
+  const FIELD_NOUNS: Record<string, RegExp> = {
+    fee: /\bfee|price|rate|retainer|amount|cost\b/i,
+    paymentSplit: /\bsplit|percent|payment|upfront\b/i,
+    signedAgreement: /\bagreement|contract|signed\b/i,
+    retention: /\bretention|retain|keep\b/i,
+    scope: /\bscope|site|region|phase\b/i,
+    deadline: /\btarget|deadline|launch|date|timeline\b/i,
+    signedAddendum: /\baddendum|dpa|processing\b/i,
+    signatory: /\bsignatory|signs|signature\b/i,
+    invoice: /\binvoice\b/i,
+    termination: /\bterminat|cancel|exit\b/i,
+  };
+  // Local scope signature: distinctive capitalized phrases in the claim's
+  // own sentence ("Alpha workstream"), excluding speaker prefixes, dates and
+  // generic business words. Two claims from one document whose sentences
+  // name different workstreams are not the same engagement.
+  const LOCAL_STOP =
+    /^(the|this|that|internal|approved|approval|current|proposed|revised|committee|finance|legal|security|action|outcome|status|date|note|yes|no|not|steering|customer|client|project|pilot|meeting|transcript|fictional|evaluation|only)$/i;
+  const MONTH_DAY =
+    /^(january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i;
+  const localScopeOf = (quote: string): string[] => {
+    const body = (quote ?? "").replace(
+      /^\s*[A-Z][a-z]{1,20}(?:\s*\([^)]*\))?\s*:\s*/,
+      "",
+    ); // speaker prefix
+    const out: string[] = [];
+    for (const m of body.matchAll(
+      /\b([A-Z][a-z]{2,}(?:\s+[a-z]{2,}){1,2})\b/g,
+    )) {
+      const phrase = m[1].toLowerCase();
+      const words = phrase.split(/\s+/);
+      if (words.some((w) => LOCAL_STOP.test(w) || MONTH_DAY.test(w))) continue;
+      out.push(phrase);
+    }
+    // Subject descriptor: the noun naming what the field value attaches to
+    // ("hosting fee", "license fee") - distinct descriptors are distinct
+    // subjects even without capitalized workstream names.
+    const GENERIC_MOD =
+      /^(operational|current|revised|proposed|internal|tentative|commercial|opening|pilot|upfront|lower|earlier|formal|original|annual|monthly|quarterly|standard|regular|final|initial|new|old|first|second)$/i;
+    const dm =
+      /\b([a-z][a-z-]{3,})\s+(?:fees?|retainer|price|rate|split|scope|retention|target|deadline)\b/i.exec(
+        body,
+      );
+    if (
+      dm &&
+      !LOCAL_STOP.test(dm[1]) &&
+      !MONTH_DAY.test(dm[1]) &&
+      !GENERIC_MOD.test(dm[1])
+    )
+      out.push("desc:" + dm[1].toLowerCase());
+    return [...new Set(out)];
+  };
   const sharesEngagement = (a: Claim, b: Claim) => {
-    // Entities come from the document title and H1, so two claims from one
-    // document always carry the same list: when it is empty (no named
-    // entity), one document is one engagement context and they share it.
+    // Entities come from the document title and H1. When both sides name
+    // none, the only engagement evidence is the document itself plus the
+    // superseding statement's own field binding - checked by the caller.
     if (!a.scopeEntities.length || !b.scopeEntities.length)
       return a.sourceId === b.sourceId;
     const shared = a.scopeEntities.some((e) => b.scopeEntities.includes(e));
@@ -932,6 +989,21 @@ export function resolveClaims(claims: Claim[]): {
       for (const c of list) {
         if (c === sup || c.supersedes) continue;
         if (!sharesEngagement(sup, c)) continue; // engagement not established
+        // Empty-entity same-document path: hold ambiguity unless the
+        // superseding sentence itself binds this field.
+        if (sup.sourceId === c.sourceId && !sup.scopeEntities.length) {
+          // Field binding required...
+          if (!(FIELD_NOUNS[field] ?? /$^/).test(sup.quote ?? "")) continue;
+          // ...and distinct local scope signatures hold ambiguity.
+          const supScope = localScopeOf(sup.quote ?? "");
+          const cScope = localScopeOf(c.quote ?? "");
+          if (
+            supScope.length &&
+            cScope.length &&
+            !supScope.some((x) => cScope.includes(x))
+          )
+            continue;
+        }
         // Ambiguous attribution: a revision whose scope also matches another,
         // mutually exclusive engagement (shared letterhead, no client named)
         // cannot be attributed uniquely - it supersedes nothing and the
