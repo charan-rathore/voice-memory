@@ -16,7 +16,11 @@ const spec = JSON.parse(readFileSync(site("openapi.json"), "utf8"));
 const llms = readFileSync(site("llms.txt"), "utf8");
 
 test("every documented endpoint is routed by the public API", async () => {
+  const before = process.env.VM_BYO_VOICE;
+  process.env.VM_BYO_VOICE = "on";
   const srv = createLocalServer({ port: 0 });
+  if (before === undefined) delete process.env.VM_BYO_VOICE;
+  else process.env.VM_BYO_VOICE = before;
   await new Promise((r) => srv.listen(0, "127.0.0.1", r));
   await srv.loadPublicCases();
   const base = `http://127.0.0.1:${srv.address().port}/api/public`;

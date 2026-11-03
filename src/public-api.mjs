@@ -115,6 +115,7 @@ export function createPublicApi({
   // for that one synthesis, never stored or logged, and their quota pays
   // for it, so the server's daily narration caps do not apply; the per-IP
   // limit below still does, so this is not an open proxy.
+  const byoEnabled = process.env.VM_BYO_VOICE === "on";
   const byoTtsLimit = limiter(120, 3600000);
   const ttsFor = (req) => {
     const p = String(req.headers["x-vm-tts-provider"] ?? "");
@@ -443,6 +444,13 @@ export function createPublicApi({
     const path = url.pathname.slice("/api/public".length);
     const ip = clientAddress(req);
     try {
+      if (
+        !byoEnabled &&
+        (req.headers["x-vm-tts-provider"] || req.headers["x-vm-tts-key"])
+      ) {
+        send(res, 503, { error: "Bring-your-own voice is not enabled." });
+        return true;
+      }
       if (req.method === "OPTIONS") {
         res.writeHead(204, { Allow: "GET, POST" });
         res.end();
@@ -473,6 +481,7 @@ export function createPublicApi({
           },
           // Neural voice for Listen (never the browser's): which providers
           // are configured, in the order they are tried.
+          byoVoice: { enabled: byoEnabled },
           voiceOut: tts
             ? { enabled: true, providers: tts.providers ?? ["sarvam"] }
             : { enabled: false, providers: [] },

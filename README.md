@@ -288,3 +288,10 @@ shown while the free host wakes up; a test keeps it equal to the live engine).
   the falsifiable milestones in [docs/MARKET.md](docs/MARKET.md).
 - Clinician review of lab explanations before any patient pilot
 - Phone-number calls and WhatsApp voice notes through Bolna
+
+
+Bring-your-own voice is disabled by default (`VM_BYO_VOICE` unset). Only an
+explicit `VM_BYO_VOICE=on` enables its key, session and visitor-provider Listen
+routes and shows its controls. Existing server-funded public calling is separate.
+Real visitor-account call integration has not been verified; this gate does not
+approve provider terms or spending.

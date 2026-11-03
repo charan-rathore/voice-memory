@@ -52,6 +52,7 @@
   // browser (this tab, or this device if they choose), are sent to this
   // server only with the one call or Listen request that needs them, and the
   // server uses them once and keeps nothing.
+  let byoEnabled = false;
   const byo = (() => {
     const K = "vm-byo";
     const empty = { bolnaKey: "", bolnaAgent: "", ttsProvider: "", ttsKey: "", remember: false };
@@ -85,10 +86,10 @@
           /* storage blocked */
         }
       },
-      hasCall: () => !!(v.bolnaKey && v.bolnaAgent),
-      hasTts: () => !!(v.ttsProvider && v.ttsKey),
+      hasCall: () => byoEnabled && !!(v.bolnaKey && v.bolnaAgent),
+      hasTts: () => byoEnabled && !!(v.ttsProvider && v.ttsKey),
       ttsHeaders: () =>
-        v.ttsProvider && v.ttsKey
+        byoEnabled && v.ttsProvider && v.ttsKey
           ? { "x-vm-tts-provider": v.ttsProvider, "x-vm-tts-key": v.ttsKey }
           : {},
     };
@@ -170,6 +171,8 @@
           const { cases } = await api("/cases");
           state.cases = Object.fromEntries(cases.map((c) => [c.id, c]));
           state.live = true;
+          byoEnabled = s.byoVoice?.enabled === true;
+          if ($("#byo")) $("#byo").hidden = !byoEnabled;
           state.voice = s.voice;
           state.semantic = s.semantic ?? null;
           state.voiceOut = s.voiceOut ?? null;

@@ -6,7 +6,12 @@ import assert from "node:assert/strict";
 import { createLocalServer } from "../src/server.mjs";
 
 async function boot(opts = {}) {
+  const previous = process.env.VM_BYO_VOICE;
+  if (opts.byoEnabled !== false) process.env.VM_BYO_VOICE = "on";
+  else delete process.env.VM_BYO_VOICE;
   const srv = createLocalServer({ port: 0, ...opts });
+  if (previous === undefined) delete process.env.VM_BYO_VOICE;
+  else process.env.VM_BYO_VOICE = previous;
   await new Promise((r) => srv.listen(0, "127.0.0.1", r));
   await srv.loadPublicCases();
   return { srv, base: `http://127.0.0.1:${srv.address().port}/api/public` };
@@ -256,6 +261,45 @@ test("expired workspace revokes its BYO key without creating another workspace",
     );
   } finally {
     Date.now = realNow;
+    srv.close();
+  }
+});
+
+test("BYO default off refuses keys, calls and visitor TTS before vendor access", async () => {
+  let calls = 0;
+  const { srv, base } = await boot({
+    byoEnabled: false,
+    vendorFetch: async () => {
+      calls++;
+      throw Error("must not call");
+    },
+  });
+  try {
+    const status = await (await fetch(`${base}/status`)).json();
+    assert.equal(status.byoVoice.enabled, false);
+    for (const path of [
+      "/llm/key",
+      "/llm/v1/chat/completions",
+      "/voice/byo/session",
+      "/speak",
+    ]) {
+      const response = await fetch(base + path, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-vm-tts-provider": "sarvam",
+          "x-vm-tts-key": "synthetic-no-secret",
+        },
+        body: JSON.stringify({
+          case: "health",
+          text: "synthetic",
+          agent_id: "53863b64-11e0-4cad-85c4-1285ba982159",
+        }),
+      });
+      assert.equal(response.status, 503, path);
+    }
+    assert.equal(calls, 0);
+  } finally {
     srv.close();
   }
 });

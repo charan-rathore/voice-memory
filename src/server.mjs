@@ -1216,6 +1216,7 @@ export function createLocalServer({
     ttlMs: 30 * 60 * 1000,
     hardTtlMs: BYO_HARD_MS,
   });
+  const byoEnabled = process.env.VM_BYO_VOICE === "on";
   const byoKeys = new Map(); // token -> { at, scope, bundle }
   const byoHits = new Map(); // `${kind}|${ip}` -> { n, start }
   const byoAllow = (kind, ip, max, windowMs = 3600000) => {
@@ -1514,6 +1515,16 @@ export function createLocalServer({
       byoPath.startsWith("/api/public/llm/") ||
       byoPath === "/api/public/voice/byo/session"
     ) {
+      if (!byoEnabled) {
+        res.writeHead(503, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        });
+        res.end(
+          JSON.stringify({ error: "Bring-your-own voice is not enabled." }),
+        );
+        return;
+      }
       const ip = clientAddress(req);
       const reply = (code, obj) => {
         res.writeHead(code, {
