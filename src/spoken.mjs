@@ -1102,9 +1102,12 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
         })),
       };
   }
+  // A real invoice document on file makes an invoice/bill amount question a
+  // fee-field question; the absence guard above owns the no-invoice case.
   const field =
     resolveField(question, claims, null) ??
-    (prevField ? resolveField(question, claims, prevField) : null);
+    (prevField ? resolveField(question, claims, prevField) : null) ??
+    (invoiceAsk ? "fee" : null);
   if (!field && intent === "MUTATE")
     return {
       spoken:

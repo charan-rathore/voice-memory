@@ -299,9 +299,9 @@ const MONTH_ABBR: Record<string, string> = {
   nov: "11",
   dec: "12",
 };
-/** Amounts in symbol or ISO-code form: $42,000 / USD 72,000 / EUR 36,500. */
+/** Amounts in symbol or ISO-code form: $42,000 / USD 72,000 / 18,500 INR. */
 const AMOUNT_RE =
-  /(?:[$€£₹]\s?\d(?:[\d,]*\d)?(?:\.\d+)?|\b(?:USD|EUR|GBP|INR|AUD|CAD|NZD|SGD|AED|CHF|JPY)\s?[$€£₹]?\s?\d(?:[\d,]*\d)?(?:\.\d+)?)/g;
+  /(?:[$€£₹]\s?\d(?:[\d,]*\d)?(?:\.\d+)?|\b(?:USD|EUR|GBP|INR|AUD|CAD|NZD|SGD|AED|CHF|JPY)\s?[$€£₹]?\s?\d(?:[\d,]*\d)?(?:\.\d+)?|\b\d(?:[\d,]*\d)?(?:\.\d+)?\s?(?:USD|EUR|GBP|INR|AUD|CAD|NZD|SGD|AED|CHF|JPY)\b)/g;
 /** Scope units a meeting can count: not only "regions". */
 const UNIT =
   "(?:retail\\s+)?(?:regions?|sites?|depots?|stores?|locations?|branches?|markets?|countries|offices?|warehouses?|areas?)";
@@ -372,9 +372,12 @@ export function extractClaims(
       // document chrome, not assertions: they mint no claims.
       if (!/[a-z]/.test(line)) continue;
       for (const utt of utterancesOf(line)) {
-        const seg = utt.text;
-        const start = lineStart + utt.at;
-        if (isQuestionUtterance(seg)) continue;
+        // List furniture ("1. ") is not content: the cited span starts at
+        // the assertion itself, keeping quote/start honest for display and
+        // evidence validation alike.
+        const seg = utt.text.replace(/^\s*\d+\.\s+/, "");
+        const start = lineStart + utt.at + (utt.text.length - seg.length);
+        if (!seg || isQuestionUtterance(seg)) continue;
         const base = {
           sourceId: source.id,
           title: source.title,

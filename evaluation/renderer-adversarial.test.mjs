@@ -58,7 +58,9 @@ test("A6: 'three retail regions' phrasing still resolves to the scope claim", ()
     },
   ]);
   const r = spokenTurn("What is the scope?", scopey);
-  assert.match(r.spoken, /three regions/i);
+  // The scope value is the document's own wording: "retail" belongs to the
+  // claim, and the named list stays attached.
+  assert.match(r.spoken, /three retail regions \(North, South, West\)/i);
 });
 
 test("A7: retainer/retention phrasing clarifies, never aliases, the engagement fee", () => {

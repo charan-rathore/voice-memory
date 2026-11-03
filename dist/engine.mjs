@@ -23586,7 +23586,7 @@ var MONTH_ABBR = {
   nov: "11",
   dec: "12"
 };
-var AMOUNT_RE = /(?:[$€£₹]\s?\d(?:[\d,]*\d)?(?:\.\d+)?|\b(?:USD|EUR|GBP|INR|AUD|CAD|NZD|SGD|AED|CHF|JPY)\s?[$€£₹]?\s?\d(?:[\d,]*\d)?(?:\.\d+)?)/g;
+var AMOUNT_RE = /(?:[$€£₹]\s?\d(?:[\d,]*\d)?(?:\.\d+)?|\b(?:USD|EUR|GBP|INR|AUD|CAD|NZD|SGD|AED|CHF|JPY)\s?[$€£₹]?\s?\d(?:[\d,]*\d)?(?:\.\d+)?|\b\d(?:[\d,]*\d)?(?:\.\d+)?\s?(?:USD|EUR|GBP|INR|AUD|CAD|NZD|SGD|AED|CHF|JPY)\b)/g;
 var UNIT = "(?:retail\\s+)?(?:regions?|sites?|depots?|stores?|locations?|branches?|markets?|countries|offices?|warehouses?|areas?)";
 var UNIT_RE = new RegExp("\\b" + UNIT + "\\b", "i");
 var NUMWORD_RE = "\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve";
@@ -23623,9 +23623,9 @@ function extractClaims(bundle, fields) {
       if (!line.trim() || line.startsWith("#")) continue;
       if (!/[a-z]/.test(line)) continue;
       for (const utt of utterancesOf(line)) {
-        const seg = utt.text;
-        const start = lineStart + utt.at;
-        if (isQuestionUtterance(seg)) continue;
+        const seg = utt.text.replace(/^\s*\d+\.\s+/, "");
+        const start = lineStart + utt.at + (utt.text.length - seg.length);
+        if (!seg || isQuestionUtterance(seg)) continue;
         const base = {
           sourceId: source.id,
           title: source.title,
@@ -31774,7 +31774,7 @@ function answer(question, bundle, dense) {
       });
     }
     const FIELD_TOKEN = new Set(
-      "fee fees invoice invoiced invoicing cost costs bill billed billing charg charge charged charging money commercial commercials paid pay payment payments split upfront installment installments deadline due pilot signoff launch approve approved approval authorize authorized authorization region regions scope area areas cover covers covered weekly daily biweekly monthly cadence progress report reporting status update current record records ask asked asking funding funded finance financed financing amount amounts price prices value values discount discounts structure terms revised final agree agreed proposal propose proposed quote quoted sign signing signed off timing expected date change changed discuss discussed decided decide decision steering committee board customer client legal finance internal original initially opening earlier previously history historical contract contracts addendum addenda signature signatory".split(
+      "fee fees invoice invoiced invoicing cost costs bill billed billing charg charge charged charging money commercial commercials paid pay payment payments split upfront installment installments deadline due pilot signoff launch approve approved approval authorize authorized authorization region regions scope area areas cover covers covered weekly daily biweekly monthly cadence progress report reporting status update current record records ask asked asking funding funded finance financed financing amount amounts price prices value values discount discounts structure terms revised final agree agreed proposal propose proposed quote quoted sign signing signed off timing expected date change changed discuss discussed decided decide decision steering committee board group team customer client legal finance internal original initially opening earlier previously history historical contract contracts addendum addenda signature signatory".split(
         " "
       )
     );
