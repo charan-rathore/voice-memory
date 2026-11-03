@@ -159,10 +159,14 @@ export function parseReference(text, sex = null, age = null) {
   let s = String(text).replace(/\s+/g, " ").trim();
   // A child's result is never judged against an adult range: sex-specific
   // and "Adults" ranges are adult ranges. (Age bands are not interpreted.)
+  // Band labels glued to a number ("13-17adult") count too: printers often
+  // drop the space, and a missed label used to adopt the adult band.
   if (
     age != null &&
     age < 16 &&
-    /\b(adults?|male|female|men|women|m\/f|m|f)\b\s*[:=(]?|\(adults?\)/i.test(s)
+    /(?:\b|(?<=\d))(adults?|male|female|men|women|m\/f)\b\s*[:=(]?|\(adults?\)|\b[mf]\b\s*[:=(]?/i.test(
+      s,
+    )
   )
     return { lowN: null, highN: null, adultOnly: true, text: s };
   s = s.replace(

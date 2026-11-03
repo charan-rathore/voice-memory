@@ -477,3 +477,48 @@ test("a bare month with several years names the most recent, and says which", ()
     "the date is disclosed in the answer",
   );
 });
+
+test("a child's result is never judged against an adult band, even glued to numbers", async () => {
+  // RED 2026-11-03: "11.5-15.5child;13-17adult" (no spaces, the printed
+  // corpus format) let the adult 13-17 band judge a 7-year-old's 11.3 and
+  // the answer said "clearly below this lab's range of 13 to 17".
+  const r = await ingestFile(
+    Buffer.from(
+      [
+        "Name: Test Child",
+        "Patient ID: SYN-0007",
+        "Age: 7 Yrs",
+        "Collected: 20 October 2026",
+        "Reported: 21 October 2026",
+        "Report status: FINAL",
+        "",
+        "| Test | Result | Unit | Reference range | Flag |",
+        "| --- | --- | --- | --- | --- |",
+        "| Hemoglobin | 11.3 | g/dL | 11.5-15.5child;13-17adult | L |",
+        "",
+        "Values flagged L or H are outside the laboratory's reference range.",
+        "",
+      ].join("\n"),
+    ),
+    "child-2026-10.txt",
+  );
+  assert.equal(r.ok, true, r.message);
+  const rep = {
+    title: "child-2026-10.txt",
+    sourceId: "child-2026-10.txt",
+    ...extractReport(r.doc),
+  };
+  assert.equal(rep.meta.patient?.age, 7, "child age parsed");
+  const t = clinicalTurn("What is the hemoglobin result?", [rep]);
+  assert.ok(t, "clinical answer produced");
+  assert.doesNotMatch(
+    t.spoken,
+    /13 to 17|13\.0-17|below this lab's range of 13/,
+    "adult band numbers never reach the spoken answer",
+  );
+  assert.match(
+    t.spoken,
+    /adult ranges?|haven't judged|not judged/i,
+    "the child/adult-range caveat is spoken",
+  );
+});
