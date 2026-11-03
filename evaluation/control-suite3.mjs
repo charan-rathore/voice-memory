@@ -514,7 +514,8 @@ run(
   "What is the invoice amount due?",
   (r, ans) =>
     !r.refused &&
-    (ans.includes("18,500") || JSON.stringify(r.evidence).includes("18,500")),
+    ans.includes("18,500") &&
+    r.evidence.some((e) => e.title === "Acme_Invoice.txt"),
 );
 run(
   "R2-invoice-payable-date",
@@ -527,8 +528,8 @@ run(
   "When is it payable?",
   (r, ans) =>
     !r.refused &&
-    (ans.includes("15 November 2026") ||
-      JSON.stringify(r.evidence).includes("15 November 2026")),
+    ans.includes("15 November 2026") &&
+    r.evidence.some((e) => e.title === "Acme_Invoice.txt"),
 );
 run(
   "R3-compound-amount-and-payable",
@@ -539,12 +540,11 @@ run(
     ),
   ],
   "What is the invoice amount due and when is it payable?",
-  (r, ans) => {
-    const blob = ans + JSON.stringify(r.evidence);
-    return (
-      !r.refused && blob.includes("18,500") && blob.includes("15 November 2026")
-    );
-  },
+  (r, ans) =>
+    !r.refused &&
+    ans.includes("18,500") &&
+    ans.includes("15 November 2026") &&
+    r.evidence.some((e) => e.title === "Acme_Invoice.txt"),
 );
 run(
   "R4-billing-owner-never-answers-strict-metric",
