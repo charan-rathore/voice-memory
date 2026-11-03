@@ -272,3 +272,32 @@ test("a real-layout report answers the questions people actually ask", () => {
     "not a lab question",
   );
 });
+
+test("a named ratio is its own result even with no unit or range", () => {
+  // LalPath WM14 prints "| BUN/Creatinine Ratio | 14 |  |  |": a real result
+  // that the bare-number guard ("Age 23") must not keep swallowing.
+  const row = readLabLine("| BUN/Creatinine Ratio | 14 |  |  |");
+  assert.equal(row.test, "BUN/Creatinine Ratio");
+  assert.equal(row.value, 14);
+  const text =
+    "Creatinine, Serum 0.86 mg/dL 0.67 - 1.17\nBUN/Creatinine Ratio 14\n";
+  const R = [
+    {
+      ...extractReport({ text, elements: [] }),
+      title: "kidney.pdf",
+      sourceId: "s1",
+      haystack: ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `,
+    },
+  ];
+  const ans = clinicalAnswer("What is the BUN creatinine ratio?", R);
+  assert.match(ans.spoken, /BUN\/Creatinine Ratio result is 14/);
+  assert.doesNotMatch(ans.spoken, /0\.86/, "never substitutes creatinine");
+  // The noise guard still stands.
+  assert.equal(readLabLine("Age 23"), null);
+  assert.equal(readLabLine("Bill 189455"), null);
+});
+
+test("risk-category table bleed never becomes an observation", () => {
+  // WM14's LDL risk table bleeds "| Moderate | 100 | <130 ≥100 ≥130 |".
+  assert.equal(readLabLine("| Moderate | 100 | <130 ≥100 ≥130 |"), null);
+});

@@ -361,10 +361,18 @@ export function readLabLine(line) {
   const v = parseResult(raw);
   if (!v) return null;
   const t = tail(rest ?? "");
+  // A named ratio, index or score is dimensionless by convention
+  // ("BUN/Creatinine Ratio 14", "INR 1.1"): the name carries the meaning.
+  const dimensionless = /\b(ratio|index|score)\b/i.test(test);
   // A number with neither a unit nor a range is too weak to call a result
   // ("Age 23", "Bill 189455"); a qualitative result needs no unit.
-  if (v.qual == null && !t.unit && !t.range) return null;
-  if (v.qual == null && t.range == null && !/[a-z]/i.test(t.unit ?? ""))
+  if (v.qual == null && !t.unit && !t.range && !dimensionless) return null;
+  if (
+    v.qual == null &&
+    t.range == null &&
+    !dimensionless &&
+    !/[a-z]/i.test(t.unit ?? "")
+  )
     return null;
   return {
     test,
@@ -397,7 +405,7 @@ function validTest(t) {
   if (t.split(/\s+/).length > 9) return false; // prose, not a test name
   if (/[.!?]\s+[A-Z]/.test(t)) return false;
   if (
-    /^(child|children|adult|adults|new\s*born|newborn|infant|male|female|men|women|desirable|optimal|borderline|high|low|very high|near)\b/i.test(
+    /^(child|children|adult|adults|new\s*born|newborn|infant|male|female|men|women|desirable|optimal|borderline|high|low|very high|near|moderate)\b/i.test(
       t,
     )
   )
