@@ -1152,7 +1152,10 @@ function unknownModifier(question, bundle) {
 // asked aspect named for the absence statement: number, payment, or the
 // invoice itself. Null when the question is not about an invoice/bill.
 function invoiceDocumentAsk(question) {
-  if (!/\binvoices?\b|\binvoiced\b|\bbills?\b/i.test(question)) return null;
+  // "Bill Lobban" is a person, not an invoice: strip capitalized-Bill
+  // name uses before the noun test.
+  const q = question.replace(/\bBill\s+[A-Z][a-z]+\b/g, " ");
+  if (!/\binvoices?\b|\binvoiced\b|\bbills?\b/i.test(q)) return null;
   if (/\b(?:invoice|bill)s?\s+(?:number|no\.?|id)\b/i.test(question))
     return "an invoice number";
   if (/\b(?:paid|payment|settled|received|cleared)\b/i.test(question))
