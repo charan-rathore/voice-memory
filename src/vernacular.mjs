@@ -334,8 +334,14 @@ export function normalizeVernacular(text) {
 const CONDITION =
   /\b(diabet\w*|prediabet\w*|an(a)?emi\w*|hypo\w*|hyper\w*|thyroid (?:disease|problem|issue)|kidney (?:disease|failure|problem)|ckd|cancer|infection|iron deficiency|pcos|sugar ki bimari|khoon ki kami|bimari)\b|डायबिटीज|मधुमेह|एनीमिया|खून की कमी|बीमारी|थायरॉइड की समस्या/i;
 const MED =
-  /\b(tablets?|pills?|medicines?|medication|meds|supplements?|thyroxine|levothyroxine|metformin|insulin|iron|vitamin|goli|goliyan|dawa|dawai|dawaai|injection|treatment)\b|गोली|दवा|दवाई|इंजेक्शन|इलाज/i;
+  /\b(statins?|aspirin|antibiotics?|blood thinners?|drugs?|therapy|tablets?|pills?|medicines?|medication|meds|supplements?|thyroxine|levothyroxine|metformin|insulin|iron|vitamin|goli|goliyan|dawa|dawai|dawaai|injection|treatment)\b|गोली|दवा|दवाई|इंजेक्शन|इलाज/i;
+const WHO =
+  "(?:i|he|she|they|we|my\\s+(?:dad|father|mother|mom|mum|mummy|papa|son|daughter|wife|husband|parents?|grand(?:father|mother|pa|ma))|papa|mummy|dad|mom)";
 const ADVICE = [
+  new RegExp(
+    `\\b(should|can|could|must|do|does)\\s+${WHO}\\s+(take|stop|start|continue|increase|reduce|skip|quit|double|lower|raise|change|go on|be put on|get)\\b`,
+    "i",
+  ),
   // English: should I take / stop / start / how much ... should I
   /\b(should|can|could|must|do)\s+i\s+(take|stop|start|continue|increase|reduce|skip|quit|double|lower|raise|change)\b/i,
   /\bhow (?:much|many)\b.{0,30}\b(should|do|can)\s+i\b/i,
@@ -346,6 +352,12 @@ const ADVICE = [
   /(लेनी|लेना|लेने|खानी|खाना|छोड़|बंद\s*कर|शुरू\s*कर).{0,20}(चाहिए|दूं|दूँ|सकता|सकती)/,
 ];
 const DIAGNOSIS = [
+  new RegExp(`\\b(do|does|did|could|might|can)\\s+${WHO}\\s+have\\b`, "i"),
+  new RegExp(
+    `\\b(is|am|are)\\s+${WHO}\\s+(diabetic|an(a)?emic|sick|ill|prediabetic|hypothyroid|hyperthyroid)\\b`,
+    "i",
+  ),
+  /\bkya\s+(unko|unhe|usko|use|papa\s+ko|mummy\s+ko|inko)\b.{0,30}\b(hai|ho\s+gaya|ho\s+gayi|hua|hui)\b/i,
   /\b(do|did|could|might)\s+i\s+have\b/i,
   /\bam\s+i\s+(diabetic|an(a)?emic|sick|ill|prediabetic|hypothyroid)\b/i,
   /\bkya\s+(mujhe|mujhko|mere\s+ko)\b.{0,30}\b(hai|ho\s+gaya|ho\s+gayi|hua|hui)\b/i,

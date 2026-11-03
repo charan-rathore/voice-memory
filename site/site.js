@@ -484,10 +484,17 @@
     if (!state.ticket || !state.call || !scope || state.callScope === scope)
       return;
     state.callScope = scope;
+    // A counter per switch: the server applies only the newest update, so
+    // quick A -> B -> A switches cannot leave the call on B.
+    state.scopeGen = (state.scopeGen ?? 0) + 1;
     api("/voice/scope", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ticket: state.ticket, case: scope }),
+      body: JSON.stringify({
+        ticket: state.ticket,
+        case: scope,
+        gen: state.scopeGen,
+      }),
     }).catch(() => {
       // The call keeps its old scope; its turns for that scope stay off
       // this screen (pollTurns), so nothing from the wrong records shows.

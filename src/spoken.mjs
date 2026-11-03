@@ -56,7 +56,7 @@ const INTENTS = [
   ],
   [
     "HISTORY",
-    /\b(earlier|before|original(?:ly)?|remember|used to|previous|wasn'?t it|weren'?t it)\b/i,
+    /\b(earlier|before|original(?:ly)?|remember|used to|previous|wasn'?t it|weren'?t it|supersed\w*|replaced|(?:first|initial(?:ly)?) (?:proposed|proposal|quoted?|offer(?:ed)?|fee|price|figure))\b/i,
   ],
   [
     "FINALIZED",
@@ -196,6 +196,12 @@ function resolveField(q, claims, prevField) {
     const hit = claims.find((c) => c.value.replace(/[^\d]/g, "") === digits);
     if (hit) return hit.field;
   }
+  if (
+    /\b(proposal|offer)\b/i.test(q) &&
+    /\b(original|first|initial|earlier|previous)\b/i.test(q) &&
+    claims.some((c) => c.field === "fee")
+  )
+    return "fee";
   if (/\b(revision|revised|amount|price|quote|total)\b/i.test(q)) {
     if (claims.some((c) => c.field === "fee")) return "fee";
   }
@@ -481,7 +487,11 @@ function render({
       return `Yes. ${cap(docLabel(current))} says: ${trimQuote(current.quote.replace(/^\s*\d+\.\s*/, ""), 120)}`;
   }
   if (field === "signoffWho" && current && verdict !== "CONFIRMED")
-    return `The terms need ${current.value} sign-off, and that sign-off is not recorded yet.`;
+    // "Did finance reject it?" right after "who signs off": the rejection
+    // question is answered first; missing approval is not a rejection.
+    return intent === "REJECTED"
+      ? `No record shows a rejection. The terms need ${current.value} sign-off, and that sign-off is not recorded yet.`
+      : `The terms need ${current.value} sign-off, and that sign-off is not recorded yet.`;
   if (field === "scope" && current)
     return `The current working scope is ${value}.`;
   if (field === "reporting" && current) {
@@ -497,8 +507,23 @@ function render({
 
   switch (`${intent}:${verdict}`) {
     case "FINALIZED:PROPOSED":
-    case "LATEST:PROPOSED":
+    case "LATEST:PROPOSED": {
+      // "Is $48,000 the current fee?" names a figure the record replaced:
+      // the answer is "No" first, then what stands.
+      const named = (
+        question.match(/[$€£₹]\s?[\d,]+|\b\d{1,3}(?:,\d{3})+\b/g) ?? []
+      ).map((a) => a.replace(/[^\d]/g, ""));
+      const cur = (value ?? "").replace(/[^\d]/g, "");
+      const yn = /^\s*(is|was|are|has|did|does)\b/i.test(question);
+      if (yn && cur && named.length && named.every((n) => n !== cur)) {
+        const old =
+          earlier && named.includes((earlierVal ?? "").replace(/[^\d]/g, ""))
+            ? ` ${earlierVal} was superseded.`
+            : "";
+        return `No. ${cap(value)} is the latest proposal, and it is not approved.${old}`;
+      }
       return `${cap(value ?? "It")} is the latest proposal, and it is not approved.`;
+    }
     case "FINALIZED:CONFIRMED":
     case "LATEST:CONFIRMED":
       return `Yes. ${cap(label)} records the approval${value ? ` of ${value}` : ""}.`;
@@ -508,7 +533,11 @@ function render({
     case "HISTORY:PROPOSED":
     case "HISTORY:OPEN":
       return earlier
-        ? `Yes, the earlier record was ${earlierVal}. It was superseded by ${value ?? "the current proposal"}, which is still not approved.`
+        ? /^\s*(was|is|were|did|has|had|didn'?t|wasn'?t|isn'?t)\b/i.test(
+            question,
+          )
+          ? `Yes, the earlier record was ${earlierVal}. It was superseded by ${value ?? "the current proposal"}, which is still not approved.`
+          : `The earlier record was ${earlierVal}. It was superseded by ${value ?? "the current proposal"}, which is still not approved.`
         : `${cap(value ?? "The current record")} is the only record, and it is not approved.`;
     case "HISTORY:CONFIRMED":
       return earlier
@@ -1071,7 +1100,9 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
       /\b([a-z][a-z-]{3,})\s+(?:fees?|retainer|price|rate)\b/i.exec(question) ??
       /\b(retainer)\b/i.exec(question);
     const desc = dm?.[1]?.toLowerCase();
-    if (desc) {
+    const statusWord =
+      /^(proposed|revised|original|first|initial|earlier|previous|current|latest|new|old|final|approved|agreed|pending|superseded|updated)$/;
+    if (desc && !statusWord.test(desc)) {
       const hit = fieldClaims.filter((c) =>
         new RegExp(`\\b${desc}\\b`, "i").test(c.quote ?? ""),
       );

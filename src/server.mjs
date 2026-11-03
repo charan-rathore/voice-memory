@@ -46,11 +46,16 @@ import {
   observationEvidence,
   findTest,
   subjectsFor,
+  DATE_ASK_RE,
 } from "../clinical/answer.mjs";
 import { extractReport } from "../clinical/observations.mjs";
 import { sectionAnswer, fieldAnswer } from "./doc-sections.mjs";
 import { detectLang, aliasesFor, nameOf } from "../clinical/explain.mjs";
-import { labVocabulary, repairTestNames } from "./spoken-repair.mjs";
+import {
+  labVocabulary,
+  repairTestNames,
+  selfRepair,
+} from "./spoken-repair.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
 import {
   normalizeVernacular,
@@ -164,21 +169,42 @@ for (const f of readdirSync(
 // no test of its own that reads as a follow-up.
 const LAB_FOLLOWUP_RE =
   /\b(it|its|that|this|those|them|before|previous|earlier|again|same|then|correct\w*|amend\w*|original\w*|prelim\w*|units?|range|normal|high|low|why|mean\w*)\b|पहले|वो|यह|इसका|उसका|इसे/i;
+// "SYN-0003" alone, said back after "whose TSH?", answers that question.
+const BARE_ID_RE =
+  /^\s*(?:(?:and|for|of|the|patient)\s+)*[A-Za-z]{2,5}[- ]?\d{3,6}(?:'s)?\s*[?.!]?\s*$/i;
 function withLabContext(question, reports, prevField) {
-  if (!prevField || !LAB_FOLLOWUP_RE.test(question)) return question;
+  if (
+    !prevField ||
+    DATE_ASK_RE.test(question) ||
+    (!LAB_FOLLOWUP_RE.test(question) && !BARE_ID_RE.test(question))
+  )
+    return question;
   if (findTest(question, reports) || !findTest(prevField, reports))
     return question;
   const test = prevField.replace(/^[A-Z]{2,5}-\d{3,6}\s+/, "");
-  const ownSubject = subjectsFor(question, reports).some(
-    (id) => !/^(doc|name):/.test(id),
-  );
+  // the question names its own patient only if it says an id; subjectsFor
+  // lists every patient when none is named, so it cannot tell
+  const ownSubject = /\b[A-Za-z]{2,5}[- ]?\d{3,6}\b/.test(question);
   return `${question} ${ownSubject ? test : prevField}`;
 }
 const labField = (c) => {
   const o = c?.used?.[0];
-  if (!o) return null;
+  // a clarification ("whose TSH?") keeps the test it asked about
+  if (!o)
+    return typeof c?.test === "string" &&
+      /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(c.test)
+      ? c.test
+      : null;
   const pid = o.report?.meta?.patient?.id;
-  const f = `${/^[A-Z]{2,5}-\d{3,6}$/.test(pid ?? "") ? pid + " " : ""}${nameOf(o)}`;
+  // an answer about one dated report keeps that date ("convert it" then
+  // means the September value, not the latest)
+  const day =
+    c.used.length === 1 &&
+    c.verdict === "VALUE" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(o.report?.meta?.collected ?? "")
+      ? " " + o.report.meta.collected
+      : "";
+  const f = `${/^[A-Z]{2,5}-\d{3,6}$/.test(pid ?? "") ? pid + " " : ""}${nameOf(o)}${day}`;
   return /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(f) ? f : null;
 };
 function leadFor(question, result, bundle, prevField) {
@@ -522,14 +548,20 @@ export function createLocalServer({
       const t = Date.now();
       for (const [c, v] of voiceCalls)
         if (t - v.at > VOICE_CALL_MS) voiceCalls.delete(c);
-      voiceCalls.set(call, { scope, at: t });
+      voiceCalls.set(call, { scope, at: t, gen: 0 });
     },
-    setScope(call, scope) {
+    // `gen` is the page's own switch counter. Scope updates can arrive out of
+    // order (A -> B -> A sent quickly, B delivered last); an update older
+    // than the one already applied is ignored, so the server ends on what
+    // the page shows. Returns the scope in force, or false.
+    setScope(call, scope, gen = null) {
       const v = voiceCalls.get(call);
       if (!v) return false;
+      if (Number.isSafeInteger(gen) && gen <= v.gen) return v.scope;
       if (scope.startsWith("w_") && !liveWorkspace(scope)) return false;
       v.scope = scope;
-      return true;
+      if (Number.isSafeInteger(gen)) v.gen = gen;
+      return v.scope;
     },
   };
   const liveWorkspace = (id) => {
@@ -543,7 +575,7 @@ export function createLocalServer({
   };
   voice.setOnTurn?.((token, t) => {
     const feedCase =
-      token === fixedCap
+      (token === fixedCap
         ? t.caseId === "health" || t.caseId === "deal"
           ? caseSessions[t.caseId]
           : voiceCase.bundle && t.scope === voiceCase.bundle.scope
@@ -551,7 +583,13 @@ export function createLocalServer({
             : [...workspaces.values()].find(
                 (w) => w.s.bundle?.scope === t.scope,
               )?.s
-        : null;
+        : null) ??
+      // A turn with nothing to cite (workspace expired, scope unreadable,
+      // page switched mid-answer) still reaches its own call's screen, so
+      // the page shows the words the caller heard.
+      (token === fixedCap && t.call && !t.lead?.citations?.length
+        ? voiceCase
+        : null);
     if (feedCase) {
       const lead = t.lead
         ? {
@@ -805,7 +843,8 @@ export function createLocalServer({
       // questions are understood in Hindi directly). The answer is rendered
       // back in Hindi below.
       const original = question;
-      question = repairDealTerms(stripPreamble(question)) || question;
+      question =
+        repairDealTerms(stripPreamble(selfRepair(question))) || question;
       // Recogniser and keyboard damage to a test this case actually reports
       // ("ferrite in" -> Ferritin) is repaired against the case's own lab
       // vocabulary; anything the reports don't hold stays untouched, and the
@@ -1271,11 +1310,18 @@ export function createLocalServer({
         typeof m?.content === "string"
           ? m.content
           : JSON.stringify(m?.content ?? "");
+      // The agent prompt reads "vm_ws={vm_ws}." Bolna substitutes the value
+      // minted for a browser call; a phone call (no value) leaves the
+      // placeholder or nothing, and answers from the demo records as before.
+      // A value that is present but unreadable is refused, never widened to
+      // every record.
+      const raw = /vm_ws=(\S*)/.exec(text)?.[1];
+      if (raw === undefined) continue;
+      const value = raw.replace(/[.,;:)\]'"]+$/, "");
+      if (!value || /^\{\s*vm_ws\s*\}$/.test(value)) continue;
       const hit =
-        /vm_ws=(w_[0-9a-f]{32}|health|deal|demo)(?:\.(c[0-9a-f]{24}))?(?![0-9a-z_])/.exec(
-          text,
-        );
-      if (!hit) continue;
+        /^(w_[0-9a-f]{32}|health|deal|demo)(?:\.(c[0-9a-f]{24}))?$/.exec(value);
+      if (!hit) return { malformed: true, call: null, caseId: null };
       const call = hit[2] ?? null;
       // A live public call's scope is what its page has open now.
       const scope = (call && voiceCalls.get(call)?.scope) || hit[1];

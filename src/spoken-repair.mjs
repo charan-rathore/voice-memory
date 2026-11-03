@@ -31,6 +31,21 @@ function lev(a, b) {
 }
 
 // Ordinary words whose consonant skeleton sits next to a test name.
+import { GLOSSARY } from "../clinical/explain.mjs";
+
+// Words that ARE lab tests somewhere (any report, any glossary entry) are
+// never "repaired" into a different test this report happens to hold: an
+// absent ferritin is absent, not creatinine. Condition names are never a
+// misheard test either ("hypothyroidism" is not potassium).
+const KNOWN_TESTS = new Set(
+  Object.entries(GLOSSARY)
+    .flatMap(([k, g]) => [k, ...(g?.aliases ?? [])])
+    .map((a) => String(a).toLowerCase().trim())
+    .filter((a) => /^[a-z0-9]+$/.test(a) && a.length >= 3),
+);
+const CONDITION_RE =
+  /^(?:hypo|hyper)[a-z]{4,}$|[a-z]{3,}(?:ism|itis|aemia|emia|osis|pathy|oma|algia|uria)$/;
+const notRepairable = (w) => KNOWN_TESTS.has(w) || CONDITION_RE.test(w);
 const NOT_TESTS = new Set(
   "certain curtain protein written britain pretend partner fortune frighten portion parting printing pertain fattening threatening creating created corrected correction creative critical clinical criteria credit reading heading ferry forty fourteen thirty thirteen finalized finalised thousand fortnight".split(
     " ",
@@ -118,7 +133,9 @@ export function repairTestNames(text, vocab) {
   // ordinary pair, stays untouched rather than silently picking one.
   text = text.replace(/[A-Za-z]{3,} [A-Za-z]{1,6}(?![A-Za-z])/g, (pair) => {
     const joined = pair.replace(/ /g, "").toLowerCase();
-    if (joined.length < 5 || NOT_TESTS.has(joined) || vocab.has(joined))
+    // "hemo globin" is exactly a test in these reports: rejoin it
+    if (vocab.has(joined) && !NOT_TESTS.has(joined)) return vocab.get(joined);
+    if (joined.length < 5 || NOT_TESTS.has(joined) || notRepairable(joined))
       return pair;
     const sk = skeleton(joined);
     if (sk.length < 4) return pair;
@@ -141,7 +158,7 @@ export function repairTestNames(text, vocab) {
   });
   return text.replace(/[A-Za-z][A-Za-z']{4,}/g, (w) => {
     const base = w.toLowerCase().replace(/'s$/, "");
-    if (NOT_TESTS.has(base) || vocab.has(base)) return w;
+    if (NOT_TESTS.has(base) || vocab.has(base) || notRepairable(base)) return w;
     const sk = skeleton(base);
     if (sk.length < 4) return w;
     let best = null;
@@ -163,8 +180,51 @@ export function repairTestNames(text, vocab) {
         tied = true;
       }
     }
-    return best && !tied ? best.canon + (/'s$/i.test(w) ? "'s" : "") : w;
+    if (!best || tied) return w;
+    // A known test this report does NOT hold that is at least as close
+    // ("faratin" is nearer ferritin than creatinine) means the caller asked
+    // about that test: leave the word alone, so the answer can say it is
+    // not in these reports instead of reading out a different one.
+    const inReport = new Set(entries.map((e) => e.n));
+    for (const k of KNOWN_TESTS) {
+      if (inReport.has(k)) continue;
+      const ks = skeleton(k);
+      if (ks.length < 4) continue;
+      const kd = lev(sk, ks);
+      if (kd < best.d || (kd === best.d && lev(base, k) <= best.raw)) return w;
+    }
+    return best.canon + (/'s$/i.test(w) ? "'s" : "");
   });
+}
+
+/**
+ * A spoken self-correction keeps only what the caller settled on:
+ * "what is the triglycer, sorry, the HDL?" -> "What is the HDL?",
+ * "no wait, ferritin on 12 October" -> "ferritin on 12 October". The
+ * question's opening ("what is") is kept when the repair is just a noun.
+ */
+export function selfRepair(text) {
+  const t = String(text ?? "");
+  const parts = t.split(
+    /(?:^|[\s,.;:!?-]+)(?:(?:sorry|wait|rather|actually)(?=\s*[,.;:!-])|no wait|i mean(?: to say)?|i meant|nahi nahi|nahin nahin|मतलब)(?=[\s,.;:!?]|$)[\s,.;:!-]*/i,
+  );
+  if (parts.length < 2) return t;
+  const last = parts[parts.length - 1].trim();
+  if (!last || last.split(/\s+/).length < 1 || !/[\p{L}\d]/u.test(last))
+    return t;
+  const stem =
+    /^\s*(what(?:'s| is| was| are| were)?|how (?:much|high|low|many)(?: (?:is|was|are|were))?|is|was|has|did|does|kya|kitna|kitni)\b/i.exec(
+      parts[0],
+    )?.[0];
+  const startsAsk =
+    /^(what|how|is|was|has|did|does|when|which|who|kya|kitna|kitni|tell|give|and)\b/i.test(
+      last,
+    );
+  const hasAsk =
+    /\b(what|how|is|was|are|hai|tha|kitna|kitni|kya|kab|when)\b/i.test(last);
+  return stem && !startsAsk && !hasAsk && last.split(/\s+/).length <= 5
+    ? `${stem.trim()} ${last}`
+    : last;
 }
 
 const FILLER =

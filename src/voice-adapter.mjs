@@ -23,12 +23,15 @@ import {
   clinicalOverview,
   clinicalAnswer,
   observationEvidence,
+  findTest,
+  DATE_ASK_RE,
 } from "../clinical/answer.mjs";
-import { aliasesFor } from "../clinical/explain.mjs";
+import { aliasesFor, nameOf } from "../clinical/explain.mjs";
 import {
   voiceQuestions,
   isFragment,
   FRAGMENT_REPLY,
+  selfRepair,
 } from "./spoken-repair.mjs";
 import { promotedAnswer } from "./paraphrase.mjs";
 import { sectionAnswer } from "./doc-sections.mjs";
@@ -49,7 +52,7 @@ import {
   hasSubject,
   isDealQuestion,
 } from "./conversation.mjs";
-import { normalizeVernacular } from "./vernacular.mjs";
+import { normalizeVernacular, adviceKind, declineLead } from "./vernacular.mjs";
 
 export function createVoiceAdapter({
   ttlMs = 120000,
@@ -333,10 +336,12 @@ export function createVoiceAdapter({
       let callTag = null;
       let caseId = null;
       let scopeGone = false;
+      let scopeBad = false;
       try {
         const ws = resolveBundle?.(data.messages);
         if (ws?.expired) scopeGone = true;
-        if (ws && ("bundle" in ws || "expired" in ws)) {
+        if (ws?.malformed) scopeBad = true;
+        if (ws && ("bundle" in ws || "expired" in ws || "malformed" in ws)) {
           callTag = ws.call ?? null;
           caseId = ws.caseId ?? null;
           if (ws.bundle) bundle = ws.bundle;
@@ -372,15 +377,49 @@ export function createVoiceAdapter({
           { status: 400 },
         );
       }
-      if (scopeGone) {
-        // Their workspace expired (30 idle minutes) or was replaced. Say so
-        // plainly; never answer from the fictional demo records instead.
-        const gone =
-          "Your uploaded documents have expired, so I can't answer from them. Upload them again on the page and ask me once more.";
-        logTurn({ transcript: askedRaw, outcome: "scope_expired" });
-        return sseOnce(gone);
+      if (scopeGone || scopeBad) {
+        // Their workspace expired (30 idle minutes) or was replaced, or the
+        // call names a scope this server cannot read. Say so plainly, and
+        // show the same words on the page; never answer from the fictional
+        // demo records (or every record) instead.
+        const said = scopeGone
+          ? "Your uploaded documents have expired, so I can't answer from them. Upload them again on the page and ask me once more."
+          : "I can't tell which documents this call is for, so I won't answer from any of them. Please end the call and start it again from the page.";
+        logTurn({
+          transcript: askedRaw,
+          outcome: scopeGone ? "scope_expired" : "scope_malformed",
+        });
+        try {
+          onTurn?.(token, {
+            question: askedRaw,
+            lead: {
+              intent: scopeGone ? "SCOPE_EXPIRED" : "SCOPE_UNKNOWN",
+              verdict: "UNKNOWN",
+              spoken: said,
+              citations: [],
+            },
+            result: null,
+            scope: null,
+            call: callTag,
+            caseId,
+          });
+        } catch {
+          /* best-effort */
+        }
+        return sseOnce(said);
       }
-      const transcript = askedRaw;
+      // "the triglycer, sorry, the HDL" is a question about HDL: only what
+      // the caller settled on is read, here and in the history the engine sees
+      const transcript = selfRepair(askedRaw);
+      if (transcript !== askedRaw) {
+        const at = data.messages.map((m) => m?.role).lastIndexOf("user");
+        data = {
+          ...data,
+          messages: data.messages.map((m, i) =>
+            i === at ? { ...m, content: transcript } : m,
+          ),
+        };
+      }
       // Repair recogniser damage (patient ids, misheard test names) and, for
       // a fragment or a follow-up that lost its subject, join this caller's
       // own previous utterances. Lab questions take the first candidate the
@@ -411,6 +450,97 @@ export function createVoiceAdapter({
         })
         .map((q) => normalizeSpoken(q) || q)
         .filter((q, i, all) => q && all.indexOf(q) === i);
+      // Bounded per-call context, from this request's own messages only:
+      // the agent's last spoken answer and the caller's last question.
+      const prevSaid = messageText(
+        [...data.messages.slice(0, -1)]
+          .reverse()
+          .find((m) => m?.role === "assistant" && messageText(m.content).trim())
+          ?.content ?? "",
+      );
+      const prevAsked = messageText(
+        [...data.messages.slice(0, -1)]
+          .reverse()
+          .find((m) => m?.role === "user" && messageText(m.content).trim())
+          ?.content ?? "",
+      );
+      if (reports.length) {
+        let own = null;
+        try {
+          own = findTest(transcript, reports);
+        } catch {
+          own = null;
+        }
+        // "SYN-0003", said back after "whose TSH results?", answers that
+        // question: read it joined to the question it answers, first. A
+        // new question with its own test ("creatinine in September?") is a
+        // change of topic, not an answer.
+        if (
+          !own &&
+          /Whose (results|report)|Which one did you mean|किसके|kiske/i.test(
+            prevSaid,
+          ) &&
+          prevAsked
+        )
+          candidates.unshift(
+            normalizeSpoken(`${prevAsked} ${transcript}`) ||
+              `${prevAsked} ${transcript}`,
+          );
+        // "Is that normal?" four turns after "ferritin": the subject of the
+        // last answer, as the typed path keeps the last answer's field.
+        let said = null;
+        try {
+          said = findTest(prevSaid, reports);
+        } catch {
+          said = null;
+        }
+        if (said && !own && (!said.keys || said.keys.length <= 1)) {
+          // a patient is inherited only when the last answer named exactly
+          // one, and never from a "whose results?" question: no silent pick
+          const ids = [
+            ...new Set(prevSaid.match(/\b[A-Z]{2,5}-\d{3,6}\b/g) ?? []),
+          ];
+          const pid =
+            ids.length === 1 && !/Whose|which one|किसके|kiske/i.test(prevSaid)
+              ? ids[0]
+              : "";
+          // one dated report in the last answer: keep its date too
+          const dates = [
+            ...new Set(
+              prevSaid.match(
+                /\b\d{1,2} (?:January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b/g,
+              ) ?? [],
+            ),
+          ];
+          const day =
+            dates.length === 1 &&
+            !/\b(before|earlier|previous|since|chang\w*|improv\w*|went|up|down|compar\w*|correct\w*|amend\w*|original\w*|first|earliest|pehle)\b|पहले/i.test(
+              transcript,
+            )
+              ? dates[0]
+              : "";
+          const withCtx = `${transcript} ${pid} ${nameOf(said)} ${day}`
+            .replace(/\s+/g, " ")
+            .trim();
+          // a clear follow-up ("is that normal?", "why?") is about the last
+          // answer before anything older; otherwise it is a last resort
+          // A question that names its own subject ("is his kidney function
+          // okay?") or asks for dates is not a follow-up, however short.
+          const followUp =
+            transcript.split(/\s+/).length <= 7 &&
+            !DATE_ASK_RE.test(transcript) &&
+            !/\b(kidney|liver|thyroid|heart|sugar|diabetes|cholesterol|lipid|blood|urine|vitamin|iron|report|test)\b|किडनी|लिवर|थायरॉइड|शुगर/i.test(
+              transcript,
+            ) &&
+            /\b(it|its|that|this|those|them|again|same|normal|high|low|range|why|mean\w*|okay|ok|fine|good|bad|worried|worry)\b|ठीक|सामान्य|normal hai|theek/i.test(
+              transcript,
+            );
+          if (DATE_ASK_RE.test(transcript)) {
+            /* a date question carries no inherited subject */
+          } else if (followUp) candidates.unshift(withCtx);
+          else if (!own) candidates.push(withCtx);
+        }
+      }
       // This call's own history only (a fixed bearer is shared by callers).
       const userHistory = data.messages
         .slice(0, -1)
@@ -529,7 +659,20 @@ export function createVoiceAdapter({
       const secondQ = mixedTurn ? null : secondQ0;
       if (secondQ) asked = firstQ;
       const streaming = true;
-      const sequence = ++grant.sequence;
+      // Barge-in is per call. The operator's fixed bearer is shared by every
+      // caller, so one counter per bearer let caller B's turn supersede
+      // caller A's answer in flight (A heard silence). The per-call handle
+      // from vm_ws keys the counter; without one (a phone call, an older
+      // page) the bearer-wide counter is kept, as before.
+      const seqKey = callTag ?? "";
+      grant.seqs ??= new Map();
+      const sequence = (grant.seqs.get(seqKey) ?? 0) + 1;
+      grant.seqs.delete(seqKey);
+      grant.seqs.set(seqKey, sequence);
+      if (grant.seqs.size > 500)
+        grant.seqs.delete(grant.seqs.keys().next().value);
+      grant.sequence = sequence;
+      const current = () => grant.seqs.get(seqKey) === sequence;
       grant.busy = (grant.busy ?? 0) + 1;
       const releaseBusy = () => {
         grant.busy = Math.max(0, (grant.busy ?? 1) - 1);
@@ -548,6 +691,23 @@ export function createVoiceAdapter({
             verdict: mixedTurn.verdict,
             spoken,
             citations: mixedTurn.citations,
+          },
+        };
+      } else if (!social && adviceKind(transcript)) {
+        // Treatment, diagnosis or a decision that is the caller's to make:
+        // declined before any record can turn into advice, in the caller's
+        // language, exactly as the typed path declines it.
+        const d = declineLead(
+          adviceKind(transcript),
+          lang === "hi" ? "hi" : lang === "hinglish" ? "hinglish" : "en",
+        );
+        spoken = d.text;
+        turn = {
+          spokenTurn: {
+            intent: "ADVICE",
+            verdict: d.verdict,
+            spoken,
+            citations: [],
           },
         };
       } else if (social) {
@@ -641,7 +801,7 @@ export function createVoiceAdapter({
             { status: 401 },
           );
         }
-        if (streaming && sequence !== grant.sequence) {
+        if (streaming && !current()) {
           releaseBusy();
           logTurn({ transcript, outcome: "superseded" });
           return Response.json({ error: "Superseded turn" }, { status: 409 });
@@ -873,9 +1033,68 @@ export function createVoiceAdapter({
       // Hindi on request or when spoken to in Hindi. Clinical answers are
       // already rendered in the caller's language; deal templates are
       // rendered here, with record quotes kept verbatim.
-      if (isHindi(lang) && !clinicalHit && !social && !mixedTurn && !pointed)
+      if (
+        isHindi(lang) &&
+        !clinicalHit &&
+        !social &&
+        !mixedTurn &&
+        !pointed &&
+        turn?.spokenTurn?.intent !== "ADVICE"
+      )
         spoken = toHindi(spoken);
       releaseBusy();
+      // Answer first, nothing repeated: a general explanation already spoken
+      // earlier in THIS call ("Some general background: ferritin shows...")
+      // is not read out again. Facts are never dropped, only these fixed
+      // explanation sentences, and the page shows the same words.
+      {
+        const before = data.messages
+          .slice(0, -1)
+          .filter((m) => m?.role === "assistant")
+          .map((m) => messageText(m.content))
+          .join(" ");
+        if (before)
+          spoken = spoken
+            .replace(
+              /(?:Some general background|Thodi general jaankari|थोड़ी सामान्य जानकारी): [^.।]+[.।]\s*|Your doctor can read it[^.]+\.\s*|Results just outside a range are common[^.]+\.\s*|आपके डॉक्टर इसे[^।]+।\s*|Aapke doctor ise[^.]+\.\s*/g,
+              (m) => (before.includes(m.trim()) ? "" : m),
+            )
+            .trim();
+      }
+      // The page may have moved this call to another case while the answer
+      // was being built (tab switched mid-turn). An answer for a case that is
+      // no longer on screen is not spoken: say what happened instead, with
+      // no facts, and tie the turn to the case now open. A round trip back
+      // (A -> B -> A) leaves the answer valid for what is on screen.
+      if (callTag && caseId) {
+        let now2 = null;
+        try {
+          now2 = resolveBundle?.(data.messages) ?? null;
+        } catch {
+          now2 = null;
+        }
+        const nowCase = now2?.caseId ?? null;
+        if (nowCase && nowCase !== caseId) {
+          const label =
+            nowCase === "deal"
+              ? "the Northstar deal"
+              : nowCase === "health"
+                ? "the lab reports"
+                : "your documents";
+          spoken = isHindi(lang)
+            ? `जवाब देते समय स्क्रीन ${label === "the Northstar deal" ? "Northstar deal" : label === "the lab reports" ? "लैब रिपोर्ट्स" : "आपके दस्तावेज़ों"} पर चली गई, इसलिए वह जवाब मैंने छोड़ दिया। कृपया फिर से पूछिए।`
+            : `The page switched to ${label} while I was answering, so I dropped that answer. Please ask again.`;
+          turn = {
+            spokenTurn: {
+              intent: "SCOPE_CHANGED",
+              verdict: "UNKNOWN",
+              spoken,
+              citations: [],
+            },
+          };
+          caseId = nowCase;
+        }
+      }
       const id = "local-contract-" + randomBytes(8).toString("hex");
       const encoder = new TextEncoder();
       const stream = new ReadableStream({

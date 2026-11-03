@@ -42,6 +42,45 @@ const PRIOR_RE =
 // A bare "before" with no other comparison word: after a corrected result it
 // can mean either the pre-correction value or the previous report, so both
 // are named, each with its own row, instead of guessing one.
+// "What was the first / earliest ferritin?" asks for the earliest
+// measurement in these reports, which is a different row from the value a
+// correction replaced ("first reported as" stays a correction question).
+const EARLIEST_RE =
+  /\b(earliest|oldest|very first|first (?:\w+ )?(?:result|test|reading|measurement|report|value|level|check)|sabse pehl[aei]|pehl[ai] (?:baar|report|jaanch|test))\b|सबसे पहल|पहली (?:बार|रिपोर्ट|जांच)/i;
+// A unit the caller names ("in mmol", "convert it to micromoles"): the
+// engine never converts, and a value is never read out under a unit the lab
+// did not print for it.
+const UNIT_WORDS = [
+  [/\bmmol(?:\/l| per l(?:it(?:re|er))?)?\b|\bmillimol\w*/i, "mmol/L"],
+  [/\b(?:µ|u|micro ?)mol\w*(?:\/l| per l(?:it(?:re|er))?)?/i, "µmol/L"],
+  [/\bmg\/?dl\b|\bmilligrams?(?: per decilit(?:re|er))?\b/i, "mg/dL"],
+  [/\bng\/?ml\b|\bnanograms?(?: per millilit(?:re|er))?\b/i, "ng/mL"],
+  [/\bg\/?dl\b|\bgrams? per decilit(?:re|er)\b/i, "g/dL"],
+  [/\bmilli ?(?:international )?units?\b|\bmiu\/?l\b/i, "mIU/L"],
+  [/\bmicro ?(?:international )?units?\b|\b(?:µ|u)iu\/?ml\b/i, "µIU/mL"],
+];
+// "convert", "mmol mein badlo", "mmol में बदलो"; never "बदला क्या?"
+// ("has it changed?"), which is a change question.
+const CONVERT_RE =
+  /\bconver(?:t|sion)\w*\b|\b(?:mein|me|main) badal\w*|में बदल/i;
+const UNIT_SAY = {
+  en: (test, units, asked, o, date) =>
+    [
+      "I don't convert lab units.",
+      asked ? `These reports don't give ${test} in ${asked}.` : "",
+      units.length > 1 ? `They use ${units.join(" and ")}.` : "",
+      `The ${date} result is ${valueText(o, "en")}, as the lab printed it.`,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  hi: (test, units, asked, o, date) =>
+    `मैं लैब की यूनिट नहीं बदलती। ${asked ? `इन रिपोर्ट्स में ${test} ${asked} में नहीं दिया गया है। ` : ""}${date} का नतीजा ${valueText(o, "hi")} है, जैसा लैब ने छापा है।`,
+  hinglish: (test, units, asked, o, date) =>
+    `Main lab ki units convert nahi karti. ${asked ? `In reports mein ${test} ${asked} mein nahi diya gaya hai. ` : ""}${date} ka result ${valueText(o, "hinglish")} hai, jaisa lab ne print kiya hai.`,
+};
+// "When was this test done?" asks for the report's dates, not a value.
+export const DATE_ASK_RE =
+  /\b(when|what date|which date|kab)\b.{0,40}\b(done|taken|collected|drawn|tested|reported|released|test|sample|report|blood)\b|\bdate of (?:the |this )?(?:test|report|sample|collection)\b|(?:जांच|टेस्ट|सैंपल|रिपोर्ट).{0,20}कब|कब.{0,20}(?:जांच|टेस्ट|सैंपल|रिपोर्ट)/i;
 const YES_NO_RE =
   /^\s*(was|is|were|did|does|has|have|had|kya)\b|^\s*क्या|\bkya\s*$|क्या\s*[?।]?\s*$/i;
 const BARE_BEFORE_RE = /\b(before|pehle|pahle)\b|पहले/i;
@@ -106,6 +145,11 @@ export function findTest(question, reports) {
   const q = norm(question);
   const qw = words(question);
   const hits = [];
+  // a named ratio, category or index is its own row: "BUN creatinine
+  // ratio" must not answer with Creatinine
+  const qualifier = /\b(ratio|category|index|percentage|absolute)\b/i.exec(
+    question,
+  )?.[1];
   for (const r of reports)
     for (const o of r.observations) {
       const n = norm(o.test).trim();
@@ -124,6 +168,13 @@ export function findTest(question, reports) {
       }
       if (best) hits.push({ o, score: best });
     }
+  if (qualifier) {
+    const kept = hits.filter((h) =>
+      new RegExp(`\\b${qualifier}\\b`, "i").test(`${h.o.test} ${h.o.key}`),
+    );
+    hits.length = 0;
+    hits.push(...kept);
+  }
   if (!hits.length) return null;
   const top = Math.max(...hits.map((h) => h.score));
   const chosen = hits.filter((h) => h.score === top);
@@ -228,7 +279,7 @@ export function clinicalTurn(question, reports) {
     r.observations.some((o) => o.key === hit.key),
   );
   const intent = CHANGE_RE.test(question) ? "COMPARE" : "LOOKUP";
-  const base = { field: null, intent, lang };
+  const base = { field: null, intent, lang, test: nameOf(hit) };
   // The question names a person whose reports don't have this test: say so.
   // Never fall back to someone else's value (that was SYN-0003's "ferritin"
   // being answered with SYN-0001's 50 ng/mL).
@@ -279,7 +330,63 @@ export function clinicalTurn(question, reports) {
     ? { from: latest.superseded[0].raw, to: latest.current.raw }
     : null;
 
-  const correctionAsk = CORRECTION_RE.test(question);
+  // unit asks first: never read a value under a unit the lab did not print
+  const askedUnit = UNIT_WORDS.find(([re]) => re.test(question))?.[1] ?? null;
+  const units = [...new Set(series.map((x) => x.current.unit).filter(Boolean))];
+  const anchorU =
+    askedUnit || CONVERT_RE.test(question) ? dateAnchor(question) : null;
+  const entryU = anchorU ? anchorEntry(series, anchorU) : latest;
+  if (
+    CONVERT_RE.test(question) ||
+    (askedUnit && (!entryU || entryU.current.unit !== askedUnit))
+  ) {
+    if (!entryU)
+      return {
+        ...base,
+        spoken: t.notInPeriod(nameOf(hit), anchorU.said),
+        verdict: "NOT_IN_REPORT",
+        used: [],
+      };
+    return {
+      ...base,
+      intent: "UNITS",
+      spoken: (UNIT_SAY[lang] ?? UNIT_SAY.en)(
+        nameOf(hit),
+        units,
+        askedUnit && !units.includes(askedUnit) ? askedUnit : null,
+        entryU.current,
+        sayDate(entryU.date, lang),
+      ),
+      verdict: "NOT_COMPARABLE",
+      used: [entryU.current],
+    };
+  }
+  const correctionAsk =
+    CORRECTION_RE.test(question) &&
+    !(
+      EARLIEST_RE.test(question) &&
+      !/first reported|correct|amend|sudh|सुधार/i.test(question)
+    );
+  if (!correctionAsk && EARLIEST_RE.test(question) && !dateAnchor(question)) {
+    const first = series[0];
+    const say = EARLIEST_SAY[lang] ?? EARLIEST_SAY.en;
+    let spoken = say(nameOf(hit), first.current, sayDate(first.date, lang));
+    if (first.superseded.length)
+      spoken +=
+        " " +
+        t.amended(
+          sayDate(first.date, lang),
+          first.superseded[0].raw,
+          first.current.raw,
+        );
+    return {
+      ...base,
+      intent: "EARLIEST",
+      spoken,
+      verdict: "VALUE",
+      used: [first.current, ...first.superseded],
+    };
+  }
   const bareBefore =
     !correctionAsk &&
     BARE_BEFORE_RE.test(question) &&
@@ -416,6 +523,8 @@ const CORRECTION_SAY = {
       `Two earlier values, depending on what you mean: before the correction, the ${date} ${test} result was ${valueText(oldO, "en")} on ${r(oldO)}; and on the earlier report, from ${prevDate}, it was ${valueText(prevO, "en")}. The current, corrected value is ${valueText(newO, "en")}.`,
     stated: (test, date, oldO, newO, r) =>
       `The ${date} ${test} result was corrected from ${valueText(oldO, "en")} on ${r(oldO)} to ${valueText(newO, "en")} on ${r(newO)}. ${valueText(newO, "en")} is the value to use.`,
+    noneOn: (test, o, date) =>
+      `The ${date} ${test} result was not corrected in these reports. It is ${valueText(o, "en")}.`,
     none: (test, latestO, date) =>
       `These reports show no correction to your ${test}. The latest result is ${valueText(latestO, "en")}, from ${date}.`,
   },
@@ -435,6 +544,8 @@ const CORRECTION_SAY = {
       `आपके मतलब के हिसाब से दो पुराने नतीजे हैं: सुधार से पहले, ${date} का ${test} ${valueText(oldO, "hi")} था (${r(oldO)}); और ${prevDate} की पिछली रिपोर्ट में यह ${valueText(prevO, "hi")} था। अभी का, सुधरा हुआ नतीजा ${valueText(newO, "hi")} है।`,
     stated: (test, date, oldO, newO, r) =>
       `${date} की ${test} जांच ${valueText(oldO, "hi")} (${r(oldO)}) से सुधारकर ${valueText(newO, "hi")} (${r(newO)}) की गई। ${valueText(newO, "hi")} ही मान्य नतीजा है।`,
+    noneOn: (test, o, date) =>
+      `${date} की ${test} जांच में इन रिपोर्ट्स में कोई सुधार नहीं हुआ। नतीजा ${valueText(o, "hi")} है।`,
     none: (test, latestO, date) =>
       `इन रिपोर्ट्स में आपके ${test} में कोई सुधार नहीं दिखता। सबसे नया नतीजा ${valueText(latestO, "hi")} है, ${date} का।`,
   },
@@ -454,11 +565,21 @@ const CORRECTION_SAY = {
       `Aapke matlab ke hisaab se do purane results hain: correction se pehle, ${date} ka ${test} ${valueText(oldO, "hinglish")} tha (${r(oldO)}); aur ${prevDate} ki pichhli report mein yeh ${valueText(prevO, "hinglish")} tha. Abhi ka, sudhra hua result ${valueText(newO, "hinglish")} hai.`,
     stated: (test, date, oldO, newO, r) =>
       `${date} ka ${test} result ${valueText(oldO, "hinglish")} (${r(oldO)}) se sudhaar kar ${valueText(newO, "hinglish")} (${r(newO)}) kiya gaya. ${valueText(newO, "hinglish")} hi maanya result hai.`,
+    noneOn: (test, o, date) =>
+      `${date} ke ${test} result mein in reports mein koi correction nahi hua. Result ${valueText(o, "hinglish")} hai.`,
     none: (test, latestO, date) =>
       `In reports mein aapke ${test} mein koi correction nahi dikhta. Sabse naya result ${valueText(latestO, "hinglish")} hai, ${date} ka.`,
   },
 };
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const EARLIEST_SAY = {
+  en: (test, o, date) =>
+    `The earliest ${test} result in these reports is ${valueText(o, "en")}, from ${date}.`,
+  hi: (test, o, date) =>
+    `इन रिपोर्ट्स में ${test} का सबसे पहला नतीजा ${valueText(o, "hi")} है, ${date} का।`,
+  hinglish: (test, o, date) =>
+    `In reports mein ${test} ka sabse pehla result ${valueText(o, "hinglish")} hai, ${date} ka.`,
+};
 
 /**
  * A question about a corrected record. The corrected entry is the dated
@@ -477,6 +598,16 @@ function correctionTurn(
   const test = nameOf(hit);
   const anchor = dateAnchor(question);
   const anchored = anchor ? anchorEntry(series, anchor) : null;
+  // A date the reports do not have stays absent: never answer about the
+  // correction on some other date instead.
+  if (anchor && !anchored)
+    return {
+      ...base,
+      intent: "CORRECTION",
+      spoken: PHRASES[lang].notInPeriod(test, anchor.said),
+      verdict: "NOT_IN_REPORT",
+      used: [],
+    };
   const entry =
     anchored ?? [...series].reverse().find((s) => s.superseded.length > 0);
   if (!entry || !entry.superseded.length) {
@@ -484,7 +615,11 @@ function correctionTurn(
     return {
       ...base,
       intent: "CORRECTION",
-      spoken: say.none(test, last.current, sayDate(last.date, lang)),
+      spoken: (anchored ? say.noneOn : say.none)(
+        test,
+        last.current,
+        sayDate(last.date, lang),
+      ),
       verdict: "VALUE",
       used: [last.current],
     };
@@ -728,7 +863,8 @@ const SAY = {
     child: (age, m) =>
       ` This report is for a child (age ${age}), and ${m} of the printed ranges are adult ranges, so I haven't judged those results against them.`,
     missing: (what, have) =>
-      `I don't see ${what} in these reports. They include ${have}.`,
+      // "an HbA1c", "an LDL": a spelled-out letter that starts with a vowel sound
+      `I don't see ${String(what).replace(/^a (?=[FHLMNRSX][A-Z0-9]|[aeiou])/i, "an ")} in these reports. They include ${have}.`,
     critical: (o) =>
       ` The lab marked ${nameOf(o)} as critical, so please contact your doctor or clinic today.`,
     soon: (o) =>
@@ -1156,11 +1292,50 @@ function unmatchedTestCandidate(question, reports) {
   return cand;
 }
 
+// "How far above the limit is the LDL?" asks for a distance: answer it
+// first, then the usual reading.
+const HOW_FAR_RE =
+  /\bhow (?:far|much) (?:above|below|over|under|higher|lower|out(?:side)?|off)\b|\bby how much\b|kitna (?:zyada|jyada|kam|upar|neeche)|कितना (?:ज़्यादा|ज्यादा|कम|ऊपर|नीचे)/i;
+function howFar(t, question) {
+  const o = t?.used?.length === 1 ? t.used[0] : null;
+  if (!HOW_FAR_RE.test(question) || !o || typeof o.value !== "number") return t;
+  const { lowN = null, highN = null } = o.ref ?? {};
+  const dp = (x) => (String(x).split(".")[1] ?? "").length;
+  const places = Math.max(dp(o.raw ?? o.value), dp(highN ?? lowN ?? 0));
+  const fmt = (x) => x.toFixed(places);
+  const u = o.unit ? ` ${o.unit}` : "";
+  const lang = t.lang ?? "en";
+  let lead = null;
+  if (highN != null && o.value > highN) {
+    const d = fmt(o.value - highN);
+    lead = {
+      en: `It's ${d}${u} above the lab's upper limit of ${fmt(highN)}.`,
+      hi: `यह लैब की ऊपरी सीमा ${fmt(highN)} से ${d}${u} ज़्यादा है।`,
+      hinglish: `Yeh lab ki upper limit ${fmt(highN)} se ${d}${u} zyada hai.`,
+    }[lang];
+  } else if (lowN != null && o.value < lowN) {
+    const d = fmt(lowN - o.value);
+    lead = {
+      en: `It's ${d}${u} below the lab's lower limit of ${fmt(lowN)}.`,
+      hi: `यह लैब की निचली सीमा ${fmt(lowN)} से ${d}${u} कम है।`,
+      hinglish: `Yeh lab ki lower limit ${fmt(lowN)} se ${d}${u} kam hai.`,
+    }[lang];
+  } else if (highN != null || lowN != null) {
+    lead = {
+      en: "It isn't outside the lab's range at all.",
+      hi: "यह लैब की रेंज से बाहर नहीं है।",
+      hinglish: "Yeh lab ki range se bahar nahi hai.",
+    }[lang];
+  }
+  return lead ? { ...t, spoken: `${lead} ${t.spoken}` } : t;
+}
+
 export function clinicalAnswer(question, reports) {
   if (!reports?.length) return null;
   const t = clinicalTurn(question, reports);
-  if (t) return t;
+  if (t) return howFar(t, question);
   const lang = detectLang(question);
+  if (DATE_ASK_RE.test(question)) return reportDates(reports, lang);
   // A test-shaped question whose test none of these reports holds ("what is
   // my heritage level"): say which tests ARE here and ask, instead of a
   // generic overview or summary that answers a different question.
@@ -1193,6 +1368,42 @@ export function clinicalAnswer(question, reports) {
   if (SUMMARY_RE.test(question) && !(change && multiReport(question, reports)))
     return reportSummary(question, reports);
   return clinicalOverview(question, reports) ?? notInReport(question, reports);
+}
+
+/** When each report's sample was collected and when it was reported, as printed. */
+function reportDates(reports, lang) {
+  const day = (iso, raw) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(iso ?? "") ? sayDate(iso, lang) : (raw ?? null);
+  const rows = reports.slice(0, 5).map((r) => ({
+    c: day(r.meta?.collected, r.meta?.collectedRaw),
+    p: day(r.meta?.reported, r.meta?.reportedRaw),
+    st: r.meta?.status ?? null,
+  }));
+  if (!rows.some((x) => x.c || x.p)) return null;
+  const one = (x) =>
+    ({
+      en: `${x.st && x.st !== "final" ? `the ${x.st} report: ` : ""}sample collected ${x.c ?? "on a date that isn't printed clearly"}${x.p ? `, reported ${x.p}` : ""}`,
+      hi: `${x.c ? `सैंपल ${x.c} को लिया गया` : "सैंपल की तारीख़ साफ़ नहीं छपी है"}${x.p ? `, रिपोर्ट ${x.p} को आई` : ""}`,
+      hinglish: `${x.c ? `sample ${x.c} ko liya gaya` : "sample ki date saaf nahi chhapi hai"}${x.p ? `, report ${x.p} ko aayi` : ""}`,
+    })[lang] ?? "";
+  const lead = {
+    en:
+      rows.length === 1
+        ? "For this report: "
+        : `There are ${rows.length} reports. `,
+    hi:
+      rows.length === 1 ? "इस रिपोर्ट में: " : `${rows.length} रिपोर्ट्स हैं। `,
+    hinglish:
+      rows.length === 1 ? "Is report mein: " : `${rows.length} reports hain. `,
+  }[lang];
+  return {
+    spoken: lead + rows.map(one).join("; ") + (lang === "hi" ? "।" : "."),
+    verdict: "VALUE",
+    intent: "DATES",
+    field: null,
+    lang,
+    used: [],
+  };
 }
 
 /**
@@ -1234,7 +1445,9 @@ function notInReport(question, reports) {
   const said =
     what.said.length <= 4
       ? what.said.toUpperCase().replace("HBA1C", "HbA1c")
-      : what.said;
+      : what.said
+          .replace(/ ([a-z]\d?)$/, (m, c) => " " + c.toUpperCase())
+          .replace(/\bhba1c\b/i, "HbA1c");
   const label = what.group
     ? `${said} results`
     : `${/^[aeiou]/i.test(said) && said.length > 4 ? "an" : "a"} ${said} result`;

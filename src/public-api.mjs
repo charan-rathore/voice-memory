@@ -1275,12 +1275,16 @@ export function createPublicApi({
             send(res, 400, { error: "Pick health, deal or a workspace id." }),
             true
           );
-        if (!voiceCalls?.setScope(t.call, scope))
+        const gen = Number.isSafeInteger(data?.gen) ? data.gen : null;
+        const inForce = voiceCalls?.setScope(t.call, scope, gen);
+        if (!inForce)
           return (
             send(res, 404, { error: "That workspace has expired." }),
             true
           );
-        send(res, 200, { case: scope });
+        // `case` is the scope in force after this update: an older update
+        // arriving late leaves the newer one in place.
+        send(res, 200, { case: inForce });
         return true;
       }
       send(res, 404, { error: "Not found." });

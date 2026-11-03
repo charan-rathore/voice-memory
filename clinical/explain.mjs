@@ -23,6 +23,7 @@ export const SOURCES = {
   creatinine: "https://medlineplus.gov/lab-tests/creatinine-test/",
   urea: "https://medlineplus.gov/lab-tests/bun-blood-urea-nitrogen/",
   potassium: "https://medlineplus.gov/lab-tests/potassium-blood-test/",
+  egfr: "https://medlineplus.gov/lab-tests/glomerular-filtration-rate-gfr-test/",
 };
 
 // General information only. Paraphrased from the cited MedlinePlus pages.
@@ -86,6 +87,22 @@ export const GLOSSARY = {
     hinglish:
       "Creatinine muscles se banne wala waste hai jise kidney filter karti hai, isliye isse kidney ke kaam ki jaanch hoti hai. Muscle, diet, exercise aur kuch dawaiyan iss par asar daal sakti hain.",
     aliases: ["creatinine", "serum creatinine", "क्रिएटिनिन"],
+  },
+  egfr: {
+    en: "eGFR is an estimate of how well the kidneys filter the blood, worked out from creatinine together with age and sex; it's one of the main ways kidney function is checked.",
+    hi: "ईजीएफआर इस बात का अनुमान है कि किडनी खून को कितनी अच्छी तरह छानती है; इसे क्रिएटिनिन, उम्र और लिंग से निकाला जाता है, और यह किडनी के काम की जांच का एक मुख्य तरीका है।",
+    hinglish:
+      "eGFR is baat ka andaaza hai ki kidney khoon ko kitni achhi tarah filter karti hai; ise creatinine, umar aur gender se nikala jata hai, aur yeh kidney ke kaam ki jaanch ka ek main tareeka hai.",
+    aliases: [
+      "egfr",
+      "gfr",
+      "e gfr",
+      "gfr estimated",
+      "estimated gfr",
+      "glomerular filtration rate",
+      "ईजीएफआर",
+      "जीएफआर",
+    ],
   },
   urea: {
     en: "Urea is a waste product made when the body breaks down protein; it's one of the ways kidney function is checked.",

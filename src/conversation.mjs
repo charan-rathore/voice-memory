@@ -142,8 +142,15 @@ export function socialTurn(text, { lang = "en", last = null } = {}) {
     return { intent: "SCREEN", spoken: say.screen };
   // "How do I use my own reports?" names a report but asks about the page:
   // answer it, and show the way (the landing highlights the upload panel).
+  // "I just uploaded my dad's report, is anything wrong?" already did it and
+  // asks about the report: that is a question for the records, not for help.
+  const alreadyUploaded =
+    /\b(uploaded|upload kar (?:diya|di|chuka|chuki)|daal diya|bhej diya)\b|अपलोड कर (?:दी|दिया)/i.test(
+      t,
+    ) && !/\bhow\b|\bwhere\b|kaise|kahan|कैसे|कहां/i.test(t);
   if (
     R.upload.test(t) &&
+    !alreadyUploaded &&
     !/\b(ferritin|creatin\w*|tsh|h(a)?emoglobin|hba1c|urea|fee|deadline|contract|payment|northstar|proposal|revision)\b/i.test(
       t,
     )

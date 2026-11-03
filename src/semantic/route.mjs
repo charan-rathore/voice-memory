@@ -185,7 +185,9 @@ export function intentLead(question, bundle, validate) {
     const label =
       absentTest.length <= 4
         ? absentTest.toUpperCase()
-        : absentTest.replace(/\b\w/, (c) => c.toUpperCase());
+        : absentTest
+            .replace(/\b\w/, (c) => c.toUpperCase())
+            .replace(/ ([a-z]\d?)$/, (m, c) => " " + c.toUpperCase());
     return {
       text: {
         en: `These reports don't include a ${label} result. They have: ${names.slice(0, 8).join(", ")}.`,

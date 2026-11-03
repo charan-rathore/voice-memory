@@ -104,6 +104,45 @@ test("Hindi and Hinglish: before the correction", async () => {
   assert.doesNotMatch(hl.spoken, /0\.5/);
 });
 
+test("a date the reports do not have stays absent, even in a correction question", async () => {
+  const rs = await fixtureReports();
+  for (const q of [
+    "What was ferritin before the correction on 5 August?",
+    "What was SYN-0001's ferritin on 5 August 2026?",
+  ]) {
+    const a = clinicalAnswer(q, rs);
+    assert.equal(a.verdict, "NOT_IN_REPORT", q);
+    assert.doesNotMatch(a.spoken, /\b5 ng\/mL|50 ng\/mL|0\.5/, q);
+    assert.equal(a.used.length, 0, q);
+  }
+  // a date that exists but was never corrected says exactly that
+  const sep = clinicalAnswer(
+    "What was the 3 September ferritin before the correction?",
+    rs,
+  );
+  assert.match(
+    sep.spoken,
+    /3 September 2026 Ferritin result was not corrected/,
+  );
+  assert.match(sep.spoken, /0\.5 ng\/mL/);
+});
+
+test("before-the-correction, earliest, and current are three different rows", async () => {
+  const rs = await fixtureReports();
+  const prior = clinicalAnswer("What was ferritin first reported as?", rs);
+  assert.match(prior.spoken, /^Before the correction[^.]*\b5 ng\/mL/);
+  const earliest = clinicalAnswer("What was the first ferritin result?", rs);
+  assert.match(
+    earliest.spoken,
+    /^The earliest Ferritin result[^.]*0\.5 ng\/mL, from 3 September 2026/,
+  );
+  assert.deepEqual(usedRows(earliest), ["a-2026-09.pdf:0.5"]);
+  const hl = clinicalAnswer("SYN-0001 ka sabse pehla ferritin kitna tha?", rs);
+  assert.match(hl.spoken, /0\.5 ng\/mL/);
+  const current = clinicalAnswer("What is the corrected ferritin value?", rs);
+  assert.match(current.spoken, /50 ng\/mL is the value to use/);
+});
+
 // ------------------------------------------------------------ live server
 
 const CAP = "sync" + "7".repeat(60);

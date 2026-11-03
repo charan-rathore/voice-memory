@@ -52,7 +52,11 @@ const looksUnit = (s) => {
   if (BARE_UNITS.test(t)) return true;
   if (/^(10|x10)\^?\d+\/?[a-zµμ]*l?$/i.test(t)) return true;
   if (/^\/[a-zµμ]+$/i.test(t)) return true; // "/Cmm", "/hpf"
-  if (/^[a-zµμ%0-9^.*]+\/[a-zµμ0-9^.*]+$/i.test(t) && /[a-zµμ%]/i.test(t))
+  // one or two slashes: "mg/dL", "mL/min/1.73m2" (eGFR)
+  if (
+    /^[a-zµμ%0-9^.*]+(?:\/[a-zµμ0-9^.*]+){1,2}$/i.test(t) &&
+    /[a-zµμ%]/i.test(t)
+  )
     return true;
   return false;
 };
