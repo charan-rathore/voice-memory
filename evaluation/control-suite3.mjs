@@ -497,5 +497,56 @@ run(
   "Which regions are in the 2028 expansion scope?",
   (r, ans) => /approved record eight regions/i.test(ans),
 );
+
+// R-family (RED 2026-11-03): invoice phrasing ("total due") falsely refused
+// a billing-amount question - production reproduced "documents do not
+// establish an answer" with both facts in the cited sentence. Billing owners
+// (total/due/balance/payable/invoice/bill) answer billing-generic asks only;
+// strict metrics (revenue/budget/...) keep the exact-noun rule.
+run(
+  "R1-invoice-amount-from-total-due",
+  [
+    doc(
+      "Acme_Invoice.txt",
+      "Invoice total due: 18,500 INR, payable by 15 November 2026.\n",
+    ),
+  ],
+  "What is the invoice amount due?",
+  (r) => !r.refused && r.evidence.length >= 1,
+);
+run(
+  "R2-invoice-payable-date",
+  [
+    doc(
+      "Acme_Invoice.txt",
+      "Invoice total due: 18,500 INR, payable by 15 November 2026.\n",
+    ),
+  ],
+  "When is it payable?",
+  (r) => !r.refused && r.evidence.length >= 1,
+);
+run(
+  "R3-compound-amount-and-payable",
+  [
+    doc(
+      "Acme_Invoice.txt",
+      "Invoice total due: 18,500 INR, payable by 15 November 2026.\n",
+    ),
+  ],
+  "What is the invoice amount due and when is it payable?",
+  (r) => !r.refused && r.evidence.length >= 1,
+);
+run(
+  "R4-billing-owner-never-answers-strict-metric",
+  [
+    doc(
+      "Acme_Invoice.txt",
+      "Invoice total due: 18,500 INR, payable by 15 November 2026.\n",
+    ),
+  ],
+  "What was the annual revenue?",
+  (r) => r.refused,
+);
+
 console.log(`=== CONTROLS3: ${pass} pass, ${fail} fail ===`);
 process.exit(fail ? 1 : 0);
