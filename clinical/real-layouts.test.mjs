@@ -105,6 +105,7 @@ test("reference ranges: the patient's sex, adults only, Indian grouping, open bo
     "risk categories are not a range",
   );
   assert.equal(parseReference("NEGATIVE").expected, "negative");
+
   assert.equal(
     parseReference("Adults: 4,000-10,000", "male", 3).adultOnly,
     true,
@@ -112,6 +113,32 @@ test("reference ranges: the patient's sex, adults only, Indian grouping, open bo
   );
   const pm = parseReference("13-99 YRS,M/F:=32.5 +/- 2.5", "male");
   assert.deepEqual([pm.lowN, pm.highN], [30, 35]);
+});
+test("reference ranges: child report, band labels glued to numbers (no spaces)", () => {
+  // RED 2026-11-03: the printed corpus format "11.5-15.5child;13-17adult"
+  // (no spaces around band labels) slipped past the adult-band guard and a
+  // 7-year-old's 11.3 was judged against the adult 13-17 band.
+  for (const printed of [
+    "11.5-15.5child;13-17adult",
+    "11.5-15.5child / 13-17adult",
+    "11.5-15.5 child; 13-17 adult",
+    "11.5-15.5 (child); 13-17 (adult)",
+    "Child: 11.5-15.5; Adult: 13-17",
+  ]) {
+    const r = parseReference(printed, null, 7);
+    assert.equal(
+      r?.adultOnly,
+      true,
+      `${printed}: adult band must never judge a child`,
+    );
+    assert.equal(r?.lowN, null, `${printed}: no adult numbers adopted`);
+    assert.equal(r?.highN, null, `${printed}: no adult numbers adopted`);
+  }
+  // Plain adult ranges are untouched: adult patient and unknown age.
+  const plain = parseReference("13-17");
+  assert.deepEqual([plain.lowN, plain.highN], [13, 17]);
+  const adult = parseReference("13-17", null, 40);
+  assert.deepEqual([adult.lowN, adult.highN], [13, 17]);
 });
 
 test("report headers: name, ID, sex, age; numeric dates only when unambiguous", () => {
