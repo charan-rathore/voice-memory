@@ -304,7 +304,24 @@ export function rejectionLookup(question, bundle) {
   const qTok = (
     question.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []
   ).filter((t) => !STOPQ.has(t));
-  if (!qTok.length) return null; // "Was it rejected?" - no subject, no guess
+  if (!qTok.length) {
+    // "Was it rejected?" - no subject: never a global no-record claim.
+    // Ask which item, citing what IS on record when anything is.
+    for (const src of bundle.sources)
+      for (const snt of sentencesOf(src)) {
+        if (/\?\s*$/.test(snt.text)) continue;
+        if (!REJ_S.test(snt.text)) continue;
+        const short = snt.text.length > 100 ? snt.text.slice(0, 100) : snt.text;
+        return {
+          spoken: `Which item do you mean? A rejection is recorded: ${short}`,
+          verdict: "AMBIGUOUS",
+          intent: "REJECTED",
+          field: null,
+          citations: [cite(src, snt)],
+        };
+      }
+    return null;
+  }
   const sharesSubject = (text) => {
     const low = text.toLowerCase();
     return qTok.some((t) => new RegExp(`\\b${t}\\b`).test(low));

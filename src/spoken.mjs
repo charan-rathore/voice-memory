@@ -366,6 +366,91 @@ function canonValue(v) {
     .trim();
 }
 
+// Plural-insensitive comparison key ("sites" ~ "site").
+function stemCanon(v) {
+  return canonValue(v).replace(/\b(\w{3,})s\b/g, "$1");
+}
+
+const GENERIC_ID =
+  /^(the|this|that|dear|customer|client|caller|user|document|memo|call|transcript|january|february|march|april|may|june|july|august|september|october|november|december)$/i;
+// Canonical identity tokens of a question ("customer:a", "alpha").
+function questionIds(question) {
+  const ids = [];
+  for (const m of question.matchAll(/\bcustomer\s+([A-Z])\b/gi))
+    ids.push("customer:" + m[1].toLowerCase());
+  for (const w of question.match(/\b[A-Z][a-z]{2,}\b/g) ?? [])
+    if (!GENERIC_ID.test(w)) ids.push(w.toLowerCase());
+  return ids;
+}
+// Canonical identity tokens on a claim's own sentence, minus value words.
+function claimIds(claim) {
+  const ids = [];
+  const q = claim.quote ?? "";
+  for (const m of q.matchAll(/\bcustomer\s+([A-Z])\b/gi))
+    ids.push("customer:" + m[1].toLowerCase());
+  const valueWords = canonValue(claim.value);
+  for (const w of q.match(/\b[A-Z][a-z]{2,}\b/g) ?? []) {
+    const lw = w.toLowerCase();
+    if (!GENERIC_ID.test(w) && !valueWords.includes(lw)) ids.push(lw);
+  }
+  return [...new Set(ids)];
+}
+
+// Engagement identity label on a claim's own sentence ("Customer A", "Alpha").
+function identityLabel(claim) {
+  const q = claim.quote ?? "";
+  const m = /\bcustomer\s+([A-Z])\b/i.exec(q);
+  if (m) return `Customer ${m[1].toUpperCase()}`;
+  const valueWords = canonValue(claim.value);
+  for (const w of q.match(/\b[A-Z][a-z]{2,}\b/g) ?? []) {
+    if (
+      /^(the|this|that|dear|january|february|march|april|may|june|july|august|september|october|november|december)$/i.test(
+        w,
+      )
+    )
+      continue;
+    if (valueWords.includes(w.toLowerCase())) continue; // value, not identity
+    return w;
+  }
+  return null;
+}
+
+// Two distinct approved values are the same fact only when the SOURCE ties
+// them: canon containment, or one sentence/quote carrying both wordings.
+// East/West vs "TWO SITES" never merge without that evidence.
+function equivalenceSupport(claims, bundle) {
+  const vals = [...new Set(claims.map((c) => stemCanon(c.value)))];
+  if (vals.length < 2) return true;
+  const norm = (t) =>
+    " " +
+    String(t ?? "")
+      .toLowerCase()
+      .replace(/\band\b/g, " ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\b(\w{3,})s\b/g, "$1") +
+    " ";
+  const sentences = (bundle?.sources ?? []).flatMap((src) =>
+    String(src.text ?? "")
+      .split(/(?<=[.!?])\s+/)
+      .map(norm),
+  );
+  const quoteHay = claims.map((c) => norm(c.quote));
+  const wordsOf = (v) => v.split(" ").filter(Boolean);
+  const hasAll = (hay, v) => wordsOf(v).every((w) => hay.includes(` ${w} `));
+  for (let i = 0; i < vals.length; i++)
+    for (let j = i + 1; j < vals.length; j++) {
+      const a = vals[i];
+      const b = vals[j];
+      if (a.includes(b) || b.includes(a)) continue;
+      if (
+        !quoteHay.some((h) => hasAll(h, a) && hasAll(h, b)) &&
+        !sentences.some((h) => hasAll(h, a) && hasAll(h, b))
+      )
+        return false;
+    }
+  return true;
+}
+
 // A negative claim counts for this field only when its own quote names the
 // field's subject (never bleed a deadline negative into a fee verdict).
 function scopedNegative(field, claims, question, bundle = null) {
@@ -462,20 +547,13 @@ function verdictFor(field, resolved, claims, question, intent, bundle) {
   // Two approved values in force (two customers, one document) are an open
   // conflict, never a silent single CONFIRMED answer.
   if (approvedClaims.length) {
-    const avals = [
-      ...new Set(approvedClaims.map((c) => canonValue(c.value))),
-    ];
-    // Two approved CONCRETE values (distinct amounts/dates, e.g. two
-    // customers' fees in one document) are an open conflict; free-text
-    // variants like "East and West sites" vs "TWO SITES" stay CONFIRMED.
-    if (
-      avals.length > 1 &&
-      avals.every((v) => {
-        const t = v.replace(/\s+/g, "");
-        return /^[a-z$]*[\d,.]+%?$/i.test(t) || /^\d{1,2}[a-z]+\d{4}$/i.test(t);
-      })
-    )
-      return "OPEN";
+    // Status preservation: approved values stay approved. Distinct values
+    // in force are an ambiguity to surface (never "not approved"), and
+    // distinct free-text wordings merge into one fact only with source
+    // equivalence support.
+    const avals = [...new Set(approvedClaims.map((c) => stemCanon(c.value)))];
+    if (avals.length > 1 && !equivalenceSupport(approvedClaims, bundle))
+      return "AMBIGUOUS";
     return "CONFIRMED";
   }
   const actives = active.get(field) ?? [];
@@ -585,7 +663,12 @@ function render({
     return intent === "REJECTED"
       ? `No record shows a rejection. The terms need ${current.value} sign-off, and that sign-off is not recorded yet.`
       : `The terms need ${current.value} sign-off, and that sign-off is not recorded yet.`;
-  if (field === "scope" && current && intent !== "HISTORY")
+  if (
+    field === "scope" &&
+    current &&
+    intent !== "HISTORY" &&
+    verdict !== "AMBIGUOUS"
+  )
     return `The current working scope is ${value}.`;
   if (field === "reporting" && current) {
     const cadence = (current.quote + " " + (current.value ?? "")).match(
@@ -691,6 +774,37 @@ function render({
     case "REJECTED:REJECTED-EXPLICIT":
       return `Yes. ${cap(label)} records the rejection.`;
     default:
+      if (verdict === "AMBIGUOUS") {
+        const seenAppr = new Set();
+        const appr = citations.filter(
+          (c) =>
+            c.status === "approved" &&
+            c.field === field &&
+            !seenAppr.has(c) &&
+            (seenAppr.add(c), true),
+        );
+        const vals = dedupeValues(appr.map((c) => disp(c.value)));
+        const labels = appr.map(identityLabel);
+        const hist = earlier ? `The earlier record was ${earlierVal}. ` : "";
+        if (
+          labels.length > 1 &&
+          labels.every(Boolean) &&
+          new Set(labels).size > 1
+        )
+          return (
+            hist +
+            `Different engagements have different approved values: ${appr.map((c, i) => `${labels[i]} approved ${disp(c.value)}`).join("; ")}. Which do you mean?`
+          );
+        if (vals.every((v) => /\d/.test(v)))
+          return (
+            hist +
+            `The approved records conflict: ${vals.join(" versus ")}. I can't pick one without knowing which you mean.`
+          );
+        return (
+          hist +
+          `The approved records are ${vals.join(" and ")}; the documents don't say whether those are the same ${field}.`
+        );
+      }
       if (verdict === "UNKNOWN") return `I don't see that in these documents.`;
       if (verdict === "OPEN")
         return `That is still open: ${dedupeValues(citations.map((c) => c.value)).join(" versus ")} are both on record.`;
@@ -774,6 +888,7 @@ function guard(spoken, citations, verdict) {
     if (
       verdict !== "CONFIRMED" &&
       verdict !== "NO-RECORD" &&
+      verdict !== "AMBIGUOUS" &&
       !/\bnot approved|not an approved|no approval|not final|isn't approved|not recorded|stays? a proposal|still not approved|is not final|neither is approved\b/i.test(
         spoken,
       )
@@ -1309,14 +1424,14 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   // match, fall back to the unfiltered graph (which reports open conflicts
   // instead of forcing one figure).
   // Identity binding: a question naming a specific subject ("the Alpha
-  // migration fee") answers from that subject's records only; with no
-  // match the unfiltered graph reports the conflict instead.
-  const askedIds = (question.match(/\b[A-Z][a-z]{2,}\b/g) ?? []).filter(
-    (w) => !/^(the|this|that|what|when|how|was|were|did|does|has|have)$/i.test(w),
-  );
-  if (askedIds.length) {
+  // migration fee", "Customer A") answers from that subject's records
+  // only; with no match the unfiltered graph reports the ambiguity. Both
+  // sides are canonical identity tokens - a bare "customer"/"client" is
+  // generic and binds nothing.
+  const qIds = questionIds(question);
+  if (qIds.length) {
     const bound = fieldClaims.filter((c) =>
-      askedIds.some((w) => new RegExp(`\\b${w}\\b`, "i").test(c.quote ?? "")),
+      claimIds(c).some((id) => qIds.includes(id)),
     );
     if (bound.length) fieldClaims = bound;
   }
