@@ -396,21 +396,30 @@ function claimIds(claim) {
   return [...new Set(ids)];
 }
 
-// Engagement identity label on a claim's own sentence ("Customer A", "Alpha").
+// Engagement identity label on a claim's own sentence: a letter-labeled
+// customer, or a capitalized word bound to the field's subject noun ("the
+// ALPHA migration fee"). Speaker names and structural prefixes are not
+// engagement identities.
 function identityLabel(claim) {
-  const q = claim.quote ?? "";
+  const q = (claim.quote ?? "").replace(
+    /^\s*[A-Z][a-z]{1,20}(?:\s*\([^)]*\))?\s*:\s*/,
+    "",
+  );
   const m = /\bcustomer\s+([A-Z])\b/i.exec(q);
   if (m) return `Customer ${m[1].toUpperCase()}`;
   const valueWords = canonValue(claim.value);
-  for (const w of q.match(/\b[A-Z][a-z]{2,}\b/g) ?? []) {
+  const fm = new RegExp(
+    "\\b([A-Z][a-z]{2,})\\s+(?:[a-z][a-z-]{3,}\\s+)?(?:fees?|retainer|price|rate|split|scope|retention|target|deadline)\\b",
+  ).exec(q);
+  if (fm) {
+    const w = fm[1];
     if (
-      /^(the|this|that|dear|january|february|march|april|may|june|july|august|september|october|november|december)$/i.test(
+      !/^(the|this|that|dear|january|february|march|april|may|june|july|august|september|october|november|december)$/i.test(
         w,
-      )
+      ) &&
+      !valueWords.includes(w.toLowerCase())
     )
-      continue;
-    if (valueWords.includes(w.toLowerCase())) continue; // value, not identity
-    return w;
+      return w;
   }
   return null;
 }
@@ -429,28 +438,37 @@ function equivalenceSupport(claims, bundle) {
       .replace(/[^a-z0-9]+/g, " ")
       .replace(/\b(\w{3,})s\b/g, "$1") +
     " ";
-  const sentences = (bundle?.sources ?? []).flatMap((src) =>
-    String(src.text ?? "")
-      .split(/(?<=[.!?])\s+/)
-      .map(norm),
-  );
+  let sentences = null;
+  const getSentences = () =>
+    (sentences ??= (bundle?.sources ?? []).flatMap((src) =>
+      String(src.text ?? "")
+        .split(/(?<=[.!?])\s+/)
+        .map(norm),
+    ));
   // Engagement sections: dated blocks ("AUG 19 2026 - STEERING COMMITTEE");
   // a document without date headers is one section.
   const DATE_HEADER =
     /^\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}\b/i;
-  const sections = (bundle?.sources ?? []).flatMap((src) => {
-    const out = [];
-    let cur = [];
-    for (const line of String(src.text ?? "").split("\n")) {
-      if (DATE_HEADER.test(line) && cur.length) {
-        out.push(cur.join("\n"));
-        cur = [];
+  let sections = null;
+  const buildSections = () =>
+    (bundle?.sources ?? []).flatMap((src) => {
+      const out = [];
+      let cur = [];
+      let headers = 0;
+      for (const line of String(src.text ?? "").split("\n")) {
+        if (DATE_HEADER.test(line)) {
+          if (cur.length) out.push(cur.join("\n"));
+          cur = [];
+          headers++;
+        }
+        cur.push(line);
       }
-      cur.push(line);
-    }
-    if (cur.length) out.push(cur.join("\n"));
-    return out;
-  });
+      if (cur.length) out.push(cur.join("\n"));
+      // A headerless document has no engagement sections: one decision word
+      // cannot prove two unrelated approvals equivalent.
+      return headers ? out : [];
+    });
+  const getSections = () => (sections ??= buildSections());
   const APPROVAL_RE =
     /\b(approves|approved|accepted|signed|agreed|confirmed|ratified|adopted)\b/i;
   const quoteHay = claims.map((c) => norm(c.quote));
@@ -468,18 +486,29 @@ function equivalenceSupport(claims, bundle) {
       // and no shared-sentence support ("usd 54" is a word-subset of
       // "usd 54 000" quotes, so substring evidence is meaningless here).
       if (/\d/.test(a) || /\d/.test(b)) return false;
+      // Unit compatibility: count-bearing wordings with different head
+      // nouns ("four sites" vs "four depots") are never one fact.
+      const na = a.split(" ").pop();
+      const nb = b.split(" ").pop();
+      if (
+        na !== nb &&
+        /\d|^(one|two|three|four|five|six|seven|eight|nine|ten)\b/.test(
+          a + " " + b,
+        )
+      )
+        return false;
       // Containment only merges amount-free wordings.
       if (a.includes(b) || b.includes(a)) continue;
       const quoteOk = quoteHay.some(
         (h) => hasAll(h, a) && hasAll(h, b) && !CONTRAST.test(h),
       );
-      const sentenceOk = sentences.some(
+      const sentenceOk = getSentences().some(
         (h) => hasAll(h, a) && hasAll(h, b) && !CONTRAST.test(h),
       );
       // Evidence chain across one engagement section: both wordings appear
       // with a decision marker and no sentence contrasts THIS pair (a
       // "TWO sites instead of FOUR" contrast is about FOUR, not this pair).
-      const sectionOk = sections.some((sec) => {
+      const sectionOk = getSections().some((sec) => {
         const nsec = norm(sec);
         if (!hasAll(nsec, a) || !hasAll(nsec, b)) return false;
         if (!APPROVAL_RE.test(sec)) return false;
@@ -589,6 +618,12 @@ function verdictFor(field, resolved, claims, question, intent, bundle) {
   // Two approved values in force (two customers, one document) are an open
   // conflict, never a silent single CONFIRMED answer.
   if (approvedClaims.length) {
+    // Identity conflict outranks everything: distinct engagements' approved
+    // values are an ambiguity to surface, never mergeable by any chain.
+    const apprLabels = new Set(
+      approvedClaims.map(identityLabel).filter(Boolean),
+    );
+    if (apprLabels.size > 1) return "AMBIGUOUS";
     // Status preservation: approved values stay approved. Distinct values
     // in force are an ambiguity to surface (never "not approved"), and
     // distinct free-text wordings merge into one fact only with source

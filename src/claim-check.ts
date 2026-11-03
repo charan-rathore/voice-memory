@@ -928,9 +928,13 @@ export function resolveClaims(claims: Claim[]): {
       if (words.some((w) => LOCAL_STOP.test(w) || MONTH_DAY.test(w))) continue;
       out.push(phrase);
     }
-    // Single identity words ("Alpha", "Beta") and letter-labeled customers
-    // ("Customer A") are engagement boundaries too.
-    for (const m of body.matchAll(/\b([A-Z][a-z]{2,})\b/g)) {
+    // LOCAL explicit scope only: a capitalized word bound to the field's
+    // subject noun ("the BETA migration fee") or a letter-labeled customer.
+    // Party/region names elsewhere in the sentence describe the engagement,
+    // they do not discriminate it.
+    for (const m of body.matchAll(
+      /\b([A-Z][a-z]{2,})\s+(?:[a-z][a-z-]{3,}\s+)?(?:fees?|retainer|price|rate|split|scope|retention|target|deadline)\b/g,
+    )) {
       const w = m[1].toLowerCase();
       if (!LOCAL_STOP.test(w) && !MONTH_DAY.test(w) && !COMMON_WORD.test(w))
         out.push("id:" + w);
@@ -1030,13 +1034,13 @@ export function resolveClaims(claims: Claim[]): {
             t.filter((x) => x.startsWith("desc:"));
           const supIds = idsOf(supScope);
           const cIds = idsOf(cScope);
-          // A specific identity CONFLICT (both sides carry distinct
-          // identity tokens) outranks a shared generic noun. A one-sided
-          // token is not a conflict: terse revisions legitimately carry
-          // fewer names than the opening record they replace.
+          // Identity evidence must positively match: a labeled subject
+          // never supersedes a record whose subject is different OR
+          // unstated (unknown scope is not permission to collapse). Local
+          // scope is field-noun-bound, so terse revisions of a
+          // party-dense opening carry no false labels.
           if (
-            supIds.length &&
-            cIds.length &&
+            (supIds.length || cIds.length) &&
             !supIds.some((x) => cIds.includes(x))
           )
             continue;

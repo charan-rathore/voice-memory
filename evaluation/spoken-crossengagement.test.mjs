@@ -119,3 +119,75 @@ test("canon containment never merges distinct amounts", () => {
   assert.match(a, /54,000/);
   assert.doesNotMatch(a, /not approved/);
 });
+
+test("one-sided labeled subject never supersedes an unlabeled record", () => {
+  const b = bundleOf(
+    "JAN 10 2026 - CALL\nThe migration fee is USD 20,000.\n\nFEB 10 2026 - CALL\nThe revised Beta migration fee is USD 30,000.\n",
+  );
+  const active = (
+    resolveClaims(extractClaims(b, ["fee"])).active.get("fee") ?? []
+  ).map((c) => c.value);
+  assert.deepEqual(active.sort(), ["USD 20,000", "USD 30,000"]);
+});
+
+test("headerless document: one decision word never merges unrelated approvals", () => {
+  const a = ask(
+    bundleOf(
+      "The East and West site scope is approved. The two-site scope is approved. Both decisions were approved today.",
+    ),
+    "What is the scope?",
+  );
+  assert.match(a, /don't say whether those are the same scope/);
+});
+
+test("radar: identity conflict is semantic, not header syntax (headerless)", () => {
+  const a = ask(
+    bundleOf(
+      "Customer A approved East and West sites. Customer B approved North and South sites. The committee approved the budget.",
+    ),
+    "What is the scope?",
+  );
+  assert.match(a, /Different engagements have different approved values/);
+  assert.match(a, /East and West sites/);
+  assert.match(a, /North and South sites/);
+  assert.doesNotMatch(a, /not approved/);
+});
+
+test("radar: same identity conflict inside one dated section also holds", () => {
+  const a = ask(
+    bundleOf(
+      "JAN 10 2026 - CALL\nCustomer A approved East and West sites. Customer B approved the two-site scope. The committee confirmed the plan.\n",
+    ),
+    "What is the scope?",
+  );
+  assert.match(a, /Different engagements have different approved values/);
+});
+
+test("radar: count equality never merges unit-incompatible values", () => {
+  const a = ask(
+    bundleOf(
+      "JAN 10 2026 - CALL\nThe committee approved FOUR SITES. The board approved FOUR DEPOTS.\n",
+    ),
+    "What is the scope?",
+  );
+  assert.match(a, /FOUR DEPOTS/);
+  assert.match(a, /FOUR SITES/);
+  assert.doesNotMatch(a, /^Yes\. /);
+});
+
+test("radar: unattributed revision neither demotes nor joins an identified target", () => {
+  const b = bundleOf(
+    "JAN 10 2026 - CALL\nCustomer A approved the fee of USD 20,000.\n\nFEB 10 2026 - CALL\nThe revised fee of USD 15,000 is approved.\n",
+  );
+  const active = (
+    resolveClaims(extractClaims(b, ["fee"])).active.get("fee") ?? []
+  ).map((c) => c.value);
+  assert.deepEqual(active.sort(), ["USD 15,000", "USD 20,000"]);
+  const generic = ask(b, "What is the fee?");
+  assert.match(generic, /USD 15,000/);
+  assert.match(generic, /USD 20,000/);
+  assert.doesNotMatch(generic, /^Yes\. /); // no silent single pick
+  const named = ask(b, "What is Customer A's fee?");
+  assert.match(named, /approval of USD 20,000/);
+  assert.doesNotMatch(named, /not approved/);
+});
