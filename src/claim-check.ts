@@ -909,7 +909,12 @@ export function resolveClaims(claims: Claim[]): {
     /^(the|this|that|internal|approved|approval|current|proposed|revised|committee|finance|legal|security|action|outcome|status|date|note|yes|no|not|steering|customer|client|project|pilot|meeting|transcript|fictional|evaluation|only)$/i;
   const MONTH_DAY =
     /^(january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i;
-  const localScopeOf = (quote: string): string[] => {
+  const COMMON_WORD =
+    /^(the|this|that|these|those|only|with|from|they|them|then|than|when|what|which|there|their|some|such|each|also|just|even|more|most|less|very|much|many|here|after|before|during|between|under|over|both|same|other|another|every|never|always|still|again|once|now|all|any|few|own|per|via|said|says|noted|confirmed|asked|raised|explained|questioned|sought|shared|seconded|welcomed|one|two|three|four|five|six)$/i;
+  // Identity evidence: distinctive names in the claim's own sentence, minus
+  // the claim's own value words (East/West in "East and West sites" are the
+  // VALUE, not an engagement identity).
+  const localScopeOf = (quote: string, value?: string): string[] => {
     const body = (quote ?? "").replace(
       /^\s*[A-Z][a-z]{1,20}(?:\s*\([^)]*\))?\s*:\s*/,
       "",
@@ -923,6 +928,15 @@ export function resolveClaims(claims: Claim[]): {
       if (words.some((w) => LOCAL_STOP.test(w) || MONTH_DAY.test(w))) continue;
       out.push(phrase);
     }
+    // Single identity words ("Alpha", "Beta") and letter-labeled customers
+    // ("Customer A") are engagement boundaries too.
+    for (const m of body.matchAll(/\b([A-Z][a-z]{2,})\b/g)) {
+      const w = m[1].toLowerCase();
+      if (!LOCAL_STOP.test(w) && !MONTH_DAY.test(w) && !COMMON_WORD.test(w))
+        out.push("id:" + w);
+    }
+    for (const m of body.matchAll(/\bcustomer\s+([A-Z])\b/gi))
+      out.push("customer:" + m[1].toLowerCase());
     // Subject descriptor: the noun naming what the field value attaches to
     // ("hosting fee", "license fee") - distinct descriptors are distinct
     // subjects even without capitalized workstream names.
@@ -939,7 +953,17 @@ export function resolveClaims(claims: Claim[]): {
       !GENERIC_MOD.test(dm[1])
     )
       out.push("desc:" + dm[1].toLowerCase());
-    return [...new Set(out)];
+    const valueWords = new Set(
+      (value ?? "").toLowerCase().match(/[a-z]{3,}/g) ?? [],
+    );
+    return [
+      ...new Set(
+        out.filter((tok) => {
+          const w = tok.replace(/^(id|desc|customer):/, "");
+          return ![...valueWords].some((vw) => w.includes(vw));
+        }),
+      ),
+    ];
   };
   const sharesEngagement = (a: Claim, b: Claim) => {
     // Entities come from the document title and H1. When both sides name
@@ -994,13 +1018,22 @@ export function resolveClaims(claims: Claim[]): {
         if (sup.sourceId === c.sourceId && !sup.scopeEntities.length) {
           // Field binding required...
           if (!(FIELD_NOUNS[field] ?? /$^/).test(sup.quote ?? "")) continue;
-          // ...and distinct local scope signatures hold ambiguity.
-          const supScope = localScopeOf(sup.quote ?? "");
-          const cScope = localScopeOf(c.quote ?? "");
-          if (
-            supScope.length &&
-            cScope.length &&
-            !supScope.some((x) => cScope.includes(x))
+          // ...and identity evidence must positively match. A specific
+          // identity conflict (Alpha vs Beta) outranks a shared generic
+          // noun; distinct subject descriptors with no identity either way
+          // also compete; unknown scope never collapses.
+          const supScope = localScopeOf(sup.quote ?? "", sup.value);
+          const cScope = localScopeOf(c.quote ?? "", c.value);
+          const idsOf = (t: string[]) => t.filter((x) => !x.startsWith("desc:"));
+          const descsOf = (t: string[]) => t.filter((x) => x.startsWith("desc:"));
+          const supIds = idsOf(supScope);
+          const cIds = idsOf(cScope);
+          if (supIds.length || cIds.length) {
+            if (!supIds.some((x) => cIds.includes(x))) continue;
+          } else if (
+            descsOf(supScope).length &&
+            descsOf(cScope).length &&
+            !descsOf(supScope).some((x) => descsOf(cScope).includes(x))
           )
             continue;
         }

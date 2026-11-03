@@ -459,7 +459,25 @@ function valueNamedIn(v, question) {
 function verdictFor(field, resolved, claims, question, intent, bundle) {
   const { active, approved } = resolved;
   const approvedClaims = approved.get(field) ?? [];
-  if (approvedClaims.length) return "CONFIRMED";
+  // Two approved values in force (two customers, one document) are an open
+  // conflict, never a silent single CONFIRMED answer.
+  if (approvedClaims.length) {
+    const avals = [
+      ...new Set(approvedClaims.map((c) => canonValue(c.value))),
+    ];
+    // Two approved CONCRETE values (distinct amounts/dates, e.g. two
+    // customers' fees in one document) are an open conflict; free-text
+    // variants like "East and West sites" vs "TWO SITES" stay CONFIRMED.
+    if (
+      avals.length > 1 &&
+      avals.every((v) => {
+        const t = v.replace(/\s+/g, "");
+        return /^[a-z$]*[\d,.]+%?$/i.test(t) || /^\d{1,2}[a-z]+\d{4}$/i.test(t);
+      })
+    )
+      return "OPEN";
+    return "CONFIRMED";
+  }
   const actives = active.get(field) ?? [];
   const neg = scopedNegative(field, claims, question, bundle);
   if (!actives.length) return neg ? "NO-RECORD" : "UNKNOWN";
@@ -1290,6 +1308,18 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   // Answer only from claims whose own sentence uses the descriptor; with no
   // match, fall back to the unfiltered graph (which reports open conflicts
   // instead of forcing one figure).
+  // Identity binding: a question naming a specific subject ("the Alpha
+  // migration fee") answers from that subject's records only; with no
+  // match the unfiltered graph reports the conflict instead.
+  const askedIds = (question.match(/\b[A-Z][a-z]{2,}\b/g) ?? []).filter(
+    (w) => !/^(the|this|that|what|when|how|was|were|did|does|has|have)$/i.test(w),
+  );
+  if (askedIds.length) {
+    const bound = fieldClaims.filter((c) =>
+      askedIds.some((w) => new RegExp(`\\b${w}\\b`, "i").test(c.quote ?? "")),
+    );
+    if (bound.length) fieldClaims = bound;
+  }
   if (field === "fee") {
     const dm =
       /\b([a-z][a-z-]{3,})\s+(?:fees?|retainer|price|rate)\b/i.exec(question) ??

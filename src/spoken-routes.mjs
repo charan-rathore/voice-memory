@@ -304,6 +304,7 @@ export function rejectionLookup(question, bundle) {
   const qTok = (
     question.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []
   ).filter((t) => !STOPQ.has(t));
+  if (!qTok.length) return null; // "Was it rejected?" - no subject, no guess
   const sharesSubject = (text) => {
     const low = text.toLowerCase();
     return qTok.some((t) => new RegExp(`\\b${t}\\b`).test(low));

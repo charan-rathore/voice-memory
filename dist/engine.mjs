@@ -23959,7 +23959,8 @@ function resolveClaims(claims) {
   };
   const LOCAL_STOP = /^(the|this|that|internal|approved|approval|current|proposed|revised|committee|finance|legal|security|action|outcome|status|date|note|yes|no|not|steering|customer|client|project|pilot|meeting|transcript|fictional|evaluation|only)$/i;
   const MONTH_DAY = /^(january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i;
-  const localScopeOf = (quote) => {
+  const COMMON_WORD = /^(the|this|that|these|those|only|with|from|they|them|then|than|when|what|which|there|their|some|such|each|also|just|even|more|most|less|very|much|many|here|after|before|during|between|under|over|both|same|other|another|every|never|always|still|again|once|now|all|any|few|own|per|via|said|says|noted|confirmed|asked|raised|explained|questioned|sought|shared|seconded|welcomed|one|two|three|four|five|six)$/i;
+  const localScopeOf = (quote, value) => {
     const body = (quote ?? "").replace(
       /^\s*[A-Z][a-z]{1,20}(?:\s*\([^)]*\))?\s*:\s*/,
       ""
@@ -23973,13 +23974,30 @@ function resolveClaims(claims) {
       if (words.some((w) => LOCAL_STOP.test(w) || MONTH_DAY.test(w))) continue;
       out.push(phrase);
     }
+    for (const m of body.matchAll(/\b([A-Z][a-z]{2,})\b/g)) {
+      const w = m[1].toLowerCase();
+      if (!LOCAL_STOP.test(w) && !MONTH_DAY.test(w) && !COMMON_WORD.test(w))
+        out.push("id:" + w);
+    }
+    for (const m of body.matchAll(/\bcustomer\s+([A-Z])\b/gi))
+      out.push("customer:" + m[1].toLowerCase());
     const GENERIC_MOD = /^(operational|current|revised|proposed|internal|tentative|commercial|opening|pilot|upfront|lower|earlier|formal|original|annual|monthly|quarterly|standard|regular|final|initial|new|old|first|second)$/i;
     const dm = /\b([a-z][a-z-]{3,})\s+(?:fees?|retainer|price|rate|split|scope|retention|target|deadline)\b/i.exec(
       body
     );
     if (dm && !LOCAL_STOP.test(dm[1]) && !MONTH_DAY.test(dm[1]) && !GENERIC_MOD.test(dm[1]))
       out.push("desc:" + dm[1].toLowerCase());
-    return [...new Set(out)];
+    const valueWords = new Set(
+      (value ?? "").toLowerCase().match(/[a-z]{3,}/g) ?? []
+    );
+    return [
+      ...new Set(
+        out.filter((tok) => {
+          const w = tok.replace(/^(id|desc|customer):/, "");
+          return ![...valueWords].some((vw) => w.includes(vw));
+        })
+      )
+    ];
   };
   const sharesEngagement = (a, b) => {
     if (!a.scopeEntities.length || !b.scopeEntities.length)
@@ -24017,9 +24035,15 @@ function resolveClaims(claims) {
         if (!sharesEngagement(sup, c)) continue;
         if (sup.sourceId === c.sourceId && !sup.scopeEntities.length) {
           if (!(FIELD_NOUNS[field] ?? /$^/).test(sup.quote ?? "")) continue;
-          const supScope = localScopeOf(sup.quote ?? "");
-          const cScope = localScopeOf(c.quote ?? "");
-          if (supScope.length && cScope.length && !supScope.some((x) => cScope.includes(x)))
+          const supScope = localScopeOf(sup.quote ?? "", sup.value);
+          const cScope = localScopeOf(c.quote ?? "", c.value);
+          const idsOf = (t) => t.filter((x) => !x.startsWith("desc:"));
+          const descsOf = (t) => t.filter((x) => x.startsWith("desc:"));
+          const supIds = idsOf(supScope);
+          const cIds = idsOf(cScope);
+          if (supIds.length || cIds.length) {
+            if (!supIds.some((x) => cIds.includes(x))) continue;
+          } else if (descsOf(supScope).length && descsOf(cScope).length && !descsOf(supScope).some((x) => descsOf(cScope).includes(x)))
             continue;
         }
         const ambiguous = list.some(

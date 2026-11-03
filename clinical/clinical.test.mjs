@@ -522,3 +522,20 @@ test("a child's result is never judged against an adult band, even glued to numb
     "the child/adult-range caveat is spoken",
   );
 });
+
+test("anonymous reports are never attributed to the caller (graph audit #1)", async () => {
+  const reports = await Promise.all(
+    ["a-2026-09.pdf", "c-2026-10.pdf"].map(report),
+  );
+  const anon = reports.map((r) => {
+    const c = { ...r, meta: { ...r.meta } };
+    delete c.meta.patient;
+    return c;
+  });
+  const t = clinicalTurn("What is the latest creatinine?", anon);
+  assert.equal(t.verdict, "NOT_COMPARABLE", t.spoken);
+  assert.match(t.spoken, /can't tell whose/i);
+  // a single anonymous document on its own still answers from itself
+  const solo = clinicalTurn("What is the latest creatinine?", [anon[0]]);
+  assert.equal(solo.verdict, "LATEST", solo.spoken);
+});
