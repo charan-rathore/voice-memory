@@ -1054,15 +1054,28 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
       resolveClaims(claims.filter((c) => c.field === "fee")).active.get(
         "fee",
       ) ?? [];
-    const fc = feeActives.find(
+    // Prefer the approved record, else the latest dated one: superseded
+    // opening figures stay active honestly but must not lead an answer.
+    const feeQuoting = feeActives.filter(
       (x) => x.value && /\bfee\b/i.test(x.quote ?? ""),
     );
+    const fc =
+      feeQuoting.find((x) => x.status === "approved") ??
+      [...feeQuoting].sort((a, b) =>
+        (b.docDate || "").localeCompare(a.docDate || ""),
+      )[0];
     if (fc) {
       const label = /\b([a-z][a-z-]*)\s+fees?\b/i.exec(fc.quote)?.[1];
       const named = label ? `${label.toLowerCase()} fee` : "fee";
       const article = /^[aeiou]/.test(named) ? "an" : "a";
+      const statusTail =
+        fc.status === "approved"
+          ? /internal/i.test(fc.quote ?? "")
+            ? "approved internally; the client has not accepted"
+            : "approved"
+          : "proposed, not approved";
       return {
-        spoken: `${absence} They do record ${article} ${named} of ${fc.value}, ${fc.status === "approved" ? "approved" : "proposed, not approved"}.`,
+        spoken: `${absence} They do record ${article} ${named} of ${fc.value}, ${statusTail}.`,
         verdict: "NO-RECORD",
         field: null,
         intent,
@@ -1198,7 +1211,9 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
           (c) => !chosen.includes(c),
         ) ?? null;
       const tail = currentApproved
-        ? ` It was later replaced; the current approved record is ${currentApproved.value}.`
+        ? /internal/i.test(currentApproved.quote ?? "")
+          ? ` It was later replaced; the current record is ${currentApproved.value}, approved internally (the client has not accepted).`
+          : ` It was later replaced; the current approved record is ${currentApproved.value}.`
         : "";
       return {
         spoken: `In ${monthName}${yearUsed ? " " + yearUsed : ""}, the recorded ${field === "fee" ? "fee" : field} was ${latest.value}, ${latest.status === "approved" ? "approved" : "proposed, not approved"}.${tail}`,
