@@ -1903,3 +1903,10 @@ mark.hl,
 .public-demo #hero-talk {
   display: none;
 }
+
+.cite-broad {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  font-style: italic;
+  margin: 0.25rem 0 0;
+}

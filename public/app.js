@@ -56,9 +56,20 @@ async function renderVoiceTurn(final = false) {
         const d = document.createElement("details"),
           s = document.createElement("summary"),
           p = document.createElement("pre");
-        s.textContent = `${c.title} · lines ${c.firstLine}-${c.lastLine}`;
+        s.textContent = c.broadCitation
+          ? `${c.title} · wider passage`
+          : `${c.title} · lines ${c.firstLine}-${c.lastLine}`;
         p.textContent = c.quote;
         d.append(s, p);
+        // A span widened past the claim's own sentence proves the source,
+        // not a pinpoint line; say so instead of a pinpoint quote.
+        if (c.broadCitation) {
+          const note = document.createElement("p");
+          note.className = "cite-broad";
+          note.textContent =
+            "Wider passage cited - it supports the source, not a pinpoint line.";
+          d.append(note);
+        }
         return d;
       }),
     );

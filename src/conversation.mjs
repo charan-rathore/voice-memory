@@ -344,7 +344,7 @@ const HI = [
   ],
   [/^The current working scope is (.+)\.$/, "अभी का काम का दायरा $1 है।"],
   [
-    /^I don't see that in these documents\.?$/,
+    /^(?:I don't see that in these documents|I couldn't establish that from these documents)\.?$/,
     "मुझे यह इन दस्तावेज़ों में नहीं मिला।",
   ],
   [

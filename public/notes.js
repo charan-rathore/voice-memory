@@ -115,7 +115,7 @@ export async function addNote(text, { spoken = true } = {}) {
     const say =
       r.lead?.text ??
       (r.refused
-        ? "I don't see that in these documents."
+        ? "I couldn't establish that from these documents."
         : "I found the closest passages; they're on screen.");
     n.say = say;
     const p = el("p", "note-text", say);

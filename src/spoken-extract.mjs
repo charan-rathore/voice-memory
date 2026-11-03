@@ -18,7 +18,7 @@ const STOP = new Set(
     " ",
   ),
 );
-const terms = (s) =>
+export const terms = (s) =>
   (s.toLowerCase().match(/[a-z0-9][a-z0-9.\-/%<>]*/g) ?? [])
     .map((t) => t.replace(/[.\-/]+$/, ""))
     .filter((t) => t && !STOP.has(t))
@@ -63,6 +63,16 @@ export function mainClause(text) {
     /[,;]?\s*\b(?:provided(?: that)?|if|unless|as long as|assuming|subject to|on condition that|only when)\b[^.;]*/gi,
     "",
   );
+}
+
+// The clause that carries a governing-body decision verb; a polar ask's
+// named target must bind here, not merely somewhere in the unit or the
+// enclosing evidence container.
+const DECISION_VERB_RE =
+  /\b(?:approved|refused|rejected|deferred|ratified|adopted)\b/i;
+export function decisionClauseOf(text) {
+  const clauses = mainClause(text).split(/[,;:]\s*|\s+-\s+/);
+  return clauses.find((c) => DECISION_VERB_RE.test(c)) ?? null;
 }
 
 const cellsOf = (row) =>
@@ -133,15 +143,51 @@ export function extractiveSpoken(
     return null;
   const q = new Set(terms(question));
   if (!q.size) return null;
+  // A polar decision word in the question ("were the applications
+  // APPROVED?") is the point of the question: a unit stating that decision
+  // beats a same-score agenda header that merely names the subject.
+  const qDecision = question.match(
+    /\b(approved?|rejected?|refused?|signed|agreed|declared?|finali[sz]ed|ratified|adopted)\b/i,
+  );
+  const decisionRe = qDecision
+    ? new RegExp(qDecision[1].replace(/e?d$/, ""), "i")
+    : null;
   let best = null;
   for (const ev of result.evidence) {
     for (const u of units(ev.quote)) {
       // Only the main clause asserts: "readiness is targeted for 22 November,
       // provided data access arrives on time" says nothing about whether data
       // access IS on time. Words inside a conditional clause do not count.
-      const ut = new Set(terms(mainClause(u.text)));
+      const main = mainClause(u.text);
+      // A modal conditional ("the panel WOULD approve IF ...") states no
+      // decision; it never answers a decision ask.
+      if (
+        decisionRe &&
+        /\b(?:would|could|might|may|shall)\b[^.\n]{0,25}\b(?:approv|agree|sign|accept|refus|reject)/i.test(
+          main,
+        )
+      )
+        continue;
+      const ut = new Set(terms(main));
       let score = 0;
-      for (const t of q) if (ut.has(t)) score++;
+      for (const t of q) {
+        if (ut.has(t)) {
+          score++;
+          continue;
+        }
+        // Stem-level match: the question's "declare" binds the record's
+        // "declared" - word-form differences must not lose the answering
+        // passage to a name-dense attendance list.
+        if (
+          t.length >= 4 &&
+          [...ut].some(
+            (w) =>
+              w.length >= 4 &&
+              (w.startsWith(t.slice(0, 6)) || t.startsWith(w.slice(0, 6))),
+          )
+        )
+          score++;
+      }
       // A table row is "about" its first cell: naming it is the strong signal.
       if (u.row) {
         const label = terms(cellsOf(u.text)[0] ?? "");
@@ -159,6 +205,183 @@ export function extractiveSpoken(
     }
   }
   if (!best || best.score < Math.max(1, Math.ceil(q.size * 0.4))) return null;
+  // A time ask is answered by a DATED record only: quoting an undated
+  // related sentence ("finance had not yet signed off") is not a timing.
+  if (
+    /\b(?:when|what (?:time|date|day)|which day)\b/i.test(question) &&
+    !/\d/.test(best.unit.text)
+  )
+    return null;
+  // A plural ask ("were the planning APPLICATIONS approved?") must not be
+  // answered by one item's decision as if it covered all. Decisions are
+  // main-clause governing-body resolutions in EITHER polarity; mixed
+  // outcomes are enumerated, never flattened. A conditional ("would
+  // approve IF ...") states no decision.
+  const decidedRe =
+    /\b(?:the )?(?:committee|board|panel)\s+(?:unanimously )?(?:approved|refused|rejected|deferred|ratified|adopted)\b/i;
+  if (
+    decisionRe &&
+    /\b(?:applications|items|decisions|requests|sites|depots)\b/i.test(question)
+  ) {
+    const seen = new Map();
+    for (const ev of result.evidence)
+      for (const u of units(ev.quote)) {
+        const main = mainClause(u.text);
+        if (!decidedRe.test(main)) continue;
+        const key = main
+          .replace(/^[\s\d.]+/, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+        if (!seen.has(key))
+          seen.set(key, {
+            text: main
+              .replace(/^[\s\d.]+/, "")
+              .replace(/\s+/g, " ")
+              .trim(),
+            ev,
+            count: 0,
+          });
+        seen.get(key).count++;
+      }
+    const distinct = [...seen.values()];
+    const total = distinct.reduce((n, d) => n + d.count, 0);
+    const polarity = (t) =>
+      /\b(?:refused|rejected|deferred)\b/i.test(t) ? "refused" : "approved";
+    if (distinct.length) {
+      const polarities = new Set(distinct.map((d) => polarity(d.text)));
+      if (polarities.size > 1) {
+        // Mixed outcomes: enumerate, never claim a blanket result.
+        const body = distinct
+          .map(
+            (d) =>
+              `${d.text.replace(/[.;:,]?$/, ".")}${d.count > 1 ? ` (${d.count} items)` : ""}`,
+          )
+          .join(" ");
+        return {
+          spoken: `The decisions are mixed: ${body}`,
+          verdict: "QUOTED",
+          citations: distinct.map((d) => d.ev),
+        };
+      }
+      if (distinct.length === 1 && total > 1)
+        return {
+          spoken: `${distinct[0].text.replace(/[.;:,]?$/, ".")} The minutes record that decision for each of the ${total} applications separately.`,
+          verdict: "QUOTED",
+          citations: [distinct[0].ev],
+        };
+      // One decision only: say it is one, not all.
+      return {
+        spoken: `${distinct[0].text.replace(/[.;:,]?$/, ".")} Only one decision is recorded in these documents.`,
+        verdict: "QUOTED",
+        citations: [distinct[0].ev],
+      };
+    }
+    return null;
+  }
+  // A singular polar ask naming a target ("was Carrbridge approved?",
+  // lowercase ASR too) must bind THAT target: another item's decision is
+  // never evidence for it. A word is a target when the documents use it as
+  // a proper name (capitalized) - generic field nouns never bind.
+  if (decisionRe) {
+    const cand = question.match(
+      /\b(?:was|did|is|were|has|have)\s+(?:the\s+)?([a-zA-Z0-9][a-zA-Z0-9-]*)\b/i,
+    )?.[1];
+    const GENERIC =
+      /^(?:the|this|that|application|item|fee|deadline|payment|invoice|bill|contract|agreement|proposal|budget|report|plan|request|decision|minutes|meeting)$/i;
+    if (cand && !GENERIC.test(cand)) {
+      const capForm = cand[0].toUpperCase() + cand.slice(1);
+      const proper = new RegExp(`\\b${capForm}\\b`);
+      const ci = new RegExp(`\\b${cand}\\b`, "i");
+      // Any non-generic asked token the documents carry binds: a polar
+      // ask's target must sit in the cited decision clause. Capitalization
+      // is not required from either side - an all-lowercase OCR scan
+      // cannot show it and a lowercase ASR ask cannot mark it - and a
+      // generic field noun never binds (stoplist above). A target absent
+      // from the decision clause abstains (safe direction).
+      void proper;
+      const named = bundle.sources.some((src) =>
+        ci.test(String(src.text ?? "")),
+      );
+      if (named) {
+        // Bind the target to ITS OWN governing-body decision. Minutes name
+        // the application in an agenda line ("Agenda Item 5 ... New build at
+        // Anagach.") while the decision clause says only "the application",
+        // so each decision unit carries the NEAREST PRECEDING naming line in
+        // its evidence as its antecedent. A decision recorded for another
+        // item is never evidence for this target; when no decision names
+        // the target (directly or via its antecedent), abstain.
+        const namingLine = (t) =>
+          /\bagenda item\b|\bapplication\s+\d|\bnew build\b|\bsite at\b|\bproposal\s+for\b/i.test(
+            t,
+          );
+        const decisions = [];
+        for (const ev of result.evidence) {
+          let nameLine = "";
+          for (const u of units(ev.quote)) {
+            if (namingLine(u.text)) {
+              nameLine = u.text;
+              continue;
+            }
+            const main = mainClause(u.text);
+            if (!decidedRe.test(main)) continue;
+            // A modal conditional ("would approve IF ...") states no
+            // decision.
+            if (
+              /\b(?:would|could|might|may|shall)\b[^.\n]{0,25}\b(?:approv|agree|sign|accept|refus|reject)/i.test(
+                main,
+              )
+            )
+              continue;
+            decisions.push({ u, ev, nameLine });
+            // An antecedent binds ONE decision: a later decision with no
+            // fresh naming line belongs to something else (unnamed), never
+            // to the same item.
+            nameLine = "";
+          }
+        }
+        const mine = decisions.filter(
+          (d) => ci.test(d.u.text) || (d.nameLine && ci.test(d.nameLine)),
+        );
+        if (!mine.length) {
+          // No governing-body decision names the target. A rejection
+          // sentence naming it answers the polar ask directly, from the
+          // same engine-validated evidence; anything else abstains rather
+          // than quote another item's decision.
+          for (const ev of result.evidence)
+            for (const u of units(ev.quote)) {
+              if (
+                /\b(?:rejected|turned down|declined|refused)\b/i.test(u.text) &&
+                ci.test(u.text)
+              )
+                return {
+                  spoken: `No. ${u.text.replace(/\s+/g, " ").replace(/[.;:,]?$/, ".")} That's from ${shortTitle(ev.title)}.`,
+                  verdict: "QUOTED",
+                  citations: [ev],
+                };
+            }
+          return null;
+        }
+        best = {
+          score: best.score,
+          unit: mine[mine.length - 1].u,
+          ev: mine[mine.length - 1].ev,
+        };
+      }
+    }
+    // One quoted unit carrying BOTH outcomes is ambiguous for a polar ask:
+    // abstain rather than let one polarity speak for the whole.
+    const mainBest = mainClause(best.unit.text);
+    const hasAppr =
+      /\b(?:committee|board|panel)\s+(?:unanimously )?(?:approved|ratified|adopted)\b/i.test(
+        mainBest,
+      );
+    const hasRef =
+      /\b(?:committee|board|panel)\s+(?:unanimously )?(?:refused|rejected|deferred)\b/i.test(
+        mainBest,
+      );
+    if (hasAppr && hasRef) return null;
+  }
   const src = bundle.sources.find((s) => s.id === best.ev.sourceId);
   let body = best.unit.row
     ? speakRow(best.unit.text, src ? headerFor(src.text, best.unit.text) : null)

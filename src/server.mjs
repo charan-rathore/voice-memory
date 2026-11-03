@@ -252,11 +252,22 @@ function leadFor(question, result, bundle, prevField) {
       }
     });
     if (!citations.length) return null;
+    // The engine's exact-citation rule (a quote appearing more than once in
+    // its source is never a pinpoint citation) applies to the spoken path
+    // too: mark repeated quotes broad so renderers say so honestly.
+    const marked = citations.map((c) => {
+      if (c.broadCitation || !c.quote) return c;
+      const src = bundle.sources.find((x) => x.id === c.sourceId);
+      if (!src) return c;
+      return src.text.indexOf(c.quote) !== src.text.lastIndexOf(c.quote)
+        ? { ...c, broadCitation: true }
+        : c;
+    });
     return {
       text: t.spoken,
       verdict: t.verdict,
       field: t.field ?? null,
-      citations,
+      citations: marked,
     };
   } catch {
     return null;

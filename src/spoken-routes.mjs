@@ -1,3 +1,4 @@
+import { mainClause } from "./spoken-extract.mjs";
 // Spoken routes that sit beside the claim graph. Each one answers a question
 // shape the field renderer could not ("what's still open?", "what did the
 // client ask in their email?", "is X on time?") and each one speaks only
@@ -31,7 +32,12 @@ export function sentencesOf(src) {
     if (!line.trim() || /^#|^(Author|Date):/i.test(line.trim())) continue;
     const body = line.replace(/^\s*\d+\.\s*/, "");
     const bodyStart = lineStart + (line.length - body.length);
-    for (const m of body.matchAll(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g)) {
+    // A period inside a number, time, or version ("11.08am", "$42.50",
+    // "1.2.3") is not a sentence end: keep dotted digit groups inside the
+    // sentence or the record vanishes from retrieval entirely.
+    for (const m of body.matchAll(
+      /(?:[^.!?]|\d+(?:\.\d+)+)+(?:[.!?]+(?=\s|$)|$)/g,
+    )) {
       const raw = m[0];
       const lead = raw.length - raw.trimStart().length;
       const s = raw.trim();
@@ -259,20 +265,93 @@ export function unboundSubject(question, fieldClaims, bundle) {
   return unbound.length ? unbound : null;
 }
 
-/** Best sentence mentioning every unbound subject word, prefer negatives. */
-export function subjectSentence(unbound, bundle) {
+/** Best sentence mentioning every unbound subject word. A question's
+ * content words are stem-matched ("declare" binds "declared"), and the
+ * sentence answering more of the question wins over a name-dense but
+ * content-free line such as an attendance entry. */
+// Irregular past forms a suffix-stemmer cannot reach: the question's
+// "leave" must bind the record's "left".
+const IRREG = {
+  leave: "left",
+  pay: "paid",
+  go: "went",
+  come: "came",
+  take: "took",
+  make: "made",
+  give: "gave",
+  write: "wrote",
+  meet: "met",
+  hold: "held",
+  say: "said",
+  tell: "told",
+  buy: "bought",
+  bring: "brought",
+  send: "sent",
+  spend: "spent",
+  win: "won",
+  lose: "lost",
+  sell: "sold",
+  speak: "spoke",
+};
+export function subjectSentence(
+  unbound,
+  bundle,
+  qTerms = [],
+  question = "",
+  requireDigit = false,
+  minWords = 0,
+) {
+  const stemHit = (t, low) =>
+    new RegExp(`\\b${t}\\b`).test(low) ||
+    (IRREG[t] && new RegExp(`\\b${IRREG[t]}\\b`).test(low)) ||
+    (t.length >= 4 &&
+      low
+        .split(/\W+/)
+        .some(
+          (w) =>
+            w.length >= 4 &&
+            (w.startsWith(t.slice(0, 6)) || t.startsWith(w.slice(0, 6))),
+        ));
   let best = null;
   for (const src of bundle.sources) {
     for (const s of sentencesOf(src)) {
-      const low = s.text.toLowerCase();
-      if (!unbound.every((t) => new RegExp(`\\b${t}\\b`).test(low))) continue;
+      // Only the main clause asserts: words inside a conditional clause
+      // ("...IF approved, the applicant will have to...") state no decision.
+      const low = mainClause(s.text).toLowerCase();
+      if (!unbound.every((t) => stemHit(t, low))) continue;
+      // A time ask needs a dated record; the document label's date is not
+      // the record's.
+      if (requireDigit && !/\d/.test(low)) continue;
       const neg =
         /\bno (?:amount|price|figure)\b|\bnothing agreed\b|\bnot agreed\b|\bno amount was agreed\b/i.test(
           s.text,
         )
           ? 1
           : 0;
-      if (!best || neg > best.neg) best = { src, s, neg };
+      // A fragment ("Bill") is not an answer; a recognized short negative
+      // ("Nothing agreed.") is.
+      if (!neg && minWords && s.text.trim().split(/\s+/).length < minWords)
+        continue;
+      let qScore = qTerms.filter((t) => stemHit(t, low)).length;
+      // A polar decision word in the question is its point: the sentence
+      // stating that decision beats a same-score subject mention.
+      const dm = question.match(
+        /\b(approved?|rejected?|signed|agreed|declared?|finali[sz]ed|ratified|adopted)\b/i,
+      );
+      if (dm && new RegExp(dm[1].replace(/e?d$/, ""), "i").test(low))
+        qScore += 0.5;
+      // "When did X leave?" wants the record carrying the time.
+      if (
+        /\b(when|what (?:date|time|day)|which day)\b/i.test(question) &&
+        /\d/.test(s.text)
+      )
+        qScore += 0.5;
+      if (
+        !best ||
+        qScore > best.qScore ||
+        (qScore === best.qScore && neg > best.neg)
+      )
+        best = { src, s, neg, qScore };
     }
   }
   if (!best) return null;

@@ -462,11 +462,13 @@ function renderCitation(c, i) {
   const n = el("span", "cite-n", String(i + 1));
   n.setAttribute("aria-hidden", "true");
   const title = el("span", "cite-title", c.title);
-  const where = el("span", "cite-where", locationText(c));
+  // A widened passage is not a pinpoint line: label it as what it is.
+  const whereText = c.broadCitation ? "wider passage" : locationText(c);
+  const where = el("span", "cite-where", whereText);
   head.append(n, title, where);
   head.setAttribute(
     "aria-label",
-    `Open source ${i + 1}: ${c.title}, ${locationText(c)}`,
+    `Open source ${i + 1}: ${c.title}, ${whereText}`,
   );
   head.onclick = () =>
     openSource({ documentId: c.documentId, title: c.title, evidence: c });
@@ -483,6 +485,16 @@ function renderCitation(c, i) {
     );
   }
   li.append(head, quote);
+  // A span widened past the claim's own sentence proves the source, not a
+  // pinpoint line; say so instead of presenting the quote as pinpoint.
+  if (c.broadCitation)
+    li.append(
+      el(
+        "p",
+        "cite-broad",
+        "Wider passage cited - it supports the source, not a pinpoint line.",
+      ),
+    );
   if (c.location?.methods?.includes("ocr"))
     li.append(
       el(
@@ -496,7 +508,9 @@ function renderCitation(c, i) {
   const s = el(
     "summary",
     "",
-    `[${i + 1}] ${c.title} · lines ${c.firstLine}-${c.lastLine}`,
+    c.broadCitation
+      ? `[${i + 1}] ${c.title} · wider passage`
+      : `[${i + 1}] ${c.title} · lines ${c.firstLine}-${c.lastLine}`,
   );
   const pre = el("pre", "", c.quote);
   const h = el("p", "hash", "SHA-256 " + c.hash);

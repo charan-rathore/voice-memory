@@ -803,7 +803,11 @@
                 ? `<span>page ${c.location.pages[0]}</span>`
                 : ""
             }</span>
-            <span class="cite-q">${esc(prettyQuote(c.quote))}</span>
+            <span class="cite-q">${
+              c.broadCitation
+                ? "Wider passage cited - it supports the source, not a pinpoint line."
+                : esc(prettyQuote(c.quote))
+            }</span>
           </button>`;
         })
         .join("")}</div>`;

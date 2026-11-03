@@ -1,3 +1,4 @@
+import { terms } from "./spoken-extract.mjs";
 // spoken.mjs - deterministic spoken renderer for the voice path.
 // The engine (answer/extractClaims/resolveClaims) stays the authority on
 // facts; this module only routes intent, resolves the subject, reads the
@@ -692,7 +693,22 @@ function render({
   citations,
   claims,
   question,
+  scope = [],
 }) {
+  // "Latest" must be true of what is spoken. When the ask itself scoped
+  // the resolution (an identity token or descriptor narrowed the claims),
+  // the scope is named in the answer, in the record's own casing; without a
+  // scoped route there is no scope to name and the wording stays generic.
+  const latestProposalPhrase = (value) => {
+    // Ground the named scope in the record itself: keep only the asked
+    // tokens that appear on the claim's own sentence, in its casing.
+    const display = (scope ?? [])
+      .map((t) => new RegExp(`\\b${t}\\b`, "i").exec(current?.quote ?? "")?.[0])
+      .filter(Boolean);
+    if (display.length)
+      return `${cap(value)} is the latest ${display.join(" ")} proposal on record, and it is not approved.`;
+    return `${cap(value)} is the latest proposal, and it is not approved.`;
+  };
   const disp = (v) => (v ? v.replace(/(\S)\(/, "$1 (") : v);
   const value = current ? disp(current.value) : null;
   const label = current ? docLabel(current) : null;
@@ -734,6 +750,21 @@ function render({
     if (verdict === "CONFIRMED" && current)
       return `Yes. ${cap(docLabel(current))} says: ${trimQuote(current.quote.replace(/^\s*\d+\.\s*/, ""), 120)}`;
   }
+  if (
+    (field === "signoffWho" || field === "signedAgreement") &&
+    /\bwho\b/i.test(question)
+  ) {
+    // A who-ask is answered by the record's own statement when the record
+    // says there IS no named signatory - never by an adjacent
+    // signature-requirement line.
+    for (const c of citations.length ? citations : (claims ?? [])) {
+      const m = (c.quote ?? "").match(
+        /[^.\n]*\bno (?:named )?(?:client )?signatory\b[^.\n]*/i,
+      );
+      if (m)
+        return `${cap(m[0].trim().replace(/[.;:,]?$/, ""))} - that is the record, from ${docLabel(c)}.`;
+    }
+  }
   if (field === "signoffWho" && current && verdict !== "CONFIRMED")
     // "Did finance reject it?" right after "who signs off": the rejection
     // question is answered first; missing approval is not a rejection.
@@ -773,15 +804,26 @@ function render({
           earlier && named.includes((earlierVal ?? "").replace(/[^\d]/g, ""))
             ? ` ${earlierVal} was superseded.`
             : "";
-        return `No. ${cap(value)} is the latest proposal, and it is not approved.${old}`;
+        return `No. ${latestProposalPhrase(value)}${old}`;
       }
       if (current?.status === "internal-target")
         return `${cap(value ?? "It")} is the current internal target, not an approved or contractual ${field === "deadline" ? "date" : field === "fee" ? "fee" : field === "paymentSplit" ? "split" : "figure"}.`;
-      return `${cap(value ?? "It")} is the latest proposal, and it is not approved.`;
+      return value
+        ? latestProposalPhrase(value)
+        : `It is the latest proposal, and it is not approved.`;
     }
     case "FINALIZED:CONFIRMED":
-    case "LATEST:CONFIRMED":
-      return `Yes. ${cap(label)} records the approval${value ? ` of ${value}` : ""}.`;
+    case "LATEST:CONFIRMED": {
+      // "Yes" belongs to a polar ask; a wh-ask ("what is the latest fee?",
+      // "which payment terms?") gets the declarative record, not a "Yes."
+      const polar =
+        /^\s*(?:is|was|are|were|has|have|had|did|does|do|can|could|should|would|will)\b/i.test(
+          question,
+        );
+      return polar
+        ? `Yes. ${cap(label)} records the approval${value ? ` of ${value}` : ""}.`
+        : `${cap(label)} records the approval${value ? ` of ${value}` : ""}.`;
+    }
     case "FINALIZED:OPEN":
     case "LATEST:OPEN":
       return `That is still open: ${dedupeValues(citations.map((c) => c.value)).join(" versus ")} are both on record, and it is not approved.`;
@@ -882,7 +924,8 @@ function render({
           `The approved records are ${vals.join(" and ")}; the documents don't say whether those are the same ${field}.`
         );
       }
-      if (verdict === "UNKNOWN") return `I don't see that in these documents.`;
+      if (verdict === "UNKNOWN")
+        return `I couldn't establish that from these documents.`;
       if (verdict === "OPEN")
         return `That is still open: ${dedupeValues(citations.map((c) => c.value)).join(" versus ")} are both on record.`;
       if (verdict === "PROPOSED" && value)
@@ -1061,6 +1104,9 @@ const pack = (c) => ({
   start: c.start,
   end: c.end,
   status: c.status,
+  // A span widened past the claim's own sentence proves the source, not a
+  // pinpoint location - renderers must not present it as a pinpoint quote.
+  ...(c.broadCitation ? { broadCitation: true } : {}),
 });
 
 // Canonical value key for "did they approve $42,000?" style questions.
@@ -1151,10 +1197,39 @@ function unknownModifier(question, bundle) {
 // about a billing DOCUMENT - its amount, number, issue or payment. The
 // asked aspect named for the absence statement: number, payment, or the
 // invoice itself. Null when the question is not about an invoice/bill.
-function invoiceDocumentAsk(question) {
-  // "Bill Lobban" is a person, not an invoice: strip capitalized-Bill
-  // name uses before the noun test.
-  const q = question.replace(/\bBill\s+[A-Z][a-z]+\b/g, " ");
+function invoiceDocumentAsk(question, bundle) {
+  // "Bill Lobban" is a person, not an invoice: name uses of people the
+  // documents actually contain are stripped before the noun test, in any
+  // letter case (voice ASR lowercases proper names). A real bill ("bill
+  // of lading", "invoice bill") still matches.
+  // Person vs payment noun by GRAMMATICAL INTENT, not letter case (voice
+  // ASR and OCR lowercase proper names): a "bill" followed by a verb-like
+  // word or a name is a person ("did bill pay?", "bill lobban declare?",
+  // "bill's declaration"); a "bill" followed by a billing noun, "of", or
+  // nothing is the payment document ("bill amount", "bill of lading",
+  // "what is the bill?").
+  const BILL_NOUN_TAIL =
+    /^(?:of|amount|total|number|no\.?|id|due|payable|balance|invoice|payment|receipt|date|lading|s\s+(?:amount|total|number|due|date)\b)/i;
+  let q = question;
+  for (const src of bundle?.sources ?? []) {
+    const names = new Map();
+    for (const m of String(src.text ?? "").matchAll(/\b(Bill\s+[A-Za-z]+)\b/gi))
+      names.set(m[1].toLowerCase(), m[1]);
+    for (const [low, name] of names) {
+      // A titlecase use in either the question or the document is a person.
+      if (
+        new RegExp(`\\b${name}\\b`).test(q) ||
+        /\bBill\s+[A-Z][a-z]+\b/.test(name)
+      )
+        q = q.replace(new RegExp(`\\b${low}\\b`, "gi"), " ");
+    }
+  }
+  // A possessive ("Bill's declaration", either apostrophe) is always the
+  // person; a bare "bill" is the person unless a billing noun follows.
+  q = q.replace(/\bbill[’']s\b/gi, " ");
+  q = q.replace(/\bbill\b(\s+\S+)?/gi, (m, tail) =>
+    !tail || BILL_NOUN_TAIL.test(tail.trim()) ? m : " ",
+  );
   if (!/\binvoices?\b|\binvoiced\b|\bbills?\b/i.test(q)) return null;
   if (/\b(?:invoice|bill)s?\s+(?:number|no\.?|id)\b/i.test(question))
     return "an invoice number";
@@ -1185,6 +1260,34 @@ function recordsInvoiceDocument(bundle) {
       text,
     )
   );
+}
+
+// Open-ended record lookup ("when did X leave?", "who declared Y?"): when
+// the question's content words bind in the documents, the best matching
+// verbatim sentence answers with its citation - never a same-name record
+// about a different predicate. Words absent from the corpus stay unasked;
+// a question whose terms mostly do not bind returns null.
+function evidenceLookup(question, bundle, requireDigit = false) {
+  const qT = terms(question);
+  if (!qT.length) return null;
+  const corpus = bundle.sources
+    .map((src) => String(src.text ?? "").toLowerCase())
+    .join("\n");
+  const corpusWords = corpus.split(/\W+/);
+  const corpusHit = (t) =>
+    new RegExp(`\\b${t}\\b`).test(corpus) ||
+    (t.length >= 4 &&
+      corpusWords.some(
+        (w) =>
+          w.length >= 4 &&
+          (w.startsWith(t.slice(0, 6)) || t.startsWith(w.slice(0, 6))),
+      ));
+  const bound = qT.filter(corpusHit);
+  if (bound.length < Math.min(2, qT.length) || bound.length * 2 < qT.length)
+    return null;
+  const sub = subjectSentence(bound, bundle, qT, question, requireDigit, 4);
+  if (!sub) return null;
+  return { ...sub, spoken: sub.spoken.replace(/(: )\s*[-*•]\s+/u, "$1") };
 }
 
 export function spokenTurn(rawQuestion, bundle, prevField = null) {
@@ -1236,7 +1339,7 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   const claims = mergedClaims(bundle, ALL_FIELDS);
   if (unknownNamedEntity(question, bundle))
     return {
-      spoken: "I don't see that in these documents.",
+      spoken: "I couldn't establish that from these documents.",
       verdict: "UNKNOWN",
       field: null,
       intent,
@@ -1286,7 +1389,7 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   // invoice exists or was paid outside them. A fee recorded under its own
   // label may be named with its status; it is never presented AS an
   // invoice or as a payment.
-  const invoiceAsk = invoiceDocumentAsk(question);
+  const invoiceAsk = invoiceDocumentAsk(question, bundle);
   if (invoiceAsk && intent !== "MUTATE" && !recordsInvoiceDocument(bundle)) {
     const absence = `These documents don't record ${invoiceAsk}.`;
     const feeActives =
@@ -1403,8 +1506,64 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
     if (pend) return pend;
   }
   if (!field) {
+    // General evidence lookup before abstaining: when the question's
+    // content words bind in the documents, the best matching verbatim
+    // sentence answers it ("When did Bill Lobban leave?" -> the 11.08am
+    // record). Words absent from the corpus stay unasked - a question
+    // whose terms mostly do not bind keeps the honest abstention below.
+    // Polar decision asks ("was the budget approved?") keep the extractive
+    // decision path; this fallback covers open-ended record lookups.
+    // Open-ended verbatim lookup is intentionally narrow: time-asks only,
+    // where the answering record must carry an actual date/time. Wider
+    // semantic binds answered unanswerable questions with unrelated
+    // sentences (the CEO-name regression).
+    if (
+      /\b(?:approved?|rejected?|refused?|signed|agreed|finali[sz]ed|ratified|adopted)\b/i.test(
+        question,
+      )
+    )
+      return null;
+    // A signatory who-ask: when the record itself says there is no named
+    // signatory, that sentence IS the answer - say it verbatim instead of a
+    // bare inability, and instead of an adjacent signature requirement.
+    if (/\bwho\b/i.test(question) && /\bsign/i.test(question))
+      for (const src of bundle.sources)
+        for (const snt of sentencesOf(src)) {
+          const m = snt.text.match(
+            /[^.\n]*\bno (?:named )?(?:client )?signatory\b[^.\n]*/i,
+          );
+          if (m)
+            return {
+              spoken: `${m[0].trim().replace(/[.;:,]?$/, "")} - that is what the record says, in ${docLabel({ title: src.title })}.`,
+              verdict: "QUOTED",
+              field: null,
+              intent,
+              citations: [
+                pack({
+                  title: src.title,
+                  quote: snt.text.trim(),
+                  firstLine: snt.firstLine,
+                  lastLine: snt.lastLine,
+                  hash: src.hash,
+                  sourceId: src.id,
+                  start: snt.start,
+                  end: snt.end,
+                }),
+              ],
+            };
+        }
+    // Claim-bearing workspaces answer time-asks from the field graph's own
+    // honest wording ("no timing is recorded"); verbatim retrieval is the
+    // evidence source of last resort for documents with no claim graph.
+    if (
+      !claims.length &&
+      /\b(?:when|what (?:time|date|day))\b/i.test(question)
+    ) {
+      const ev = evidenceLookup(question, bundle, true);
+      if (ev) return ev;
+    }
     return {
-      spoken: "I don't see that in these documents.",
+      spoken: "I couldn't establish that from these documents.",
       verdict: "UNKNOWN",
       field: null,
       intent,
@@ -1508,6 +1667,7 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   // only; with no match the unfiltered graph reports the ambiguity. Both
   // sides are canonical identity tokens - a bare "customer"/"client" is
   // generic and binds nothing.
+  let scopeWords = [];
   const qIds = questionIds(question);
   if (qIds.length) {
     // Engagement-level names (the documents' own entities) bind by entity,
@@ -1525,7 +1685,12 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
       );
     if (rest.length)
       bound = bound.filter((c) => claimIds(c).some((id) => rest.includes(id)));
-    if (bound.length) fieldClaims = bound;
+    if (bound.length) {
+      // A narrowing IS the grounded scope signal: the asked token
+      // discriminates this subject's records from the field's others.
+      if (bound.length < fieldClaims.length) scopeWords = [...qIds];
+      fieldClaims = bound;
+    }
   }
   if (field === "fee") {
     const dm =
@@ -1541,8 +1706,11 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
       // Narrow only when the descriptor picks ONE value. A descriptor that
       // spans figures the unfiltered graph resolves by supersession (the
       // revised engagement fee) must not be flattened into a false conflict.
-      if (hit.length && new Set(hit.map((c) => c.value)).size === 1)
+      if (hit.length && new Set(hit.map((c) => c.value)).size === 1) {
+        if (hit.length < fieldClaims.length)
+          scopeWords = [...new Set([...scopeWords, desc])];
         fieldClaims = hit;
+      }
     }
   }
   // Subject binding: "how much is the Dock E training change?" names a
@@ -1576,7 +1744,14 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   ) {
     const unbound = unboundSubject(question, fieldClaims, bundle);
     if (unbound) {
-      const sub = subjectSentence(unbound, bundle);
+      const sub = subjectSentence(
+        unbound,
+        bundle,
+        terms(question),
+        question,
+        false,
+        4,
+      );
       if (sub) return sub;
     }
   }
@@ -1715,7 +1890,39 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   // Engine refused the canonical field question and the claim graph has no
   // structured answer either: defer to the caller's existing engine-answer
   // path, which carries the engine's own honest wording.
-  if (engineResult.refused && (verdict === "UNKNOWN" || !current)) return null;
+  if (engineResult.refused && (verdict === "UNKNOWN" || !current)) {
+    // A time ask the field graph cannot place ("when did Bill Lobban
+    // leave?") still deserves the verbatim dated record when the
+    // question's words bind in the documents - actual retrieval, never a
+    // same-name record about another predicate.
+    // Only when the resolved field has NO claims in these documents: a
+    // mis-bound field (the engine reads "leave" as paymentSplit) must not
+    // bury the verbatim dated record. When the field DOES have claims
+    // ("finance had not yet signed off"), the field path's own honest
+    // wording stands.
+    if (
+      !claims.some((c) => c.field === field) &&
+      /\b(?:when|what (?:time|date|day))\b/i.test(question)
+    ) {
+      const ev = evidenceLookup(question, bundle, true);
+      if (ev) return ev;
+    }
+    // A bare payment ask ("Did Bill pay?") with no invoice or payment
+    // event on record: scoped absence as a non-assertion, no citation.
+    if (
+      /\b(?:pay|paid|payment|settle[ds]?)\b/i.test(question) &&
+      !/\b(?:fees?|retainer|split)\b/i.test(question) &&
+      !recordsInvoiceDocument(bundle)
+    )
+      return {
+        spoken: "These documents don't record a payment.",
+        verdict: "NO-RECORD",
+        field: null,
+        intent,
+        citations: [],
+      };
+    return null;
+  }
   if (intent === "WHY") {
     const why = documentedReason(current, bundle);
     const spokenWhy =
@@ -1738,6 +1945,7 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
     citations,
     claims,
     question,
+    scope: scopeWords,
   });
   // An internal/body approval is not client acceptance: say whose approval
   // it is, and what the client side still owes, whenever the record says so.

@@ -40,7 +40,7 @@ test("A3/A4: a client the documents never mention gets an abstention", () => {
   for (const q of ["What fee did Bluebird agree?", "What did Bluebird sign?"]) {
     const r = spokenTurn(q, north);
     assert.doesNotMatch(r.spoken, /\$48,000/);
-    assert.match(r.spoken, /don't see/);
+    assert.match(r.spoken, /don't see|couldn't establish/);
   }
 });
 
@@ -113,7 +113,7 @@ test("A8: out-of-corpus attributes still abstain, not answer with a real figure"
   ]) {
     const r = spokenTurn(q, marked);
     assert.doesNotMatch(r.spoken, /\$48,000/, q);
-    assert.match(r.spoken, /don't see/, q);
+    assert.match(r.spoken, /don't see|couldn't establish/, q);
   }
 });
 

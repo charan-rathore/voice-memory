@@ -4,3 +4,4 @@ dist/
 .shots/
 evaluation/field/files/
 public-call-counters.json
+/node_modules

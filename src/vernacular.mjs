@@ -457,7 +457,7 @@ const HL = [
   ],
   [/^The current working scope is (.+)\.$/, "Abhi ka kaam ka scope $1 hai."],
   [
-    /^I don't see that in these documents\.?$/,
+    /^(?:I don't see that in these documents|I couldn't establish that from these documents)\.?$/,
     "Mujhe yeh in documents mein nahi mila.",
   ],
   [
@@ -513,7 +513,7 @@ export function toHinglish(spoken) {
 /** Localised "nothing supports an answer" for a question that got no lead. */
 export function noAnswerLead(lang = "en") {
   const text = {
-    en: "I don't see that in these documents, so I won't guess.",
+    en: "I couldn't establish that from these documents, so I won't guess.",
     hi: "मुझे यह इन दस्तावेज़ों में नहीं मिला, इसलिए मैं अंदाज़ा नहीं लगाऊँगी।",
     hinglish:
       "Mujhe yeh in documents mein nahi mila, isliye main andaaza nahi lagaungi.",

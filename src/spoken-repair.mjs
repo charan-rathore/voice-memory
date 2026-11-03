@@ -275,5 +275,7 @@ export function voiceQuestions(messages, { reports, ids, aliasesFor, text }) {
   return [...new Set(out)];
 }
 
+// Domain-neutral: naming another workspace's people, metrics, or figures
+// here would leak unrelated facts into this conversation's documents.
 export const FRAGMENT_REPLY =
-  "Sorry, I only caught part of that. You can ask, for example: what is S Y N zero zero zero one's ferritin result, has creatinine gone up, or was the forty two thousand dollar revision finalized?";
+  "Sorry, I only caught part of that. You can ask about a decision, a date, an amount, or a person named in these documents.";

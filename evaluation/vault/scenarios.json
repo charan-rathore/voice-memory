@@ -88,7 +88,7 @@
         },
         {
           "say": "What fee did Bluebird agree?",
-          "has": ["don't see"],
+          "has": ["couldn't establish"],
           "not": ["42,000"]
         }
       ]

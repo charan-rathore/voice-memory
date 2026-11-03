@@ -71,7 +71,7 @@ test("cross-bundle trap: Bluebird question abstains, binding unchanged", async (
   );
   assert.equal(r.status, 200);
   assert.doesNotMatch(r.spoken, /\$12,250|\$17,500|Bluebird Logistics/);
-  assert.match(r.spoken, /don't see|cannot|can't|not in these documents/i);
+  assert.match(r.spoken, /don't see|cannot|can't|couldn't establish|not in these documents/i);
   // The credential is still bound to Northstar: the next fee question
   // answers from the pinned bundle.
   const after = await speak(a, t, "What is the engagement fee?");

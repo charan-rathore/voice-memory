@@ -23959,7 +23959,7 @@ function resolveClaims(claims) {
   };
   const LOCAL_STOP = /^(the|this|that|internal|approved|approval|current|proposed|revised|committee|finance|legal|security|action|outcome|status|date|note|yes|no|not|steering|customer|client|project|pilot|meeting|transcript|fictional|evaluation|only)$/i;
   const MONTH_DAY = /^(january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i;
-  const COMMON_WORD = /^(the|this|that|these|those|only|with|from|they|them|then|than|when|what|which|there|their|some|such|each|also|just|even|more|most|less|very|much|many|here|after|before|during|between|under|over|both|same|other|another|every|never|always|still|again|once|now|all|any|few|own|per|via|said|says|noted|confirmed|asked|raised|explained|questioned|sought|shared|seconded|welcomed|one|two|three|four|five|six)$/i;
+  const COMMON_WORD = /^(the|this|that|these|those|only|with|from|they|them|then|than|when|what|which|there|their|some|such|each|also|just|even|more|most|less|very|much|many|here|after|before|during|between|under|over|both|same|other|another|every|never|always|still|again|once|now|all|any|few|own|per|via|said|says|noted|confirmed|asked|raised|explained|questioned|sought|shared|seconded|welcomed|following|narrower|one|two|three|four|five|six)$/i;
   const localScopeOf = (quote, value) => {
     const body = (quote ?? "").replace(
       /^\s*[A-Z][a-z]{1,20}(?:\s*\([^)]*\))?\s*:\s*/,
@@ -23974,7 +23974,9 @@ function resolveClaims(claims) {
       if (words.some((w) => LOCAL_STOP.test(w) || MONTH_DAY.test(w))) continue;
       out.push(phrase);
     }
-    for (const m of body.matchAll(/\b([A-Z][a-z]{2,})\b/g)) {
+    for (const m of body.matchAll(
+      /\b([A-Z][a-z]{2,})\s+(?:[a-z][a-z-]{3,}\s+)?(?:fees?|retainer|price|rate|split|scope|retention|target|deadline)\b/g
+    )) {
       const w = m[1].toLowerCase();
       if (!LOCAL_STOP.test(w) && !MONTH_DAY.test(w) && !COMMON_WORD.test(w))
         out.push("id:" + w);
@@ -24041,9 +24043,9 @@ function resolveClaims(claims) {
           const descsOf = (t) => t.filter((x) => x.startsWith("desc:"));
           const supIds = idsOf(supScope);
           const cIds = idsOf(cScope);
-          if (supIds.length || cIds.length) {
-            if (!supIds.some((x) => cIds.includes(x))) continue;
-          } else if (descsOf(supScope).length && descsOf(cScope).length && !descsOf(supScope).some((x) => descsOf(cScope).includes(x)))
+          if ((supIds.length || cIds.length) && !supIds.some((x) => cIds.includes(x)))
+            continue;
+          if (!supIds.length && !cIds.length && descsOf(supScope).length && descsOf(cScope).length && !descsOf(supScope).some((x) => descsOf(cScope).includes(x)))
             continue;
         }
         const ambiguous = list.some(

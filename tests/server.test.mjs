@@ -431,3 +431,29 @@ test("readiness reports watchdog memory state", async () => {
     await new Promise((r) => local.close(r));
   }
 });
+
+test("lead citation for a repeated quote is marked broad, never pinpoint", async () => {
+  const s = await session();
+  const text = [
+    "Consultancy Agreement between Mariner Systems and Northbay Marine, signed 3 February 2025.",
+    "The fee is $42,000 payable on completion of the trial.",
+    "Scope covers engine monitoring for the pilot vessel.",
+    "The term runs twelve months from signature.",
+    "Schedule B restates the commercial terms for clarity.",
+    "The fee is $42,000 payable on completion of the trial.",
+    "Invoices are due within fourteen days of issue.",
+  ].join("\n");
+  const imp = await post(s, "import", {
+    documents: [{ title: "agreement.txt", text }],
+  });
+  assert.equal(imp.status, 200);
+  const r = await (
+    await post(s, "query", { question: "What is the fee?" })
+  ).json();
+  assert.ok(r.lead, JSON.stringify(r).slice(0, 400));
+  assert.equal(
+    r.lead.citations[0].broadCitation,
+    true,
+    JSON.stringify(r.lead.citations[0]),
+  );
+});

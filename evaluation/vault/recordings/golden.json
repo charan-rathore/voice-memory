@@ -140,11 +140,11 @@
   "abstain/v0": [
     {
       "say": "What's the budget for marketing?",
-      "spoken": "I don't see that in these documents."
+      "spoken": "I couldn't establish that from these documents."
     },
     {
       "say": "What fee did Bluebird agree?",
-      "spoken": "I don't see that in these documents."
+      "spoken": "I couldn't establish that from these documents."
     }
   ],
   "lab-en": [
