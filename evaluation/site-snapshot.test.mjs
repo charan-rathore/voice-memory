@@ -13,7 +13,16 @@ vm.runInNewContext(
   readFileSync(new URL("../site/snapshot.js", import.meta.url), "utf8"),
   sandbox,
 );
+// Saved answers and document texts moved into the lazy cold-boot chunk;
+// the test reads them from there, exactly as the page's loader would.
+vm.runInNewContext(
+  readFileSync(new URL("../site/snapshot-answers.js", import.meta.url), "utf8"),
+  sandbox,
+);
 const snap = JSON.parse(JSON.stringify(sandbox.window.VM_SNAPSHOT));
+const snapAnswers = JSON.parse(
+  JSON.stringify(sandbox.window.VM_SNAPSHOT_ANSWERS),
+);
 
 test("every saved landing answer equals the engine's current answer", async () => {
   const srv = createLocalServer({ port: 0 });
@@ -21,7 +30,7 @@ test("every saved landing answer equals the engine's current answer", async () =
   await srv.loadPublicCases();
   const base = `http://127.0.0.1:${srv.address().port}/api/public`;
   try {
-    const keys = Object.keys(snap.answers);
+    const keys = Object.keys(snapAnswers.answers);
     assert.ok(keys.length >= 8, "snapshot has the suggested questions");
     for (const k of keys) {
       const [c, ...rest] = k.split("|");
@@ -33,7 +42,7 @@ test("every saved landing answer equals the engine's current answer", async () =
           body: JSON.stringify({ case: c, question: q }),
         })
       ).json();
-      const saved = snap.answers[k];
+      const saved = snapAnswers.answers[k];
       assert.equal(saved.lead?.text, live.lead?.text, k);
       assert.equal(saved.lead?.verdict, live.lead?.verdict, k);
       assert.deepEqual(
@@ -52,7 +61,8 @@ test("the hero quotes the engine and the amended report verbatim", () => {
     new URL("../site/index.html", import.meta.url),
     "utf8",
   );
-  const ferritin = snap.answers["health|What is SYN-0001's ferritin result?"];
+  const ferritin =
+    snapAnswers.answers["health|What is SYN-0001's ferritin result?"];
   assert.match(
     ferritin.lead.text,
     /corrected from 5 to 50, and I'm using the corrected value/,
