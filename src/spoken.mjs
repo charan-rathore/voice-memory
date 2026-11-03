@@ -819,6 +819,43 @@ function unknownModifier(question, bundle) {
     : `${m[1].toLowerCase()} ${m[2].toLowerCase()}`;
 }
 
+// Clarify, never alias (invoice family): an invoice/bill question asks
+// about a billing DOCUMENT - its amount, number, issue or payment. The
+// asked aspect named for the absence statement: number, payment, or the
+// invoice itself. Null when the question is not about an invoice/bill.
+function invoiceDocumentAsk(question) {
+  if (!/\binvoices?\b|\binvoiced\b|\bbills?\b/i.test(question)) return null;
+  if (/\b(?:invoice|bill)s?\s+(?:number|no\.?|id)\b/i.test(question))
+    return "an invoice number";
+  if (/\b(?:paid|payment|settled|received|cleared)\b/i.test(question))
+    return "a payment";
+  return "an invoice";
+}
+
+// The records hold an invoice document only when text ties invoice/bill to
+// an identifier, a billing amount, or a payment event. Invoicing TERMS
+// ("invoiced 50% on signing") record a contingency, not an invoice.
+function recordsInvoiceDocument(bundle) {
+  const text = bundle.sources.map((s) => s.text).join("\n");
+  return (
+    /\b(?:invoice|bill)\s*(?:#|no\.?|number|id)\s*[:\-]?\s*[\w-]+/i.test(
+      text,
+    ) ||
+    /\b(?:invoice|bill)\b[^.\n]{0,80}\b(?:total|due|payable|amount|balance)\b[^.\n]{0,60}\d/i.test(
+      text,
+    ) ||
+    /\b(?:total|due|payable|balance)\b[^.\n]{0,40}\d[^.\n]{0,60}\b(?:invoice|bill)\b/i.test(
+      text,
+    ) ||
+    /\b(?:invoice|bill)\b[^.\n]{0,60}\b(?:paid|settled|received|cleared)\b/i.test(
+      text,
+    ) ||
+    /\b(?:paid|settled|received|cleared)\b[^.\n]{0,60}\b(?:invoice|bill)\b/i.test(
+      text,
+    )
+  );
+}
+
 export function spokenTurn(rawQuestion, bundle, prevField = null) {
   if (!bundle?.sources?.length) return null;
   // Speech notation -> document notation (numbers, ordinals, fillers).
@@ -907,6 +944,42 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
     return {
       spoken: `I don't see a ${unknownMod} in these documents.`,
       verdict: "UNKNOWN",
+      field: null,
+      intent,
+      citations: [],
+    };
+  }
+  // Invoice family of clarify-never-alias: when the records hold no
+  // invoice document or payment event, say so for the asked aspect. The
+  // wording is scoped to these documents - it never asserts that no
+  // invoice exists or was paid outside them. A fee recorded under its own
+  // label may be named with its status; it is never presented AS an
+  // invoice or as a payment.
+  const invoiceAsk = invoiceDocumentAsk(question);
+  if (invoiceAsk && intent !== "MUTATE" && !recordsInvoiceDocument(bundle)) {
+    const absence = `These documents don't record ${invoiceAsk}.`;
+    const feeActives =
+      resolveClaims(claims.filter((c) => c.field === "fee")).active.get(
+        "fee",
+      ) ?? [];
+    const fc = feeActives.find(
+      (x) => x.value && /\bfee\b/i.test(x.quote ?? ""),
+    );
+    if (fc) {
+      const label = /\b([a-z][a-z-]*)\s+fees?\b/i.exec(fc.quote)?.[1];
+      const named = label ? `${label.toLowerCase()} fee` : "fee";
+      const article = /^[aeiou]/.test(named) ? "an" : "a";
+      return {
+        spoken: `${absence} They do record ${article} ${named} of ${fc.value}, ${fc.status === "approved" ? "approved" : "proposed, not approved"}.`,
+        verdict: "NO-RECORD",
+        field: null,
+        intent,
+        citations: [fc],
+      };
+    }
+    return {
+      spoken: absence,
+      verdict: "NO-RECORD",
       field: null,
       intent,
       citations: [],

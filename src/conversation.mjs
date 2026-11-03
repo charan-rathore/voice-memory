@@ -345,6 +345,23 @@ const HI = [
     "मुझे $1 इन दस्तावेज़ों में नहीं दिखा।",
   ],
   [
+    /^These documents don't record an invoice\.$/,
+    "इन दस्तावेज़ों में कोई इनवॉइस दर्ज नहीं है।",
+  ],
+  [
+    /^These documents don't record a payment\.$/,
+    "इन दस्तावेज़ों में कोई भुगतान दर्ज नहीं है।",
+  ],
+  [
+    /^These documents don't record an invoice number\.$/,
+    "इन दस्तावेज़ों में कोई इनवॉइस नंबर दर्ज नहीं है।",
+  ],
+  [
+    /^They do record (.+), proposed, not approved\.$/,
+    "इनमें $1 दर्ज है, प्रस्तावित, मंज़ूर नहीं।",
+  ],
+  [/^They do record (.+), approved\.$/, "इनमें $1 दर्ज है, मंज़ूर।"],
+  [
     /^I could not find supporting evidence in these documents\.$/,
     "मुझे इन दस्तावेज़ों में इसका कोई सबूत नहीं मिला।",
   ],

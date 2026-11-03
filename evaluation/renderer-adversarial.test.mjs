@@ -66,10 +66,7 @@ test("A7: retainer/retention phrasing clarifies, never aliases, the engagement f
   // "retention": the system must not present the engagement figure AS the
   // asked-for retention/retainer fee. It says the asked term is absent and
   // names what fee the documents do record, with its own label and status.
-  for (const q of [
-    "What is the retention fee?",
-    "What is the retainer fee?",
-  ]) {
+  for (const q of ["What is the retention fee?", "What is the retainer fee?"]) {
     const r = spokenTurn(q, north);
     assert.match(r.spoken, /don't see a (retention|retainer) fee/, q);
     assert.match(r.spoken, /engagement fee of \$48,000/, q);
@@ -116,4 +113,78 @@ test("A8: out-of-corpus attributes still abstain, not answer with a real figure"
     assert.doesNotMatch(r.spoken, /\$48,000/, q);
     assert.match(r.spoken, /don't see/, q);
   }
+});
+
+// Invoice family of clarify-never-alias (production repro 2026-11-03): the
+// deal corpus records a proposed fee and invoicing TERMS ("invoiced 50% on
+// signing and 50% on pilot acceptance") but no invoice document, number or
+// payment. Every invoice phrasing was answered with the same fee lead
+// ("$42,000 is the current proposal; approval is not recorded."), inviting
+// the false inference that an invoice lifecycle exists. The records must
+// say what they do not record for the asked aspect - scoped to the
+// documents, never asserting what exists outside them - and may then name
+// the recorded fee under its own label and status.
+const northInvoice = importBundle([
+  {
+    title: "01_Northstar.md",
+    text: "# Northstar Proposal\nAuthor: M. Date: 2026-09-04. Type: proposal.\n1. Meridian proposes a customer analytics pilot for Northstar Retail.\n2. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.\n3. This proposal is an offer, not an agreement.",
+  },
+  {
+    title: "02_Commercial_Revision.md",
+    text: "# Commercial Revision - Northstar Pilot\nAuthor: M. Date: 2026-09-18. Type: revision memo.\n1. Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance.",
+  },
+]);
+
+test("A10: invoice asks name the absent record, never alias the proposed fee", () => {
+  for (const [q, aspect] of [
+    ["What is the invoice amount?", "an invoice"],
+    ["How much was the invoice?", "an invoice"],
+    ["Has the client been invoiced?", "an invoice"],
+    ["When was the invoice issued?", "an invoice"],
+    ["When was the invoice paid?", "a payment"],
+    ["Was the invoice paid?", "a payment"],
+    ["What is the invoice number?", "an invoice number"],
+  ]) {
+    const r = spokenTurn(q, northInvoice);
+    assert.equal(r.verdict, "NO-RECORD", q);
+    assert.match(
+      r.spoken,
+      new RegExp(`^These documents don't record ${aspect}\\.`),
+      q,
+    );
+    assert.match(r.spoken, /They do record a revised fee of \$42,000/, q);
+    assert.match(r.spoken, /proposed, not approved\.$/, q);
+    assert.equal(r.citations.length, 1, q);
+    assert.match(r.citations[0].quote, /42,000/, q);
+  }
+});
+
+test("A11: a recorded invoice document still answers invoice asks", () => {
+  // Counter-requirement (R-family): when the records DO hold an invoice
+  // document, invoice phrasing must find it - the absence guard never
+  // fires on a real-invoice corpus.
+  const inv = importBundle([
+    {
+      title: "Acme_Invoice.txt",
+      text: "Invoice total due: 18,500 INR, payable by 15 November 2026.\n",
+    },
+  ]);
+  const r = spokenTurn("What is the invoice amount due?", inv);
+  assert.notEqual(r.verdict, "NO-RECORD");
+  assert.match(r.spoken, /18,500/);
+  assert.doesNotMatch(r.spoken, /don't record/);
+});
+
+test("A12: no invoice and no fee - a bare absence, no pointer", () => {
+  const lab = importBundle([
+    {
+      title: "Lab_Report.md",
+      text: "# Lab Report\nAuthor: L. Date: 2026-10-01. Type: report.\n1. Ferritin is 42 ng/mL (reference 30-400).\n",
+    },
+  ]);
+  const r = spokenTurn("What is the invoice amount?", lab);
+  assert.equal(r.verdict, "NO-RECORD");
+  assert.equal(r.spoken, "These documents don't record an invoice.");
+  const p = spokenTurn("Was the invoice paid?", lab);
+  assert.equal(p.spoken, "These documents don't record a payment.");
 });
