@@ -434,19 +434,61 @@ function equivalenceSupport(claims, bundle) {
       .split(/(?<=[.!?])\s+/)
       .map(norm),
   );
+  // Engagement sections: dated blocks ("AUG 19 2026 - STEERING COMMITTEE");
+  // a document without date headers is one section.
+  const DATE_HEADER =
+    /^\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}\b/i;
+  const sections = (bundle?.sources ?? []).flatMap((src) => {
+    const out = [];
+    let cur = [];
+    for (const line of String(src.text ?? "").split("\n")) {
+      if (DATE_HEADER.test(line) && cur.length) {
+        out.push(cur.join("\n"));
+        cur = [];
+      }
+      cur.push(line);
+    }
+    if (cur.length) out.push(cur.join("\n"));
+    return out;
+  });
+  const APPROVAL_RE =
+    /\b(approves|approved|accepted|signed|agreed|confirmed|ratified|adopted)\b/i;
   const quoteHay = claims.map((c) => norm(c.quote));
   const wordsOf = (v) => v.split(" ").filter(Boolean);
   const hasAll = (hay, v) => wordsOf(v).every((w) => hay.includes(` ${w} `));
+  // Contrast/negation in the shared sentence means the wordings are being
+  // distinguished, not equated ("East and West, not two sites").
+  const CONTRAST =
+    /\b(not|no|never|rather than|instead of|versus|vs|but|however|unlike|except|excluding|differs?|distinct)\b/;
   for (let i = 0; i < vals.length; i++)
     for (let j = i + 1; j < vals.length; j++) {
       const a = vals[i];
       const b = vals[j];
+      // Distinct concrete amounts/dates are never one fact: no containment
+      // and no shared-sentence support ("usd 54" is a word-subset of
+      // "usd 54 000" quotes, so substring evidence is meaningless here).
+      if (/\d/.test(a) || /\d/.test(b)) return false;
+      // Containment only merges amount-free wordings.
       if (a.includes(b) || b.includes(a)) continue;
-      if (
-        !quoteHay.some((h) => hasAll(h, a) && hasAll(h, b)) &&
-        !sentences.some((h) => hasAll(h, a) && hasAll(h, b))
-      )
-        return false;
+      const quoteOk = quoteHay.some(
+        (h) => hasAll(h, a) && hasAll(h, b) && !CONTRAST.test(h),
+      );
+      const sentenceOk = sentences.some(
+        (h) => hasAll(h, a) && hasAll(h, b) && !CONTRAST.test(h),
+      );
+      // Evidence chain across one engagement section: both wordings appear
+      // with a decision marker and no sentence contrasts THIS pair (a
+      // "TWO sites instead of FOUR" contrast is about FOUR, not this pair).
+      const sectionOk = sections.some((sec) => {
+        const nsec = norm(sec);
+        if (!hasAll(nsec, a) || !hasAll(nsec, b)) return false;
+        if (!APPROVAL_RE.test(sec)) return false;
+        const sents = sec.split(/(?<=[.!?])\s+/).map(norm);
+        return !sents.some(
+          (h) => hasAll(h, a) && hasAll(h, b) && CONTRAST.test(h),
+        );
+      });
+      if (!quoteOk && !sentenceOk && !sectionOk) return false;
     }
   return true;
 }
@@ -1430,9 +1472,21 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   // generic and binds nothing.
   const qIds = questionIds(question);
   if (qIds.length) {
-    const bound = fieldClaims.filter((c) =>
-      claimIds(c).some((id) => qIds.includes(id)),
+    // Engagement-level names (the documents' own entities) bind by entity,
+    // never by quote mention - a superseded opening sentence names the
+    // engagement too, and binding to it would resurrect replaced records.
+    const entityIds = new Set(
+      fieldClaims.flatMap((c) => c.scopeEntities ?? []),
     );
+    const entQ = qIds.filter((id) => entityIds.has(id));
+    const rest = qIds.filter((id) => !entityIds.has(id));
+    let bound = fieldClaims;
+    if (entQ.length)
+      bound = bound.filter((c) =>
+        (c.scopeEntities ?? []).some((e) => entQ.includes(e)),
+      );
+    if (rest.length)
+      bound = bound.filter((c) => claimIds(c).some((id) => rest.includes(id)));
     if (bound.length) fieldClaims = bound;
   }
   if (field === "fee") {

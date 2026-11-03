@@ -114,3 +114,21 @@ test("distinct fee subjects in one entity-less document compete, never supersede
   assert.ok(actives.includes("USD 20,000"), "hosting fee stays on record");
   assert.ok(actives.includes("USD 30,000"), "license fee on record");
 });
+
+test("scope evidence chain: original, approved and current all correct (radar)", () => {
+  const approved = spokenTurn("Which sites were approved?", bundle, fields, {});
+  assert.match(approved.spoken, /East and West sites/);
+  assert.match(approved.spoken, /committee level/);
+  const original = spokenTurn(
+    "How many sites were originally proposed?",
+    bundle,
+    fields,
+    {},
+  );
+  assert.match(original.spoken, /Four customer support sites/);
+  assert.match(original.spoken, /East and West sites/);
+  assert.match(original.spoken, /committee level/);
+  const current = spokenTurn("What is the current scope?", bundle, fields, {});
+  assert.match(current.spoken, /East and West sites/);
+  assert.match(current.spoken, /committee level/);
+});

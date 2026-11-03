@@ -96,3 +96,26 @@ test("free-text approved variants WITH source equivalence stay one fact", () => 
   assert.match(a, /East and West site/);
   assert.doesNotMatch(a, /don't say whether/);
 });
+
+test("a contrast sentence is not equivalence support", () => {
+  const a = ask(
+    bundleOf(
+      "JAN 10 2026 - CALL\nThe East and West site scope is approved. The two sites are not East and West.\n\nFEB 10 2026 - CALL\nThe two-site scope is approved.\n",
+    ),
+    "What is the scope?",
+  );
+  assert.match(a, /don't say whether those are the same scope/);
+});
+
+test("canon containment never merges distinct amounts", () => {
+  const a = ask(
+    bundleOf(
+      "JAN 10 2026 - CALL\nThe fee of USD 54 is approved.\n\nFEB 10 2026 - CALL\nThe handling fee of USD 54,000 is approved.\n",
+    ),
+    "What is the fee?",
+  );
+  assert.doesNotMatch(a, /^Yes\. /); // never a silent single pick
+  assert.match(a, /54/);
+  assert.match(a, /54,000/);
+  assert.doesNotMatch(a, /not approved/);
+});

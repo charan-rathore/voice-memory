@@ -910,7 +910,7 @@ export function resolveClaims(claims: Claim[]): {
   const MONTH_DAY =
     /^(january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i;
   const COMMON_WORD =
-    /^(the|this|that|these|those|only|with|from|they|them|then|than|when|what|which|there|their|some|such|each|also|just|even|more|most|less|very|much|many|here|after|before|during|between|under|over|both|same|other|another|every|never|always|still|again|once|now|all|any|few|own|per|via|said|says|noted|confirmed|asked|raised|explained|questioned|sought|shared|seconded|welcomed|one|two|three|four|five|six)$/i;
+    /^(the|this|that|these|those|only|with|from|they|them|then|than|when|what|which|there|their|some|such|each|also|just|even|more|most|less|very|much|many|here|after|before|during|between|under|over|both|same|other|another|every|never|always|still|again|once|now|all|any|few|own|per|via|said|says|noted|confirmed|asked|raised|explained|questioned|sought|shared|seconded|welcomed|following|narrower|one|two|three|four|five|six)$/i;
   // Identity evidence: distinctive names in the claim's own sentence, minus
   // the claim's own value words (East/West in "East and West sites" are the
   // VALUE, not an engagement identity).
@@ -1024,13 +1024,25 @@ export function resolveClaims(claims: Claim[]): {
           // also compete; unknown scope never collapses.
           const supScope = localScopeOf(sup.quote ?? "", sup.value);
           const cScope = localScopeOf(c.quote ?? "", c.value);
-          const idsOf = (t: string[]) => t.filter((x) => !x.startsWith("desc:"));
-          const descsOf = (t: string[]) => t.filter((x) => x.startsWith("desc:"));
+          const idsOf = (t: string[]) =>
+            t.filter((x) => !x.startsWith("desc:"));
+          const descsOf = (t: string[]) =>
+            t.filter((x) => x.startsWith("desc:"));
           const supIds = idsOf(supScope);
           const cIds = idsOf(cScope);
-          if (supIds.length || cIds.length) {
-            if (!supIds.some((x) => cIds.includes(x))) continue;
-          } else if (
+          // A specific identity CONFLICT (both sides carry distinct
+          // identity tokens) outranks a shared generic noun. A one-sided
+          // token is not a conflict: terse revisions legitimately carry
+          // fewer names than the opening record they replace.
+          if (
+            supIds.length &&
+            cIds.length &&
+            !supIds.some((x) => cIds.includes(x))
+          )
+            continue;
+          if (
+            !supIds.length &&
+            !cIds.length &&
             descsOf(supScope).length &&
             descsOf(cScope).length &&
             !descsOf(supScope).some((x) => descsOf(cScope).includes(x))
