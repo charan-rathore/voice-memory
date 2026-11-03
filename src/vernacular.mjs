@@ -462,6 +462,23 @@ const HL = [
     "Haan. $1 mein manzoori darj hai$2.",
   ],
   [/^Still open, per (.+?): (.+)$/, "Abhi open hai, $1 ke hisaab se: $2"],
+  [
+    /^These documents don't record an invoice\.$/,
+    "In documents mein koi invoice darj nahi hai.",
+  ],
+  [
+    /^These documents don't record a payment\.$/,
+    "In documents mein koi payment darj nahi hai.",
+  ],
+  [
+    /^These documents don't record an invoice number\.$/,
+    "In documents mein koi invoice number darj nahi hai.",
+  ],
+  [
+    /^They do record (.+), proposed, not approved\.$/,
+    "Inmein $1 darj hai, proposed, manzoor nahi.",
+  ],
+  [/^They do record (.+), approved\.$/, "Inmein $1 darj hai, manzoor."],
 ];
 /**
  * Romanised Hindi for an English template answer. Unknown sentences fall
