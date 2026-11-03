@@ -338,7 +338,7 @@ export function extractClaims(
   },
   fields: ClaimField[],
 ): Claim[] {
-  const claims: Claim[] = [];
+  let claims: Claim[] = [];
   for (const source of bundle.sources) {
     const dateMatch = source.text.match(/Date:\s*([0-9-]+)/);
     const docDateHeader = dateMatch ? dateMatch[1] : "";
@@ -771,6 +771,20 @@ export function extractClaims(
       }
     }
   }
+  // Exact-duplicate collapse: a source that repeats an identical assertion
+  // (boilerplate, repeated passages) yields one claim, not one per copy -
+  // the copies carry no additional information, and citation uniqueness is
+  // handled at the evidence layer (engine uniqueClaimEvidence).
+  const seen = new Set<string>();
+  claims = claims.filter((c) => {
+    const k = `${c.sourceId}|${c.field}|${c.value}|${c.status}|${c.quote
+      .trim()
+      .replace(/[.!?\s]+$/, "")
+      .toLowerCase()}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
   return claims;
 }
 

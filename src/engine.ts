@@ -179,6 +179,54 @@ export function validateEvidence(
     throw Error("Source evidence does not match its original.");
   return true;
 }
+// Claim-derived evidence must satisfy the same exact-citation rule as chunk
+// evidence: a quote that appears more than once in its source is not an
+// exact citation. Identical repeated assertions collapse to one entry; a
+// non-unique quote's span extends to sentence boundaries until it is unique
+// (full source text is the final bound) - a repeated span is never presented
+// as a pinpoint citation.
+function uniqueClaimEvidence(
+  claims: Claim[],
+  bundle: ReturnType<typeof importBundle>,
+): Claim[] {
+  const out: Claim[] = [];
+  const seen = new Set<string>();
+  for (const c of claims) {
+    const source = bundle.sources.find((s) => s.id === c.sourceId);
+    if (!source) continue;
+    const key = `${c.sourceId}|${c.field}|${c.value}|${c.status}|${c.quote
+      .trim()
+      .replace(/[.!?\s]+$/, "")
+      .toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (source.text.indexOf(c.quote) === source.text.lastIndexOf(c.quote)) {
+      out.push(c);
+      continue;
+    }
+    let start = c.start;
+    let end = c.end;
+    let guard = 0;
+    while (
+      (start > 0 || end < source.text.length) &&
+      guard++ < 10000 &&
+      source.text.indexOf(source.text.slice(start, end)) !==
+        source.text.lastIndexOf(source.text.slice(start, end))
+    ) {
+      if (start > 0) {
+        const prev = source.text.lastIndexOf(". ", Math.max(0, start - 2));
+        start = prev >= 0 ? prev + 2 : 0;
+      }
+      if (end < source.text.length) {
+        const next = source.text.indexOf(". ", end);
+        end = next >= 0 ? next + 1 : source.text.length;
+      }
+    }
+    out.push({ ...c, start, end, quote: source.text.slice(start, end) });
+  }
+  return out;
+}
+
 export function answer(
   question: string,
   bundle: ReturnType<typeof importBundle>,
@@ -571,11 +619,10 @@ export function answer(
           result.partial = false;
           result.partialNotice = null;
           result.evidenceStatus = "positive";
-          result.evidence = [
-            ...negs,
-            ...didApprove,
-            ...otherApproved.slice(0, 1),
-          ] as unknown as typeof result.evidence;
+          result.evidence = uniqueClaimEvidence(
+            [...negs, ...didApprove, ...otherApproved.slice(0, 1)],
+            bundle,
+          ) as unknown as typeof result.evidence;
           const negTxt = negs.length
             ? ` The record states: "${negs[0].quote}" (${negs[0].title}${negs[0].docDate ? ", " + negs[0].docDate : ""}).`
             : ` No ${actorM[1].toLowerCase()} approval of the asked item is recorded.`;
@@ -644,7 +691,10 @@ export function answer(
           result.partial = false;
           result.partialNotice = null;
           result.evidenceStatus = "positive";
-          result.evidence = chosen as unknown as typeof result.evidence;
+          result.evidence = uniqueClaimEvidence(
+            chosen,
+            bundle,
+          ) as unknown as typeof result.evidence;
           result.answer =
             `${lead}: ` +
             chosen
@@ -745,7 +795,10 @@ export function answer(
       result.partial = false;
       result.partialNotice = null;
       result.evidenceStatus = "positive";
-      result.evidence = recorded as unknown as typeof result.evidence;
+      result.evidence = uniqueClaimEvidence(
+        recorded,
+        bundle,
+      ) as unknown as typeof result.evidence;
       result.answer =
         "The record states: " +
         recorded
@@ -962,7 +1015,10 @@ export function answer(
         result.unresolved = false;
         result.partial = true;
         result.partialNotice = histories.join(" ") + phaseNote + yearNote;
-        result.evidence = claims as unknown as typeof result.evidence;
+        result.evidence = uniqueClaimEvidence(
+          claims,
+          bundle,
+        ) as unknown as typeof result.evidence;
         result.answer =
           "Record status: " +
           histories.join(" ") +

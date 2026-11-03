@@ -23438,7 +23438,8 @@ function statusOf(line) {
     line
   ))
     return "internal-target";
-  if (/propos|revis|offer\b|floated|suggested|draft\b/i.test(line)) return "proposed";
+  if (/propos|revis|offer\b|floated|suggested|draft\b/i.test(line))
+    return "proposed";
   if (/asks|requested|retain/i.test(line)) return "requested";
   return "discussed";
 }
@@ -23602,7 +23603,7 @@ function sectionDateOf(line) {
   return null;
 }
 function extractClaims(bundle, fields) {
-  const claims = [];
+  let claims = [];
   for (const source of bundle.sources) {
     const dateMatch = source.text.match(/Date:\s*([0-9-]+)/);
     const docDateHeader = dateMatch ? dateMatch[1] : "";
@@ -23644,7 +23645,9 @@ function extractClaims(bundle, fields) {
           if (docExecuted && status === "discussed") status = "approved";
           if (negationBinds(field, value, seg)) status = "unresolved";
           const supersededByWording = /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(clause) || /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(seg);
-          const supersedes = force?.supersedes ?? (/revis|supersed|replaces|narrow|instead of|\bcurrent\b/i.test(clause) && !supersededByWording && status !== "unresolved" && !/\bvs\b|open decision|disput/i.test(clause));
+          const supersedes = force?.supersedes ?? (/revis|supersed|replaces|narrow|instead of|\bcurrent\b/i.test(
+            clause
+          ) && !supersededByWording && status !== "unresolved" && !/\bvs\b|open decision|disput/i.test(clause));
           claims.push({
             field,
             value,
@@ -23687,13 +23690,23 @@ function extractClaims(bundle, fields) {
           ))
             push("fee", m[0], m.index);
         }
-        const pct = seg.match(/(\d{1,2})%[^.\n]*?(\d{1,2})%/) || seg.match(/(\d{1,2})\s*percent\b[^.\n]{0,60}?\b(\d{1,2})\s*percent\b/i);
+        const pct = seg.match(/(\d{1,2})%[^.\n]*?(\d{1,2})%/) || seg.match(
+          /(\d{1,2})\s*percent\b[^.\n]{0,60}?\b(\d{1,2})\s*percent\b/i
+        );
         const split = (pct && Number(pct[1]) + Number(pct[2]) === 100 ? pct : null) || seg.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\b/);
-        if (split && /payment|upfront|schedule|split|on signing|on signature|after acceptance|plan|draft/i.test(seg))
+        if (split && /payment|upfront|schedule|split|on signing|on signature|after acceptance|plan|draft/i.test(
+          seg
+        ))
           push("paymentSplit", `${split[1]}/${split[2]}`, split.index);
         const DATE_RES = [
-          new RegExp("\\b(\\d{1,2}\\s+(?:" + MONTHS + ")(?:\\s+20\\d{2})?)\\b", "gi"),
-          new RegExp("\\b((?:" + MONTHS + ")\\s+\\d{1,2}(?:,\\s*20\\d{2})?)\\b", "gi")
+          new RegExp(
+            "\\b(\\d{1,2}\\s+(?:" + MONTHS + ")(?:\\s+20\\d{2})?)\\b",
+            "gi"
+          ),
+          new RegExp(
+            "\\b((?:" + MONTHS + ")\\s+\\d{1,2}(?:,\\s*20\\d{2})?)\\b",
+            "gi"
+          )
         ];
         for (const DATE_RE of DATE_RES) {
           for (const dm of seg.matchAll(DATE_RE)) {
@@ -23791,10 +23804,7 @@ function extractClaims(bundle, fields) {
             } else {
               const before = claims.length;
               for (const m of seg.matchAll(
-                new RegExp(
-                  "\\b(" + NUMWORD_RE + ")-(" + UNIT + ")\\b",
-                  "gi"
-                )
+                new RegExp("\\b(" + NUMWORD_RE + ")-(" + UNIT + ")\\b", "gi")
               ))
                 pushScope(`${m[1]} ${m[2]}`, m.index);
               for (const m of seg.matchAll(
@@ -23810,7 +23820,10 @@ function extractClaims(bundle, fields) {
                   "gi"
                 )
               )) {
-                const before2 = seg.slice(Math.max(0, (m.index ?? 0) - 8), m.index ?? 0);
+                const before2 = seg.slice(
+                  Math.max(0, (m.index ?? 0) - 8),
+                  m.index ?? 0
+                );
                 if (/(?:^|[^a-z])phase-\s*$/i.test(before2) || /-$/.test(before2))
                   continue;
                 pushScope(
@@ -23857,7 +23870,11 @@ function extractClaims(bundle, fields) {
         const replacedCad = fwd ? fwd[2].toLowerCase() : rev ? rev[1].toLowerCase() : null;
         const replacingCad = fwd ? fwd[1] : rev ? rev[2] : null;
         if (replacingCad)
-          push("reporting", replacingCad.toLowerCase(), (fwd ?? rev).index ?? 0);
+          push(
+            "reporting",
+            replacingCad.toLowerCase(),
+            (fwd ?? rev).index ?? 0
+          );
         for (const m of seg.matchAll(
           /\b(weekly|daily|biweekly|monthly)\s+(?:progress\s+)?report/gi
         )) {
@@ -23875,6 +23892,13 @@ function extractClaims(bundle, fields) {
       }
     }
   }
+  const seen = /* @__PURE__ */ new Set();
+  claims = claims.filter((c) => {
+    const k = `${c.sourceId}|${c.field}|${c.value}|${c.status}|${c.quote.trim().replace(/[.!?\s]+$/, "").toLowerCase()}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
   return claims;
 }
 var NUMWORD_TO_DIGIT = {
@@ -31549,6 +31573,36 @@ function validateEvidence(c, bundle) {
     throw Error("Source evidence does not match its original.");
   return true;
 }
+function uniqueClaimEvidence(claims, bundle) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const c of claims) {
+    const source = bundle.sources.find((s) => s.id === c.sourceId);
+    if (!source) continue;
+    const key = `${c.sourceId}|${c.field}|${c.value}|${c.status}|${c.quote.trim().replace(/[.!?\s]+$/, "").toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (source.text.indexOf(c.quote) === source.text.lastIndexOf(c.quote)) {
+      out.push(c);
+      continue;
+    }
+    let start = c.start;
+    let end = c.end;
+    let guard = 0;
+    while ((start > 0 || end < source.text.length) && guard++ < 1e4 && source.text.indexOf(source.text.slice(start, end)) !== source.text.lastIndexOf(source.text.slice(start, end))) {
+      if (start > 0) {
+        const prev = source.text.lastIndexOf(". ", Math.max(0, start - 2));
+        start = prev >= 0 ? prev + 2 : 0;
+      }
+      if (end < source.text.length) {
+        const next = source.text.indexOf(". ", end);
+        end = next >= 0 ? next + 1 : source.text.length;
+      }
+    }
+    out.push({ ...c, start, end, quote: source.text.slice(start, end) });
+  }
+  return out;
+}
 function answer(question, bundle, dense) {
   if (typeof question !== "string" || !question.trim() || question.length > 4e3)
     throw Error("Ask a question of 1-4,000 characters.");
@@ -31683,10 +31737,9 @@ function answer(question, bundle, dense) {
   );
   let claimsVerdict = false;
   if (fields.length) {
-    const extractedClaims = extractClaims(
-      bundle,
-      [.../* @__PURE__ */ new Set([...fields, "signedAgreement"])]
-    );
+    const extractedClaims = extractClaims(bundle, [
+      .../* @__PURE__ */ new Set([...fields, "signedAgreement"])
+    ]);
     const agNegClaims = extractedClaims.filter(
       (c) => c.field === "signedAgreement" && c.status === "unresolved"
     );
@@ -31781,7 +31834,10 @@ function answer(question, bundle, dense) {
           result.partial = false;
           result.partialNotice = null;
           result.evidenceStatus = "positive";
-          result.evidence = [...negs, ...didApprove, ...otherApproved.slice(0, 1)];
+          result.evidence = uniqueClaimEvidence(
+            [...negs, ...didApprove, ...otherApproved.slice(0, 1)],
+            bundle
+          );
           const negTxt = negs.length ? ` The record states: "${negs[0].quote}" (${negs[0].title}${negs[0].docDate ? ", " + negs[0].docDate : ""}).` : ` No ${actorM[1].toLowerCase()} approval of the asked item is recorded.`;
           const scopeTxt = didApprove.length ? ` ${actorM[1][0].toUpperCase() + actorM[1].slice(1).toLowerCase()} approval is recorded for ${[...new Set(didApprove.map((c) => c.field))].join(" and ")} only.` : "";
           const otherTxt = otherApproved.length ? ` The recorded approval here is ${otherApproved[0].authority ?? "unspecified"}: "${otherApproved[0].quote}" (${otherApproved[0].title}${otherApproved[0].docDate ? ", " + otherApproved[0].docDate : ""}).` : "";
@@ -31833,7 +31889,10 @@ function answer(question, bundle, dense) {
           result.partial = false;
           result.partialNotice = null;
           result.evidenceStatus = "positive";
-          result.evidence = chosen;
+          result.evidence = uniqueClaimEvidence(
+            chosen,
+            bundle
+          );
           result.answer = `${lead}: ` + chosen.map(
             (c) => `${claimInfo(c)} - "${c.quote}" (${c.title}${c.docDate ? ", " + c.docDate : ""})`
           ).join("; ") + "." + laterNote;
@@ -31887,7 +31946,10 @@ function answer(question, bundle, dense) {
       result.partial = false;
       result.partialNotice = null;
       result.evidenceStatus = "positive";
-      result.evidence = recorded;
+      result.evidence = uniqueClaimEvidence(
+        recorded,
+        bundle
+      );
       result.answer = "The record states: " + recorded.map(
         (c) => `"${c.quote}" (${c.title}${c.docDate ? ", " + c.docDate : ""})`
       ).join("; ") + ". No signed agreement is on record for the revised terms; these documents do not establish that one was later executed.";
@@ -32040,7 +32102,10 @@ function answer(question, bundle, dense) {
         result.unresolved = false;
         result.partial = true;
         result.partialNotice = histories.join(" ") + phaseNote + yearNote;
-        result.evidence = claims;
+        result.evidence = uniqueClaimEvidence(
+          claims,
+          bundle
+        );
         result.answer = "Record status: " + histories.join(" ") + phaseNote + yearNote + (currentQuotes ? "\nCurrent record: " + currentQuotes : "");
         result.spoken = result.answer.replace(/\n/g, " ");
       } else if (approvedNotes.length) {

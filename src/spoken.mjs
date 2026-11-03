@@ -395,18 +395,31 @@ function scopedNegative(field, claims, question, bundle = null) {
         (String(src.text ?? "").match(/Date:\s*(\d{4}-\d{2}-\d{2})/) ??
           [])[1] ?? null;
       const lines = String(src.text ?? "").split("\n");
+      let lineStart = 0;
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].replace(/^\s*\d+\.\s*/, "").trim();
+        const rawLine = lines[i];
+        const line = rawLine.replace(/^\s*\d+\.\s*/, "").trim();
+        const lineOff =
+          lineStart + (rawLine.length ? rawLine.indexOf(line) : 0);
+        lineStart += rawLine.length + 1;
         if (!line) continue;
         // A line can hold several sentences with different subjects; cite the
         // sentence that actually carries this field's negative.
+        let sentOff = 0;
         for (const sentence of line.split(/(?<=[.!?])\s+/)) {
+          const quote = sentence.trim();
+          const at = quote ? line.indexOf(quote, sentOff) : -1;
+          if (at >= 0) sentOff = at + quote.length;
           if (relevant(sentence)) {
             return {
               field,
               value: null,
-              quote: sentence.trim(),
+              quote,
               title: src.title,
+              sourceId: src.id,
+              hash: src.hash,
+              start: at >= 0 ? lineOff + at : undefined,
+              end: at >= 0 ? lineOff + at + quote.length : undefined,
               docDate: src.docDate ?? src.date ?? null,
               firstLine: i + 1,
               lastLine: i + 1,
