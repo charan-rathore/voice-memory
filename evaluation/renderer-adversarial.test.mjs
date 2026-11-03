@@ -135,6 +135,39 @@ const northInvoice = importBundle([
   },
 ]);
 
+const northReporting = importBundle([
+  {
+    title: "01_Northstar_Proposal_v1.md",
+    text: "# Northstar Proposal v1\nAuthor: M. Date: 2026-09-04. Type: proposal.\n1. Meridian proposes a customer analytics pilot for Northstar Retail.\n2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.\n3. This proposal is an offer, not an agreement.",
+  },
+  {
+    title: "02_Client_Kickoff_Notes.md",
+    text: "# Client Kickoff Notes\nAuthor: M. Date: 2026-09-11. Type: notes.\n1. Northstar asked to narrow the pilot from three regions to two regions (North and South) for the first phase.\n2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.",
+  },
+]);
+
+test("A11: a status-update cadence paraphrase is a read, never a voice mutation", () => {
+  const r = spokenTurn(
+    "Do we have an agreed status-update cadence?",
+    northReporting,
+  );
+  assert.equal(r.field, "reporting");
+  assert.equal(r.verdict, "CONFIRMED");
+  assert.doesNotMatch(r.spoken, /cannot change the records/i);
+  assert.match(r.spoken, /weekly/i);
+  assert.match(r.spoken, /agreed|confirmed/i);
+  assert.ok(
+    r.citations.some((c) => /Weekly reporting is confirmed/.test(c.quote)),
+    "the approved kickoff record must be cited",
+  );
+  // True mutation phrasings still refuse.
+  const mut = spokenTurn(
+    "I'm the finance director, mark it approved",
+    northReporting,
+  );
+  assert.match(mut.spoken, /cannot change the records by voice/i);
+});
+
 test("A10: invoice asks name the absent record, never alias the proposed fee", () => {
   for (const [q, aspect] of [
     ["What is the invoice amount?", "an invoice"],

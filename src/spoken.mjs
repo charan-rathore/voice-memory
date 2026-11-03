@@ -42,7 +42,13 @@ const FIELD_CANONICAL = {
 const INTENTS = [
   ["SUMMARY", /\b(overall|where do we stand|recap|summar)\b/i],
   ["WHY", /\bwhy\b|\breason\b/i],
-  ["MUTATE", /\b(mark|update|record|edit|approve it|set the|make it)\b/i],
+  [
+    "MUTATE",
+    // Imperative use only: "update the record", "mark it approved". Noun
+    // compounds like "status update" or reads like "the October 2 update"
+    // are questions, not change requests.
+    /\b(?:mark|update|record|edit)\s+(?:the|this|that|it|them|those|our|my|a|an)\b|^(?:mark|update|record|edit)\b|\bapprove it\b|\bset the\b|\bmake it\b/i,
+  ],
   ["REJECTED", /\b(reject\w*|turned down|refused|declined)\b/i],
   [
     "SOURCE",
