@@ -1034,6 +1034,16 @@ mark.hl {
   padding: 22px;
   min-height: 420px;
 }
+/* the viewer is fitted to the answer column's height: proof content must
+   never shrink to make that fit - it keeps its natural size and the row
+   grows or the continuation yields instead */
+.viewer-body > .page,
+.viewer-body > .rd-pdf,
+.viewer-body > .vw-text,
+.viewer-body > .page-note,
+.viewer-body > .cite-more {
+  flex-shrink: 0;
+}
 .viewer-empty {
   height: 100%;
   min-height: 380px;

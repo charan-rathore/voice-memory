@@ -1058,11 +1058,33 @@
     const vb = $("#viewer-body");
     const more = vb?.querySelector(".cite-more");
     if (!more) return;
+    const desk = vb.closest(".desk");
+    const leftEl = desk?.querySelector(".desk-left");
+    const bar = desk?.querySelector(".viewer-bar");
+    const rail = desk?.querySelector(".doc-rail");
     const all = [...more.querySelectorAll(".cite-more-doc")].map((d) =>
       d.cloneNode(true),
     );
     const fit = () => {
-      if (!vb.clientHeight) return;
+      if (!vb.clientHeight || !desk) return;
+      // The cited pages are the proof: the row must be tall enough to show
+      // them whole. The answer column usually makes it so; when it does
+      // not, the desk grows rather than the source clipping.
+      more.style.display = "none";
+      const proofNeed =
+        vb.scrollHeight + (bar?.offsetHeight ?? 0) + (rail?.offsetHeight ?? 0);
+      more.style.display = "";
+      const lastLeft = [...(leftEl?.children ?? [])]
+        .filter((c) => c.offsetHeight)
+        .pop();
+      const leftNeed = lastLeft
+        ? lastLeft.getBoundingClientRect().bottom -
+          leftEl.getBoundingClientRect().top +
+          22
+        : 0;
+      const rowTarget = Math.max(leftNeed, proofNeed, 660);
+      if (Math.abs(rowTarget - desk.offsetHeight) > 2)
+        desk.style.minHeight = `${Math.round(rowTarget)}px`;
       const over = () => vb.scrollHeight - vb.clientHeight;
       // restore everything first: the room can grow as the answer's own
       // images land, and a taller row fits more of the continuation
@@ -1070,9 +1092,13 @@
       more.append(...all.map((d) => d.cloneNode(true)));
       for (let guard = 0; guard < 6 && over() > 8; guard++) {
         const docs = more.querySelectorAll(".cite-more-doc");
-        if (docs.length > 1) docs[docs.length - 1].remove();
+        if (docs.length) docs[docs.length - 1].remove();
         else break;
       }
+      // continuation is optional; if even one card does not fit, the
+      // documents rail below already lists every report
+      if (over() > 8 || !more.querySelector(".cite-more-doc"))
+        more.style.display = "none";
     };
     let t = 0;
     const run = () => {
@@ -1098,6 +1124,9 @@
     const cites = state.currentCites ?? [];
     const c = cites[i];
     if (!c) return;
+    // a fresh citation re-balances the desk from scratch
+    const deskEl = $("#viewer-body")?.closest(".desk");
+    if (deskEl) deskEl.style.minHeight = "";
     $$(".cite").forEach((b) =>
       b.classList.toggle("on", Number(b.dataset.cite) === i),
     );
