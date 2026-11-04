@@ -273,8 +273,23 @@
       return doc.error?.message ?? "This file could not be read.";
     if (s.cached && s.finalAt != null)
       return "This exact file was read moments ago, so the saved reading was reused.";
+    if (doc.local && doc.status === "sending") {
+      const L = doc.local;
+      const pct = L.total ? Math.round((L.sent / L.total) * 100) : 0;
+      if (tech)
+        return L.phase === "sending"
+          ? `XHR upload ${n0(L.sent)} / ${n0(L.total)} bytes (${pct}%)`
+          : `POST /api/public/workspace … ${L.phase}`;
+      return L.phase === "waking"
+        ? "The engine was asleep (free hosting sleeps when idle). Waking it; this first wait is the slowest part."
+        : L.phase === "sending"
+          ? `Sending your file to the engine: ${pct}%.`
+          : L.phase === "sent"
+            ? "Received. Opening it now."
+            : "Connecting to the engine.";
+    }
     if (s.status === "uploaded")
-      return "In line. The engine reads one file at a time, and yours is next.";
+      return "In line: another file is being read. Yours starts in a moment.";
     if (s.status === "validating" || (s.checkedAt != null && !total))
       return "Checking that it really is the kind of file it says it is, and not too large.";
     if (s.finalAt != null) {
@@ -344,6 +359,10 @@
             `<li data-step="${st.id}" style="--i:${i}"><i class="rd-dot"></i><b>${st.plain}</b><small data-tech="${esc(st.tech)}"></small></li>`,
         ).join("")}<i class="rd-packet" aria-hidden="true"></i></ol>
         <div class="rd-pages" aria-hidden="true"></div>
+        <section class="rd-eng" aria-label="Inside the engine">
+          <header><b>Inside the engine</b><span>how your file becomes something it can answer from</span></header>
+          <ol class="rd-film"></ol>
+        </section>
         <p class="rd-say" aria-live="polite"></p>
         <ol class="rd-log"></ol>
         <footer class="rd-foot"></footer>
@@ -371,16 +390,26 @@
       // About eight seconds of screen time, whatever the real duration was.
       const speed = Math.max(1, total / 8000);
       replay = { id: d.id, start: performance.now(), speed, total };
+      engineKey = "";
       loop();
     });
   }
 
+  // Follow the file being read right now (a queued file has nothing to
+  // show yet); else the most recent one. A click on a file in the list
+  // pins it (focus()).
+  const ACTIVE = new Set(["validating", "parsing", "partial", "indexing"]);
   const focus = () =>
     docs.find((d) => d.id === focusId) ??
+    docs.find((d) => ACTIVE.has(d.status)) ??
+    docs.find((d) => d.local && !TERMINAL.has(d.status)) ??
     [...docs].reverse().find((d) => d.progress && !TERMINAL.has(d.status)) ??
     [...docs].reverse().find((d) => d.progress);
 
   function elapsedOf(d) {
+    // Still in the browser: the clock runs from the drop.
+    if (d.local && d.status === "sending")
+      return performance.now() - d.local.since - off(d);
     if (replay?.id === d.id)
       return Math.min(
         replay.total,
@@ -419,6 +448,9 @@
     const tau = elapsedOf(d);
     const s = stateAt(d, tau, replaying ? null : d.progress?.pages);
     const steps = stepStates(s, d);
+    if (d.status === "sending" || d.status === "uploaded")
+      for (const k of ["checked", "text", "ocr", "evidence", "answer"])
+        steps[k] = "wait";
     const done = s.finalAt != null;
     root.querySelector(".rd-file").textContent =
       (docs.length > 1
@@ -457,7 +489,7 @@
       if (["done", "live", "warn"].includes(steps[st.id])) active = i;
       if (steps[st.id] === "active") active = i;
       const stamp = {
-        received: o || null,
+        received: d.status === "sending" ? null : o || null,
         checked: at(s.checkedAt),
         text: at(s.textAt),
         ocr:
@@ -466,6 +498,17 @@
         answer: askAt,
       }[st.id];
       const small = li.querySelector("small");
+      if (st.id === "received" && d.local && d.status === "sending") {
+        const L = d.local;
+        small.textContent =
+          L.phase === "sending" && L.total
+            ? `${Math.round((L.sent / L.total) * 100)}%`
+            : L.phase === "waking"
+              ? "waking"
+              : "now";
+        li.dataset.state = "active";
+        return;
+      }
       small.textContent = tech
         ? small.dataset.tech
         : steps[st.id] === "skip"
@@ -546,6 +589,8 @@
                   : `Page ${p.n}`;
     });
 
+    paintEngine(d, s, tech, replaying ? tau : null);
+
     const say = root.querySelector(".rd-say");
     const line = narrate(s, d, steps, tech, o);
     if (say.textContent !== line) say.textContent = line;
@@ -580,6 +625,254 @@
       : "live";
   }
 
+  // ------------------------------------------------- inside the engine
+  // Five frames, each shown only when the data for it exists (digest =
+  // what the server computed from this document after indexing it).
+  const FRAMES = [
+    {
+      id: "structure",
+      n: "1",
+      plain: "Pages become structure",
+      tech: "layout → typed blocks",
+    },
+    {
+      id: "records",
+      n: "2",
+      plain: "Structure becomes records",
+      tech: "packet segments + authority",
+    },
+    {
+      id: "facts",
+      n: "3",
+      plain: "Records become facts",
+      tech: "table facts, lab rows, supersession",
+    },
+    {
+      id: "numbers",
+      n: "4",
+      plain: "Words become numbers",
+      tech: "BM25 term weights (k1 1.5, b 0.75)",
+    },
+    {
+      id: "graph",
+      n: "5",
+      plain: "Numbers become a graph",
+      tech: "evidence graph (grounded edges)",
+    },
+  ];
+  const bar = (v, max, cls = "") =>
+    `<i class="rd-b ${cls}" style="--w:${Math.max(2, Math.min(100, (v / (max || 1)) * 100)).toFixed(1)}%"></i>`;
+  const AUTH = { authoritative: "auth", provisional: "prov", unknown: "unk" };
+  let engineKey = "";
+  function paintEngine(d, s, tech, replayTau) {
+    const film = root.querySelector(".rd-film");
+    const eng = root.querySelector(".rd-eng");
+    const g = d.digest;
+    // During a replay, a frame appears at the moment its data was produced.
+    const ready = {
+      structure: !!(s.counts || g),
+      records:
+        !!g && (replayTau == null || (s.evidence && s.evidence.t <= replayTau)),
+      facts:
+        !!g && (replayTau == null || (s.evidence && s.evidence.t <= replayTau)),
+      numbers:
+        !!g?.lookup &&
+        (replayTau == null || s.finalAt != null || s.partialAt != null),
+      graph: !!g && (replayTau == null || s.finalAt != null),
+    };
+    eng.hidden = !ready.structure;
+    if (eng.hidden) return;
+    const key = JSON.stringify([
+      d.id,
+      ready,
+      tech,
+      !!g,
+      s.counts,
+      g?.graph?.facts,
+    ]);
+    if (key === engineKey) return;
+    engineKey = key;
+    const L = g?.layout ?? s.counts ?? {};
+    const html = FRAMES.map((f) => {
+      if (!ready[f.id])
+        return `<li class="rd-fr wait" data-f="${f.id}"><em>${f.n}</em><b>${tech ? f.tech : f.plain}</b><p class="rd-dim">waiting</p></li>`;
+      let body = "";
+      if (f.id === "structure") {
+        const parts = [
+          ["h", L.headings ?? 0, "headings"],
+          ["t", L.tables ?? 0, "tables"],
+          ["p", L.paragraphs ?? 0, "paragraphs"],
+          ["o", L.ocr ?? 0, "read by OCR"],
+        ];
+        const total = parts.reduce((a, p) => a + p[1], 0) || 1;
+        body =
+          `<div class="rd-mix">${parts.map(([c, v]) => `<i class="m-${c}" style="flex:${v || 0}"></i>`).join("")}</div>` +
+          `<ul class="rd-kv">${parts
+            .filter((p) => p[1])
+            .map(([c, v, l]) => `<li><i class="m-${c}"></i>${n0(v)} ${l}</li>`)
+            .join("")}` +
+          (L.furniture
+            ? `<li class="rd-dim"><i class="m-f"></i>${n0(L.furniture)} headers and footers set aside</li>`
+            : "") +
+          `</ul>` +
+          (tech && L.rows
+            ? `<p class="rd-mono">${n0(L.rows)} table rows · ${n0(L.characters)} chars</p>`
+            : "") +
+          `<p class="rd-cap">${tech ? "Columns found by their grid; repeated page furniture excluded from the index." : "Tables stay tables, so a label keeps its value."}</p>`;
+        void total;
+      }
+      if (f.id === "records") {
+        const recs = g.records ?? [];
+        body =
+          `<ul class="rd-recs">${recs
+            .slice(0, 9)
+            .map(
+              (r) =>
+                `<li class="a-${AUTH[r.authority] ?? "unk"}"><span>p.${esc(r.pages?.join("-") ?? r.n)}</span><b>${esc(r.title.toLowerCase())}</b>${r.status ? `<small>${esc(r.status)}</small>` : ""}${r.patient ? `<code>${esc(r.patient)}</code>` : ""}</li>`,
+            )
+            .join("")}</ul>` +
+          `<p class="rd-cap">${recs.length > 1 ? `${recs.length} records in one file` : "One record"}${g.graph.patients ? ` · ${g.graph.patients} patient${g.graph.patients > 1 ? "s" : ""}` : ""}${g.graph.sameName ? " · same name, different ID: kept apart" : ""}. ${tech ? "Teal: signed/final/posted. Amber: estimate/draft/preliminary." : "Signed and final records outrank estimates and drafts."}</p>`;
+      }
+      if (f.id === "facts") {
+        const samples = (g.records ?? [])
+          .filter((r) => r.authority === "authoritative")
+          .sort((a, b) => b.n - a.n)
+          .flatMap((r) => r.sample)
+          .slice(0, 3);
+        body =
+          `<div class="rd-big"><span><b>${n0(g.graph.facts)}</b>facts</span><span><b>${n0(g.graph.labRows)}</b>lab rows</span><span><b>${n0(g.graph.supersedes + g.graph.corrections)}</b>replaced</span></div>` +
+          `<ul class="rd-facts">${samples.map((x) => `<li><span>${esc(x.label)}</span><b>${esc(x.value)}</b></li>`).join("")}</ul>` +
+          `<p class="rd-cap">${g.graph.corrections ? `${g.graph.corrections} lab value corrected by an amendment. ` : ""}${g.graph.supersedes ? `${g.graph.supersedes} earlier value${g.graph.supersedes > 1 ? "s" : ""} replaced by a signed or final record.` : "Every fact keeps the exact line it came from."}</p>`;
+      }
+      if (f.id === "numbers") {
+        const lk = g.lookup;
+        const maxIdf = Math.max(...lk.terms.map((t) => t.idf), 0.01);
+        const maxScore = Math.max(...lk.hits.map((h) => h.score), 0.01);
+        const vec = g.passage?.vector ?? [];
+        const maxW = Math.max(...vec.map((v) => v.w), 0.01);
+        body =
+          `<p class="rd-q">Looking up “${esc(lk.query)}”</p>` +
+          `<ul class="rd-idf">${lk.terms.map((t, i) => `<li><span class="t${i % 4}">${esc(t.t)}</span>${bar(t.idf, maxIdf, "t" + (i % 4))}<code>${t.idf.toFixed(3)}</code></li>`).join("")}</ul>` +
+          `<ul class="rd-hits">${lk.hits
+            .slice(0, 3)
+            .map(
+              (h) =>
+                `<li><span>${esc((h.heading || "passage " + h.ordinal).toLowerCase())}</span><i class="rd-stack" style="--w:${((h.score / maxScore) * 100).toFixed(1)}%">${h.parts.map((p, i) => (p ? `<i class="t${i % 4}" style="flex:${p}"></i>` : "")).join("")}</i><code>${h.score.toFixed(2)}</code></li>`,
+            )
+            .join("")}</ul>` +
+          (vec.length
+            ? `<div class="rd-vec" title="The top passage as numbers: one weight per word">${vec.map((v) => `<i style="--h:${((v.w / maxW) * 100).toFixed(0)}%" title="${esc(v.t)} ${v.w}"></i>`).join("")}</div>`
+            : "") +
+          `<p class="rd-cap">${
+            tech
+              ? `idf = ln(1 + (N − df + 0.5)/(df + 0.5)), N = ${g.index.bundlePassages} passages · ${n0(g.index.vocabulary)} terms here. Meaning vectors: ${g.dense.state === "on" ? `${g.passage?.embedding?.dims ?? ""}-d, ${g.dense.embedded} passages` : g.dense.state === "pending" ? "computing in the background" : "off on this host (memory)"}.`
+              : `Every word gets a weight. Rare words decide; words found everywhere (${esc(lk.terms.reduce((a, t) => (t.idf < a.idf ? t : a), lk.terms[0])?.t ?? "")}) count for almost nothing. The best-scoring passage is what an answer is read from.`
+          }</p>`;
+      }
+      if (f.id === "graph") body = miniGraph(g.graph.mini, tech, g.graph);
+      return `<li class="rd-fr" data-f="${f.id}"><em>${f.n}</em><b>${tech ? f.tech : f.plain}</b>${body}</li>`;
+    }).join("");
+    film.innerHTML = html;
+    // Follow the newest frame, like a film advancing.
+    const last = [...film.querySelectorAll(".rd-fr:not(.wait)")].pop();
+    if (last && !reduced())
+      film.scrollTo({
+        left: last.offsetLeft - film.offsetLeft - 8,
+        behavior: "smooth",
+      });
+  }
+
+  function miniGraph(mini, tech, gg) {
+    const nodes = mini?.nodes ?? [];
+    const edges = mini?.edges ?? [];
+    if (!nodes.length)
+      return `<p class="rd-cap">No records with linked facts in this file.</p>`;
+    // Four columns: patients, records, values in force, values replaced.
+    // A replaced value sits level with the value that replaced it, so each
+    // coral link reads left to right: "this one, instead of that one".
+    const col = (n) =>
+      n.kind === "patient"
+        ? 0
+        : n.kind === "document"
+          ? 1
+          : n.status === "superseded"
+            ? 3
+            : 2;
+    const cols = [[], [], [], []];
+    for (const n of nodes) cols[col(n)].push(n);
+    const sup = edges.filter((e) => e.kind === "supersedes");
+    cols[3].sort(
+      (a, b) =>
+        cols[2].findIndex((n) =>
+          sup.some((e) => e.to === a.id && e.from === n.id),
+        ) -
+        cols[2].findIndex((n) =>
+          sup.some((e) => e.to === b.id && e.from === n.id),
+        ),
+    );
+    const W = 230,
+      H = Math.max(120, Math.max(...cols.map((c) => c.length)) * 14 + 20);
+    const pos = new Map();
+    cols.forEach((c, i) =>
+      c.forEach((n, j) =>
+        pos.set(n.id, {
+          x: 14 + i * ((W - 28) / 3),
+          y: 12 + ((j + 0.5) * (H - 24)) / c.length,
+        }),
+      ),
+    );
+    const path = (a, b) =>
+      `M${a.x},${a.y} C${(a.x + b.x) / 2},${a.y} ${(a.x + b.x) / 2},${b.y} ${b.x},${b.y}`;
+    const svg =
+      `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Records, patients and replaced values">` +
+      edges
+        .map((e) => {
+          const a = pos.get(e.from),
+            b = pos.get(e.to);
+          if (!a || !b) return "";
+          const cls =
+            e.kind === "supersedes"
+              ? "e-sup"
+              : e.kind.startsWith("same name")
+                ? "e-id"
+                : e.kind === "records"
+                  ? "e-rec"
+                  : "e-has";
+          return e.kind.startsWith("same name")
+            ? `<path class="${cls}" d="M${a.x},${a.y} Q${a.x - 14},${(a.y + b.y) / 2} ${b.x},${b.y}"/>`
+            : `<path class="${cls}" d="${path(a, b)}"/>`;
+        })
+        .join("") +
+      nodes
+        .map((n) => {
+          const p = pos.get(n.id);
+          const cls =
+            n.kind === "patient"
+              ? "n-pat"
+              : n.kind === "document"
+                ? `n-rec a-${AUTH[n.authority] ?? "unk"}`
+                : n.status === "superseded"
+                  ? "n-old"
+                  : "n-val";
+          return `<circle class="${cls}" cx="${p.x}" cy="${p.y}" r="${n.kind === "patient" ? 5 : 3.4}"><title>${esc(n.label)}</title></circle>`;
+        })
+        .join("") +
+      `</svg>`;
+    return (
+      `<div class="rd-graph">${svg}<div class="rd-glab"><span>patients</span><span>records</span><span>in force</span><span>replaced</span></div></div>` +
+      (mini.replaced?.length
+        ? `<ul class="rd-rep">${mini.replaced
+            .slice(0, 3)
+            .map(
+              (r) =>
+                `<li><span>${esc(r.field)}</span><b>${esc(r.now)}</b> <s>${esc(r.was)}</s>${r.wasStatus ? ` <small>${esc(r.wasStatus)}</small>` : ""}</li>`,
+            )
+            .join("")}</ul>`
+        : "") +
+      `<p class="rd-cap">${tech ? `${gg.records} record nodes · ${gg.supersedes} supersedes · ${gg.corrections} corrects · ${gg.sameName} identity split. Every value node cites its line.` : "Coral lines: an earlier value replaced by a later, signed one. Red: same name, different person. Open Memory graph to explore it all."}</p>`
+    );
+  }
+
   function logLine(e) {
     switch (e.k) {
       case "open":
@@ -604,6 +897,8 @@
         return "OCR overran: kept the text pages, marked the scan unread";
       case "cache":
         return "identical file read recently: reused";
+      case "ocr-wait":
+        return "waiting for the OCR engine (one file at a time)";
       default:
         return e.k;
     }
@@ -640,15 +935,25 @@
       clicks.push(...drops.slice(dropsSeen));
       dropsSeen = drops.length;
       for (const d of docs) {
-        if (offsets.has(d.id) || !d.id) continue;
+        if (!d.id) continue;
+        // A placeholder still in the browser has no server zero yet.
+        if (d.status === "sending") {
+          offsets.set(d.id, 0);
+          continue;
+        }
+        if (offsets.has(d.id) && !(offsets.get(d.id) === 0 && d.local))
+          continue;
         const live = !TERMINAL.has(d.status);
-        const drop = live ? clicks.shift() : null;
+        const drop = d.local?.since ?? (live ? clicks.shift() : null);
         const serverZero = received - (d.progress?.age ?? 0);
         offsets.set(d.id, drop != null ? Math.max(0, serverZero - drop) : 0);
       }
       if (replay && !docs.some((d) => d.id === replay.id)) replay = null;
       paint();
       loop();
+    },
+    tick() {
+      paint();
     },
     focus(id) {
       focusId = id;

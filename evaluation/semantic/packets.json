@@ -1,0 +1,498 @@
+{
+ "note": "Hard held-out packets (2026-11-04): three fictional consolidated files (evaluation/packets/build.py) unlike the hospital packet the record layer was developed on: other wording, other domains (clinic, procurement, lease), British spelling, Indian digit grouping, label: value lines as well as tables, a second same-name patient. Questions and gold were written from the documents BEFORE either build was run, and run ONCE against main and the branch with no code change in between. Same author as the code, so not independent. firstNot: must not be what the answer leads with (naming a superseded value as superseded is allowed).",
+ "workspaces": {
+  "clinic": [
+   "../packets/riverbend-clinic-packet.pdf"
+  ],
+  "proc": [
+   "../packets/procurement-packet.pdf"
+  ],
+  "lease": [
+   "../packets/lease-packet.pdf"
+  ]
+ },
+ "cases": [
+  {
+   "id": "c01",
+   "case": "ws:clinic",
+   "q": "What is RB-30211's haemoglobin?",
+   "kind": "answer",
+   "must": [
+    [
+     "12.9"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "8.9"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "c02",
+   "case": "ws:clinic",
+   "q": "What was the haemoglobin before it was corrected?",
+   "kind": "answer",
+   "must": [
+    [
+     "8.9"
+    ],
+    [
+     "12.9"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "c03",
+   "case": "ws:clinic",
+   "q": "What is Ravi Kumar's vitamin B12?",
+   "kind": "clarify_or_answer",
+   "must": [
+    [
+     "RB-30244"
+    ]
+   ],
+   "mustNot": [
+    "RB-30211's Vitamin B12"
+   ],
+   "critical": "patient_mix"
+  },
+  {
+   "id": "c04",
+   "case": "ws:clinic",
+   "q": "what's my B12 level",
+   "kind": "clarify_or_answer",
+   "must": [
+    [
+     "RB-30244"
+    ]
+   ],
+   "mustNot": [
+    "RB-30211's Vitamin B12"
+   ],
+   "critical": "patient_mix"
+  },
+  {
+   "id": "c05",
+   "case": "ws:clinic",
+   "q": "When was the patient discharged?",
+   "kind": "answer",
+   "must": [
+    [
+     "05 Nov",
+     "5 Nov"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "03 Nov",
+    "3 Nov"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "c06",
+   "case": "ws:clinic",
+   "q": "Was the patient discharged on 3 November?",
+   "kind": "answer",
+   "must": [
+    [
+     "05 Nov",
+     "5 Nov"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "Yes"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "c07",
+   "case": "ws:clinic",
+   "q": "How much does the patient still owe?",
+   "kind": "answer",
+   "must": [
+    [
+     "4,050"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "9,000",
+    "6,050"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "c08",
+   "case": "ws:clinic",
+   "q": "What was the total bill?",
+   "kind": "answer",
+   "must": [
+    [
+     "24,050"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "25,700"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "c09",
+   "case": "ws:clinic",
+   "q": "Was the deposit received from the patient?",
+   "kind": "answer",
+   "must": [
+    [
+     "2,000"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "c10",
+   "case": "ws:clinic",
+   "q": "Who signed the discharge note?",
+   "kind": "answer",
+   "must": [
+    [
+     "Anita Rao"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "c11",
+   "case": "ws:clinic",
+   "q": "Was insulin started?",
+   "kind": "answer",
+   "must": [
+    [
+     "Not started"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "Consider insulin"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "c12",
+   "case": "ws:clinic",
+   "q": "Which medicines was he discharged on?",
+   "kind": "answer",
+   "must": [
+    [
+     "Metformin"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "c13",
+   "case": "ws:clinic",
+   "q": "Should I start insulin?",
+   "kind": "decline",
+   "must": [],
+   "mustNot": []
+  },
+  {
+   "id": "c14",
+   "case": "ws:clinic",
+   "q": "How much did the insurer pay?",
+   "kind": "answer",
+   "must": [
+    [
+     "18,000"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "c15",
+   "case": "ws:clinic",
+   "q": "What is the HbA1c?",
+   "kind": "answer",
+   "must": [
+    [
+     "7.4"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "c16",
+   "case": "ws:clinic",
+   "q": "How much were the room charges?",
+   "kind": "answer",
+   "must": [
+    [
+     "16,000"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "18,000"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "p01",
+   "case": "ws:proc",
+   "q": "What is the total price of the order?",
+   "kind": "answer",
+   "must": [
+    [
+     "11,900"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "12,400"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "p02",
+   "case": "ws:proc",
+   "q": "Was the 12,400 quote approved?",
+   "kind": "answer",
+   "must": [
+    [
+     "11,900"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "Yes"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "p03",
+   "case": "ws:proc",
+   "q": "How much is still owed to the supplier?",
+   "kind": "answer",
+   "must": [
+    [
+     "6,900"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "11,900",
+    "12,400"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "p04",
+   "case": "ws:proc",
+   "q": "How much has been paid so far?",
+   "kind": "answer",
+   "must": [
+    [
+     "5,000"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "p05",
+   "case": "ws:proc",
+   "q": "When were the chairs delivered?",
+   "kind": "answer",
+   "must": [
+    [
+     "14 Nov"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "10 Nov"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "p06",
+   "case": "ws:proc",
+   "q": "Were the chairs delivered on 10 November?",
+   "kind": "answer",
+   "must": [
+    [
+     "14 Nov"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "Yes"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "p07",
+   "case": "ws:proc",
+   "q": "Who approved the purchase order?",
+   "kind": "answer",
+   "must": [
+    [
+     "Priya Nair"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "p08",
+   "case": "ws:proc",
+   "q": "When is the balance due?",
+   "kind": "answer",
+   "must": [
+    [
+     "18 Dec"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "p09",
+   "case": "ws:proc",
+   "q": "How many chairs arrived, and were any damaged?",
+   "kind": "answer",
+   "must": [
+    [
+     "40 chairs",
+     "40"
+    ],
+    [
+     "0 damaged",
+     "damaged"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "p10",
+   "case": "ws:proc",
+   "q": "What did delivery and assembly cost in the order?",
+   "kind": "answer",
+   "must": [
+    [
+     "1,100"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "1,200"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "p11",
+   "case": "ws:proc",
+   "q": "What is the warranty period on the chairs?",
+   "kind": "abstain",
+   "must": [],
+   "mustNot": [],
+   "critical": "false_accept"
+  },
+  {
+   "id": "l01",
+   "case": "ws:lease",
+   "q": "What will the rent be from January 2027?",
+   "kind": "answer",
+   "must": [
+    [
+     "48,000"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "52,000"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "l02",
+   "case": "ws:lease",
+   "q": "What was the rent in the original lease?",
+   "kind": "answer",
+   "must": [
+    [
+     "45,000"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "l03",
+   "case": "ws:lease",
+   "q": "Was the rent raised to 52,000?",
+   "kind": "answer",
+   "must": [
+    [
+     "48,000"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "Yes"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "l04",
+   "case": "ws:lease",
+   "q": "How much is the security deposit?",
+   "kind": "answer",
+   "must": [
+    [
+     "1,35,000"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "l05",
+   "case": "ws:lease",
+   "q": "Who signed the lease?",
+   "kind": "answer",
+   "must": [
+    [
+     "Meera Iyer"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "l06",
+   "case": "ws:lease",
+   "q": "Is there a parking fee?",
+   "kind": "abstain",
+   "must": [],
+   "mustNot": [],
+   "critical": "false_accept"
+  },
+  {
+   "id": "l07",
+   "case": "ws:lease",
+   "q": "january 2027 se kiraya kitna hoga?",
+   "kind": "answer",
+   "must": [
+    [
+     "48,000"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "52,000"
+   ],
+   "critical": "substitution",
+   "lang": "hinglish"
+  }
+ ]
+}

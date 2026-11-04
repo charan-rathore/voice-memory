@@ -1377,6 +1377,55 @@ function howFar(t, question) {
 }
 
 export function clinicalAnswer(question, reports) {
+  return namedPatient(question, reports, clinicalAnswer0(question, reports));
+}
+
+/**
+ * Reports holding more than one verified patient: an answer about one of
+ * them says whose result it is, unless the question already named them
+ * ("what's my B12?" in a file with two Ravi Kumars must not answer "Your
+ * Vitamin B12 result is 180" when 180 is RB-30244's).
+ */
+function namedPatient(question, reports, out) {
+  if (!out?.spoken || !out.used?.length) return out;
+  // Only where identity can actually be confused: two verified patient IDs
+  // that print the same name ("Ravi Kumar", RB-30211 and RB-30244).
+  const idsByName = new Map();
+  for (const r of reports ?? []) {
+    const id = subjectOf(r);
+    const name = r.meta?.patient?.name?.trim().toLowerCase();
+    if (id.startsWith("doc:") || !name) continue;
+    (idsByName.get(name) ?? idsByName.set(name, new Set()).get(name)).add(id);
+  }
+  const confusable = new Set(
+    [...idsByName.values()]
+      .filter((ids) => ids.size > 1)
+      .flatMap((ids) => [...ids]),
+  );
+  if (!confusable.size) return out;
+  const whose = new Set(
+    out.used
+      .map((u) => (u?.report ? subjectOf(u.report) : null))
+      .filter(Boolean),
+  );
+  if (whose.size !== 1) return out;
+  const pid = [...whose][0];
+  if (!confusable.has(pid) || String(question).toUpperCase().includes(pid))
+    return out;
+  const lang = out.lang ?? detectLang(question);
+  const spoken =
+    lang === "en"
+      ? /\bYour (\S[^.]*?) result is\b/.test(out.spoken)
+        ? out.spoken.replace(
+            /\bYour (\S[^.]*?) result is\b/,
+            `${pid}'s $1 result is`,
+          )
+        : `For ${pid}: ${out.spoken}`
+      : `${pid}: ${out.spoken}`;
+  return { ...out, spoken, patient: pid };
+}
+
+function clinicalAnswer0(question, reports) {
   const out = answerFor(question, reports);
   // "What is his TSH?" after "I uploaded my dad's report": the results are
   // not the caller's, so the English answer says "The TSH result", never

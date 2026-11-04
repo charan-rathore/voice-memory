@@ -7,7 +7,7 @@
     "test": "node --test --test-force-exit tests/test.mjs tests/motion-math.test.mjs tests/paraphrase.test.mjs tests/spoken-normalize.test.mjs tests/voicelab-score.test.mjs tests/retrieval-core.test.mjs tests/memorable-json.test.mjs tests/dense-guard.test.mjs tests/budget.test.mjs tests/spoken-repair.test.mjs tests/semantic.test.mjs tests/vernacular.test.mjs tests/dense-context.test.mjs tests/visual-insight.test.mjs tests/rerank.test.mjs tests/line-index.test.mjs",
     "start": "node server.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "test:boundaries": "node --test --test-force-exit tests/server.test.mjs tests/voice-adapter.test.mjs tests/synthesis.test.mjs tests/provider.test.mjs tests/retrieval-bridge.test.mjs tests/fictional-sample.test.mjs tests/cache.test.mjs tests/motion.test.mjs tests/persistence.test.mjs tests/public-api.test.mjs tests/public-narrate.test.mjs tests/voice-companion.test.mjs tests/mcp.test.mjs tests/byo-voice.test.mjs",
+    "test:boundaries": "node --test --test-force-exit tests/server.test.mjs tests/voice-adapter.test.mjs tests/synthesis.test.mjs tests/provider.test.mjs tests/retrieval-bridge.test.mjs tests/fictional-sample.test.mjs tests/cache.test.mjs tests/motion.test.mjs tests/persistence.test.mjs tests/public-api.test.mjs tests/public-narrate.test.mjs tests/voice-companion.test.mjs tests/mcp.test.mjs tests/byo-voice.test.mjs tests/record-facts.test.mjs",
     "test:browser": "node tests/browser-check.mjs && node tests/notes-check.mjs && node tests/site-check.mjs && node tests/voice-sync-check.mjs",
     "format:check": "prettier --check \"src/*.{mjs,ts}\" \"tests/*.mjs\" \"tests/vendor/*\" \"scripts/*.mjs\" \"*.{mjs,json}\" \"mcp/*.mjs\" public/* memory/* evaluation/vault/*",
     "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:vault && npm run test:browser && npm run test:graph",
@@ -29,7 +29,8 @@
     "build:site": "node scripts/build-site-motion.mjs",
     "mcp": "node mcp/server.mjs",
     "bench:outside": "bash evaluation/outside/fetch.sh && node evaluation/outside-bench.mjs",
-    "dev:site": "node scripts/site-dev.mjs"
+    "dev:site": "node scripts/site-dev.mjs",
+    "eval:packets": "node evaluation/semantic/run.mjs . current packets.json && node evaluation/semantic/run.mjs . current packets-heldout2.json && node evaluation/semantic/run.mjs . current packets-heldout3.json"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "5.2.8",

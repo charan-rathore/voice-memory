@@ -336,16 +336,16 @@ export function normalizeVernacular(text) {
 const CONDITION =
   /\b(diabet\w*|prediabet\w*|an(a)?emi\w*|hypo\w*|hyper\w*|thyroid (?:disease|problem|issue)|kidney (?:disease|failure|problem)|ckd|cancer|infection|iron deficiency|pcos|sugar ki bimari|khoon ki kami|bimari)\b|डायबिटीज|मधुमेह|एनीमिया|खून की कमी|बीमारी|थायरॉइड की समस्या/i;
 const MED =
-  /\b(statins?|aspirin|antibiotics?|blood thinners?|drugs?|therapy|tablets?|pills?|medicines?|medication|meds|supplements?|thyroxine|levothyroxine|metformin|insulin|iron|vitamin|goli|goliyan|dawa|dawai|dawaai|injection|treatment)\b|गोली|दवा|दवाई|इंजेक्शन|इलाज/i;
+  /\b(painkillers?|pain ?relief|steroids?|antacids?|statins?|aspirin|antibiotics?|blood thinners?|drugs?|therapy|tablets?|pills?|medicines?|medication|meds|supplements?|thyroxine|levothyroxine|metformin|insulin|iron|vitamin|goli|goliyan|dawa|dawai|dawaai|injection|treatment)\b|गोली|दवा|दवाई|इंजेक्शन|इलाज/i;
 const WHO =
   "(?:i|he|she|they|we|my\\s+(?:dad|father|mother|mom|mum|mummy|papa|son|daughter|wife|husband|parents?|grand(?:father|mother|pa|ma))|papa|mummy|dad|mom)";
 const ADVICE = [
   new RegExp(
-    `\\b(should|can|could|must|do|does)\\s+${WHO}\\s+(take|stop|start|continue|increase|reduce|skip|quit|double|lower|raise|change|go on|be put on|get)\\b`,
+    `\\b(should|can|could|must|do|does)\\s+${WHO}\\s+(take|stop|start|continue|increase|reduce|skip|quit|double|lower|raise|change|go on|be put on|get|give|administer)\\b`,
     "i",
   ),
   // English: should I take / stop / start / how much ... should I
-  /\b(should|can|could|must|do)\s+i\s+(take|stop|start|continue|increase|reduce|skip|quit|double|lower|raise|change)\b/i,
+  /\b(should|can|could|must|do)\s+i\s+(take|stop|start|continue|increase|reduce|skip|quit|double|lower|raise|change|give|administer)\b/i,
   /\bhow (?:much|many)\b.{0,30}\b(should|do|can)\s+i\b/i,
   /\b(dose|dosage|prescri\w+)\b/i,
   // Hinglish: leni chahiye / band kar doon / chhod doon
@@ -375,7 +375,15 @@ const DECISION =
 export function adviceKind(text) {
   const t = String(text ?? "");
   if (DECISION.test(t)) return "decision";
+  // "Was iron prescribed?", "Is there a prescription on the discharge
+  // list?": a question about what the record says, not a request for
+  // advice. Any advice verb keeps it advice.
+  const recordLookup =
+    /^\s*(?:was|were|did|has|had|is there|are there|what was|which)\b/i.test(
+      t,
+    ) && !/\b(should|can|could|must|ought)\b/i.test(t);
   if (
+    !recordLookup &&
     ADVICE.some((re) => re.test(t)) &&
     (MED.test(t) || /\b(dose|dosage)\b|खुराक/i.test(t))
   )

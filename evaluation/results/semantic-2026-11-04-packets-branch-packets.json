@@ -1,0 +1,181 @@
+{
+  "label": "packets-branch",
+  "commit": "fa8ff7f",
+  "date": "2026-11-04",
+  "cases": 34,
+  "answerableCorrect": {
+    "k": 19,
+    "n": 32,
+    "ci95": "42.3%–74.5%"
+  },
+  "abstentionCorrect": {
+    "k": 2,
+    "n": 2,
+    "ci95": "34.2%–100.0%"
+  },
+  "falseAcceptance": {
+    "k": 0,
+    "n": 2
+  },
+  "unnecessaryRefusals": 7,
+  "criticalFailures": [
+    {
+      "id": "p10",
+      "class": "substitution",
+      "q": "What did delivery and assembly cost in the order?",
+      "said": "Quotation q-7781 (draft) gives Delivery and assembly: 1 · USD 1,200.00."
+    }
+  ],
+  "latencyMs": {
+    "p50": 7,
+    "p95": 38,
+    "max": 63
+  },
+  "semantic": {
+    "configured": false,
+    "provider": "gemini",
+    "enabled": false,
+    "model": "gemini-3.8-flash",
+    "search": true,
+    "lastOkAt": null,
+    "lastError": null,
+    "budget": {
+      "calls": 0,
+      "search": 0,
+      "usd": 0,
+      "refused": 0,
+      "errors": 0,
+      "cached": 0,
+      "caps": {
+        "callsPerDay": 500,
+        "searchPerDay": 100,
+        "usdPerDay": 2,
+        "callsPerIpHour": 40,
+        "inUsdPerM": 0.75,
+        "outUsdPerM": 3.75,
+        "searchUsd": 0.014
+      }
+    }
+  },
+  "failures": [
+    {
+      "id": "c03",
+      "q": "What is Ravi Kumar's vitamin B12?",
+      "kind": "clarify_or_answer",
+      "verdict": "LATEST",
+      "said": "Your Vitamin B12 result is 180 pg/mL, from 28 October 2026. That's below this lab's printed range of 200 to 900. Some general background: Vitamin B12 helps the body make red blood cells and keeps nerves healthy. Your doctor can read it alongside how you feel, your medicines and your other results.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "c04",
+      "q": "what's my B12 level",
+      "kind": "clarify_or_answer",
+      "verdict": "LATEST",
+      "said": "Your Vitamin B12 result is 180 pg/mL, from 28 October 2026. That's below this lab's printed range of 200 to 900. Some general background: Vitamin B12 helps the body make red blood cells and keeps nerves healthy. Your doctor can read it alongside how you feel, your medicines and your other results.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "c05",
+      "q": "When was the patient discharged?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Discharge note (p.5, signed / final) gives Discharge medications: Metformin 500 mg twice daily.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "c06",
+      "q": "Was the patient discharged on 3 November?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Not according to the most authoritative record. Discharge note (p.5, signed / final) gives Discharge medications: Metformin 500 mg twice daily.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p02",
+      "q": "Was the 12,400 quote approved?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p06",
+      "q": "Were the chairs delivered on 10 November?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p07",
+      "q": "Who approved the purchase order?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p09",
+      "q": "How many chairs arrived, and were any damaged?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p10",
+      "q": "What did delivery and assembly cost in the order?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Quotation q-7781 (draft) gives Delivery and assembly: 1 · USD 1,200.00.",
+      "bad": [
+        "1,200"
+      ],
+      "notes": []
+    },
+    {
+      "id": "l01",
+      "q": "What will the rent be from January 2027?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "l02",
+      "q": "What was the rent in the original lease?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "l03",
+      "q": "Was the rent raised to 52,000?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Not according to the most authoritative record. Lease agreement (signed) gives Monthly rent: INR 45,000.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "l07",
+      "q": "january 2027 se kiraya kitna hoga?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    }
+  ]
+}

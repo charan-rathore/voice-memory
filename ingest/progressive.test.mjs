@@ -142,3 +142,25 @@ test("a timeout before any page was read still fails cleanly", async () => {
   assert.equal(r.ok, false);
   assert.equal(r.code, "timeout");
 });
+
+test("files read in parallel take turns at OCR, never OCR at the same time", async () => {
+  const t0 = Date.now();
+  const spans = [[], []];
+  const waited = [false, false];
+  const run = (i) =>
+    ingestFile(MIXED, `mixed-${i}.pdf`, {
+      onEvent: (e) => {
+        if (e.k === "ocr-wait") waited[i] = true;
+        if (e.k === "ocr-start") spans[i].push(Date.now() - t0);
+        if (e.k === "ocr-done") spans[i].push(Date.now() - t0);
+      },
+    });
+  const [a, b] = await Promise.all([run(0), run(1)]);
+  assert.equal(a.ok && b.ok, true);
+  assert.deepEqual(waited, [true, true], "both asked for the OCR turn");
+  const [[s0, e0], [s1, e1]] = spans;
+  assert.ok(
+    e0 <= s1 || e1 <= s0,
+    `OCR intervals overlap: ${spans.join(" | ")}`,
+  );
+});

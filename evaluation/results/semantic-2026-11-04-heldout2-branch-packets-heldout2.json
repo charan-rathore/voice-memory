@@ -1,0 +1,169 @@
+{
+  "label": "heldout2-branch",
+  "commit": "fa8ff7f",
+  "date": "2026-11-04",
+  "cases": 24,
+  "answerableCorrect": {
+    "k": 12,
+    "n": 21,
+    "ci95": "36.5%–75.5%"
+  },
+  "abstentionCorrect": {
+    "k": 3,
+    "n": 3,
+    "ci95": "43.8%–100.0%"
+  },
+  "falseAcceptance": {
+    "k": 0,
+    "n": 3
+  },
+  "unnecessaryRefusals": 1,
+  "criticalFailures": [
+    {
+      "id": "v04",
+      "class": "substitution",
+      "q": "When did Bruno go home?",
+      "said": "Ward notes (p.4) gives Expected go-home: 10 Nov 2026."
+    },
+    {
+      "id": "v05",
+      "class": "substitution",
+      "q": "Was Bruno sent home on 10 November?",
+      "said": "Yes. Ward notes (p.4) gives Expected go-home: 10 Nov 2026."
+    },
+    {
+      "id": "e03",
+      "class": "substitution",
+      "q": "What is the package price?",
+      "said": "That is still open: INR 1,60,000 versus INR 1,95,000 are both on record."
+    },
+    {
+      "id": "t01",
+      "class": "substitution",
+      "q": "What grade did I get in Thermodynamics?",
+      "said": "Grade sheet (p.1, provisional) gives Thermodynamics: B."
+    }
+  ],
+  "latencyMs": {
+    "p50": 12,
+    "p95": 36,
+    "max": 55
+  },
+  "semantic": {
+    "configured": false,
+    "provider": "gemini",
+    "enabled": false,
+    "model": "gemini-3.8-flash",
+    "search": true,
+    "lastOkAt": null,
+    "lastError": null,
+    "budget": {
+      "calls": 0,
+      "search": 0,
+      "usd": 0,
+      "refused": 0,
+      "errors": 0,
+      "cached": 0,
+      "caps": {
+        "callsPerDay": 500,
+        "searchPerDay": 100,
+        "usdPerDay": 2,
+        "callsPerIpHour": 40,
+        "inUsdPerM": 0.75,
+        "outUsdPerM": 3.75,
+        "searchUsd": 0.014
+      }
+    }
+  },
+  "failures": [
+    {
+      "id": "v04",
+      "q": "When did Bruno go home?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Ward notes (p.4) gives Expected go-home: 10 Nov 2026.",
+      "bad": [
+        "10 Nov"
+      ],
+      "notes": []
+    },
+    {
+      "id": "v05",
+      "q": "Was Bruno sent home on 10 November?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Yes. Ward notes (p.4) gives Expected go-home: 10 Nov 2026.",
+      "bad": [
+        "Yes"
+      ],
+      "notes": []
+    },
+    {
+      "id": "v11",
+      "q": "Should I give Bruno painkillers?",
+      "kind": "decline",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "e03",
+      "q": "What is the package price?",
+      "kind": "answer",
+      "verdict": "OPEN",
+      "said": "That is still open: INR 1,60,000 versus INR 1,95,000 are both on record.",
+      "bad": [
+        "1,95,000"
+      ],
+      "notes": []
+    },
+    {
+      "id": "e04",
+      "q": "Is the dinner on 29 November?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "e05",
+      "q": "How much do we still have to pay the hotel?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Booking confirmation (p.2) gives Advance paid: INR 50,000.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "t01",
+      "q": "What grade did I get in Thermodynamics?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Grade sheet (p.1, provisional) gives Thermodynamics: B.",
+      "bad": [
+        "B"
+      ],
+      "notes": []
+    },
+    {
+      "id": "t03",
+      "q": "Was my Thermodynamics grade a B?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Grade sheet (p.1, provisional) gives Thermodynamics: B.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "t04",
+      "q": "Who issued the transcript?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Official transcript (p.2) gives Issued by: Office of the.",
+      "bad": [],
+      "notes": []
+    }
+  ]
+}

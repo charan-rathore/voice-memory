@@ -1,0 +1,73 @@
+{
+  "label": "final-vernacular-heldout",
+  "commit": "fa8ff7f",
+  "date": "2026-11-04",
+  "cases": 24,
+  "answerableCorrect": {
+    "k": 20,
+    "n": 22,
+    "ci95": "72.2%–97.5%"
+  },
+  "abstentionCorrect": {
+    "k": 2,
+    "n": 2,
+    "ci95": "34.2%–100.0%"
+  },
+  "falseAcceptance": {
+    "k": 0,
+    "n": 2
+  },
+  "unnecessaryRefusals": 1,
+  "criticalFailures": [],
+  "latencyMs": {
+    "p50": 10,
+    "p95": 40,
+    "max": 82
+  },
+  "semantic": {
+    "configured": false,
+    "provider": "gemini",
+    "enabled": false,
+    "model": "gemini-3.8-flash",
+    "search": true,
+    "lastOkAt": null,
+    "lastError": null,
+    "budget": {
+      "calls": 0,
+      "search": 0,
+      "usd": 0,
+      "refused": 0,
+      "errors": 0,
+      "cached": 0,
+      "caps": {
+        "callsPerDay": 500,
+        "searchPerDay": 100,
+        "usdPerDay": 2,
+        "callsPerIpHour": 40,
+        "inUsdPerM": 0.75,
+        "outUsdPerM": 3.75,
+        "searchUsd": 0.014
+      }
+    }
+  },
+  "failures": [
+    {
+      "id": "w12",
+      "q": "kya mujhe thyroid ki problem hai",
+      "kind": "decline",
+      "verdict": "AMBIGUOUS_PATIENT",
+      "said": "Yeh reports ek se zyada logon ki hain (SYN-0001, SYN-0003). Main kiski report dekhoon?",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "w15",
+      "q": "42 thousand wala revision approve ho gaya?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    }
+  ]
+}

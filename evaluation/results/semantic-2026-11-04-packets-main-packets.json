@@ -1,0 +1,263 @@
+{
+  "label": "packets-main",
+  "commit": "c7238f3",
+  "date": "2026-11-04",
+  "cases": 34,
+  "answerableCorrect": {
+    "k": 10,
+    "n": 32,
+    "ci95": "18.0%–48.6%"
+  },
+  "abstentionCorrect": {
+    "k": 2,
+    "n": 2,
+    "ci95": "34.2%–100.0%"
+  },
+  "falseAcceptance": {
+    "k": 0,
+    "n": 2
+  },
+  "unnecessaryRefusals": 16,
+  "criticalFailures": [
+    {
+      "id": "c05",
+      "class": "substitution",
+      "q": "When was the patient discharged?",
+      "said": "Planned discharge 03 Nov 2026. That's from riverbend clinic packet."
+    }
+  ],
+  "latencyMs": {
+    "p50": 7,
+    "p95": 41,
+    "max": 60
+  },
+  "semantic": {
+    "configured": false,
+    "provider": "gemini",
+    "enabled": false,
+    "model": "gemini-3.8-flash",
+    "search": true,
+    "lastOkAt": null,
+    "lastError": null,
+    "budget": {
+      "calls": 0,
+      "search": 0,
+      "usd": 0,
+      "refused": 0,
+      "errors": 0,
+      "cached": 0,
+      "caps": {
+        "callsPerDay": 500,
+        "searchPerDay": 100,
+        "usdPerDay": 2,
+        "callsPerIpHour": 40,
+        "inUsdPerM": 0.75,
+        "outUsdPerM": 3.75,
+        "searchUsd": 0.014
+      }
+    }
+  },
+  "failures": [
+    {
+      "id": "c03",
+      "q": "What is Ravi Kumar's vitamin B12?",
+      "kind": "clarify_or_answer",
+      "verdict": "LATEST",
+      "said": "Your Vitamin B12 result is 180 pg/mL, from 28 October 2026. That's below this lab's printed range of 200 to 900. Some general background: Vitamin B12 helps the body make red blood cells and keeps nerves healthy. Your doctor can read it alongside how you feel, your medicines and your other results.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "c04",
+      "q": "what's my B12 level",
+      "kind": "clarify_or_answer",
+      "verdict": "LATEST",
+      "said": "Your Vitamin B12 result is 180 pg/mL, from 28 October 2026. That's below this lab's printed range of 200 to 900. Some general background: Vitamin B12 helps the body make red blood cells and keeps nerves healthy. Your doctor can read it alongside how you feel, your medicines and your other results.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "c05",
+      "q": "When was the patient discharged?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Planned discharge 03 Nov 2026. That's from riverbend clinic packet.",
+      "bad": [
+        "03 Nov",
+        "3 Nov"
+      ],
+      "notes": []
+    },
+    {
+      "id": "c06",
+      "q": "Was the patient discharged on 3 November?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "c07",
+      "q": "How much does the patient still owe?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "The riverbend clinic packet: PATIENT NAME PATIENT ID",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "c08",
+      "q": "What was the total bill?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "c09",
+      "q": "Was the deposit received from the patient?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "c10",
+      "q": "Who signed the discharge note?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "c12",
+      "q": "Which medicines was he discharged on?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p01",
+      "q": "What is the total price of the order?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p02",
+      "q": "Was the 12,400 quote approved?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p03",
+      "q": "How much is still owed to the supplier?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p05",
+      "q": "When were the chairs delivered?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Ergonomic chair: qty 40, amount (usd) 11,200.00. That's from procurement packet.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p06",
+      "q": "Were the chairs delivered on 10 November?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p07",
+      "q": "Who approved the purchase order?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p09",
+      "q": "How many chairs arrived, and were any damaged?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "p10",
+      "q": "What did delivery and assembly cost in the order?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "l01",
+      "q": "What will the rent be from January 2027?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "l02",
+      "q": "What was the rent in the original lease?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "l03",
+      "q": "Was the rent raised to 52,000?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "l05",
+      "q": "Who signed the lease?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "SIGNED Flat 4B, Lakeshore Towers. That's from lease packet.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "l07",
+      "q": "january 2027 se kiraya kitna hoga?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    }
+  ]
+}
