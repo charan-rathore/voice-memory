@@ -17,6 +17,7 @@
 
   const state = {
     drops: [],
+    digestPolls: {},
     case: "health",
     live: false,
     cases: Object.fromEntries((snap.cases ?? []).map((c) => [c.id, c])),
@@ -301,56 +302,115 @@
     syncCallScope();
     return w.id;
   }
+  // One upload over XHR: fetch cannot report upload progress, and the bytes
+  // actually leaving the browser are the first stage the reading view shows.
+  function sendFile(id, f, onBytes) {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open("POST", `/api/public/workspace/${id}/upload`);
+      x.setRequestHeader("content-type", "application/octet-stream");
+      x.setRequestHeader("x-file-name", encodeURIComponent(f.name));
+      x.timeout = 90000;
+      x.upload.onprogress = (e) =>
+        e.lengthComputable && onBytes(e.loaded, e.total);
+      x.onload = () => {
+        let body = null;
+        try {
+          body = JSON.parse(x.responseText);
+        } catch {}
+        if (x.status >= 200 && x.status < 300 && body?.document)
+          resolve(body.document);
+        else
+          reject(
+            new Error(
+              body?.error ||
+                (x.status >= 500
+                  ? "The engine is waking up. Try again in a moment."
+                  : "Upload failed."),
+            ),
+          );
+      };
+      x.onerror = () =>
+        reject(new Error("The upload did not reach the engine."));
+      x.ontimeout = () => reject(new Error("The upload timed out."));
+      x.send(f);
+    });
+  }
   async function uploadFiles(list) {
     const files = [...list].slice(0, 5);
     if (!files.length) return;
-    // When each file was dropped: the reading view's clock starts here.
+    if (state.case !== "own") setCase("own");
+    // Every file shows up the moment it is dropped, with what is really
+    // happening to it: connecting to the engine, then bytes sent, then the
+    // server's own progress. The reading view loads in parallel.
     const dropped = performance.now();
+    const local = files.map((f, i) => ({
+      id: `local:${dropped}:${i}`,
+      title: f.name,
+      filename: f.name,
+      status: f.size > 4 * 1048576 ? "failed" : "sending",
+      error:
+        f.size > 4 * 1048576 ? { message: `${f.name} is over 4 MB.` } : null,
+      bytes: f.size,
+      local: { phase: "connecting", sent: 0, total: f.size, since: dropped },
+      progress: { pages: [], log: [], counts: null, age: 0 },
+    }));
     for (const f of files) if (f.size <= 4 * 1048576) state.drops.push(dropped);
+    state.wsDocs = [
+      ...state.wsDocs.filter((d) => !String(d.id).startsWith("local:")),
+      ...local,
+    ];
+    renderUploads();
+    readingView();
     // Uploads must not wait for the demo cases to finish loading: visitor
     // workspaces are independent of them, so on a cold boot we retry the
-    // workspace create instead of turning the visitor away. (This gate was
-    // the reported "isn't taking a doc upload" failure.)
+    // workspace create instead of turning the visitor away.
     let id = null;
-    for (let attempt = 0; attempt < 6 && !id; attempt++) {
+    for (let attempt = 0; attempt < 8 && !id; attempt++) {
       try {
         id = await ensureWorkspace();
       } catch (e) {
-        if (attempt === 5) {
-          $("#upl-list").innerHTML =
-            `<li><b>The live engine is still waking up and the upload did not go through. Try again in a few seconds.</b></li>`;
+        for (const d of local)
+          if (d.status === "sending") d.local.phase = "waking";
+        renderUploads();
+        if (attempt === 7) {
+          for (const d of local)
+            if (d.status === "sending")
+              Object.assign(d, {
+                status: "failed",
+                error: {
+                  message:
+                    "The live engine is still waking up and the upload did not go through. Try again in a few seconds.",
+                },
+              });
+          renderUploads();
           return;
         }
-        $("#upl-list").innerHTML =
-          `<li><b>The live engine is still waking up. Retrying your upload…</b></li>`;
-        await new Promise((r) => setTimeout(r, 4000));
+        await new Promise((r) => setTimeout(r, 3000));
       }
     }
-    for (const f of files) {
-      try {
-        if (f.size > 4 * 1048576) throw new Error(`${f.name} is over 4 MB.`);
-        await api(
-          `/workspace/${id}/upload`,
-          {
-            method: "POST",
-            headers: {
-              "content-type": "application/octet-stream",
-              "x-file-name": encodeURIComponent(f.name),
-            },
-            body: f,
-          },
-          60000,
-        );
-      } catch (e) {
-        state.wsDocs.push({
-          title: f.name,
-          status: "failed",
-          error: { message: e.message },
-        });
-      }
-      refreshWorkspace();
-    }
-    if (state.case !== "own") setCase("own");
+    // All files at once: the engine reads them in parallel.
+    await Promise.all(
+      files.map(async (f, i) => {
+        const d = local[i];
+        if (d.status !== "sending") return;
+        d.local.phase = "sending";
+        renderUploads();
+        try {
+          const doc = await sendFile(id, f, (sent, total) => {
+            d.local.sent = sent;
+            d.local.total = total;
+            window.VMReading?.tick?.();
+          });
+          d.serverId = doc.id;
+          d.local.phase = "sent";
+          d.local.sentAt = performance.now();
+        } catch (e) {
+          Object.assign(d, { status: "failed", error: { message: e.message } });
+        }
+        refreshWorkspace();
+      }),
+    );
     pollWorkspace();
   }
   async function refreshWorkspace() {
@@ -362,7 +422,37 @@
           d.status === "failed" &&
           !st.documents.some((x) => x.title === d.title),
       );
-      state.wsDocs = [...st.documents, ...failed];
+      // A file still on its way has no server entry yet: keep its local
+      // placeholder; once the server lists it (by id, or by name before the
+      // upload reply has arrived), carry the drop time over.
+      const claimed = new Set(
+        state.wsDocs.map((d) => d.serverId).filter(Boolean),
+      );
+      for (const d of state.wsDocs)
+        if (d.local && !d.serverId && d.status !== "failed") {
+          const x = st.documents.find(
+            (x) =>
+              !claimed.has(x.id) &&
+              (x.filename === d.filename || x.title === d.title),
+          );
+          if (x) {
+            d.serverId = x.id;
+            claimed.add(x.id);
+          }
+        }
+      const pending = state.wsDocs.filter(
+        (d) =>
+          d.local &&
+          d.status !== "failed" &&
+          !st.documents.some((x) => x.id === d.serverId),
+      );
+      const docs = st.documents.map((x) => {
+        const was = state.wsDocs.find(
+          (d) => d.serverId === x.id || d.id === x.id,
+        );
+        return was?.local ? { ...x, local: was.local } : x;
+      });
+      state.wsDocs = [...docs, ...pending, ...failed];
       state.cases.own = {
         ...OWN,
         ready: st.ready,
@@ -393,7 +483,13 @@
     refreshWorkspace().then(() => {
       if (
         state.wsDocs.some(
-          (d) => !["ready", "needs_review", "failed"].includes(d.status),
+          (d) =>
+            !["ready", "needs_review", "failed"].includes(d.status) ||
+            // a settled document's digest arrives with the index rebuild
+            (d.digest == null &&
+              d.status !== "failed" &&
+              (state.digestPolls[d.id] = (state.digestPolls[d.id] ?? 0) + 1) <
+                8),
         )
       )
         pollTimer = setTimeout(pollWorkspace, 600);
@@ -414,6 +510,7 @@
       document.head.append(js);
     }).catch(() => (readingLoad = null)));
   const STAGE = {
+    sending: "Sending",
     uploaded: "Queued",
     validating: "Checking",
     parsing: "Reading",
@@ -458,6 +555,7 @@
   ["dragenter", "dragover"].forEach((ev) =>
     drop.addEventListener(ev, (e) => {
       e.preventDefault();
+      readingView();
       drop.classList.add("over");
     }),
   );
@@ -484,6 +582,7 @@
   function setCase(id, { quiet = false } = {}) {
     $("#upload").hidden = id !== "own";
     if (id === "own") {
+      readingView(); // ready before the first drop
       state.cases.own ??= { ...OWN, documents: [] };
       refreshWorkspace();
     }

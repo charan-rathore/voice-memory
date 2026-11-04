@@ -16,7 +16,7 @@ const root = resolve(
 );
 const label = process.argv[3] ?? "current";
 const casesFile = process.argv[4] ?? "cases.json";
-const { cases } = JSON.parse(
+const { cases, workspaces = {} } = JSON.parse(
   readFileSync(new URL("./" + casesFile, import.meta.url), "utf8"),
 );
 // The eval is one client asking many questions: lift the per-visitor
@@ -30,6 +30,43 @@ const srv = createLocalServer({ port: 0 });
 await new Promise((r) => srv.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${srv.address().port}`;
 await srv.loadPublicCases();
+
+// Cases over uploaded files: each named workspace gets its files through the
+// same upload route a visitor uses, and is asked once they are read.
+const wsIds = {};
+for (const [name, files] of Object.entries(workspaces)) {
+  const ws = await (
+    await fetch(base + "/api/public/workspace", { method: "POST" })
+  ).json();
+  for (const f of files) {
+    const r = await fetch(`${base}/api/public/workspace/${ws.id}/upload`, {
+      method: "POST",
+      headers: {
+        "x-file-name": f.split("/").pop(),
+        "content-type": "application/octet-stream",
+      },
+      body: readFileSync(new URL("./" + f, import.meta.url)),
+    });
+    if (r.status !== 202) throw Error(`upload ${f}: ${r.status}`);
+  }
+  for (let i = 0; i < 1200; i++) {
+    const st = await (
+      await fetch(`${base}/api/public/workspace/${ws.id}`)
+    ).json();
+    if (
+      st.ready &&
+      st.documents.length === files.length &&
+      st.documents.every((d) =>
+        ["ready", "needs_review", "failed"].includes(d.status),
+      )
+    )
+      break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  wsIds[name] = ws.id;
+}
+const caseId = (c) =>
+  c.case.startsWith("ws:") ? wsIds[c.case.slice(3)] : c.case;
 
 const ABSTAIN = new Set([
   "UNKNOWN",
@@ -58,7 +95,13 @@ function judge(c, r) {
   const mustOk = (c.must ?? []).every((group) =>
     group.some((n) => has(text, n)),
   );
-  const bad = (c.mustNot ?? []).filter((n) => has(text, n));
+  // firstNot: must not be what the answer LEADS with (its first sentence);
+  // naming a superseded value later, as superseded, is allowed.
+  const first = text.split(/(?<=[.!?])\s+/)[0] ?? "";
+  const bad = [
+    ...(c.mustNot ?? []).filter((n) => has(text, n)),
+    ...(c.firstNot ?? []).filter((n) => has(first, n)),
+  ];
   const notes = [];
   let ok;
   switch (c.kind) {
@@ -115,7 +158,7 @@ for (const c of cases) {
   const res = await fetch(base + "/api/public/ask", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ case: c.case, question: c.q }),
+    body: JSON.stringify({ case: caseId(c), question: c.q }),
   });
   const r = await res.json();
   const ms = performance.now() - t0;

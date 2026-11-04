@@ -1,0 +1,235 @@
+{
+ "note": "Third held-out set (2026-11-04): written after packets.json and packets-heldout2.json had both been used for development, and before this set was run; run once against main and the branch with no code change in between. Status words still unseen by the record layer (INDICATIVE, SANCTIONED, CLOSED), wording not coded for (EMI, handed over, promised ready by). Same author as the code, so not independent.",
+ "workspaces": {
+  "car": [
+   "../packets/car-service-packet.pdf"
+  ],
+  "loan": [
+   "../packets/home-loan-packet.pdf"
+  ]
+ },
+ "cases": [
+  {
+   "id": "s01",
+   "case": "ws:car",
+   "q": "What did the service cost in the end?",
+   "kind": "answer",
+   "must": [
+    [
+     "8,750"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "9,800"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "s02",
+   "case": "ws:car",
+   "q": "How much did the brake pads cost?",
+   "kind": "answer",
+   "must": [
+    [
+     "5,900"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "6,400"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "s03",
+   "case": "ws:car",
+   "q": "When did I get the car back?",
+   "kind": "answer",
+   "must": [
+    [
+     "17 Nov"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "16 Nov"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "s04",
+   "case": "ws:car",
+   "q": "Was the car ready on 16 November?",
+   "kind": "answer",
+   "must": [
+    [
+     "17 Nov"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "Yes"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "s05",
+   "case": "ws:car",
+   "q": "Is anything still due?",
+   "kind": "answer",
+   "must": [
+    [
+     "0.00"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "9,800"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "s06",
+   "case": "ws:car",
+   "q": "Who was my service advisor?",
+   "kind": "answer",
+   "must": [
+    [
+     "Rohit Das"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "s07",
+   "case": "ws:car",
+   "q": "What was the odometer reading at delivery?",
+   "kind": "answer",
+   "must": [
+    [
+     "48,210"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "s08",
+   "case": "ws:car",
+   "q": "Did they replace the timing belt?",
+   "kind": "abstain",
+   "must": [],
+   "mustNot": [],
+   "critical": "false_accept"
+  },
+  {
+   "id": "h01",
+   "case": "ws:loan",
+   "q": "What is the interest rate on my loan?",
+   "kind": "answer",
+   "must": [
+    [
+     "8.65"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "8.90"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "h02",
+   "case": "ws:loan",
+   "q": "How much loan was sanctioned?",
+   "kind": "answer",
+   "must": [
+    [
+     "42,00,000"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "45,00,000"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "h03",
+   "case": "ws:loan",
+   "q": "What will my EMI be?",
+   "kind": "answer",
+   "must": [
+    [
+     "36,850"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "40,200"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "h04",
+   "case": "ws:loan",
+   "q": "Is the interest rate 8.9%?",
+   "kind": "answer",
+   "must": [
+    [
+     "8.65"
+    ]
+   ],
+   "mustNot": [],
+   "firstNot": [
+    "Yes"
+   ],
+   "critical": "substitution"
+  },
+  {
+   "id": "h05",
+   "case": "ws:loan",
+   "q": "Who sanctioned the loan?",
+   "kind": "answer",
+   "must": [
+    [
+     "Neha Kulkarni"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "h06",
+   "case": "ws:loan",
+   "q": "Until when is the offer valid?",
+   "kind": "answer",
+   "must": [
+    [
+     "15 Jan 2027"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "h07",
+   "case": "ws:loan",
+   "q": "What is the processing fee?",
+   "kind": "answer",
+   "must": [
+    [
+     "10,000"
+    ]
+   ],
+   "mustNot": []
+  },
+  {
+   "id": "h08",
+   "case": "ws:loan",
+   "q": "Is there a prepayment penalty?",
+   "kind": "abstain",
+   "must": [],
+   "mustNot": [],
+   "critical": "false_accept"
+  }
+ ]
+}

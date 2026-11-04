@@ -17,6 +17,23 @@ import { detectFormat, safeFilename } from "./detect.mjs";
 import { IngestError, LIMITS } from "./errors.mjs";
 
 export { locate } from "./canonical.mjs";
+
+// One OCR at a time across all parses (tesseract peaks near 280 MB on a
+// 512 MB host); text reading runs in parallel around it.
+let ocrBusy = false;
+const ocrQueue = [];
+function takeOcr() {
+  if (!ocrBusy) {
+    ocrBusy = true;
+    return Promise.resolve();
+  }
+  return new Promise((r) => ocrQueue.push(r));
+}
+function giveOcr() {
+  const next = ocrQueue.shift();
+  if (next) next();
+  else ocrBusy = false;
+}
 export { LIMITS } from "./errors.mjs";
 
 export async function ingestFile(
@@ -47,10 +64,15 @@ export async function ingestFile(
   onStage("parsing");
   return await new Promise((resolve) => {
     let settled = false;
+    let holdsOcr = false;
+    let wantsOcr = false;
     const done = (v) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (holdsOcr) giveOcr();
+      holdsOcr = false;
+      wantsOcr = false;
       resolve(v);
     };
     const worker = new Worker(new URL("./worker.mjs", import.meta.url), {
@@ -99,6 +121,25 @@ export async function ingestFile(
     }, timeoutMs);
     worker.on("message", (m) => {
       if (settled) return;
+      if (m?.type === "ocr-wait") {
+        wantsOcr = true;
+        takeOcr().then(() => {
+          // Finished (or stopped) while waiting: hand the turn on.
+          if (settled || !wantsOcr) return giveOcr();
+          holdsOcr = true;
+          try {
+            worker.postMessage({ type: "ocr-go" });
+          } catch {
+            done({
+              ok: false,
+              code: "parse_failed",
+              stage: "parsing",
+              message: "This file could not be read.",
+            });
+          }
+        });
+        return;
+      }
       if (m?.type === "event") {
         try {
           onEvent(m.event);

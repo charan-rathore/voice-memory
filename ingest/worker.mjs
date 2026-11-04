@@ -11,10 +11,20 @@ import { parseBuffer } from "./parse.mjs";
 import { shutdownOcr } from "./ocr.mjs";
 
 const { bytes, filename } = workerData;
+// The parent grants the OCR turn (one file OCRs at a time).
+let ocrGo = null;
+parentPort.on("message", (m) => {
+  if (m?.type === "ocr-go") ocrGo?.();
+});
 try {
   const out = await parseBuffer(Buffer.from(bytes), filename, {
     onEvent: (event) => parentPort.postMessage({ type: "event", event }),
     onPartial: (r) => parentPort.postMessage({ type: "partial", ...r }),
+    waitForOcr: () =>
+      new Promise((resolve) => {
+        ocrGo = resolve;
+        parentPort.postMessage({ type: "ocr-wait" });
+      }),
   });
   parentPort.postMessage({ ok: true, ...out });
 } catch (e) {
@@ -26,4 +36,5 @@ try {
   });
 } finally {
   await shutdownOcr();
+  parentPort.close();
 }

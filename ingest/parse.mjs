@@ -22,7 +22,7 @@ const REVIEW_CODES = new Set([
 export async function parseBuffer(
   buf,
   filename,
-  { onEvent = () => {}, onPartial = null } = {},
+  { onEvent = () => {}, onPartial = null, waitForOcr = null } = {},
 ) {
   const { kind, mime } = detectFormat(buf, filename);
   let doc;
@@ -52,7 +52,11 @@ export async function parseBuffer(
       });
     const parsed =
       kind === "pdf"
-        ? await parsePdf(buf, { onEvent, onPartial: partial || null })
+        ? await parsePdf(buf, {
+            onEvent,
+            onPartial: partial || null,
+            waitForOcr,
+          })
         : kind === "docx"
           ? parseDocx(buf)
           : await parseImage(buf, kind);

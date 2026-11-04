@@ -1,0 +1,73 @@
+{
+  "label": "final-packets",
+  "commit": "fa8ff7f",
+  "date": "2026-11-04",
+  "cases": 34,
+  "answerableCorrect": {
+    "k": 30,
+    "n": 32,
+    "ci95": "79.9%–98.3%"
+  },
+  "abstentionCorrect": {
+    "k": 2,
+    "n": 2,
+    "ci95": "34.2%–100.0%"
+  },
+  "falseAcceptance": {
+    "k": 0,
+    "n": 2
+  },
+  "unnecessaryRefusals": 2,
+  "criticalFailures": [],
+  "latencyMs": {
+    "p50": 8,
+    "p95": 38,
+    "max": 55
+  },
+  "semantic": {
+    "configured": false,
+    "provider": "gemini",
+    "enabled": false,
+    "model": "gemini-3.8-flash",
+    "search": true,
+    "lastOkAt": null,
+    "lastError": null,
+    "budget": {
+      "calls": 0,
+      "search": 0,
+      "usd": 0,
+      "refused": 0,
+      "errors": 0,
+      "cached": 0,
+      "caps": {
+        "callsPerDay": 500,
+        "searchPerDay": 100,
+        "usdPerDay": 2,
+        "callsPerIpHour": 40,
+        "inUsdPerM": 0.75,
+        "outUsdPerM": 3.75,
+        "searchUsd": 0.014
+      }
+    }
+  },
+  "failures": [
+    {
+      "id": "p09",
+      "q": "How many chairs arrived, and were any damaged?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "l07",
+      "q": "january 2027 se kiraya kitna hoga?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    }
+  ]
+}

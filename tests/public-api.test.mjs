@@ -502,6 +502,68 @@ test("a mixed PDF is answerable before its scanned page is read, and says so as 
   );
 });
 
+test("several files upload in parallel; each gets a digest, the graph stays grounded", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ws = await (
+    await fetch(base + "/api/public/workspace", { method: "POST" })
+  ).json();
+  const files = [
+    ["../evaluation/packets/procurement-packet.pdf", "procurement.pdf"],
+    ["../evaluation/packets/lease-packet.pdf", "lease.pdf"],
+    ["../ingest/fixtures/files/mixed.pdf", "mixed.pdf"],
+  ];
+  // All at once, as the page sends them.
+  const replies = await Promise.all(
+    files.map(([f, name]) =>
+      fetch(`${base}/api/public/workspace/${ws.id}/upload`, {
+        method: "POST",
+        headers: {
+          "x-file-name": name,
+          "content-type": "application/octet-stream",
+        },
+        body: readFileSync(new URL(f, import.meta.url)),
+      }),
+    ),
+  );
+  assert.deepEqual(
+    replies.map((r) => r.status),
+    [202, 202, 202],
+  );
+  let st;
+  for (let i = 0; i < 300; i++) {
+    st = await (await fetch(`${base}/api/public/workspace/${ws.id}`)).json();
+    if (
+      st.documents.length === 3 &&
+      st.documents.every((d) => d.status === "ready" && d.digest)
+    )
+      break;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  for (const d of st.documents) {
+    assert.equal(d.status, "ready", d.filename);
+    assert.ok(d.digest, d.filename);
+    assert.equal(d.digest.index.k1, 1.5);
+    // the lookup's score is the sum of its per-word parts
+    for (const h of d.digest.lookup?.hits ?? [])
+      assert.ok(Math.abs(h.parts.reduce((a, b) => a + b, 0) - h.score) < 0.01);
+  }
+  const proc = st.documents.find((d) => d.filename === "procurement.pdf");
+  assert.deepEqual(
+    proc.digest.records.map((r) => r.authority),
+    ["provisional", "authoritative", "authoritative", "authoritative"],
+  );
+  assert.ok(proc.digest.graph.supersedes >= 2);
+  const g = await (await fetch(`${base}/api/public/graph/${ws.id}`)).json();
+  const ids = new Set(g.nodes.map((n) => n.id));
+  assert.ok(
+    g.edges.every((e) => e.from !== e.to && ids.has(e.from) && ids.has(e.to)),
+  );
+  assert.ok(g.nodes.every((n) => n.kind));
+  assert.ok(g.edges.some((e) => e.kind === "supersedes"));
+  const a = await ask(ws.id, "Who approved the purchase order?");
+  assert.match(a.body.lead.text, /Priya Nair/);
+});
+
 test("bring-your-own answers complete wrapped sentences and keep one supporting passage", async () => {
   const { readFileSync } = await import("node:fs");
   const ws = await (

@@ -1,0 +1,172 @@
+{
+  "label": "heldout3-main",
+  "commit": "c7238f3",
+  "date": "2026-11-04",
+  "cases": 16,
+  "answerableCorrect": {
+    "k": 2,
+    "n": 14,
+    "ci95": "4.0%–39.9%"
+  },
+  "abstentionCorrect": {
+    "k": 2,
+    "n": 2,
+    "ci95": "34.2%–100.0%"
+  },
+  "falseAcceptance": {
+    "k": 0,
+    "n": 2
+  },
+  "unnecessaryRefusals": 7,
+  "criticalFailures": [
+    {
+      "id": "s02",
+      "class": "substitution",
+      "q": "How much did the brake pads cost?",
+      "said": "The car service packet: Brake pads (front) 6,400.00"
+    }
+  ],
+  "latencyMs": {
+    "p50": 8,
+    "p95": 68,
+    "max": 68
+  },
+  "semantic": {
+    "configured": false,
+    "provider": "gemini",
+    "enabled": false,
+    "model": "gemini-3.8-flash",
+    "search": true,
+    "lastOkAt": null,
+    "lastError": null,
+    "budget": {
+      "calls": 0,
+      "search": 0,
+      "usd": 0,
+      "refused": 0,
+      "errors": 0,
+      "cached": 0,
+      "caps": {
+        "callsPerDay": 500,
+        "searchPerDay": 100,
+        "usdPerDay": 2,
+        "callsPerIpHour": 40,
+        "inUsdPerM": 0.75,
+        "outUsdPerM": 3.75,
+        "searchUsd": 0.014
+      }
+    }
+  },
+  "failures": [
+    {
+      "id": "s01",
+      "q": "What did the service cost in the end?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "s02",
+      "q": "How much did the brake pads cost?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "The car service packet: Brake pads (front) 6,400.00",
+      "bad": [
+        "6,400"
+      ],
+      "notes": []
+    },
+    {
+      "id": "s03",
+      "q": "When did I get the car back?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "s04",
+      "q": "Was the car ready on 16 November?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "s05",
+      "q": "Is anything still due?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "s06",
+      "q": "Who was my service advisor?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h01",
+      "q": "What is the interest rate on my loan?",
+      "kind": "answer",
+      "verdict": "PROPOSED",
+      "said": "INR 10,000 is the current proposal; approval is not recorded.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h02",
+      "q": "How much loan was sanctioned?",
+      "kind": "answer",
+      "verdict": "PROPOSED",
+      "said": "INR 10,000 is the current proposal; approval is not recorded.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h03",
+      "q": "What will my EMI be?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h04",
+      "q": "Is the interest rate 8.9%?",
+      "kind": "answer",
+      "verdict": "PROPOSED",
+      "said": "INR 10,000 is the current proposal; approval is not recorded.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h05",
+      "q": "Who sanctioned the loan?",
+      "kind": "answer",
+      "verdict": "QUOTED",
+      "said": "Loan amount INR 45,00,000. That's from home loan packet.",
+      "bad": [],
+      "notes": []
+    },
+    {
+      "id": "h06",
+      "q": "Until when is the offer valid?",
+      "kind": "answer",
+      "verdict": null,
+      "said": null,
+      "bad": [],
+      "notes": []
+    }
+  ]
+}

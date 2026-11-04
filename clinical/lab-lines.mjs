@@ -709,7 +709,7 @@ export function genericMeta(text, raw = text) {
       head,
     );
   const name =
-    /\b(?:Patient(?:'s)?\s*Name|Full name of patient|Name)\s*[:.-]\s*(?:\|\s*)?(?:(?:Mr|Mrs|Ms|Miss|Master|Baby|Dr)\.?\s+)?([A-Za-z][A-Za-z.' ]{1,40}?)(?=\s*(?:\||\n|$|\s{2,}|\b(?:Age|Date|Sex|Gender|UHID|Bill|Lab|Reg|ID|Ref|MR|PID|Email|DOB)\b))/i.exec(
+    /\b(?:Patient(?:'s)?\s*Name|Full name of patient|Name)\s*[:.-]\s*(?:\|\s*)?(?:(?:Mr|Mrs|Ms|Miss|Master|Baby|Dr)\.?\s+)?([A-Za-z][A-Za-z.' ]{1,40}?)(?=\s*(?:\||\n|$|\s{2,}|\b(?:Age|Date|Sex|Gender|UHID|Bill|Lab|Reg|ID|Ref|MR|PID|Email|DOB|Patient)\b))/i.exec(
       head,
     );
   const sexM =

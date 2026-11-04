@@ -23,6 +23,7 @@ import path from "node:path";
 import { createCallCounters } from "./public-call-counters.mjs";
 import { documentView } from "./library.mjs";
 import { buildGraph } from "../memory/graph.mjs";
+import { recordGraph } from "./record-graph.mjs";
 import { createMemory } from "../memory/memory.mjs";
 import { seriesFor, compare, subjectOf } from "../clinical/observations.mjs";
 import { spokenText, splitSentences as splitSpoken } from "./companion.mjs";
@@ -692,19 +693,25 @@ export function createPublicApi({
         if (!/^[\w:./%@-]{1,200}$/.test(focus))
           return (send(res, 400, { error: "Bad focus" }), true);
         const mem = s.publicMemory ?? (s.publicMemory = createMemory());
+        // Sources with no lab report (notes, contracts) keep their own
+        // claims graph; a packet's records and table facts come from the
+        // records graph. Counted by source, not by report: one packet holds
+        // several reports.
+        const labSources = new Set(
+          (s.bundle.clinical ?? []).map((r) => r.sourceId),
+        );
         const g =
           focus === "all"
             ? mergeGraphs(
                 s.bundle.clinical?.length ? clinicalGraph(s.bundle) : null,
-                // Text documents (notes, contracts) beside lab reports keep
-                // their own claims/evidence graph in the same view.
-                !s.bundle.clinical?.length ||
-                  s.bundle.sources.length > s.bundle.clinical.length
+                recordGraph(s.bundle),
+                s.bundle.sources.some((src) => !labSources.has(src.id))
                   ? fullGraph(s.bundle, mem)
                   : null,
               )
             : buildGraph(s.bundle, mem, focus);
-        const docId = (sid) => s.sourceToEntry?.get(sid)?.id ?? null;
+        const docId = (sid) =>
+          s.sourceToEntry?.get(String(sid).replace(/#\d+$/, ""))?.id ?? null;
         for (const n of g.nodes) {
           if (n.kind === "document") n.documentId = docId(n.id.slice(4));
           if (n.evidence) n.evidence.documentId = docId(n.evidence.sourceId);
@@ -1464,6 +1471,9 @@ export function clinicalGraph(bundle) {
       ? `${name}: name only, not linked (${r.title ?? "this report"})`
       : `Identity not printed (${r.title ?? "this report"} only)`;
   };
+  // One node per record: a packet's preliminary and amended reports are two
+  // records of one file, and must never collapse into one node.
+  const rid = (r) => `${r.sourceId}${r.segment ? "#" + r.segment : ""}`;
   for (const r of reports) {
     const pid = subjectOf(r);
     const status = (r.meta.status ?? "unknown").toLowerCase();
@@ -1474,21 +1484,21 @@ export function clinicalGraph(bundle) {
       verified: !pid.startsWith("doc:"),
     });
     node({
-      id: `doc:${r.sourceId}`,
+      id: `doc:${rid(r)}`,
       kind: "document",
-      label: `${prettyDate(r.meta.collected) ?? r.title} · ${status}`,
+      label: `${r.segment ? r.title.replace(/^.*·\s*/, "") + " · " : ""}${prettyDate(r.meta.collected) ?? r.title} · ${status}`,
       date: r.meta.reported ?? r.meta.collected ?? null,
       status,
     });
     edge({
       from: `patient:${pid}`,
-      to: `doc:${r.sourceId}`,
+      to: `doc:${rid(r)}`,
       kind: "has report",
     });
     for (const o of r.observations) {
       const tid = `test:${pid}:${o.key}`;
       node({ id: tid, kind: "topic", label: o.test, patient: pid });
-      const id = `obs:${r.sourceId}:${o.key}`;
+      const id = `obs:${rid(r)}:${o.key}`;
       node({
         id,
         kind: "value",
@@ -1501,7 +1511,7 @@ export function clinicalGraph(bundle) {
         date: r.meta.collected ?? null,
         evidence: evidenceOf(o, r),
       });
-      edge({ from: `doc:${r.sourceId}`, to: id, kind: "records" });
+      edge({ from: `doc:${rid(r)}`, to: id, kind: "records" });
       edge({ from: id, to: tid, kind: "measures" });
     }
   }
@@ -1525,16 +1535,16 @@ export function clinicalGraph(bundle) {
       series.forEach((pt, i) => {
         if (!dated) return;
         node({
-          id: `obs:${pt.current.report.sourceId}:${key}`,
+          id: `obs:${rid(pt.current.report)}:${key}`,
           ...(i === series.length - 1 ? { latest: true } : { earlier: true }),
         });
       });
       let prev = null;
       for (const point of series) {
-        const cur = `obs:${point.current.report.sourceId}:${key}`;
+        const cur = `obs:${rid(point.current.report)}:${key}`;
         node({ id: cur, status: "current" });
         for (const old of point.superseded) {
-          const oid = `obs:${old.report.sourceId}:${key}`;
+          const oid = `obs:${rid(old.report)}:${key}`;
           node({ id: oid, status: "superseded" });
           edge({ from: cur, to: oid, kind: "corrects" });
         }
@@ -1542,7 +1552,7 @@ export function clinicalGraph(bundle) {
         if (prev) {
           const c = compare(prev.current, point.current);
           edge({
-            from: `obs:${prev.current.report.sourceId}:${key}`,
+            from: `obs:${rid(prev.current.report)}:${key}`,
             to: cur,
             kind: c.comparable ? "then" : "not comparable",
             reason: c.comparable ? null : c.reason,

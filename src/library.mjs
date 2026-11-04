@@ -89,10 +89,12 @@ function parseCacheTrim() {
 }
 const PIPELINE = "vm-ingest/1";
 // Measured peak RSS while OCR'ing a scan: ~276 MB (worker + tesseract).
-// One parse at a time fits a 512 MB host; raise on bigger machines.
+// Two files are read at once; OCR itself takes turns across them (one at a
+// time, ingest/index.mjs), so the peak stays that of one OCR while a second
+// file's text pages are read alongside it. VM_PARSE_CONCURRENCY overrides.
 const MAX_PARALLEL_PARSES = Math.max(
   1,
-  Number(process.env.VM_PARSE_CONCURRENCY) || 1,
+  Number(process.env.VM_PARSE_CONCURRENCY) || 2,
 );
 
 // Process-wide parse slots: the host is small (Render free: 512 MB).
@@ -156,6 +158,9 @@ export function publicEntry(e) {
     progress: e.progress
       ? { ...e.progress, age: Date.now() - e.createdAt }
       : null,
+    // What the document became (records, facts, index numbers, graph):
+    // the reading view's "how it becomes numbers" panels.
+    digest: e.digest ?? null,
   };
 }
 
@@ -209,7 +214,7 @@ function uniqueTitle(lib, name) {
  * Accept an upload. Returns the entry immediately; parsing continues in the
  * background and calls `rebuild(s)` when the index must change.
  */
-export function addUpload(s, bytes, filename, rebuild) {
+export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
   const lib = libraryOf(s);
   const name = safeFilename(filename);
   const live = lib.filter((e) => e.status !== "failed");
@@ -326,6 +331,7 @@ export function addUpload(s, bytes, filename, rebuild) {
     entry.clinical = undefined;
     entry.haystack = undefined;
     entry.records = undefined;
+    entry.digest = undefined;
   };
   const indexed = () =>
     note({
@@ -337,6 +343,9 @@ export function addUpload(s, bytes, filename, rebuild) {
         null,
     });
   (async () => {
+    // Work that must finish before parsing (freeing the embedding model's
+    // memory) runs here, after the upload has already been acknowledged.
+    if (before) await Promise.resolve(before).catch(() => {});
     await slot(String(s.sid ?? "").startsWith("case:") ? 0 : 1);
     try {
       if (!lib.includes(entry)) return; // removed while queued

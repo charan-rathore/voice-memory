@@ -56,6 +56,7 @@ import {
   recordIntent,
 } from "./record-facts.mjs";
 import { cite as citeSpan } from "./spoken-routes.mjs";
+import { attachDigests } from "./index-digest.mjs";
 import { detectLang, aliasesFor, nameOf } from "../clinical/explain.mjs";
 import {
   labVocabulary,
@@ -734,6 +735,7 @@ export function createLocalServer({
       bundle.locateEvidence = locatorFor(s.sourceToEntry);
       bundle.clinical = clinicalReportsFor(bundle, docs, extractReport);
       attachRecords(bundle, docs);
+      attachDigests(bundle, docs, denseStatus());
     }
     setSessionBundle(s, bundle);
     schedulePersist(s);
@@ -907,12 +909,34 @@ export function createLocalServer({
       // A fact stated in a record's table, from the most authoritative
       // record that states it (signed / final / posted over estimate /
       // draft / preliminary), with superseded provisional values named.
+      // "Still open: both are on record" is settled when the records
+      // themselves rank the values: a signed / confirmed record over a
+      // proposal. Only then does a fact answer replace an open lead.
+      // The claim engine's proposal/open verdicts were built for deal
+      // negotiations; an authoritative record settles them the same way.
+      const openLead = ["OPEN", "PROPOSED"].includes(shown.lead?.verdict);
       if (
         weakLead(shown.lead) ||
         shown.lead?.verdict === "QUOTED" ||
-        recordIntent(question)
+        recordIntent(question) ||
+        openLead
       ) {
-        const fa = bundleFactAnswer(question, bundle, citeSpan);
+        let fa = bundleFactAnswer(question, bundle, citeSpan);
+        // An open lead gives way to a fact only when an authoritative record
+        // settles it: it supersedes one of the open values, or answers a
+        // different field than the one left open.
+        if (
+          fa &&
+          openLead &&
+          !(
+            fa.record.authority === "authoritative" &&
+            (fa.superseded?.length ||
+              !String(shown.lead.text).includes(
+                String(fa.lead.value).match(/\d[\d,.]*/)?.[0] ?? "\u0000",
+              ))
+          )
+        )
+          fa = null;
         if (fa) {
           sectioned = true;
           shown.lead = {
@@ -1037,6 +1061,7 @@ export function createLocalServer({
     bundle.locateEvidence = locatorFor(target.sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsIn, extractReport);
     attachRecords(bundle, docsIn);
+    attachDigests(bundle, docsIn, denseStatus());
     target.bundle = bundle;
     return target;
   };
@@ -1290,6 +1315,7 @@ export function createLocalServer({
     bundle.locateEvidence = locatorFor(ws.sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsNow, extractReport);
     attachRecords(bundle, docsNow);
+    attachDigests(bundle, docsNow, denseStatus());
     ws.bundle = bundle; // the library keeps every entry, indexed or not
     warmDense(bundle.rows);
     warmUnits(bundle);
@@ -1326,8 +1352,11 @@ export function createLocalServer({
         e.status = 409;
         throw e;
       }
-      await pauseDenseForIngest();
-      const entry = addUpload(ws, bytes, filename, (x) => rebuildWorkspace(x));
+      // The upload is acknowledged at once; freeing the embedding model's
+      // memory finishes before parsing starts, not before the reply.
+      const entry = addUpload(ws, bytes, filename, (x) => rebuildWorkspace(x), {
+        before: pauseDenseForIngest(),
+      });
       const t0 = Date.now();
       const iv = setInterval(() => {
         if (
@@ -2259,8 +2288,9 @@ export function createLocalServer({
         const bytes = await rawBody(req, LIMITS.maxFileBytes);
         // Memory guard: OCR must never share the 512MB budget with the
         // resident embedding model; dense pauses until this upload settles.
-        await pauseDenseForIngest();
-        const entry = addUpload(s, bytes, filename, rebuildIndex);
+        const entry = addUpload(s, bytes, filename, rebuildIndex, {
+          before: pauseDenseForIngest(),
+        });
         const up0 = Date.now();
         const iv = setInterval(() => {
           const settled = ["ready", "needs_review", "failed"].includes(

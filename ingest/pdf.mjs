@@ -215,7 +215,7 @@ export const fixLigatures = (s) =>
  */
 export async function parsePdf(
   buf,
-  { onEvent = () => {}, onPartial = null } = {},
+  { onEvent = () => {}, onPartial = null, waitForOcr = null } = {},
 ) {
   let doc;
   try {
@@ -395,7 +395,13 @@ export async function parsePdf(
   if (scans.length && onPartial && pages.some((p) => p.textSource === "pdf"))
     await onPartial(finish(false));
 
-  // Phase 2: OCR the scanned pages.
+  // Phase 2: OCR the scanned pages. OCR is the memory-heavy step, so when
+  // several files are read at once they take turns at it (waitForOcr); the
+  // text pages above were already read concurrently.
+  if (scans.length && ocrBudget > 0 && waitForOcr) {
+    onEvent({ k: "ocr-wait" });
+    await waitForOcr();
+  }
   for (const { n, page, vp, info } of scans) {
     delete info.ocrPending;
     if (ocrBudget > 0) {
