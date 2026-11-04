@@ -20,11 +20,9 @@ import {
 import { subjectLabel } from "../clinical/answer.mjs";
 
 const ORDER = {
-  below_clearly: 0,
-  above_clearly: 0,
-  below_slightly: 1,
-  above_slightly: 1,
-  qual_differs: 1,
+  below: 0,
+  above: 0,
+  qual_differs: 0,
   within: 2,
   unknown: 3,
 };
@@ -199,7 +197,7 @@ const N = {
     outside: (n, list) =>
       `${n === 1 ? "One result sits" : `${n} results sit`} outside this lab's printed range: ${list}.`,
     item: (t) =>
-      `${t.name} at ${t.latest.raw} is ${/below/.test(t.latest.position) ? (t.latest.position === "below_slightly" ? "a little below" : "below") : t.latest.position === "above_slightly" ? "a little above" : "above"} ${t.latest.range.low} to ${t.latest.range.high}`,
+      `${t.name} at ${t.latest.raw} is ${t.latest.position === "below" ? "below" : "above"} ${t.latest.range.low} to ${t.latest.range.high}`,
     corrected: (t) =>
       `${t.name} was first printed as ${t.corrected.from} and corrected to ${t.corrected.to}${t.unit ? " " + t.unit : ""}, so I use ${t.corrected.to}.`,
     units: (t) =>

@@ -6,11 +6,12 @@
 //  2. "What this test measures" comes only from GLOSSARY, each entry cited to
 //     MedlinePlus, and is phrased as general information, never as a finding.
 //  3. Position vs range uses the lab's own printed range. No outside thresholds.
-//  4. Tone: supportive and realistic. A value just outside the range is put in
-//     perspective (ranges are built so ~1 in 20 people without disease fall
-//     outside); a value far outside is called that, with "talk to your doctor
-//     soon"; a result the lab printed as critical gets "contact your doctor
-//     today". Never a diagnosis, a disease name, or reassurance about health.
+//  4. Literal position only: within, below or above the lab's printed range,
+//     or "cannot classify". Distance from a limit is never turned into a
+//     severity ("slightly", "clearly", "soon"): that needs validated clinical
+//     rules this product does not have. The lab's OWN critical flag keeps its
+//     separate "contact your doctor today" path. Never a diagnosis, a disease
+//     name, or reassurance about health.
 
 import { MORE_GLOSSARY, MORE_SOURCES } from "./glossary-more.mjs";
 
@@ -388,7 +389,8 @@ export function span(r, lang = "en") {
 
 /**
  * Where a value sits against its printed range.
- * @returns {"within"|"below_slightly"|"below_clearly"|"above_slightly"|"above_clearly"|"unknown"}
+ * Literal: no distance-based tiers (see rule 4).
+ * @returns {"within"|"below"|"above"|"qual_differs"|"unknown"}
  */
 export function position(o) {
   if (o.qual) {
@@ -399,18 +401,12 @@ export function position(o) {
   if (!r || o.value == null) return "unknown";
   if (r.lowN == null || r.highN == null) return "unknown";
   // A bound ("<0.05") occupies an interval; it is only "within" if the whole
-  // interval is, and it is never "slightly" outside (its true value is unknown).
+  // interval is, and only "below"/"above" if the whole interval is.
   const lo =
     o.comparator === "<" || o.comparator === "<=" ? -Infinity : o.value;
   const hi = o.comparator === ">" || o.comparator === ">=" ? Infinity : o.value;
-  // "Slightly" = within 10% of the limit that was crossed (relative, so it
-  // means the same for ferritin in the hundreds and TSH below one).
-  const near = (limit) =>
-    !o.comparator &&
-    Number.isFinite(limit) &&
-    Math.abs(o.value - limit) <= 0.1 * Math.abs(limit);
-  if (hi < r.lowN) return near(r.lowN) ? "below_slightly" : "below_clearly";
-  if (lo > r.highN) return near(r.highN) ? "above_slightly" : "above_clearly";
+  if (hi < r.lowN) return "below";
+  if (lo > r.highN) return "above";
   if (lo >= r.lowN && hi <= r.highN) return "within";
   return "unknown";
 }
@@ -424,14 +420,8 @@ const T = {
     notInPeriod: (test, period) =>
       `These reports have no ${test} result from ${period}. The results that are here are on screen.`,
     within: (r) => `That's within this lab's range of ${span(r, "en")}.`,
-    below_slightly: (r) =>
-      `That's a little below this lab's range of ${span(r, "en")}. Results just outside a range are common: ranges are set so that about 1 in 20 people without any illness land outside them.`,
-    above_slightly: (r) =>
-      `That's a little above this lab's range of ${span(r, "en")}. Results just outside a range are common: ranges are set so that about 1 in 20 people without any illness land outside them.`,
-    below_clearly: (r) =>
-      `That's clearly below this lab's range of ${span(r, "en")}, so it's worth talking it through with your doctor soon.`,
-    above_clearly: (r) =>
-      `That's clearly above this lab's range of ${span(r, "en")}, so it's worth talking it through with your doctor soon.`,
+    below: (r) => `That's below this lab's printed range of ${span(r, "en")}.`,
+    above: (r) => `That's above this lab's printed range of ${span(r, "en")}.`,
     unknown: () => `The report doesn't give a range I can compare it with.`,
     adultOnly: `The ranges printed for it are adult ranges and this report is for a child, so I won't judge it against them; a doctor can, using ranges for the child's age.`,
     qualValue: (o, date) =>
@@ -483,14 +473,8 @@ const T = {
     notInPeriod: (test, period) =>
       `इन रिपोर्ट्स में ${period} का कोई ${test} नतीजा नहीं है। जो नतीजे हैं वे स्क्रीन पर हैं।`,
     within: (r) => `यह इस लैब की सीमा (${span(r, "hi")}) के अंदर है।`,
-    below_slightly: (r) =>
-      `यह इस लैब की सीमा (${span(r, "hi")}) से थोड़ा कम है। सीमा से थोड़ा बाहर आना आम बात है: सीमा ऐसे तय की जाती है कि बिना किसी बीमारी वाले लगभग हर 20 में से 1 व्यक्ति का नतीजा भी इसके बाहर आता है।`,
-    above_slightly: (r) =>
-      `यह इस लैब की सीमा (${span(r, "hi")}) से थोड़ा ज़्यादा है। सीमा से थोड़ा बाहर आना आम बात है: सीमा ऐसे तय की जाती है कि बिना किसी बीमारी वाले लगभग हर 20 में से 1 व्यक्ति का नतीजा भी इसके बाहर आता है।`,
-    below_clearly: (r) =>
-      `यह इस लैब की सीमा (${span(r, "hi")}) से साफ़ तौर पर कम है, इसलिए इसके बारे में जल्द ही अपने डॉक्टर से बात करना अच्छा रहेगा।`,
-    above_clearly: (r) =>
-      `यह इस लैब की सीमा (${span(r, "hi")}) से साफ़ तौर पर ज़्यादा है, इसलिए इसके बारे में जल्द ही अपने डॉक्टर से बात करना अच्छा रहेगा।`,
+    below: (r) => `यह इस लैब की छपी सीमा (${span(r, "hi")}) से कम है।`,
+    above: (r) => `यह इस लैब की छपी सीमा (${span(r, "hi")}) से ज़्यादा है।`,
     unknown: () =>
       `रिपोर्ट में ऐसी सीमा नहीं दी गई है जिससे मैं इसकी तुलना कर सकूं।`,
     adultOnly: `इसके लिए छपी सीमाएं वयस्कों की हैं और यह रिपोर्ट एक बच्चे की है, इसलिए मैं इसे उनसे नहीं आंकूंगी; डॉक्टर बच्चे की उम्र की सीमा से इसे देख सकते हैं।`,
@@ -540,14 +524,10 @@ const T = {
     notInPeriod: (test, period) =>
       `In reports mein ${period} ka koi ${test} result nahi hai. Jo results hain wo screen par hain.`,
     within: (r) => `Yeh is lab ki range (${span(r, "hinglish")}) ke andar hai.`,
-    below_slightly: (r) =>
-      `Yeh is lab ki range (${span(r, "hinglish")}) se thoda kam hai. Range se thoda bahar aana aam baat hai: range aise set hoti hai ki bina kisi bimari wale lagbhag har 20 mein se 1 insaan ka result bhi iske bahar aata hai.`,
-    above_slightly: (r) =>
-      `Yeh is lab ki range (${span(r, "hinglish")}) se thoda zyada hai. Range se thoda bahar aana aam baat hai: range aise set hoti hai ki bina kisi bimari wale lagbhag har 20 mein se 1 insaan ka result bhi iske bahar aata hai.`,
-    below_clearly: (r) =>
-      `Yeh is lab ki range (${span(r, "hinglish")}) se saaf taur par kam hai, isliye iske baare mein jaldi apne doctor se baat karna achha rahega.`,
-    above_clearly: (r) =>
-      `Yeh is lab ki range (${span(r, "hinglish")}) se saaf taur par zyada hai, isliye iske baare mein jaldi apne doctor se baat karna achha rahega.`,
+    below: (r) =>
+      `Yeh is lab ki printed range (${span(r, "hinglish")}) se kam hai.`,
+    above: (r) =>
+      `Yeh is lab ki printed range (${span(r, "hinglish")}) se zyada hai.`,
     unknown: () =>
       `Report mein aisi range nahi di gayi jisse main iski tulna kar sakoon.`,
     adultOnly: `Iske liye chhapi ranges adults ki hain aur yeh report ek bachche ki hai, isliye main ise unse judge nahi karungi; doctor bachche ki umar ki range se ise dekh sakte hain.`,
