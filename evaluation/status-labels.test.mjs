@@ -12,7 +12,7 @@ import { importBundle } from "../dist/engine.mjs";
 import { MARINER_DOCS } from "../examples/corpus-mariner.mjs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { fullGraph } from "../src/public-api.mjs";
-import { approvalAuthority } from "../memory/graph.mjs";
+import { approvalAuthority, semanticOf } from "../memory/graph.mjs";
 import { createMemory } from "../memory/memory.mjs";
 
 const sandbox = { window: { caseId: "deal" } };
@@ -25,7 +25,11 @@ const { statusLabel } = sandbox.window.VM_STATUS;
 test("lab readings and record values never share wording", () => {
   const lab = { id: "obs:s1:tsh", kind: "value", status: "current" };
   const rec = { id: "value:fee:usd-58-000", kind: "value", status: "current" };
-  assert.equal(statusLabel(lab), "latest reported reading");
+  assert.equal(statusLabel(lab), "reported reading");
+  assert.equal(
+    statusLabel({ ...lab, latest: true }),
+    "latest reported reading",
+  );
   assert.equal(statusLabel(rec), "most recent proposal, not approved");
   assert.equal(
     statusLabel({ id: "obs:s1:tsh", status: "superseded" }),
@@ -56,13 +60,14 @@ test("approval names who approved, from the words before the verb only", () => {
     ),
     "steering committee",
   );
+  const asOf =
+    "As-of status: TWO SITES APPROVED, USD 54,000 INTERNALLY APPROVED, CLIENT UNSIGNED.";
   assert.equal(
-    approvalAuthority(
-      "As-of status: TWO SITES APPROVED, USD 54,000 INTERNALLY APPROVED, CLIENT UNSIGNED.",
-    ),
+    approvalAuthority(asOf, "scope"),
     null,
-    "the client is not the approver",
+    "no actor for the sites",
   );
+  assert.equal(approvalAuthority(asOf, "fee"), "internal", "never the client");
   assert.equal(approvalAuthority("Outcome: Two-site scope APPROVED."), null);
 });
 
@@ -131,3 +136,63 @@ test("graph colours: open, rejected and unknown statuses never use the approved 
   assert.match(js, /noSignedRecord\) return C\.coral/);
 });
 
+// RED on PR #50 head d0f181a: approvalAuthority took the first actor word
+// before the first approval verb, so "Finance noted that client approved"
+// credited finance, and a negated clause could name the approver.
+const APPROVAL_CASES = [
+  ["Finance noted that client approved the $42,000 fee.", "client"],
+  [
+    "Board discussed the request and internal finance approved the fee of $42,000.",
+    "internal finance",
+  ],
+  ["Finance rejected the amount; client approved the $42,000 fee.", "client"],
+  [
+    "Client finance did not approve the $42,000 fee; steering committee approved it.",
+    "steering committee",
+  ],
+];
+
+test("approval is credited to the actor of the approving clause (helper, semanticOf, graph API, label)", () => {
+  for (const [sentence, who] of APPROVAL_CASES) {
+    assert.equal(approvalAuthority(sentence, "fee"), who, sentence);
+    const b = importBundle([
+      {
+        title: "Acme_Decision.md",
+        text: "# Acme engagement\nDate: 2026-09-01\n\n" + sentence,
+      },
+    ]);
+    const fee = semanticOf(b).get("fee")?.[0];
+    assert.equal(fee?.status, "approved", sentence);
+    assert.equal(fee.authority, who, sentence);
+    const node = fullGraph(b, createMemory()).nodes.find(
+      (n) => n.kind === "value" && n.field === "fee",
+    );
+    assert.equal(node.authority, who, sentence);
+    assert.equal(statusLabel(node), `approved by ${who}`, sentence);
+  }
+});
+
+test("competing or joint approvers are 'not established', never guessed", () => {
+  assert.equal(
+    approvalAuthority("Finance and the client approved the fee.", "fee"),
+    null,
+  );
+  assert.equal(
+    approvalAuthority(
+      "Finance approved the fee; the board approved the fee.",
+      "fee",
+    ),
+    null,
+  );
+  assert.equal(
+    approvalAuthority(
+      "Finance approved the scope; the board approved the fee.",
+      "fee",
+    ),
+    "board",
+  );
+  assert.equal(
+    statusLabel({ id: "value:fee:x", status: "approved", authority: null }),
+    "approved (approver not established)",
+  );
+});

@@ -67,29 +67,71 @@ const span = (c) => ({
   quote: c.quote,
 });
 
+// Words that tie a clause to the field being approved, so "finance
+// approved the scope; the board approved the fee" credits the right actor.
+const FIELD_WORDS = {
+  fee: /\bfee\b|\bamount\b|\bprice\b|\bcost\b|\busd\b|[$€£₹]|\d{1,3},\d{3}/i,
+  paymentSplit:
+    /\bsplit\b|\bupfront\b|\bpercent\b|%|\b\d{1,2}\/\d{1,2}\b|\bschedule\b/i,
+  scope: /\bscope\b|\bsites?\b|\bregions?\b|\bdepots?\b|\bphase\b/i,
+  deadline: /\bdate\b|\bdeadline\b|\blaunch\b|\bgo-live\b|\btarget\b/i,
+};
+const APPROVE = /\bapprov(?:es|ed|e|ing)\b/i;
+// a negation before the verb inside the same clause: "did not approve"
+const NEGATED =
+  /\b(?:not|never|no|didn'?t|hasn'?t|haven'?t|won'?t|cannot|can'?t)\b/i;
+const ACTOR =
+  /\b(steering(?:\s+committee)?|finance|committee|board|client|customer|legal)\b/i;
+
 /**
- * Who approved, from the approving sentence itself: only the words BEFORE
- * the approval verb count ("Farah (finance approver): INTERNAL finance
- * APPROVES ..." -> "internal finance"), so "TWO SITES APPROVED, ... CLIENT
- * UNSIGNED" never names the client as approver. Null when not stated.
+ * Who approved, read from the clause that holds the approval itself.
+ * Invariant: an actor is credited only when it is the subject of a
+ * non-negated approval clause about this field; competing actors, or none,
+ * give null ("approver not established").
+ * Counterexamples this rejects: "Finance noted that client approved the fee"
+ * (client, not finance); "Client finance did not approve the fee; steering
+ * committee approved it" (steering committee). Tested in
+ * evaluation/status-labels.test.mjs.
  */
-export function approvalAuthority(quote) {
+export function approvalAuthority(quote, field = null) {
   const q = String(quote ?? "");
-  const verb = /\bapprov(?:es|ed|e|al|ing)\b/i.exec(q);
-  if (!verb) return null;
-  const before = q.slice(0, verb.index);
-  const internal = /\binternal(?:ly)?\b/i.test(before);
-  const body =
-    /\b(steering(?:\s+committee)?|finance|committee|board|client|customer|legal)\b/i.exec(
-      before,
-    )?.[1];
-  const who = body
-    ? /^steering/i.test(body)
-      ? "steering committee"
-      : body.toLowerCase()
-    : null;
-  if (!who && !internal) return null;
-  return [internal ? "internal" : null, who].filter(Boolean).join(" ");
+  // "Finance and the client approved": a joint subject is not one approver
+  // (splitting on "and" would credit only the client)
+  if (
+    new RegExp(
+      `${ACTOR.source}\\s+(?:and|&)\\s+(?:the\\s+)?${ACTOR.source}[^.;,]{0,20}${APPROVE.source}`,
+      "i",
+    ).test(q)
+  )
+    return null;
+  // "Rina (steering chair): ..." -> the speaker's role, used only to qualify
+  // a bare "the committee" the speaker announces
+  const role = /^[^:]{0,60}\(([^)]*)\)\s*:/.exec(q)?.[1] ?? "";
+  const clauses = q
+    .replace(/^[^:]{0,60}:\s*/, "")
+    .split(/[;:]|,|\s+(?:and|but|while|whereas|then)\s+|\bthat\b/i)
+    .map((c) => c.trim())
+    .filter(Boolean);
+  const affirm = clauses.filter((c) => {
+    const v = APPROVE.exec(c);
+    return v && !NEGATED.test(c.slice(0, v.index));
+  });
+  const words = FIELD_WORDS[field];
+  const aboutField = words ? affirm.filter((c) => words.test(c)) : [];
+  const pick = aboutField.length ? aboutField : affirm;
+  const actors = new Set(
+    pick.map((c) => {
+      const before = c.slice(0, APPROVE.exec(c).index);
+      const internal = /\binternal(?:ly)?\b/i.test(before);
+      let body = ACTOR.exec(before)?.[1]?.toLowerCase() ?? null;
+      if (body?.startsWith("steering")) body = "steering committee";
+      if (body === "committee" && /\bsteering\b/i.test(role))
+        body = "steering committee";
+      return [internal ? "internal" : null, body].filter(Boolean).join(" ");
+    }),
+  );
+  actors.delete("");
+  return actors.size === 1 ? [...actors][0] : null;
 }
 
 // A "signed agreement" record that says there is NO signed record.
@@ -183,7 +225,7 @@ export function semanticOf(bundle) {
           ...new Set(
             v.claims
               .filter((c) => c.status === "approved" || approved.has(c))
-              .map((c) => approvalAuthority(c.quote))
+              .map((c) => approvalAuthority(c.quote, f))
               .filter(Boolean),
           ),
         ];
