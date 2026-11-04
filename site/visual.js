@@ -27,8 +27,7 @@
   const WORDS = {
     en: {
       inside: "inside the lab's range",
-      belowS: "a little below range",
-      aboveS: "a little above range",
+      differs: "differs from expected",
       below: "below range",
       above: "above range",
       noRange: "no printed range",
@@ -83,8 +82,7 @@
     },
     hi: {
       inside: "लैब की सीमा के अंदर",
-      belowS: "सीमा से थोड़ा कम",
-      aboveS: "सीमा से थोड़ा ज़्यादा",
+      differs: "अपेक्षा से अलग",
       below: "सीमा से कम",
       above: "सीमा से ज़्यादा",
       noRange: "सीमा नहीं छपी",
@@ -139,8 +137,7 @@
     },
     hinglish: {
       inside: "lab ki range ke andar",
-      belowS: "range se thoda kam",
-      aboveS: "range se thoda zyada",
+      differs: "expected se alag",
       below: "range se kam",
       above: "range se zyada",
       noRange: "range nahi chhapi",
@@ -198,21 +195,17 @@
 
   const TONE = {
     within: "in",
-    below_slightly: "near",
-    above_slightly: "near",
-    below_clearly: "out",
-    above_clearly: "out",
+    below: "out",
+    above: "out",
     qual_differs: "out",
     unknown: "none",
   };
   const posWord = (p, w) =>
     ({
       within: w.inside,
-      below_slightly: w.belowS,
-      above_slightly: w.aboveS,
-      below_clearly: w.below,
-      above_clearly: w.above,
-      qual_differs: w.above,
+      below: w.below,
+      above: w.above,
+      qual_differs: w.differs,
       unknown: w.noRange,
     })[p] ?? w.noRange;
 
@@ -571,10 +564,8 @@
   let rid = 0;
   const SEV = {
     within: "in",
-    below_slightly: "near",
-    above_slightly: "near",
-    below_clearly: "out",
-    above_clearly: "out",
+    below: "out",
+    above: "out",
     qual_differs: "out",
     unknown: "none",
   };

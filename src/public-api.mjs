@@ -24,7 +24,7 @@ import { createCallCounters } from "./public-call-counters.mjs";
 import { documentView } from "./library.mjs";
 import { buildGraph } from "../memory/graph.mjs";
 import { createMemory } from "../memory/memory.mjs";
-import { seriesFor, compare } from "../clinical/observations.mjs";
+import { seriesFor, compare, subjectOf } from "../clinical/observations.mjs";
 import { spokenText, splitSentences as splitSpoken } from "./companion.mjs";
 import { repairTestNames } from "./spoken-repair.mjs";
 import { spokenIds } from "./vernacular.mjs";
@@ -689,7 +689,7 @@ export function createPublicApi({
             true
           );
         const focus = url.searchParams.get("focus") || "all";
-        if (!/^[\w:./%-]{1,200}$/.test(focus))
+        if (!/^[\w:./%@-]{1,200}$/.test(focus))
           return (send(res, 400, { error: "Bad focus" }), true);
         const mem = s.publicMemory ?? (s.publicMemory = createMemory());
         const g =
@@ -1452,10 +1452,27 @@ export function clinicalGraph(bundle) {
         }
       : null;
   };
+  // Whose report this is, exactly as the evidence engine decides it: the
+  // printed patient ID, else the printed name, else this report alone. Two
+  // reports without a verified identity are never drawn as one person.
+  // Only a printed patient ID is a verified identity; a name alone is shown
+  // but never links reports or counts as verified.
+  const subjectLabel = (r, pid) => {
+    if (!pid.startsWith("doc:")) return pid;
+    const name = r.meta.patient?.name;
+    return name
+      ? `${name}: name only, not linked (${r.title ?? "this report"})`
+      : `Identity not printed (${r.title ?? "this report"} only)`;
+  };
   for (const r of reports) {
-    const pid = r.meta.patient?.id ?? "unidentified";
+    const pid = subjectOf(r);
     const status = (r.meta.status ?? "unknown").toLowerCase();
-    node({ id: `patient:${pid}`, kind: "patient", label: pid });
+    node({
+      id: `patient:${pid}`,
+      kind: "patient",
+      label: subjectLabel(r, pid),
+      verified: !pid.startsWith("doc:"),
+    });
     node({
       id: `doc:${r.sourceId}`,
       kind: "document",
@@ -1479,6 +1496,7 @@ export function clinicalGraph(bundle) {
           `${o.comparator ?? ""}${o.raw.replace(/^[<>≤≥]=?/, "")} ${o.unit ?? ""}`.trim(),
         field: o.key,
         test: o.test,
+        domain: "lab",
         status: status === "preliminary" ? "preliminary" : "current",
         date: r.meta.collected ?? null,
         evidence: evidenceOf(o, r),
@@ -1489,16 +1507,28 @@ export function clinicalGraph(bundle) {
   }
   // Same collection, amended report wins: the older value is superseded.
   const pids = [
-    ...new Set(reports.map((r) => r.meta.patient?.id).filter(Boolean)),
+    ...new Set(reports.map(subjectOf).filter((pid) => !pid.startsWith("doc:"))),
   ];
   for (const pid of pids) {
     const keys = new Set(
       reports
-        .filter((r) => r.meta.patient?.id === pid)
+        .filter((r) => subjectOf(r) === pid)
         .flatMap((r) => r.observations.map((o) => o.key)),
     );
     for (const key of keys) {
       const series = seriesFor(reports, key, pid);
+      // "latest" is a claim about chronology: only made when every point in
+      // this verified patient's series has an ISO collection date.
+      const dated = series.every((pt) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(pt.current.report.meta?.collected ?? ""),
+      );
+      series.forEach((pt, i) => {
+        if (!dated) return;
+        node({
+          id: `obs:${pt.current.report.sourceId}:${key}`,
+          ...(i === series.length - 1 ? { latest: true } : { earlier: true }),
+        });
+      });
       let prev = null;
       for (const point of series) {
         const cur = `obs:${point.current.report.sourceId}:${key}`;

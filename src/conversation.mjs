@@ -132,8 +132,18 @@ export function socialTurn(text, { lang = "en", last = null } = {}) {
       intent: "LANGUAGE",
       spoken: ASK_HINDI.test(t) ? say.hindi : say.english,
     };
-  if (R.repeat.test(t) && !domain)
-    return { intent: "REPEAT", spoken: last || say.nothing };
+  if (R.repeat.test(t) && !domain) {
+    // "say that again, but shorter": the first sentence of the same answer,
+    // never a new or reinterpreted one
+    const short =
+      last &&
+      /\b(short(?:er)?|brief(?:ly)?|quick(?:ly)?|in short|chhota|chhote mein)\b/i.test(
+        t,
+      )
+        ? shorterOf(last)
+        : last;
+    return { intent: "REPEAT", spoken: short || say.nothing };
+  }
   // "I can't see it on the screen" (even mid-question about a result)
   if (
     R.screen.test(t) &&
@@ -157,6 +167,9 @@ export function socialTurn(text, { lang = "en", last = null } = {}) {
   )
     return { intent: "UPLOAD", spoken: say.upload, action: { type: "upload" } };
   if (domain) return null;
+  // "Thanks. Didn't they quote 48,000 earlier?" is a question with a
+  // thank-you in front: the question gets answered, not a sign-off.
+  if (asksAfterCourtesy(t)) return null;
   if (R.done.test(t)) return { intent: "BYE", spoken: say.bye };
   for (const k of ["hear", "help", "who", "thanks", "bye", "greet"])
     if (R[k].test(t))
@@ -171,6 +184,49 @@ export function socialTurn(text, { lang = "en", last = null } = {}) {
   )
     return { intent: "THANKS", spoken: say.thanks };
   return null;
+}
+
+// The opening of an answer, long enough to stand alone: "No." alone is not a
+// shorter version of "No. Per the action log: no signed agreement exists".
+function shorterOf(text) {
+  const parts = String(text).match(/[^.!?।]+[.!?।]+(?=\s|$)|[^.!?।]+$/g) ?? [
+    text,
+  ];
+  let out = "";
+  for (const p of parts) {
+    out = (out + " " + p.trim()).trim();
+    if (out.split(/\s+/).length >= 4) break;
+  }
+  return out;
+}
+
+const COURTESY =
+  /^\s*(?:ok(?:ay)?[\s,.!]+)?(?:thanks|thank\s+(?:you|u)|cheers|great|perfect|got\s+it|dhanyavaad|dhanyawad|shukriya)\b[\s,.!-]*/i;
+function asksAfterCourtesy(t) {
+  const m = COURTESY.exec(t);
+  if (!m) return false;
+  const rest = t.slice(m[0].length).trim();
+  if (rest.split(/\s+/).length < 3) return false;
+  return (
+    /\?/.test(rest) ||
+    /^(what|when|who|which|how|why|where|is|was|were|are|did|didn'?t|does|do|has|have|had|can|could|tell|and|kya|kab|kaun|kitna)\b/i.test(
+      rest,
+    )
+  );
+}
+
+/**
+ * True for a fixed reply about the call itself (greeting, hear-check,
+ * thanks, help...), in any language. "Say that again" repeats the last
+ * answer about the records, never one of these.
+ */
+export function isSocialReply(text) {
+  const t = String(text ?? "").trim();
+  if (!t) return false;
+  for (const lang of Object.values(SAY))
+    for (const v of Object.values(lang))
+      if (typeof v === "string" && v.trim() === t) return true;
+  return false;
 }
 
 // ------------------------------------------------------------ phrasing repairs

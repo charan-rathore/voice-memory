@@ -146,7 +146,9 @@ test("report headers: name, ID, sex, age; numeric dates only when unambiguous", 
     "| Name | : Test Person |  |  |\n| Lab No. | : 439854467 | Age | : 30 Years |\n| Ref By | : U | Gender | : Male |\n| Collected | : 14/5/2023 11:03AM | Reported | : 16/5/2023 1:36PM |",
   );
   assert.equal(a.patient.name, "Test Person");
-  assert.equal(a.patient.id, "439854467");
+  // Lab No. names the order/specimen, not the person: kept, never an identity
+  assert.equal(a.patient.id, null);
+  assert.equal(a.accession, "439854467");
   assert.equal(a.patient.sex, "male");
   assert.equal(a.patient.age, 30);
   assert.equal(a.collected, "2023-05-14");

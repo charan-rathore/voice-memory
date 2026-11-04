@@ -16,6 +16,7 @@
 // original passage.
 import { extractClaims, resolveClaims } from "../dist/engine.mjs";
 import { liveEpisodes } from "./memory.mjs";
+import { subjectOf } from "../clinical/observations.mjs";
 
 const FIELDS = [
   "fee",
@@ -66,6 +67,127 @@ const span = (c) => ({
   quote: c.quote,
 });
 
+// Words that tie a clause to the field being approved, so "finance
+// approved the scope; the board approved the fee" credits the right actor.
+const FIELD_WORDS = {
+  fee: /\bfee\b|\bamount\b|\bprice\b|\bcost\b|\busd\b|[$€£₹]|\d{1,3},\d{3}/i,
+  paymentSplit:
+    /\bsplit\b|\bupfront\b|\bpercent\b|%|\b\d{1,2}\/\d{1,2}\b|\bschedule\b/i,
+  scope: /\bscope\b|\bsites?\b|\bregions?\b|\bdepots?\b|\bphase\b/i,
+  deadline: /\bdate\b|\bdeadline\b|\blaunch\b|\bgo-live\b|\btarget\b/i,
+};
+const APPROVE = /\bapprov(?:es|ed|e|ing)\b/i;
+// a negation before the verb inside the same clause: "did not approve"
+const NEGATED =
+  /\b(?:not|never|no|didn'?t|hasn'?t|haven'?t|won'?t|cannot|can'?t)\b/i;
+const ACTOR =
+  /\b(steering(?:\s+committee)?|finance|committee|board|client|customer|legal)\b/i;
+
+/**
+ * Who approved, read from the clause that holds the approval itself.
+ * Invariant: an actor is credited only when it is the subject of a
+ * non-negated approval clause about this field; competing actors, or none,
+ * give null ("approver not established").
+ * Counterexamples this rejects: "Finance noted that client approved the fee"
+ * (client, not finance); "Client finance did not approve the fee; steering
+ * committee approved it" (steering committee). Tested in
+ * evaluation/status-labels.test.mjs.
+ */
+export function approvalAuthority(quote, field = null) {
+  const q = String(quote ?? "");
+  // "Finance and the client approved": a joint subject is not one approver
+  // (splitting on "and" would credit only the client)
+  if (
+    new RegExp(
+      `${ACTOR.source}\\s+(?:and|&)\\s+(?:the\\s+)?${ACTOR.source}[^.;,]{0,20}${APPROVE.source}`,
+      "i",
+    ).test(q)
+  )
+    return null;
+  // "Rina (steering chair): ..." -> the speaker's role, used only to qualify
+  // a bare "the committee" the speaker announces
+  const role = /^[^:]{0,60}\(([^)]*)\)\s*:/.exec(q)?.[1] ?? "";
+  const clauses = q
+    .replace(/^[^:]{0,60}:\s*/, "")
+    .split(/[;:]|,|\s+(?:and|but|while|whereas|then)\s+|\bthat\b/i)
+    .map((c) => c.trim())
+    .filter(Boolean);
+  const affirm = clauses.filter((c) => {
+    const v = APPROVE.exec(c);
+    return v && !NEGATED.test(c.slice(0, v.index));
+  });
+  const words = FIELD_WORDS[field];
+  const aboutField = words ? affirm.filter((c) => words.test(c)) : [];
+  const pick = aboutField.length ? aboutField : affirm;
+  const actors = new Set(
+    pick.map((c) => {
+      const before = c.slice(0, APPROVE.exec(c).index);
+      const internal = /\binternal(?:ly)?\b/i.test(before);
+      let body = ACTOR.exec(before)?.[1]?.toLowerCase() ?? null;
+      if (body?.startsWith("steering")) body = "steering committee";
+      if (body === "committee" && /\bsteering\b/i.test(role))
+        body = "steering committee";
+      return [internal ? "internal" : null, body].filter(Boolean).join(" ");
+    }),
+  );
+  actors.delete("");
+  return actors.size === 1 ? [...actors][0] : null;
+}
+
+// A "signed agreement" record that says there is NO signed record.
+const NO_SIGNED_RE =
+  /\bno\b[^.;]{0,40}\b(?:signed|executed|signature)\b|\bnot\b[^.;]{0,25}\b(?:signed|executed)\b|\bdoes not constitute\b[^.;]{0,40}\bsignature\b/i;
+
+/**
+ * Which engagement each claim belongs to, for value-node identity: the same
+ * figure in two unrelated engagements ("$42,000" proposed for Alder, approved
+ * for Birch) is two values, never one approved node. Claims of one field and
+ * amount share a node only when their engine scope entities overlap. A claim
+ * with no scope entity joins the only engagement there is, else stays apart.
+ * Returns "" (the plain id) when the amount has a single engagement, so ids in
+ * one-engagement corpora are unchanged.
+ */
+function engagementKeys(list) {
+  const out = new Map();
+  const byValue = new Map();
+  for (const c of list) {
+    const k = canon(c.value);
+    byValue.set(k, [...(byValue.get(k) ?? []), c]);
+  }
+  for (const group of byValue.values()) {
+    const clusters = [];
+    const unscoped = [];
+    for (const c of group) {
+      const ents = new Set(c.scopeEntities ?? []);
+      if (!ents.size) {
+        unscoped.push(c);
+        continue;
+      }
+      const hits = clusters.filter((k) => [...ents].some((e) => k.ents.has(e)));
+      const into = hits[0] ?? { ents: new Set(), claims: [] };
+      if (!hits.length) clusters.push(into);
+      for (const other of hits.slice(1)) {
+        for (const e of other.ents) into.ents.add(e);
+        into.claims.push(...other.claims);
+        clusters.splice(clusters.indexOf(other), 1);
+      }
+      for (const e of ents) into.ents.add(e);
+      into.claims.push(c);
+    }
+    if (clusters.length <= 1) {
+      for (const c of group) out.set(c, "");
+      continue;
+    }
+    for (const k of clusters) {
+      const name = [...k.ents].sort((a, b) => b.length - a.length)[0];
+      for (const c of k.claims)
+        out.set(c, "@" + canon(name).replace(/\s+/g, "-"));
+    }
+    for (const c of unscoped) out.set(c, "@unscoped");
+  }
+  return out;
+}
+
 export function semanticOf(bundle) {
   const claims = extractClaims(bundle, FIELDS).filter((c) => c.value);
   const byField = new Map();
@@ -77,8 +199,9 @@ export function semanticOf(bundle) {
     const superseded = new Set(r.superseded);
     const approved = new Set(r.approved.get(f) ?? []);
     const values = new Map();
+    const engagementOf = engagementKeys(list);
     for (const c of list) {
-      const id = valueId(f, c.value);
+      const id = valueId(f, c.value) + engagementOf.get(c);
       const v = values.get(id) ?? {
         id,
         field: f,
@@ -96,6 +219,21 @@ export function semanticOf(bundle) {
       values.set(id, v);
     }
     const vals = [...values.values()];
+    for (const v of vals) {
+      if (v.status === "approved") {
+        const who = [
+          ...new Set(
+            v.claims
+              .filter((c) => c.status === "approved" || approved.has(c))
+              .map((c) => approvalAuthority(c.quote, f))
+              .filter(Boolean),
+          ),
+        ];
+        v.authority = who.length ? who.join(", ") : null;
+      }
+      if (f === "signedAgreement")
+        v.noSignedRecord = v.claims.every((c) => NO_SIGNED_RE.test(c.quote));
+    }
     const currentVals = vals.filter((v) => v.current);
     for (const v of vals)
       v.competing =
@@ -171,6 +309,9 @@ export function buildGraph(bundle, mem, focus = "overview") {
       kind: "value",
       label: v.label,
       status: v.competing ? "open" : v.superseded ? "superseded" : v.status,
+      domain: "record",
+      ...(v.status === "approved" ? { authority: v.authority ?? null } : {}),
+      ...(v.noSignedRecord ? { noSignedRecord: true } : {}),
       field: v.field,
       weight: valueUse.get(v.id) ?? 0,
     });
@@ -206,11 +347,15 @@ export function buildGraph(bundle, mem, focus = "overview") {
       // stable patient ID is the key (two people can share a name); a report
       // with NO verified identity gets its own per-report topic, never a
       // shared "unidentified" bucket that would imply one person.
-      const pid = String(lab.meta?.patient?.id || "").trim();
-      const who = String(lab.meta?.patient?.name || pid).replace(
-        /\s*\(synthetic\)/i,
-        "",
-      );
+      // Same subject rule as the evidence engine (subjectOf): ID, else
+      // printed name, else this report alone. Masked fields count as absent.
+      const subject = subjectOf({ ...lab, sourceId: lab.sourceId });
+      const pid = subject.startsWith("doc:") ? "" : subject;
+      const who = pid
+        ? String(
+            lab.meta?.patient?.name || lab.meta?.patient?.id || pid,
+          ).replace(/\s*\(synthetic\)/i, "")
+        : "";
       const tid = pid ? `topic:lab:${pid}` : `topic:lab:unverified:${src.id}`;
       node({
         id: tid,

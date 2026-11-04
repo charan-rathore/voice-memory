@@ -7,6 +7,7 @@ import {
   compare,
   testKey,
   subjectOf,
+  markIdentityConflicts,
   MONTHS,
 } from "./observations.mjs";
 import {
@@ -24,6 +25,8 @@ import {
   GLOSSARY,
   CRITICAL_FLAG,
   valueText,
+  aboutSomeoneElse,
+  thirdPerson,
 } from "./explain.mjs";
 import { GROUPS } from "./glossary-more.mjs";
 
@@ -185,7 +188,13 @@ export function findTest(question, reports) {
 /** Name a subject for a question back to the user. */
 export function subjectLabel(id, reports) {
   const r = reports.find((x) => subjectOf(x) === id);
-  if (id.startsWith("doc:")) return r?.title ?? id.slice(4);
+  // an unlinked report is named by what it prints, plus its file, so two
+  // "John Smith" reports read as two choices, not one person twice
+  if (id.startsWith("doc:")) {
+    const n = r?.meta.patient?.name?.replace(/\s*\(synthetic\)/i, "");
+    const t = r?.title ?? id.slice(4);
+    return n ? `${n} (${t})` : t;
+  }
   const name = r?.meta.patient?.name?.replace(/\s*\(synthetic\)/i, "");
   // Synthetic demo reports are known by their ID; real reports by the name printed on them.
   if (id.startsWith("name:")) return name ?? id.slice(5);
@@ -687,6 +696,10 @@ export function observationEvidence(o, bundle) {
 
 /** Clinical reports for a bundle built from library entries (same order). */
 export function clinicalReportsFor(bundle, entries, extract) {
+  // identity is decided over the whole set, once (see subjectOf)
+  return markIdentityConflicts(reportsOf(bundle, entries, extract));
+}
+function reportsOf(bundle, entries, extract) {
   return bundle.sources
     .map((src, i) => {
       const e = entries[i];
@@ -844,10 +857,8 @@ function latestFor(reports, pid, keys = null) {
 
 const SAY = {
   en: {
-    above_slightly: "a little above",
-    above_clearly: "above",
-    below_slightly: "a little below",
-    below_clearly: "below",
+    above: "above",
+    below: "below",
     item: (o, where, r) =>
       `${nameOf(o)} ${valueOf(o)} (${rangeWords(where, r, "en")})`,
     qual: (o) =>
@@ -881,10 +892,8 @@ const SAY = {
         )} in these reports. They include ${have}.`,
     critical: (o) =>
       ` The lab marked ${nameOf(o)} as critical, so please contact your doctor or clinic today.`,
-    soon: (o) =>
-      ` I can't diagnose from a report; please go over these with your doctor soon, especially ${nameOf(o)}.`,
     gentle:
-      " Results a little outside a range are common; your doctor can read them alongside how you feel.",
+      " I can't diagnose from a report; your doctor can read these alongside how you feel and your history.",
     calm: " Your doctor can read them alongside how you feel and your history.",
     group: (label, items) =>
       `${label ? `For your ${label}` : "For these tests"}: ${items}.`,
@@ -899,10 +908,8 @@ const SAY = {
       `These reports belong to more than one person (${ids.join(", ")}). Whose report should I look at?`,
   },
   hi: {
-    above_slightly: "थोड़ा ज़्यादा",
-    above_clearly: "ज़्यादा",
-    below_slightly: "थोड़ा कम",
-    below_clearly: "कम",
+    above: "ज़्यादा",
+    below: "कम",
     item: (o, where, r) =>
       `${nameOf(o)} ${valueOf(o)} (सीमा ${span(r, "hi")} से ${where})`,
     qual: (o) =>
@@ -926,10 +933,8 @@ const SAY = {
       `इन रिपोर्ट्स में मुझे ${what} नहीं दिखा। इनमें ये जांचें हैं: ${have}।`,
     critical: (o) =>
       ` लैब ने ${nameOf(o)} को क्रिटिकल बताया है, कृपया आज ही अपने डॉक्टर से संपर्क करें।`,
-    soon: (o) =>
-      ` मैं रिपोर्ट से निदान नहीं कर सकती; कृपया इन्हें जल्द ही अपने डॉक्टर को दिखाएं, ख़ासकर ${nameOf(o)}।`,
     gentle:
-      " सीमा से थोड़ा बाहर आना आम बात है; आपके डॉक्टर इसे आपकी तबीयत के साथ देखकर समझा सकते हैं।",
+      " मैं रिपोर्ट से निदान नहीं कर सकती; आपके डॉक्टर इन्हें आपकी तबीयत और इतिहास के साथ देख सकते हैं।",
     calm: " आपके डॉक्टर इन्हें आपकी तबीयत और इतिहास के साथ देख सकते हैं।",
     group: (label, items) =>
       `${label ? `आपके ${label} के नतीजे` : "इन जांचों के नतीजे"}: ${items}।`,
@@ -943,10 +948,8 @@ const SAY = {
       `ये रिपोर्ट्स एक से ज़्यादा लोगों की हैं (${ids.join(", ")})। मैं किसकी रिपोर्ट देखूं?`,
   },
   hinglish: {
-    above_slightly: "thoda zyada",
-    above_clearly: "zyada",
-    below_slightly: "thoda kam",
-    below_clearly: "kam",
+    above: "zyada",
+    below: "kam",
     item: (o, where, r) =>
       `${nameOf(o)} ${valueOf(o)} (range ${span(r, "hinglish")} se ${where})`,
     qual: (o) =>
@@ -970,10 +973,8 @@ const SAY = {
       `In reports mein mujhe ${what} nahi dikha. Inmein yeh tests hain: ${have}.`,
     critical: (o) =>
       ` Lab ne ${nameOf(o)} ko critical bataya hai, please aaj hi apne doctor se baat karein.`,
-    soon: (o) =>
-      ` Main report se diagnosis nahi kar sakti; please inhe jaldi apne doctor ko dikhaiye, khaaskar ${nameOf(o)}.`,
     gentle:
-      " Range se thoda bahar aana aam baat hai; aapke doctor ise aapki tabiyat ke saath dekh sakte hain.",
+      " Main report se diagnosis nahi kar sakti; aapke doctor inhe aapki tabiyat aur history ke saath dekh sakte hain.",
     calm: " Aapke doctor inhe aapki tabiyat aur history ke saath dekh sakte hain.",
     group: (label, items) =>
       `${label ? `Aapke ${label} ke results` : "In tests ke results"}: ${items}.`,
@@ -1071,12 +1072,12 @@ function rangeWords(where, r, lang) {
 }
 const valueOf = (o) =>
   o.qual ? o.qual : `${o.raw}${o.unit ? " " + o.unit : ""}`;
+// Which results to list as outside the printed range. Not a severity: the
+// order is the lab's own (qualitative mismatch first), never a distance.
 const SEVERITY = {
   qual_differs: 0,
-  above_clearly: 1,
-  below_clearly: 1,
-  above_slightly: 2,
-  below_slightly: 2,
+  above: 1,
+  below: 1,
 };
 
 /** Pick the subject to talk about, or ask which. */
@@ -1129,12 +1130,7 @@ export function groupAnswer(question, reports, keys, label = null) {
       ? null
       : GLOSSARY[obs[0].canon ?? obs[0].key];
   if (g) spoken += " " + PHRASES[lang].general(g[lang]);
-  if (flagged.length) {
-    const worst = [...flagged].sort(
-      (a, b) => SEVERITY[position(a)] - SEVERITY[position(b)],
-    )[0];
-    spoken += SEVERITY[position(worst)] < 2 ? S.soon(worst) : S.gentle;
-  }
+  if (flagged.length) spoken += S.gentle;
   return {
     spoken,
     verdict: flagged.length ? "FLAGGED" : "LATEST",
@@ -1188,8 +1184,6 @@ export function reportSummary(question, reports) {
   if (child && adultOnly) spoken += S.child(child.meta.patient.age, adultOnly);
   if (unjudged > 0) spoken += S.noRange(unjudged);
   if (critical) spoken += S.critical(critical);
-  else if (flagged.length && SEVERITY[position(flagged[0])] < 2)
-    spoken += S.soon(flagged[0]);
   else if (flagged.length) spoken += S.gentle;
   else spoken += S.calm;
   return {
@@ -1355,6 +1349,20 @@ function howFar(t, question) {
 }
 
 export function clinicalAnswer(question, reports) {
+  const out = answerFor(question, reports);
+  // "What is his TSH?" after "I uploaded my dad's report": the results are
+  // not the caller's, so the English answer says "The TSH result", never
+  // "Your TSH result".
+  if (
+    out?.spoken &&
+    (out.lang ?? detectLang(question)) === "en" &&
+    aboutSomeoneElse(question)
+  )
+    return { ...out, spoken: thirdPerson(out.spoken) };
+  return out;
+}
+
+function answerFor(question, reports) {
   if (!reports?.length) return null;
   const t = clinicalTurn(question, reports);
   if (t) return howFar(t, question);

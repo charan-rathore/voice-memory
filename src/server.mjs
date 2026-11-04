@@ -805,7 +805,7 @@ export function createLocalServer({
         return {
           raw: null,
           shown: {
-            lead: declineLead(advice, lang),
+            lead: declineLead(advice, lang, original),
             semantic: { intent: "ADVICE", lang, steps: ["decline_advice"] },
             evidence: [],
           },
@@ -1648,6 +1648,10 @@ export function createLocalServer({
       res.end(
         JSON.stringify({
           ok: true,
+          // Which code is answering (set by Render on every deploy), so a
+          // preview page and this backend can be checked for a version match.
+          commit:
+            process.env.RENDER_GIT_COMMIT ?? process.env.VM_COMMIT ?? null,
           cache: { entries: answerCache.size, ...answerCache.stats },
           semantic: gemini.status(),
           // Memory only: no documents, questions or identities.
@@ -2078,7 +2082,7 @@ export function createLocalServer({
       if (req.method === "GET" && req.url.startsWith("/api/graph")) {
         const focus =
           new URL(req.url, origin).searchParams.get("focus") || "overview";
-        if (!/^[\w:./%-]{1,200}$/.test(focus)) {
+        if (!/^[\w:./%@-]{1,200}$/.test(focus)) {
           res.statusCode = 400;
           res.end(JSON.stringify({ error: "Bad focus" }));
           return;

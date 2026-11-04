@@ -209,7 +209,7 @@ LOINC/UCUM coding. Kept separate from the commercial claim graph.
 | Unit never inferred | Missing unit stays null; comparison refuses | `compare` missing_unit |
 | No unit conversion | mg/dL vs µmol/L refuses: no analyte/unit pair is validated | Creatinine gold case |
 | Same test only | Identical normalized names; no synonyms ("thyroid hormone" does not match "TSH") | retrieval paraphrase miss, by design |
-| Same patient only | Different IDs never combine; without one named, the answer asks which patient | Hemoglobin gold case |
+| Same patient only | Only a printed, unmasked patient ID links reports, and not when the reports contradict it (sex, impossible ages). Names and lab/accession numbers never link; without a link the answer asks which patient | Hemoglobin gold case, `evaluation/patient-identity.test.mjs` |
 | Amended wins | Same collection date: amended/corrected over final over preliminary; the superseded value is cited | Ferritin gold case |
 | Bounds stay bounds | `<0.05` vs `0.30` is higher; `<0.05` vs `<0.10` is undetermined | `compare` tests |
 | Flag vs range | A printed H/L flag its own range contradicts is said out loud | flag conflict test |

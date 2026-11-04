@@ -26,7 +26,7 @@ test("comparable readings: signed change, percent, printed precision", () => {
     s,
     s[1].current,
     { lowN: 13, highN: 17, low: "13.0", high: "17.0" },
-    "below_slightly",
+    "below",
   );
   assert.deepEqual(i.change, {
     from: "12.1",
@@ -62,7 +62,7 @@ test("a bound like <0.05 is never subtracted from", () => {
     s,
     s[1].current,
     { lowN: 0.4, highN: 4, low: "0.40" },
-    "below_clearly",
+    "below",
   );
   assert.equal(i.change, null);
   assert.equal(i.notCompared, "bound");
@@ -75,7 +75,7 @@ test("one reading: nothing to compare, nothing claimed", () => {
     s,
     s[0].current,
     { lowN: 4, highN: 5.6, high: "5.6" },
-    "above_slightly",
+    "above",
   );
   assert.equal(i.change, null);
   assert.equal(i.notCompared, null);

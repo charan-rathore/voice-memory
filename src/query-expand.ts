@@ -103,13 +103,9 @@ export function expandQuery(question: string): ExpandedQuery {
   // vocabulary. Both guards must hold, so unrelated "keep" questions ("keep
   // the deadline", "who keeps meeting notes") never widen. Recall-widening
   // only; the evidence gate decides, and the original query still wins.
-  const DURATION_ASK =
-    /\b(?:how long|for how many\s+(?:days|weeks|months|years)|for what\s+(?:period|duration)|until when)\b/i;
-  const TRANSCRIPT_RETENTION_TARGET =
-    /\b(?:keep|keeps|kept|retain|retains|retained|store|stores|stored)\s+(?:(?:the|our|these|those)\s+)?(?:call\s+)?transcripts?\b|\b(?:call\s+)?transcripts?\s+(?:(?:are|were|is|was|will be|should be|have been)\s+)?(?:retained|kept|stored)\b/i;
-  const retentionMatch = question.match(TRANSCRIPT_RETENTION_TARGET);
-  if (DURATION_ASK.test(question) && retentionMatch) {
-    push(retentionMatch[0], "retention", "dictionary");
+  const retentionMatch = transcriptRetentionAsk(question);
+  if (retentionMatch) {
+    push(retentionMatch, "retention", "dictionary");
   }
 
   // Dictionary: phrase matches first (multi-word), then single tokens.
@@ -132,4 +128,49 @@ export function expandQuery(question: string): ExpandedQuery {
     ? original + " " + [...added].join(" ")
     : original;
   return { original, expanded, applied };
+}
+
+const DURATION_ASK =
+  /\b(?:how long|for how many\s+(?:days|weeks|months|years)|for what\s+(?:period|duration)|until when)\b/i;
+const TRANSCRIPT_RETENTION_TARGET =
+  /\b(?:keep|keeps|kept|retain|retains|retained|store|stores|stored)\s+(?:(?:the|our|these|those)\s+)?(?:call\s+)?transcripts?\b|\b(?:call\s+)?transcripts?\s+(?:(?:are|were|is|was|will be|should be|have been)\s+)?(?:retained|kept|stored)\b/i;
+
+/**
+ * The phrase of a duration question about keeping transcripts ("how long
+ * are transcripts retained", "how long do you keep the transcripts for"),
+ * or null. The phrase must end the clause: "how long do we keep
+ * transcripts confidential / private / encrypted" asks about something
+ * else and never maps to retention.
+ */
+export function transcriptRetentionAsk(question: string): string | null {
+  if (!DURATION_ASK.test(question)) return null;
+  const m = TRANSCRIPT_RETENTION_TARGET.exec(question);
+  if (!m) return null;
+  const rest = question
+    .slice(m.index + m[0].length)
+    .replace(/[?.!\s]+$/, "")
+    .trim();
+  // Only a stranded "for" ("how long do you keep transcripts for?") or the
+  // pilot itself may follow: "for confidentiality", "under confidentiality
+  // terms" or "for legal review" ask about a different obligation.
+  if (rest && !/^for$|^(?:for|during|in)\s+(?:the|this)\s+pilot$/i.test(rest))
+    return null;
+  return m[0];
+}
+
+/**
+ * A verified query-equivalent rewrite: the caller's words replaced by the
+ * record's own term, used only after the original question and the appended
+ * expansion both fail the evidence gate. Only the guarded transcript
+ * retention bridge qualifies today; every other expansion stays additive.
+ */
+export function equivalentRewrite(question: string): ExpandedQuery | null {
+  const phrase = transcriptRetentionAsk(question);
+  if (!phrase) return null;
+  const to = "transcript retention period";
+  return {
+    original: question,
+    expanded: question.replace(phrase, to),
+    applied: [{ from: phrase, to, kind: "dictionary" }],
+  };
 }

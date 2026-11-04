@@ -25,6 +25,7 @@ import {
   parseReference,
   parseResult,
   normUnit,
+  isMaskedIdentity,
 } from "./lab-lines.mjs";
 import { locate } from "../ingest/canonical.mjs";
 import { canonOf } from "./explain.mjs";
@@ -55,7 +56,7 @@ export const MONTHS = {
   nov: 11,
   dec: 12,
   जनवरी: 1,
-  "फ़रवरी": 2,
+  फ़रवरी: 2,
   फरवरी: 2,
   मार्च: 3,
   अप्रैल: 4,
@@ -107,6 +108,7 @@ export function reportMeta(full) {
           age: g.patient?.age ?? null,
         }
       : g.patient,
+    accession: g.accession ?? null,
     collected: collected
       ? isoDate(collected[1], collected[2], collected[3])
       : g.collected,
@@ -353,17 +355,51 @@ const STATUS_RANK = {
  * else the document itself. Reports are only ever combined under the same
  * subject, so two unidentified uploads are never treated as one person.
  */
-export function subjectOf(r) {
-  const p = r.meta?.patient;
-  if (p?.id) return p.id;
-  if (p?.name)
-    return (
-      "name:" +
-      p.name
-        .toLowerCase()
-        .replace(/[^a-z]+/g, " ")
-        .trim()
+/**
+ * Two reports printing the same patient ID still describe different people
+ * when the reports themselves disagree: a different printed sex, or ages that
+ * cannot both be true given the collection dates (more than one year apart
+ * after allowing for the time between collections).
+ */
+export function identityConflict(a, b) {
+  const pa = a.meta?.patient ?? {};
+  const pb = b.meta?.patient ?? {};
+  if (pa.sex && pb.sex && pa.sex !== pb.sex) return true;
+  if (pa.age != null && pb.age != null) {
+    const da = Date.parse(a.meta?.collected ?? "");
+    const db = Date.parse(b.meta?.collected ?? "");
+    const years =
+      Number.isFinite(da) && Number.isFinite(db)
+        ? Math.abs(da - db) / 31557600000
+        : 0;
+    if (Math.abs(pa.age - pb.age) > years + 1) return true;
+  }
+  return false;
+}
+
+/**
+ * Marks reports whose shared patient ID is contradicted by the reports
+ * themselves (identityConflict). Call once on the full report list; such
+ * reports then stay separate in answers and graphs. Returns the list.
+ */
+export function markIdentityConflicts(reports) {
+  for (const r of reports ?? []) {
+    const p = r.meta?.patient;
+    if (!p?.id) continue;
+    // recomputed every time: cached reports may be re-used in a new set
+    p.idConflict = reports.some(
+      (x) => x !== r && x.meta?.patient?.id === p.id && identityConflict(r, x),
     );
+  }
+  return reports;
+}
+
+export function subjectOf(r) {
+  // Identity contract: only a printed PATIENT identifier links reports. A
+  // shared printed name (two John Smiths) or lab/accession number never
+  // does; such reports stay separate and the answer asks whose they are.
+  const p = r.meta?.patient;
+  if (p?.id && !isMaskedIdentity(p.id) && !p.idConflict) return p.id;
   return "doc:" + (r.sourceId ?? r.title);
 }
 /** When a report's sample was taken: ISO date, else the printed date, else the document. */

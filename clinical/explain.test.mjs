@@ -124,23 +124,24 @@ test("the lab's printed range is spoken exactly as printed", async () => {
   assert.match(a, /range of 0\.40 to 4\.00/);
 });
 
-test("position: within, slightly, clearly; bounds never 'slightly'", () => {
+test("position is literal: within, below or above the printed range; no distance tiers", () => {
+  // RED on main 6edac74: a 10% distance-from-limit heuristic split results
+  // into "slightly" and "clearly" outside, and "clearly" added "talk to your
+  // doctor soon". Mathematical distance is not clinical severity.
   const o = (raw, range) => ({ raw, range, ...parseValue(raw) });
   assert.equal(position(o("50", "30-400")), "within");
-  assert.equal(position(o("12.1", "13.0-17.0")), "below_slightly");
-  assert.equal(position(o("0.30", "0.40-4.00")), "below_clearly");
-  assert.equal(position(o("<0.05", "0.40-4.00")), "below_clearly");
-  assert.equal(
-    position(o("<0.39", "0.40-4.00")),
-    "below_clearly",
-    "a bound is never called slightly off",
-  );
-  assert.equal(position(o("17.5", "13.0-17.0")), "above_slightly");
-  assert.equal(position(o("6.4", "4.0-5.6")), "above_clearly");
+  assert.equal(position(o("12.1", "13.0-17.0")), "below");
+  assert.equal(position(o("0.30", "0.40-4.00")), "below");
+  assert.equal(position(o("<0.05", "0.40-4.00")), "below");
+  assert.equal(position(o("<0.39", "0.40-4.00")), "below");
+  assert.equal(position(o("17.5", "13.0-17.0")), "above");
+  assert.equal(position(o("6.4", "4.0-5.6")), "above");
   assert.equal(position(o("Positive", "Negative")), "unknown");
+  // a bound that straddles a limit cannot be placed
+  assert.equal(position(o("<0.50", "0.40-4.00")), "unknown");
 });
 
-test("tone matches position: perspective when slightly off, 'doctor soon' when clearly off, calm when within", () => {
+test("wording is literal for every distance; only the lab's own critical flag adds urgency", () => {
   const o = (test, key, raw, range, flag = null) => ({
     test,
     key,
@@ -150,21 +151,34 @@ test("tone matches position: perspective when slightly off, 'doctor soon' when c
     unit: "x",
     ...parseValue(raw),
   });
-  const slight = explainOne(
-    o("Hemoglobin", "hemoglobin", "12.1", "13.0-17.0", "L"),
-    "2026-09-03",
-    "en",
+  const SEVERITY_WORDS =
+    /slightly|a little|clearly|soon|1 in 20|worth talking|urgent|थोड़ा|साफ़ तौर|जल्द|thoda|saaf taur|jaldi/i;
+  for (const lang of ["en", "hi", "hinglish"]) {
+    const near = explainOne(
+      o("Hemoglobin", "hemoglobin", "12.9", "13.0-17.0", "L"),
+      "2026-09-03",
+      lang,
+    );
+    const far = explainOne(
+      o("TSH", "tsh", "25.17", "0.35-5.50", "H"),
+      "2026-10-12",
+      lang,
+    );
+    assert.doesNotMatch(near, SEVERITY_WORDS, `${lang}: ${near}`);
+    assert.doesNotMatch(far, SEVERITY_WORDS, `${lang}: ${far}`);
+  }
+  assert.match(
+    explainOne(o("TSH", "tsh", "25.17", "0.35-5.50"), "2026-10-12", "en"),
+    /above this lab's printed range of 0\.35 to 5\.50\./,
   );
-  assert.match(slight, /a little below/);
-  assert.match(slight, /about 1 in 20 people without any illness/);
-  assert.doesNotMatch(slight, /soon/);
-  const clear = explainOne(
-    o("TSH", "tsh", "0.30", "0.40-4.00", "L"),
-    "2026-10-12",
-    "en",
+  assert.match(
+    explainOne(
+      o("Hemoglobin", "hemoglobin", "12.9", "13.0-17.0"),
+      "2026-09-03",
+      "en",
+    ),
+    /below this lab's printed range of 13\.0 to 17\.0\./,
   );
-  assert.match(clear, /clearly below/);
-  assert.match(clear, /talking it through with your doctor soon/);
   const within = explainOne(
     o("Ferritin", "ferritin", "50", "30-400"),
     "2026-10-12",
@@ -172,6 +186,13 @@ test("tone matches position: perspective when slightly off, 'doctor soon' when c
   );
   assert.match(within, /within this lab's range/);
   assert.doesNotMatch(within, /doctor/);
+  // the lab's explicit critical flag keeps its own path
+  const crit = explainOne(
+    o("Potassium", "potassium", "6.9", "3.5-5.1", "HH"),
+    "2026-10-12",
+    "en",
+  );
+  assert.match(crit, /lab marked this result as critical/);
 });
 
 test("a printed critical flag is urgent but calm, in every language", () => {
