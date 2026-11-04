@@ -23289,9 +23289,11 @@ function contextReview(bundle, validate) {
   const groups = { changes: [], open: [], conditions: [], decisions: [] };
   for (const source of bundle.sources) {
     let offset = 0;
+    let lineNo = 0;
     for (const line of source.text.split("\n")) {
       const start = offset;
       offset += line.length + 1;
+      lineNo += 1;
       if (!line.trim() || line.startsWith("#")) continue;
       const c = {
         sourceId: source.id,
@@ -23299,8 +23301,8 @@ function contextReview(bundle, validate) {
         hash: source.hash,
         start,
         end: start + line.length,
-        firstLine: source.text.slice(0, start).split("\n").length,
-        lastLine: source.text.slice(0, start).split("\n").length,
+        firstLine: lineNo,
+        lastLine: lineNo,
         quote: line
       };
       validate(c, bundle);
@@ -23404,6 +23406,12 @@ function expandQuery(question) {
     added.add(to);
     applied.push({ from, to, kind });
   };
+  const DURATION_ASK = /\b(?:how long|for how many\s+(?:days|weeks|months|years)|for what\s+(?:period|duration)|until when)\b/i;
+  const TRANSCRIPT_RETENTION_TARGET = /\b(?:keep|keeps|kept|retain|retains|retained|store|stores|stored)\s+(?:(?:the|our|these|those)\s+)?(?:call\s+)?transcripts?\b|\b(?:call\s+)?transcripts?\s+(?:(?:are|were|is|was|will be|should be|have been)\s+)?(?:retained|kept|stored)\b/i;
+  const retentionMatch = question.match(TRANSCRIPT_RETENTION_TARGET);
+  if (DURATION_ASK.test(question) && retentionMatch) {
+    push(retentionMatch[0], "retention", "dictionary");
+  }
   for (const [key, vals] of DICTIONARY) {
     if (key.includes(" ") || key.includes("-")) {
       if (lower.includes(key)) for (const v of vals) push(key, v, "dictionary");
@@ -23420,6 +23428,45 @@ function expandQuery(question) {
   }
   const expanded = added.size ? original + " " + [...added].join(" ") : original;
   return { original, expanded, applied };
+}
+
+// src/line-index.ts
+var MAX_TEXTS = 128;
+var MAX_CACHE_CHARS = 4 * 7e5;
+var STARTS = /* @__PURE__ */ new Map();
+var cachedChars = 0;
+function lineStarts(text) {
+  let starts = STARTS.get(text);
+  if (!starts) {
+    starts = [0];
+    for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1))
+      starts.push(i + 1);
+    if (text.length <= MAX_CACHE_CHARS) {
+      while (STARTS.size >= MAX_TEXTS || cachedChars + text.length > MAX_CACHE_CHARS) {
+        const oldest = STARTS.keys().next();
+        if (oldest.done) break;
+        cachedChars -= oldest.value.length;
+        STARTS.delete(oldest.value);
+      }
+      STARTS.set(text, starts);
+      cachedChars += text.length;
+    }
+  }
+  return starts;
+}
+function lineOf(text, pos) {
+  const starts = lineStarts(text);
+  let lo = 0;
+  let hi = starts.length;
+  while (lo < hi) {
+    const mid = lo + hi >>> 1;
+    if (starts[mid] <= pos) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+function lineIndexCacheStats() {
+  return { texts: STARTS.size, chars: cachedChars };
 }
 
 // src/claim-check.ts
@@ -23624,10 +23671,12 @@ function extractClaims(bundle, fields) {
       source.text
     ) && /\bin force\b/i.test(source.text) && !/\bnot (?:been )?(?:counter)?signed\b/i.test(source.text);
     let offset = 0;
+    let lineNo = 0;
     let sectionDate = null;
     for (const line of source.text.split("\n")) {
       const lineStart = offset;
       offset += line.length + 1;
+      lineNo += 1;
       const sd = sectionDateOf(line);
       if (sd) sectionDate = sd;
       const docDate = sectionDate ?? docDateHeader;
@@ -23643,8 +23692,11 @@ function extractClaims(bundle, fields) {
           hash: source.hash,
           start,
           end: start + seg.length,
-          firstLine: source.text.slice(0, start).split("\n").length,
-          lastLine: source.text.slice(0, start).split("\n").length,
+          // The utterance sits inside the current line: its line number is
+          // the loop counter. (Was: slice(0, start).split("\n") per
+          // utterance - O(docsize) per candidate on large documents.)
+          firstLine: lineNo,
+          lastLine: lineNo,
           quote: seg,
           docDate,
           scopeEntities
@@ -29518,7 +29570,7 @@ function buildEntriesPayload(kind, contentLines, notes, assigned, ctx, matched =
   const collectOver = (lines, strict, lenient, options = {}) => {
     let tableHeaderCells = null;
     const entries = [];
-    const lineOf = [];
+    const lineOf2 = [];
     const used = new Set(options.skip ?? []);
     const unmatched = [];
     for (let i = 0; i < lines.length; i++) {
@@ -29536,7 +29588,7 @@ function buildEntriesPayload(kind, contentLines, notes, assigned, ctx, matched =
       const entry = strictEntry && rowCells && tableHeaderCells && options.remapRow ? options.remapRow(strictEntry, rowCells, tableHeaderCells) : strictEntry;
       if (entry) {
         entries.push(entry);
-        lineOf.push(line.lineNo);
+        lineOf2.push(line.lineNo);
         used.add(line.lineNo);
       } else {
         unmatched.push(line);
@@ -29550,14 +29602,14 @@ function buildEntriesPayload(kind, contentLines, notes, assigned, ctx, matched =
         const entry = strictCount === 0 ? lenient(line.text) : options.salvage?.(line.text) ?? null;
         if (entry) {
           entries.push(entry);
-          lineOf.push(line.lineNo);
+          lineOf2.push(line.lineNo);
           used.add(line.lineNo);
           continue;
         }
       }
       if (notes.length < LIMITS.maxNotesPerBlock) notes.push(stripListMarker(line.text));
     }
-    return { entries, lineOf, used, ...notes.length > 0 ? { notes } : {} };
+    return { entries, lineOf: lineOf2, used, ...notes.length > 0 ? { notes } : {} };
   };
   const collect = (strict, lenient, options = {}) => collectOver(contentLines, strict, lenient, options);
   const finish = (built) => ({ entries: built.entries, ...built.notes ? { notes: built.notes } : {} });
@@ -31815,7 +31867,8 @@ function answer(question, bundle, dense) {
       actualMode: found.actualMode,
       embeddingModel: found.actualMode === "keyword" ? null : dense?.model ?? null
     },
-    start
+    start,
+    expansionUsed?.expanded ?? rephraseUsed?.rephrased ?? void 0
   );
   let claimsVerdict = false;
   if (fields.length) {
@@ -32355,7 +32408,7 @@ function answer(question, bundle, dense) {
   }
   return result;
 }
-function answerFromRetrieval(question, bundle, found, expected, start = performance.now()) {
+function answerFromRetrieval(question, bundle, found, expected, start = performance.now(), scoringQuestion) {
   if (!found || !Array.isArray(found.chunks) || found.actualMode !== expected.actualMode || !["keyword", "dense", "hybrid"].includes(expected.actualMode) || expected.actualMode !== "keyword" && !expected.embeddingModel)
     throw Error("Retrieval mode contract mismatch.");
   if (!["positive", "negative_not_found", "insufficient", "ambiguous"].includes(
@@ -32390,8 +32443,8 @@ function answerFromRetrieval(question, bundle, found, expected, start = performa
       hash: source.hash,
       start: offset,
       end,
-      firstLine: source.text.slice(0, offset).split("\n").length,
-      lastLine: source.text.slice(0, end).split("\n").length,
+      firstLine: lineOf(source.text, offset),
+      lastLine: lineOf(source.text, end),
       quote: source.text.slice(offset, end)
     };
     validateEvidence(c, bundle);
@@ -32404,7 +32457,7 @@ function answerFromRetrieval(question, bundle, found, expected, start = performa
   return {
     question,
     context: review,
-    answer: found.evidence === "ambiguous" ? "Several passages are relevant, but this question remains unresolved. Review the original passages; no supported answer or draft is available." : refused ? "I could not find supporting passages in these documents." : extractiveAnswer(question, chunks).replace(
+    answer: found.evidence === "ambiguous" ? "Several passages are relevant, but this question remains unresolved. Review the original passages; no supported answer or draft is available." : refused ? "I could not find supporting passages in these documents." : extractiveAnswer(scoringQuestion ?? question, chunks).replace(
       " Add a model in Settings to reason across them.",
       ""
     ),
@@ -32468,6 +32521,8 @@ export {
   draft,
   extractClaims,
   importBundle,
+  lineIndexCacheStats,
+  lineOf,
   questionFields,
   resolveClaims,
   retrieveChunks,

@@ -384,10 +384,12 @@ export function extractClaims(
         /\bin force\b/i.test(source.text) &&
         !/\bnot (?:been )?(?:counter)?signed\b/i.test(source.text));
     let offset = 0;
+    let lineNo = 0;
     let sectionDate: string | null = null;
     for (const line of source.text.split("\n")) {
       const lineStart = offset;
       offset += line.length + 1;
+      lineNo += 1;
       const sd = sectionDateOf(line);
       if (sd) sectionDate = sd;
       const docDate = sectionDate ?? docDateHeader;
@@ -408,8 +410,11 @@ export function extractClaims(
           hash: source.hash,
           start,
           end: start + seg.length,
-          firstLine: source.text.slice(0, start).split("\n").length,
-          lastLine: source.text.slice(0, start).split("\n").length,
+          // The utterance sits inside the current line: its line number is
+          // the loop counter. (Was: slice(0, start).split("\n") per
+          // utterance - O(docsize) per candidate on large documents.)
+          firstLine: lineNo,
+          lastLine: lineNo,
           quote: seg,
           docDate,
           scopeEntities,

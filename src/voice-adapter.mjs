@@ -860,6 +860,7 @@ export function createVoiceAdapter({
             result,
             bundle,
             bundle.locateEvidence,
+            result?.queryTransform?.expanded ?? undefined,
           );
           if (quoted)
             rendered = {

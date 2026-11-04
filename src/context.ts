@@ -14,9 +14,11 @@ export function contextReview(
   } = { changes: [], open: [], conditions: [], decisions: [] };
   for (const source of bundle.sources) {
     let offset = 0;
+    let lineNo = 0;
     for (const line of source.text.split("\n")) {
       const start = offset;
       offset += line.length + 1;
+      lineNo += 1;
       if (!line.trim() || line.startsWith("#")) continue;
       const c = {
         sourceId: source.id,
@@ -24,8 +26,8 @@ export function contextReview(
         hash: source.hash,
         start,
         end: start + line.length,
-        firstLine: source.text.slice(0, start).split("\n").length,
-        lastLine: source.text.slice(0, start).split("\n").length,
+        firstLine: lineNo,
+        lastLine: lineNo,
         quote: line,
       };
       validate(c, bundle);

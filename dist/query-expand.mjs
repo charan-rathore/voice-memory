@@ -72,6 +72,12 @@ function expandQuery(question) {
     added.add(to);
     applied.push({ from, to, kind });
   };
+  const DURATION_ASK = /\b(?:how long|for how many\s+(?:days|weeks|months|years)|for what\s+(?:period|duration)|until when)\b/i;
+  const TRANSCRIPT_RETENTION_TARGET = /\b(?:keep|keeps|kept|retain|retains|retained|store|stores|stored)\s+(?:(?:the|our|these|those)\s+)?(?:call\s+)?transcripts?\b|\b(?:call\s+)?transcripts?\s+(?:(?:are|were|is|was|will be|should be|have been)\s+)?(?:retained|kept|stored)\b/i;
+  const retentionMatch = question.match(TRANSCRIPT_RETENTION_TARGET);
+  if (DURATION_ASK.test(question) && retentionMatch) {
+    push(retentionMatch[0], "retention", "dictionary");
+  }
   for (const [key, vals] of DICTIONARY) {
     if (key.includes(" ") || key.includes("-")) {
       if (lower.includes(key)) for (const v of vals) push(key, v, "dictionary");

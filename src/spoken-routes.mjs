@@ -4,7 +4,7 @@ import { mainClause } from "./spoken-extract.mjs";
 // client ask in their email?", "is X on time?") and each one speaks only
 // sentences that exist verbatim in a source, with an exact span the engine's
 // validateEvidence() accepts. No route invents a value, a status or a reason.
-import { validateEvidence } from "../dist/engine.mjs";
+import { lineOf, validateEvidence } from "../dist/engine.mjs";
 
 const MONTHS = [
   "January",
@@ -58,8 +58,8 @@ export function cite(src, sent) {
     start: sent.start,
     end: sent.end,
     quote: src.text.slice(sent.start, sent.end),
-    firstLine: src.text.slice(0, sent.start).split("\n").length,
-    lastLine: src.text.slice(0, sent.end).split("\n").length,
+    firstLine: lineOf(src.text, sent.start),
+    lastLine: lineOf(src.text, sent.end),
     docDate: (src.text.match(/Date:\s*(\d{4}-\d{2}-\d{2})/) ?? [])[1] ?? null,
     status: "quoted",
   };

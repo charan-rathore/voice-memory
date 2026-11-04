@@ -1,5 +1,7 @@
 import { contextReview } from "./context";
 import { expandQuery, type QueryTransform } from "./query-expand";
+import { lineOf } from "./line-index";
+export { lineOf, lineIndexCacheStats } from "./line-index";
 import {
   extractClaims,
   questionFields,
@@ -427,6 +429,11 @@ export function answer(
       }
     }
   }
+  // When a disclosed expansion/rephrase grounded the chunks, passage-level
+  // selection scores against that same disclosed vocabulary; otherwise an
+  // expanded retrieval can surface the right chunk yet excerpt its head
+  // instead of the matching sentence. Original query unchanged everywhere
+  // else (claims fields, refusal wording, queryTransform disclosure).
   const result = answerFromRetrieval(
     question,
     bundle,
@@ -437,6 +444,7 @@ export function answer(
         found.actualMode === "keyword" ? null : (dense?.model ?? null),
     },
     start,
+    expansionUsed?.expanded ?? rephraseUsed?.rephrased ?? undefined,
   );
   // Narrow claim-to-source/state repair: stop stale positives, distinguish
   // proposed/discussed from agreed, and refuse timing questions answered only
@@ -1322,6 +1330,7 @@ export function answerFromRetrieval(
     embeddingModel: string | null;
   },
   start = performance.now(),
+  scoringQuestion?: string,
 ) {
   if (
     !found ||
@@ -1371,8 +1380,8 @@ export function answerFromRetrieval(
       hash: source.hash,
       start: offset,
       end,
-      firstLine: source.text.slice(0, offset).split("\n").length,
-      lastLine: source.text.slice(0, end).split("\n").length,
+      firstLine: lineOf(source.text, offset),
+      lastLine: lineOf(source.text, end),
       quote: source.text.slice(offset, end),
     };
     validateEvidence(c, bundle);
@@ -1390,7 +1399,7 @@ export function answerFromRetrieval(
         ? "Several passages are relevant, but this question remains unresolved. Review the original passages; no supported answer or draft is available."
         : refused
           ? "I could not find supporting passages in these documents."
-          : extractiveAnswer(question, chunks).replace(
+          : extractiveAnswer(scoringQuestion ?? question, chunks).replace(
               " Add a model in Settings to reason across them.",
               "",
             ),

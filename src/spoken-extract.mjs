@@ -132,6 +132,7 @@ export function extractiveSpoken(
   result,
   bundle,
   locateEvidence = () => null,
+  scoringQuestion = null,
 ) {
   if (!isQuestion(question)) return null;
   if (
@@ -141,7 +142,12 @@ export function extractiveSpoken(
     !result.evidence?.length
   )
     return null;
-  const q = new Set(terms(question));
+  // When the engine grounded its evidence through a disclosed query
+  // expansion/rephrase (result.queryTransform), passage scoring uses that
+  // same disclosed vocabulary; every question-shape gate below (decision
+  // words, time asks, plural and named-target binding) still reads the
+  // caller's original question.
+  const q = new Set(terms(scoringQuestion ?? question));
   if (!q.size) return null;
   // A polar decision word in the question ("were the applications
   // APPROVED?") is the point of the question: a unit stating that decision

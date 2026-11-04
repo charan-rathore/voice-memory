@@ -98,6 +98,20 @@ export function expandQuery(question: string): ExpandedQuery {
     applied.push({ from, to, kind });
   };
 
+  // Guarded retention bridge (review 2026-11-04): a duration question about
+  // keeping/retaining/storing transcripts maps to the record's "retention"
+  // vocabulary. Both guards must hold, so unrelated "keep" questions ("keep
+  // the deadline", "who keeps meeting notes") never widen. Recall-widening
+  // only; the evidence gate decides, and the original query still wins.
+  const DURATION_ASK =
+    /\b(?:how long|for how many\s+(?:days|weeks|months|years)|for what\s+(?:period|duration)|until when)\b/i;
+  const TRANSCRIPT_RETENTION_TARGET =
+    /\b(?:keep|keeps|kept|retain|retains|retained|store|stores|stored)\s+(?:(?:the|our|these|those)\s+)?(?:call\s+)?transcripts?\b|\b(?:call\s+)?transcripts?\s+(?:(?:are|were|is|was|will be|should be|have been)\s+)?(?:retained|kept|stored)\b/i;
+  const retentionMatch = question.match(TRANSCRIPT_RETENTION_TARGET);
+  if (DURATION_ASK.test(question) && retentionMatch) {
+    push(retentionMatch[0], "retention", "dictionary");
+  }
+
   // Dictionary: phrase matches first (multi-word), then single tokens.
   for (const [key, vals] of DICTIONARY) {
     if (key.includes(" ") || key.includes("-")) {

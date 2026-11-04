@@ -239,7 +239,13 @@ function leadFor(question, result, bundle, prevField) {
     }
     let t = spokenTurn(question, bundle, prevField);
     if (!t || t.reason === "no_field")
-      t = extractiveSpoken(question, result, bundle, bundle.locateEvidence);
+      t = extractiveSpoken(
+        question,
+        result,
+        bundle,
+        bundle.locateEvidence,
+        result?.queryTransform?.expanded ?? undefined,
+      );
     if (!t || t.verdict === "UNKNOWN") return null;
     // Only claim-graph citations that still validate against the source
     // may back a lead; anything else and the screen keeps the engine text.
