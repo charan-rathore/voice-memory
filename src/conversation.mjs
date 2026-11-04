@@ -140,7 +140,7 @@ export function socialTurn(text, { lang = "en", last = null } = {}) {
       /\b(short(?:er)?|brief(?:ly)?|quick(?:ly)?|in short|chhota|chhote mein)\b/i.test(
         t,
       )
-        ? (/^.+?[.!?।](?=\s|$)/.exec(last)?.[0] ?? last)
+        ? shorterOf(last)
         : last;
     return { intent: "REPEAT", spoken: short || say.nothing };
   }
@@ -184,6 +184,20 @@ export function socialTurn(text, { lang = "en", last = null } = {}) {
   )
     return { intent: "THANKS", spoken: say.thanks };
   return null;
+}
+
+// The opening of an answer, long enough to stand alone: "No." alone is not a
+// shorter version of "No. Per the action log: no signed agreement exists".
+function shorterOf(text) {
+  const parts = String(text).match(/[^.!?।]+[.!?।]+(?=\s|$)|[^.!?।]+$/g) ?? [
+    text,
+  ];
+  let out = "";
+  for (const p of parts) {
+    out = (out + " " + p.trim()).trim();
+    if (out.split(/\s+/).length >= 4) break;
+  }
+  return out;
 }
 
 const COURTESY =

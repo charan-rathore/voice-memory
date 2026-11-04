@@ -50,6 +50,13 @@ test("'say that again, but shorter' is the first sentence of the same answer", (
     "The earlier record was $48,000.",
   );
   assert.equal(socialTurn("Say that again", { last }).spoken, last);
+  // a one-word first sentence is not a usable shorter answer
+  assert.equal(
+    socialTurn("Say that again, but shorter.", {
+      last: "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms.",
+    }).spoken,
+    "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms.",
+  );
   assert.match(
     socialTurn("Say that again", { last: null }).spoken,
     /haven't answered/,
