@@ -180,6 +180,12 @@ function routeIntent(q) {
 // core (amounts and "revision" route to the field whose claims carry them),
 // then inheritance from the previous turn on the same grant.
 function resolveField(q, claims, prevField) {
+  // "Who signs off (on the fee)?" asks for the approver, not the amount.
+  if (
+    /\bwho\b[^?.]{0,40}\bsign(?:s|ing)?[\s-]*off\b/i.test(q) &&
+    claims.some((c) => c.field === "signoffWho")
+  )
+    return "signoffWho";
   const direct = questionFields(q);
   if (direct.length) return direct[0];
   for (const c of claims) {
@@ -828,14 +834,28 @@ function render({
     case "LATEST:OPEN":
       return `That is still open: ${dedupeValues(citations.map((c) => c.value)).join(" versus ")} are both on record, and it is not approved.`;
     case "HISTORY:PROPOSED":
-    case "HISTORY:OPEN":
-      return earlier
-        ? /^\s*(was|is|were|did|has|had|didn'?t|wasn'?t|isn'?t)\b/i.test(
-            question,
-          )
-          ? `Yes, the earlier record was ${earlierVal}. It was superseded by ${value ?? "the current proposal"}, which is still not approved.`
-          : `The earlier record was ${earlierVal}. It was superseded by ${value ?? "the current proposal"}, which is still not approved.`
-        : `${cap(value ?? "The current record")} is the only record, and it is not approved.`;
+    case "HISTORY:OPEN": {
+      if (!earlier)
+        return `${cap(value ?? "The current record")} is the only record, and it is not approved.`;
+      const rest = `the earlier record was ${earlierVal}. It was superseded by ${value ?? "the current proposal"}, which is still not approved.`;
+      // "Yes" only answers a yes/no question, and only when the figure the
+      // caller named (if any) IS the earlier record: "Was the original fee
+      // $42,000?" is a "No", not "Yes, the earlier record was $48,000".
+      const yn =
+        /^\s*(was|is|were|did|has|had|didn'?t|wasn'?t|isn'?t)\b/i.test(
+          question,
+        ) ||
+        /,?\s*(right|correct|wasn'?t it|isn'?t it|didn'?t (?:they|it|we))\s*\??\s*$/i.test(
+          question,
+        );
+      const named = (
+        question.match(/[$€£₹]\s?[\d,]+|\b\d{1,3}(?:,\d{3})+\b|\b\d{4,}\b/g) ??
+        []
+      ).map((a) => a.replace(/[^\d]/g, ""));
+      const old = (earlierVal ?? "").replace(/[^\d]/g, "");
+      if (named.length && old && !named.includes(old)) return `No, ${rest}`;
+      return yn ? `Yes, ${rest}` : cap(rest);
+    }
     case "HISTORY:CONFIRMED":
       return earlier
         ? `The earlier record was ${earlierVal}; the current approved record is ${value}.`
@@ -1073,7 +1093,12 @@ const PROPER_STOP = new Set(
     "What When Where Which Who Whose Why How Was Were Is Are Did Does Do Has Have Had The This That These Those " +
     "But Okay Ok So And Or If Then Can Could Would Should Will Shall May Any Much Many Now Today Yesterday Tomorrow " +
     "January February March April May June July August September October November December " +
-    "Monday Tuesday Wednesday Thursday Friday Saturday Sunday"
+    "Monday Tuesday Wednesday Thursday Friday Saturday Sunday " +
+    // spoken openers and recogniser spellings of contractions: a caller
+    // saying "Also," or "Wasnt it" has not named an unknown party
+    "Also Please Sorry Just Wait Alright Yeah Yes Yep Again Sure Thanks Thank Great Cool Listen Remind Tell Give " +
+    "Quick Right Fine Well Hmm Hey Hello Actually Anyway Let Show Repeat Say Check Confirm Explain Last Next Another " +
+    "Wasnt Didnt Isnt Doesnt Hasnt Dont Cant Wont Arent Werent Havent Hadnt Couldnt Wouldnt Shouldnt"
   ).split(" "),
 );
 
@@ -1084,7 +1109,10 @@ function unknownNamedEntity(question, bundle) {
     .map((s) => `${s.title} ${s.text}`)
     .join(" ")
     .toLowerCase();
-  for (const t of question.match(/\b[A-Z][a-z]{2,}\b/g) ?? []) {
+  // A contraction ("Wasn't", "Didn't") is one word, not the name "Wasn".
+  for (const m of question.match(/\b[A-Z][a-z]{2,}(?:['’][a-z]+)?/g) ?? []) {
+    if (/['’](?:t|re|ve|ll|d|m)$/.test(m)) continue;
+    const t = m.replace(/['’]s$/, "");
     if (PROPER_STOP.has(t)) continue;
     if (!hay.includes(t.toLowerCase())) return t;
   }
