@@ -370,11 +370,26 @@
           (d) => d.status === "ready" || d.included,
         ),
       };
-    } catch {
+    } catch (e) {
       state.ws = null;
       try {
         sessionStorage.removeItem("vm_ws");
       } catch {}
+      if (e?.status === 404) {
+        // Confirmed gone (a deploy or the idle sweep cleared it): stop
+        // showing its documents as if they were still answerable.
+        state.wsDocs = [
+          {
+            title: "Earlier upload",
+            status: "failed",
+            error: {
+              message:
+                "Cleared on the server (deploy or 30 idle minutes). Drop the file again to re-upload.",
+            },
+          },
+        ];
+        state.cases.own = { ...OWN, ready: false, documents: [] };
+      }
     }
     renderUploads();
     if (state.case === "own") {
@@ -528,10 +543,21 @@
         case: scope,
         gen: state.scopeGen,
       }),
-    }).catch(() => {
+    }).catch((e) => {
       // The call keeps its old scope; its turns for that scope stay off
       // this screen (pollTurns), so nothing from the wrong records shows.
       state.callScope = null;
+      if (e?.status === 404 && String(scope).startsWith("w_")) {
+        // The workspace died mid-call (idle sweep or deploy): stop showing
+        // its documents as if they were still answerable.
+        state.ws = null;
+        try {
+          sessionStorage.removeItem("vm_ws");
+        } catch {}
+        state.wsDocs = [];
+        state.cases.own = { ...OWN, ready: false, documents: [] };
+        renderUploads();
+      }
     });
   }
 
@@ -1623,6 +1649,31 @@
         "The call library didn't load. Refresh the page and try again.",
       );
       return;
+    }
+    if (state.case === "own") {
+      // Never mint a call that can only say "your documents expired" (the
+      // server clears uploads on deploy and after 30 idle minutes), and
+      // never answer from the demo records behind the caller's back.
+      if (!state.ws) {
+        callState("Upload your documents first, then call.");
+        return;
+      }
+      callState("Checking your upload…");
+      try {
+        await api(`/workspace/${state.ws}`);
+      } catch {
+        state.ws = null;
+        try {
+          sessionStorage.removeItem("vm_ws");
+        } catch {}
+        state.wsDocs = [];
+        state.cases.own = { ...OWN, ready: false, documents: [] };
+        renderUploads();
+        callState(
+          "Your upload expired on the server (deploys and 30 idle minutes clear uploads). Upload it again, then call.",
+        );
+        return;
+      }
     }
     callbar.classList.add("busy");
     $("#call-label").textContent = "Connecting…";

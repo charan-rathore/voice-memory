@@ -1138,6 +1138,22 @@ export function createPublicApi({
             ? data.user_data
             : {};
         const scope = voiceScopeOf(ud.vm_ws) ?? "demo";
+        // A call scoped to a workspace this server no longer holds (a
+        // deploy wiped it, or it idled out) can only ever say "your
+        // documents expired": refuse BEFORE the vendor mint, hand the
+        // allowance back, and say why. Never answer from the demo
+        // records instead.
+        if (scope.startsWith("w_") && !(workspaces && workspaces.get(scope))) {
+          lastMint = 0;
+          await callCounters.refundReservation(adm.reservation).catch(() => {});
+          return (
+            send(res, 410, {
+              error:
+                "That upload has expired on the server. Upload it again on the page, then call.",
+            }),
+            true
+          );
+        }
         const call = "c" + randomBytes(12).toString("hex");
         // Vendor-supported request correlation: the reservation id rides in
         // user_data so a later reconcile can attribute the vendor's own
