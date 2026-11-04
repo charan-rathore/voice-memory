@@ -1493,6 +1493,7 @@ export function clinicalGraph(bundle) {
           `${o.comparator ?? ""}${o.raw.replace(/^[<>≤≥]=?/, "")} ${o.unit ?? ""}`.trim(),
         field: o.key,
         test: o.test,
+        domain: "lab",
         status: status === "preliminary" ? "preliminary" : "current",
         date: r.meta.collected ?? null,
         evidence: evidenceOf(o, r),

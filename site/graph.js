@@ -27,16 +27,16 @@
       ["patient", C.mark, "Patient"],
       ["document", C.blue, "Report (PDF)"],
       ["topic", C.violet, "Test"],
-      ["value-current", C.teal, "Value in force"],
+      ["value-current", C.teal, "Latest reported reading"],
       ["value-preliminary", C.amber, "Preliminary value"],
-      ["value-superseded", C.coral, "Corrected away"],
+      ["value-superseded", C.coral, "Corrected (replaced)"],
     ],
     deal: [
       ["topic", C.violet, "Topic"],
       ["document", C.blue, "Document"],
       ["value-proposed", C.amber, "Proposed / discussed"],
       ["value-superseded", C.coral, "Superseded"],
-      ["value-current", C.teal, "Approved / agreed"],
+      ["value-current", C.teal, "Approved (by whom: select it)"],
       ["evidence", C.ink, "Exact sentence"],
     ],
   };
@@ -381,7 +381,7 @@
     const quote = ev?.quote ?? (n.kind === "evidence" ? n.label : null);
     const ask = suggestFor(n);
     $("#p-body").innerHTML = `
-      ${n.status ? `<span class="chip c-${esc(n.status)}">${esc(n.status === "current" ? "in force" : n.status)}</span>` : ""}
+      ${n.status ? `<span class="chip c-${esc(n.noSignedRecord ? "unresolved" : n.status)}">${esc(window.VM_STATUS.statusLabel(n))}</span>` : ""}
       ${n.date ? `<span style="margin-left:8px;color:var(--ink-3);font-size:12.5px">${esc(n.date)}</span>` : ""}
       ${quote ? `<p class="quote"><small>${esc(ev?.page ? "page " + ev.page + " · " : "")}exact source text</small>${esc(/^\s*\|/.test(quote) ? String(quote).split("|").map((x) => x.trim()).filter(Boolean).join(" · ") : String(quote).replace(/^\d+\.\s*/, ""))}</p>` : ""}
       <p class="p-sec">Connections (${links.length})</p>

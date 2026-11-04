@@ -67,6 +67,35 @@ const span = (c) => ({
   quote: c.quote,
 });
 
+/**
+ * Who approved, from the approving sentence itself: only the words BEFORE
+ * the approval verb count ("Farah (finance approver): INTERNAL finance
+ * APPROVES ..." -> "internal finance"), so "TWO SITES APPROVED, ... CLIENT
+ * UNSIGNED" never names the client as approver. Null when not stated.
+ */
+export function approvalAuthority(quote) {
+  const q = String(quote ?? "");
+  const verb = /\bapprov(?:es|ed|e|al|ing)\b/i.exec(q);
+  if (!verb) return null;
+  const before = q.slice(0, verb.index);
+  const internal = /\binternal(?:ly)?\b/i.test(before);
+  const body =
+    /\b(steering(?:\s+committee)?|finance|committee|board|client|customer|legal)\b/i.exec(
+      before,
+    )?.[1];
+  const who = body
+    ? /^steering/i.test(body)
+      ? "steering committee"
+      : body.toLowerCase()
+    : null;
+  if (!who && !internal) return null;
+  return [internal ? "internal" : null, who].filter(Boolean).join(" ");
+}
+
+// A "signed agreement" record that says there is NO signed record.
+const NO_SIGNED_RE =
+  /\bno\b[^.;]{0,40}\b(?:signed|executed|signature)\b|\bnot\b[^.;]{0,25}\b(?:signed|executed)\b|\bdoes not constitute\b[^.;]{0,40}\bsignature\b/i;
+
 export function semanticOf(bundle) {
   const claims = extractClaims(bundle, FIELDS).filter((c) => c.value);
   const byField = new Map();
@@ -97,6 +126,21 @@ export function semanticOf(bundle) {
       values.set(id, v);
     }
     const vals = [...values.values()];
+    for (const v of vals) {
+      if (v.status === "approved") {
+        const who = [
+          ...new Set(
+            v.claims
+              .filter((c) => c.status === "approved" || approved.has(c))
+              .map((c) => approvalAuthority(c.quote))
+              .filter(Boolean),
+          ),
+        ];
+        v.authority = who.length ? who.join(", ") : null;
+      }
+      if (f === "signedAgreement")
+        v.noSignedRecord = v.claims.every((c) => NO_SIGNED_RE.test(c.quote));
+    }
     const currentVals = vals.filter((v) => v.current);
     for (const v of vals)
       v.competing =
@@ -172,6 +216,9 @@ export function buildGraph(bundle, mem, focus = "overview") {
       kind: "value",
       label: v.label,
       status: v.competing ? "open" : v.superseded ? "superseded" : v.status,
+      domain: "record",
+      ...(v.status === "approved" ? { authority: v.authority ?? null } : {}),
+      ...(v.noSignedRecord ? { noSignedRecord: true } : {}),
       field: v.field,
       weight: valueUse.get(v.id) ?? 0,
     });
