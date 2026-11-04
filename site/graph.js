@@ -28,7 +28,7 @@
       ["patient", C.mark, "Patient"],
       ["document", C.blue, "Report (PDF)"],
       ["topic", C.violet, "Test"],
-      ["value-current", C.teal, "Latest reported reading"],
+      ["value-current", C.teal, "Reported reading (select for which)"],
       ["value-preliminary", C.amber, "Preliminary value"],
       ["value-superseded", C.coral, "Corrected (replaced)"],
     ],

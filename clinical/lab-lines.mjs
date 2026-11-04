@@ -576,7 +576,7 @@ export function genericMeta(text) {
   const head = flatHeader(text.slice(0, 2500));
   const order = dateOrder(text);
   const id =
-    /\b(UHID|MRN|MR\s*#|MR\s*No\.?|Patient\s*ID|Pt\.?\s*ID|PID|Reg(?:istration)?\.?\s*No\.?|Lab\s*No\.?|Lab\s*#|Patient\s*No\.?|NRIC[^:]*)\s*[:#.-]?\s*(?:\|\s*)?([A-Z0-9][A-Z0-9\/-]{2,})/i.exec(
+    /\b(UHID|MRN|MR\s*#|MR\s*No\.?|Patient\s*ID|Pt\.?\s*ID|PID|Reg(?:istration)?\.?\s*No\.?|Patient\s*No\.?|NRIC[^:]*)\s*[:#.-]?\s*(?:\|\s*)?([A-Z0-9][A-Z0-9\/-]{2,})/i.exec(
       head,
     );
   const name =
@@ -608,6 +608,14 @@ export function genericMeta(text) {
   // masked reports must never become one person.
   if (isMaskedIdentity(nameStr)) nameStr = null;
   const idStr = id && !isMaskedIdentity(id[2]) ? id[2].toUpperCase() : null;
+  // A lab / accession number names an order or specimen, not a person: two
+  // labs can print the same "ABC123", and one person gets a new one per visit.
+  // Kept for display only; it never links reports.
+  const acc =
+    /\b(?:Lab\s*No\.?|Lab\s*#|Accession(?:\s*No\.?)?|Sample\s*No\.?|Order\s*No\.?)\s*[:#.-]?\s*(?:\|\s*)?([A-Z0-9][A-Z0-9\/-]{2,})/i.exec(
+      head,
+    )?.[1];
+  const accession = acc && !isMaskedIdentity(acc) ? acc.toUpperCase() : null;
   return {
     patient:
       idStr || nameStr
@@ -620,6 +628,7 @@ export function genericMeta(text) {
         : sex
           ? { name: null, id: null, sex, age: age ? Number(age[1]) : null }
           : null,
+    accession,
     collected: collected?.iso ?? plain?.iso ?? null,
     reported: reported?.iso ?? null,
     dateRaw: collected?.raw ?? plain?.raw ?? reported?.raw ?? null,

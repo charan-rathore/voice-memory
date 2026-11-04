@@ -145,3 +145,164 @@ test("a verified patient ID still links an amended report to its preliminary", a
     JSON.stringify(corrects),
   );
 });
+
+// ---- Identity contract (review of PR #50 head d0f181a, all RED there) ----
+// Only a printed patient identifier links reports. A shared printed name or
+// a shared lab/accession number never does; a patient ID contradicted by the
+// reports themselves (sex, impossible ages) does not either.
+import { markIdentityConflicts } from "../clinical/observations.mjs";
+import { clinicalAnswer as ask2 } from "../clinical/answer.mjs";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+const box = { window: {} };
+vm.runInNewContext(
+  readFileSync(new URL("../site/status-labels.js", import.meta.url), "utf8"),
+  box,
+);
+const label = box.window.VM_STATUS.statusLabel;
+const reportOn = (head, tsh, date = "14/3/2025", status = "Final") =>
+  report(head, tsh, status).replace(/14\/3\/2025/g, date);
+const loadSet = async (texts) => {
+  const b = await load(texts);
+  markIdentityConflicts(b.clinical);
+  return b;
+};
+const separate = (b) => {
+  const ids = b.clinical.map((r) => subjectOf(r));
+  assert.equal(new Set(ids).size, ids.length, ids.join(" | "));
+  assert.ok(ids.every((id) => id.startsWith("doc:")));
+  const g = clinicalGraph(b);
+  assert.ok(
+    g.nodes
+      .filter((n) => n.kind === "patient")
+      .every((n) => n.verified === false),
+  );
+  assert.ok(!g.edges.some((e) => /^obs:/.test(e.from) && /^obs:/.test(e.to)));
+  return g;
+};
+
+test("two John Smiths (36 and 25), no patient IDs: two people, never verified", async () => {
+  const b = await loadSet([
+    reportOn("Name : John Smith    Age : 36 Years    Gender : Male", "7.80"),
+    reportOn(
+      "Name : John Smith    Age : 25 Years    Gender : Male",
+      "1.20",
+      "20/3/2025",
+    ),
+  ]);
+  const g = separate(b);
+  assert.ok(
+    g.nodes
+      .filter((n) => n.kind === "patient")
+      .every((n) => /John Smith: name only, not linked/.test(n.label)),
+  );
+  const a = ask2("Has John Smith's TSH changed?", b.clinical).spoken;
+  assert.match(a, /more than one person/);
+  assert.match(a, /John Smith \(r0\.txt\).*John Smith \(r1\.txt\)/);
+  assert.doesNotMatch(a, /1\.20.*7\.80|7\.80.*1\.20/);
+});
+
+test("two labs printing the same Lab No. are two people; Lab No. is not a patient ID", async () => {
+  const b = await loadSet([
+    reportOn(
+      "City Lab    Name : Asha Rao    Lab No. : ABC123    Age : 41 Years    Gender : Female",
+      "7.80",
+    ),
+    reportOn(
+      "Town Lab    Name : Ravi Iyer    Lab No. : ABC123    Age : 63 Years    Gender : Male",
+      "1.20",
+    ),
+  ]);
+  for (const r of b.clinical) {
+    assert.equal(r.meta.patient?.id ?? null, null);
+    assert.equal(r.meta.accession, "ABC123");
+  }
+  separate(b);
+});
+
+test("one person, different lab numbers, no patient ID: not linked, the engine asks", async () => {
+  const b = await loadSet([
+    reportOn(
+      "Name : Meera Das    Lab No. : L-1001    Age : 52 Years    Gender : Female",
+      "7.80",
+      "13/9/2025",
+    ),
+    reportOn(
+      "Name : Meera Das    Lab No. : L-2002    Age : 52 Years    Gender : Female",
+      "6.10",
+      "14/10/2025",
+    ),
+  ]);
+  separate(b);
+  assert.match(
+    ask2("Has the TSH changed?", b.clinical).spoken,
+    /more than one person/,
+  );
+});
+
+test("a shared patient ID contradicted by the reports (sex) does not link", async () => {
+  const b = await loadSet([
+    reportOn(
+      "Patient: Synthetic Person, ID: SYN0042    Age : 36 Years    Gender : Male",
+      "7.80",
+    ),
+    reportOn(
+      "Patient: Synthetic Person, ID: SYN0042    Age : 36 Years    Gender : Female",
+      "1.20",
+    ),
+  ]);
+  separate(b);
+});
+
+test("verified patient ID across visits: amendment linked; 'latest' only for the latest collection", async () => {
+  const b = await loadSet([
+    reportOn(
+      "Patient: Synthetic Person, ID: SYN0009",
+      "4.10",
+      "13/9/2025",
+      "Final",
+    ),
+    reportOn(
+      "Patient: Synthetic Person, ID: SYN0009",
+      "7.80",
+      "14/10/2025",
+      "Preliminary",
+    ),
+    reportOn(
+      "Patient: Synthetic Person, ID: SYN0009",
+      "1.20",
+      "14/10/2025",
+      "Amended",
+    ),
+  ]);
+  const [sep, pre, amd] = b.clinical;
+  assert.deepEqual(
+    [sep, pre, amd].map((r) => subjectOf(r)),
+    ["SYN0009", "SYN0009", "SYN0009"],
+  );
+  const g = clinicalGraph(b);
+  const n = (r) => g.nodes.find((x) => x.id === `obs:${r.sourceId}:tsh`);
+  assert.equal(n(sep).date, "2025-09-13");
+  assert.equal(n(amd).date, "2025-10-14");
+  assert.ok(
+    g.edges.some(
+      (e) =>
+        e.kind === "corrects" && e.from === n(amd).id && e.to === n(pre).id,
+    ),
+  );
+  assert.ok(
+    g.edges.some(
+      (e) => e.kind === "then" && e.from === n(sep).id && e.to === n(amd).id,
+    ),
+  );
+  // RED on d0f181a: September final and October amended both read
+  // "latest reported reading".
+  assert.equal(label(n(sep)), "reported reading (earlier collection)");
+  assert.equal(label(n(amd)), "latest reported reading");
+  assert.equal(label(n(pre)), "corrected (replaced by the amended report)");
+  // no chronology established -> neutral
+  assert.equal(
+    label({ id: "obs:x:tsh", status: "current" }),
+    "reported reading",
+  );
+});

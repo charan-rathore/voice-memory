@@ -32,13 +32,23 @@
   function statusLabel(n) {
     if (!n || !n.status) return null;
     const d = domainOf(n);
-    if (d === "lab") return LAB[n.status] || n.status;
+    if (d === "lab") {
+      // "latest" only when the engine established chronology for this
+      // patient's series; otherwise a neutral "reported reading"
+      if (n.status === "current")
+        return n.latest
+          ? "latest reported reading"
+          : n.earlier
+            ? "reported reading (earlier collection)"
+            : "reported reading";
+      return LAB[n.status] || n.status;
+    }
     if (d === "record") {
       if (n.noSignedRecord) return "no signed record";
       if (n.status === "approved")
         return n.authority
           ? "approved by " + n.authority
-          : "approved (approver not stated)";
+          : "approved (approver not established)";
       return RECORD[n.status] || n.status;
     }
     // documents and anything else: the printed word, never "in force"

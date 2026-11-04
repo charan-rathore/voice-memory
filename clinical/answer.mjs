@@ -7,6 +7,7 @@ import {
   compare,
   testKey,
   subjectOf,
+  markIdentityConflicts,
   MONTHS,
 } from "./observations.mjs";
 import {
@@ -187,7 +188,13 @@ export function findTest(question, reports) {
 /** Name a subject for a question back to the user. */
 export function subjectLabel(id, reports) {
   const r = reports.find((x) => subjectOf(x) === id);
-  if (id.startsWith("doc:")) return r?.title ?? id.slice(4);
+  // an unlinked report is named by what it prints, plus its file, so two
+  // "John Smith" reports read as two choices, not one person twice
+  if (id.startsWith("doc:")) {
+    const n = r?.meta.patient?.name?.replace(/\s*\(synthetic\)/i, "");
+    const t = r?.title ?? id.slice(4);
+    return n ? `${n} (${t})` : t;
+  }
   const name = r?.meta.patient?.name?.replace(/\s*\(synthetic\)/i, "");
   // Synthetic demo reports are known by their ID; real reports by the name printed on them.
   if (id.startsWith("name:")) return name ?? id.slice(5);
@@ -689,6 +696,10 @@ export function observationEvidence(o, bundle) {
 
 /** Clinical reports for a bundle built from library entries (same order). */
 export function clinicalReportsFor(bundle, entries, extract) {
+  // identity is decided over the whole set, once (see subjectOf)
+  return markIdentityConflicts(reportsOf(bundle, entries, extract));
+}
+function reportsOf(bundle, entries, extract) {
   return bundle.sources
     .map((src, i) => {
       const e = entries[i];

@@ -1455,12 +1455,15 @@ export function clinicalGraph(bundle) {
   // Whose report this is, exactly as the evidence engine decides it: the
   // printed patient ID, else the printed name, else this report alone. Two
   // reports without a verified identity are never drawn as one person.
-  const subjectLabel = (r, pid) =>
-    pid.startsWith("doc:")
-      ? `Identity not printed (${r.title ?? "this report"} only)`
-      : pid.startsWith("name:")
-        ? (r.meta.patient?.name ?? pid.slice(5))
-        : pid;
+  // Only a printed patient ID is a verified identity; a name alone is shown
+  // but never links reports or counts as verified.
+  const subjectLabel = (r, pid) => {
+    if (!pid.startsWith("doc:")) return pid;
+    const name = r.meta.patient?.name;
+    return name
+      ? `${name}: name only, not linked (${r.title ?? "this report"})`
+      : `Identity not printed (${r.title ?? "this report"} only)`;
+  };
   for (const r of reports) {
     const pid = subjectOf(r);
     const status = (r.meta.status ?? "unknown").toLowerCase();
@@ -1514,6 +1517,18 @@ export function clinicalGraph(bundle) {
     );
     for (const key of keys) {
       const series = seriesFor(reports, key, pid);
+      // "latest" is a claim about chronology: only made when every point in
+      // this verified patient's series has an ISO collection date.
+      const dated = series.every((pt) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(pt.current.report.meta?.collected ?? ""),
+      );
+      series.forEach((pt, i) => {
+        if (!dated) return;
+        node({
+          id: `obs:${pt.current.report.sourceId}:${key}`,
+          ...(i === series.length - 1 ? { latest: true } : { earlier: true }),
+        });
+      });
       let prev = null;
       for (const point of series) {
         const cur = `obs:${point.current.report.sourceId}:${key}`;
