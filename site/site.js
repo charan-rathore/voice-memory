@@ -527,12 +527,14 @@
     }
   }
 
-  // The case or workspace on screen is the one a live call answers from.
-  // On a switch, the page moves its own call (the ticket is its secret);
-  // turns answered for the old scope are then dropped, not shown here.
-  const scopeOf = (id) => (id === "own" ? state.ws : id);
+  // A live call answers from the visitor's uploaded documents whenever an
+  // upload is present, whichever case is on screen; the demo records are
+  // the default only when no upload exists (owner rule, 2026-11-05). On a
+  // switch, the page moves its own call (the ticket is its secret); turns
+  // answered for the old scope are then dropped, not shown here.
+  const scopeOf = () => state.ws || state.case;
   function syncCallScope() {
-    const scope = scopeOf(state.case);
+    const scope = scopeOf();
     if (!state.ticket || !state.call || !scope || state.callScope === scope)
       return;
     state.callScope = scope;
@@ -1656,14 +1658,16 @@
       );
       return;
     }
-    if (state.case === "own") {
-      // Never mint a call that can only say "your documents expired" (the
-      // server clears uploads on deploy and after 30 idle minutes), and
-      // never answer from the demo records behind the caller's back.
-      if (!state.ws) {
-        callState("Upload your documents first, then call.");
-        return;
-      }
+    if (state.case === "own" && !state.ws) {
+      callState("Upload your documents first, then call.");
+      return;
+    }
+    if (state.ws) {
+      // Uploaded documents govern the call from any tab, so the upload is
+      // verified live whichever case is on screen: never mint a call that
+      // can only say "your documents expired" (the server clears uploads
+      // on deploy and after 30 idle minutes), and never answer from the
+      // demo records behind the caller's back.
       callState("Checking your upload…");
       try {
         await api(`/workspace/${state.ws}`);
@@ -1753,7 +1757,7 @@
         // The open case or workspace: voice answers from what is on screen.
         const user_data = {
           page: "landing",
-          vm_ws: scopeOf(state.case) || "demo",
+          vm_ws: scopeOf() || "demo",
         };
         state.callScope = user_data.vm_ws;
         // your own Bolna account pays for the call; no server allowance used
