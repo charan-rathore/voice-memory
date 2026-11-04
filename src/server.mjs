@@ -805,7 +805,7 @@ export function createLocalServer({
         return {
           raw: null,
           shown: {
-            lead: declineLead(advice, lang),
+            lead: declineLead(advice, lang, original),
             semantic: { intent: "ADVICE", lang, steps: ["decline_advice"] },
             evidence: [],
           },

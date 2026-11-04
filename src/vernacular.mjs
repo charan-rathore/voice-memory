@@ -408,13 +408,44 @@ const DECLINE = {
       "Yeh faisla aapka hai, mera nahi: main sirf batati hoon ki records mein kya likha hai. Mujhse poochiye ki kya manzoor hua, kya abhi open hai, ya kis par sign hua, aur main wahi line dikha doongi.",
   },
 };
+// The same declines when the question is about someone else ("my dad's
+// report", "does he have", "should my father take"): no "you" for a person
+// who is not the caller.
+const DECLINE_OTHER = {
+  treatment: {
+    en: "I can't say whether they should take, stop or change a medicine; that's a call for their doctor, who knows their history. What I can do is show exactly what the report says, so the right numbers reach that conversation.",
+    hi: "उन्हें दवा लेनी है, बंद करनी है या बदलनी है, यह मैं नहीं बता सकती; यह फ़ैसला उनके डॉक्टर का है, जो उनकी पूरी हिस्ट्री जानते हैं। मैं इतना कर सकती हूँ कि रिपोर्ट में जो लिखा है, वह ठीक-ठीक दिखा दूँ।",
+    hinglish:
+      "Unhe dawa leni hai, band karni hai ya badalni hai, yeh main nahi bata sakti; yeh faisla unke doctor ka hai, jo unki poori history jaante hain. Main itna kar sakti hoon ki report mein jo likha hai woh theek-theek dikha doon.",
+  },
+  diagnosis: {
+    en: "I can't say whether they have a condition; a diagnosis needs their doctor, who can look at their symptoms and history too. I can show each result next to the lab's printed range, which is a good place to start that conversation.",
+    hi: "उन्हें कोई बीमारी है या नहीं, यह मैं नहीं बता सकती; इसके लिए उनके डॉक्टर चाहिए, जो उनके लक्षण और हिस्ट्री भी देखेंगे। मैं हर नतीजा लैब की छपी सीमा के साथ दिखा सकती हूँ।",
+    hinglish:
+      "Unhe koi bimari hai ya nahi, yeh main nahi bata sakti; iske liye unke doctor chahiye, jo unke symptoms aur history bhi dekhenge. Main har result lab ki chhapi range ke saath dikha sakti hoon.",
+  },
+};
+const ABOUT_OTHER =
+  /\b(he|she|they|him|his|her|hers|their|them)\b|\bmy\s+(dad|father|mother|mom|mum|mummy|papa|son|daughter|wife|husband|parents?|grand(?:father|mother|pa|ma)|brother|sister|child|kid|patient)\b|\b(unko|unhe|usko|use|inko|papa\s+ko|mummy\s+ko)\b|उन्हें|उनको|उसको|पापा|मम्मी/i;
+/** True when the question is about someone other than the caller. */
+export const aboutSomeoneElse = (q) =>
+  ABOUT_OTHER.test(String(q ?? "")) &&
+  !/\b(i|me|my\s+(own|report|results?|tsh|ferritin))\b/i.test(
+    String(q ?? "").replace(
+      /\bmy\s+(dad|father|mother|mom|mum|son|daughter|wife|husband)\b/gi,
+      "",
+    ),
+  );
+
 /** The decline lead for an advice question, in the visitor's language. */
-export function declineLead(kind, lang = "en") {
+export function declineLead(kind, lang = "en", question = "") {
   const k = DECLINE[kind] ? kind : "treatment";
   const l = ["en", "hi", "hinglish"].includes(lang) ? lang : "en";
+  const table =
+    DECLINE_OTHER[k] && aboutSomeoneElse(question) ? DECLINE_OTHER : DECLINE;
   return {
     verdict: "DECLINE_ADVICE",
-    text: DECLINE[k][l],
+    text: table[k][l],
     field: null,
     citations: [],
     advice: k,

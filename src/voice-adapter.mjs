@@ -51,6 +51,7 @@ import {
   toHindi,
   hasSubject,
   isDealQuestion,
+  isSocialReply,
 } from "./conversation.mjs";
 import { normalizeVernacular, adviceKind, declineLead } from "./vernacular.mjs";
 
@@ -547,11 +548,17 @@ export function createVoiceAdapter({
         .filter((m) => m?.role === "user")
         .map((m) => messageText(m.content));
       const lang = callLanguage(transcript, userHistory);
+      // the last answer about the records: a hear-check or "you're welcome"
+      // in between is not what "say that again" means
       const lastSpoken =
         [...data.messages.slice(0, -1)]
           .reverse()
-          .find((m) => m?.role === "assistant" && messageText(m.content).trim())
-          ?.content ?? null;
+          .find(
+            (m) =>
+              m?.role === "assistant" &&
+              messageText(m.content).trim() &&
+              !isSocialReply(messageText(m.content)),
+          )?.content ?? null;
       const social = socialTurn(repairDealTerms(transcript), {
         lang,
         last: lastSpoken ? messageText(lastSpoken) : null,
@@ -700,6 +707,7 @@ export function createVoiceAdapter({
         const d = declineLead(
           adviceKind(transcript),
           lang === "hi" ? "hi" : lang === "hinglish" ? "hinglish" : "en",
+          transcript,
         );
         spoken = d.text;
         turn = {
