@@ -17,7 +17,7 @@ quoted span before it is used (see [docs/SEMANTIC.md](docs/SEMANTIC.md)).
 
 |                          |                                                                                                                                                   |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Try it**               | https://voice-memory-beige.vercel.app — ask by typing (voice calling is paused for now)                                                           |
+| **Try it**               | https://voice-memory-beige.vercel.app — ask by typing, or try a live voice call (experimental: the full spoken flow is still under end-to-end verification)                                                           |
 | **Memory graph**         | https://voice-memory-beige.vercel.app/graph                                                                                                       |
 | Engine / API             | https://voice-memory.onrender.com (Render, free tier)                                                                                             |
 | For agents               | [`llms.txt`](https://voice-memory-beige.vercel.app/llms.txt) · [OpenAPI](https://voice-memory-beige.vercel.app/openapi.json)                      |
