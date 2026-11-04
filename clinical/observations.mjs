@@ -98,7 +98,21 @@ export function reportMeta(full) {
       text,
     );
   const g = genericMeta(text);
-  const st = status?.[1].toLowerCase();
+  // No "Report status:" field: a status printed as a capitalised label in
+  // the first header lines ("PRELIMINARY", "AMENDED / FINAL"). Capitals
+  // only and header lines only, so prose ("superseded by the amended
+  // version") never sets a status.
+  const label =
+    status ??
+    /\b(AMENDED|CORRECTED|REVISED|PRELIMINARY|PROVISIONAL|INTERIM|FINAL)\b/.exec(
+      full
+        .split("\n")
+        .map((l) => l.replace(/^#+\s*/, "").trim())
+        .filter(Boolean)
+        .slice(0, 4)
+        .join("\n"),
+    );
+  const st = label?.[1].toLowerCase();
   return {
     patient: patient
       ? {
@@ -184,8 +198,8 @@ const unitKey = (u) =>
  * Extract a report from a canonical document (vm.document/1).
  * @returns {{meta, observations: object[]}}
  */
-export function extractReport(doc) {
-  const meta = reportMeta(doc.text);
+export function extractReport(doc, { metaText = doc.text } = {}) {
+  const meta = reportMeta(metaText);
   const observations = [];
   const tables = doc.elements.filter((e) => e.type === "table");
   for (const t of tables) {
@@ -400,7 +414,9 @@ export function subjectOf(r) {
   // does; such reports stay separate and the answer asks whose they are.
   const p = r.meta?.patient;
   if (p?.id && !isMaskedIdentity(p.id) && !p.idConflict) return p.id;
-  return "doc:" + (r.sourceId ?? r.title);
+  // A record without an identifier is its own subject: per file, and per
+  // record inside a consolidated packet.
+  return "doc:" + (r.sourceId ?? r.title) + (r.segment ? "#" + r.segment : "");
 }
 /** When a report's sample was taken: ISO date, else the printed date, else the document. */
 export const dateKeyOf = (r) =>
@@ -408,7 +424,7 @@ export const dateKeyOf = (r) =>
   r.meta?.reported ??
   (r.meta?.dateRaw
     ? "raw:" + r.meta.dateRaw
-    : "doc:" + (r.sourceId ?? r.title));
+    : "doc:" + (r.sourceId ?? r.title) + (r.segment ? "#" + r.segment : ""));
 
 export function seriesFor(reports, key, patientId) {
   const byDate = new Map();
@@ -480,4 +496,73 @@ export function compare(prev, curr) {
     direction,
     rangeChanged: (prev.range ?? "") !== (curr.range ?? ""),
   };
+}
+
+/**
+ * A consolidated packet: several records (an intake note, a preliminary lab
+ * report, its amendment, a discharge summary, a bill) printed into one PDF.
+ * Returns one segment per record, or null when the file reads as a single
+ * record (the usual case, left exactly as before).
+ *
+ * A page whose own header names a patient ID plus a date or a status starts
+ * a record; consecutive pages with the same header continue it (a long
+ * report repeating its header). The file is a packet only when at least two
+ * DIFFERENT headers appear. Inside a packet, a page with no header of its
+ * own is kept as its own record with no patient and no date, so a number in
+ * a draft note can never join another record's results.
+ */
+export function packetSegments(doc) {
+  if ((doc.pages?.length ?? 0) < 2 || !doc.elements?.length) return null;
+  const span = new Map();
+  for (const e of doc.elements) {
+    if (e.page == null || typeof e.start !== "number") continue;
+    const r = span.get(e.page) ?? [Infinity, -1];
+    span.set(e.page, [Math.min(r[0], e.start), Math.max(r[1], e.end)]);
+  }
+  const pages = [...span.keys()].sort((a, b) => a - b);
+  const heads = pages.map((n) => {
+    const [a, b] = span.get(n);
+    const m = reportMeta(doc.text.slice(a, b));
+    const id = m.patient?.id ?? null;
+    const own = !!id && !!(m.collected || m.reported || m.status !== "unknown");
+    return {
+      n,
+      own,
+      key: own ? [id, m.collected, m.reported, m.status].join("|") : null,
+    };
+  });
+  if (new Set(heads.filter((h) => h.own).map((h) => h.key)).size < 2)
+    return null;
+  const segs = [];
+  for (const h of heads) {
+    const last = segs[segs.length - 1];
+    if (h.own && last?.key === h.key) last.pages.push(h.n);
+    else segs.push({ key: h.key, pages: [h.n] });
+  }
+  return segs.map((s, i) => {
+    const a = span.get(s.pages[0])[0];
+    const b = span.get(s.pages[s.pages.length - 1])[1];
+    return { index: i + 1, pages: s.pages, start: a, end: b };
+  });
+}
+
+/**
+ * One record of a packet as a document of its own. Offsets are preserved
+ * (text outside the record is blanked, not removed) so every observation
+ * still points at the exact characters of the original file; the header is
+ * read from the record's own text.
+ */
+export function extractSegment(doc, seg) {
+  const inside = new Set(seg.pages);
+  const text =
+    " ".repeat(seg.start) +
+    doc.text.slice(seg.start, seg.end) +
+    " ".repeat(Math.max(0, doc.text.length - seg.end));
+  const part = {
+    ...doc,
+    text,
+    elements: doc.elements.filter((e) => inside.has(e.page)),
+    pages: (doc.pages ?? []).filter((p) => inside.has(p.number)),
+  };
+  return extractReport(part, { metaText: doc.text.slice(seg.start, seg.end) });
 }

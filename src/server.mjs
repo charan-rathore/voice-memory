@@ -1234,14 +1234,17 @@ export function createLocalServer({
   }, 1000);
   workspaceSweepTimer.unref?.();
   const rebuildWorkspace = (ws) => {
-    const docsIn = indexable(ws);
+    // Visitor uploads held for OCR review are included (the review notes
+    // still travel with every answer). Mark them BEFORE reading the
+    // indexable set: reading it first left a review-only workspace with no
+    // bundle, answering "still loading" forever.
     for (const e of libraryOf(ws))
       if (e.status === "needs_review") e.included = true;
-    if (!docsIn.length) {
+    const docsNow = indexable(ws);
+    if (!docsNow.length) {
       ws.bundle = null;
       return;
     }
-    const docsNow = indexable(ws);
     const bundle = importBundle(
       docsNow.map((e) => ({ title: e.title, text: e.doc.text })),
     );

@@ -1,11 +1,17 @@
 // Ingestion entry point used by the server and the benchmark.
 //
-//   const r = await ingestFile(bytes, filename, { onStage });
+//   const r = await ingestFile(bytes, filename, { onStage, onEvent, onPartial });
 //   r.ok   -> { doc, status: "ready"|"needs_review", review: string[] }
 //   !r.ok  -> { code, stage, message }   (never throws for bad input)
 //
 // Validation (signature, size) runs in-process and is cheap. Parsing runs in
 // a worker thread with a heap limit and a timeout.
+//
+// onEvent receives content-free progress records from the parser (page
+// numbers, counts, OCR %). onPartial receives a readable result early when a
+// PDF's text pages are done before its scanned pages; if OCR then overruns
+// the timeout or the heap limit, that partial result is returned (scanned
+// pages marked unread and held for review) instead of discarding the file.
 import { Worker } from "node:worker_threads";
 import { detectFormat, safeFilename } from "./detect.mjs";
 import { IngestError, LIMITS } from "./errors.mjs";
@@ -16,7 +22,12 @@ export { LIMITS } from "./errors.mjs";
 export async function ingestFile(
   bytes,
   filename,
-  { onStage = () => {}, timeoutMs = LIMITS.parseTimeoutMs } = {},
+  {
+    onStage = () => {},
+    onEvent = () => {},
+    onPartial = () => {},
+    timeoutMs = LIMITS.parseTimeoutMs,
+  } = {},
 ) {
   const name = safeFilename(filename);
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
@@ -52,44 +63,92 @@ export async function ingestFile(
     // contain document text) to the server log.
     worker.stdout?.resume();
     worker.stderr?.resume();
+    let partial = null;
+    // The scanned pages did not finish: keep every page that was read,
+    // mark the rest unread, and hold the document for review.
+    const salvage = (why) => {
+      const doc = partial.doc;
+      for (const w of doc.warnings)
+        if (w.code === "ocr_pending") {
+          w.code = "no_text_layer";
+          w.message = `Page ${w.page} is a scanned image and ${why}, so it was not read. The other pages were.`;
+        }
+      const review = [
+        ...new Set([
+          ...partial.review,
+          ...doc.warnings
+            .filter((w) => w.code === "no_text_layer")
+            .map((w) => w.message),
+        ]),
+      ];
+      onEvent({ k: "salvaged" });
+      return { ok: true, doc, status: "needs_review", review };
+    };
+    const fail = (v) => done(partial ? salvage(v.why) : v.result);
     const timer = setTimeout(() => {
       worker.terminate();
-      done({
-        ok: false,
-        code: "timeout",
-        stage: "parsing",
-        message: `Reading this file took longer than ${Math.round(timeoutMs / 1000)} seconds, so it was stopped.`,
+      fail({
+        why: `reading it took longer than ${Math.round(timeoutMs / 1000)} seconds`,
+        result: {
+          ok: false,
+          code: "timeout",
+          stage: "parsing",
+          message: `Reading this file took longer than ${Math.round(timeoutMs / 1000)} seconds, so it was stopped.`,
+        },
       });
     }, timeoutMs);
-    worker.once("message", (m) => {
+    worker.on("message", (m) => {
+      if (settled) return;
+      if (m?.type === "event") {
+        try {
+          onEvent(m.event);
+        } catch {
+          /* a display callback never breaks parsing */
+        }
+        return;
+      }
+      if (m?.type === "partial") {
+        partial = { doc: m.doc, status: m.status, review: m.review };
+        try {
+          onPartial(partial);
+        } catch {
+          /* the final result still arrives */
+        }
+        return;
+      }
       done(
         m.ok ? { ok: true, doc: m.doc, status: m.status, review: m.review } : m,
       );
       worker.terminate();
     });
-    worker.once("error", (e) =>
-      done({
-        ok: false,
-        code:
-          /heap|memory/i.test(String(e?.message)) ||
-          e?.code === "ERR_WORKER_OUT_OF_MEMORY"
-            ? "resource_limit"
-            : "parse_failed",
-        stage: "parsing",
-        message:
-          /heap|memory/i.test(String(e?.message)) ||
-          e?.code === "ERR_WORKER_OUT_OF_MEMORY"
+    worker.once("error", (e) => {
+      const oom =
+        /heap|memory/i.test(String(e?.message)) ||
+        e?.code === "ERR_WORKER_OUT_OF_MEMORY";
+      fail({
+        why: oom
+          ? "needed more memory than the safety limit allows"
+          : "could not be decoded",
+        result: {
+          ok: false,
+          code: oom ? "resource_limit" : "parse_failed",
+          stage: "parsing",
+          message: oom
             ? "This file needed more memory to read than the safety limit allows."
             : "This file could not be read.",
-      }),
-    );
+        },
+      });
+    });
     worker.once("exit", (code) => {
       if (code !== 0)
-        done({
-          ok: false,
-          code: "parse_failed",
-          stage: "parsing",
-          message: "This file could not be read.",
+        fail({
+          why: "could not be decoded",
+          result: {
+            ok: false,
+            code: "parse_failed",
+            stage: "parsing",
+            message: "This file could not be read.",
+          },
         });
     });
   });

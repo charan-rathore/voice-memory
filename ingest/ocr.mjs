@@ -15,14 +15,29 @@ const LANG_PATH = fileURLToPath(
 );
 
 let workerPromise = null;
+// tesseract.js reports recognition progress (0..1) through one logger fixed
+// at worker creation; it is forwarded to whoever is recognising right now.
+let onOcrProgress = null;
 function worker() {
   workerPromise ??= createWorker("eng", 1, {
     langPath: LANG_PATH,
     cachePath: tmpdir(),
     gzip: true,
     errorHandler: () => {},
+    logger: (m) => {
+      if (m?.status === "recognizing text" && onOcrProgress)
+        onOcrProgress(Math.max(0, Math.min(1, Number(m.progress) || 0)));
+    },
   });
   return workerPromise;
+}
+
+/** Load the OCR engine ahead of the first scanned page (overlaps with text reading). */
+export function warmOcr() {
+  return worker().then(
+    () => true,
+    () => false,
+  );
 }
 
 export async function shutdownOcr() {
@@ -41,13 +56,19 @@ export const OCR_ENGINE = "tesseract.js@5 eng 4.0.0_best_int";
  *   confidence:number, lines: Array<{text:string,bbox:object,confidence:number}>,
  *   uncertain: Array<{text:string, confidence:number}>}>}>}
  */
-export async function recognize(image) {
+export async function recognize(image, { onProgress = null } = {}) {
   const w = await worker();
-  const { data } = await w.recognize(
-    Buffer.from(image),
-    {},
-    { blocks: true, text: false },
-  );
+  onOcrProgress = onProgress;
+  let data;
+  try {
+    ({ data } = await w.recognize(
+      Buffer.from(image),
+      {},
+      { blocks: true, text: false },
+    ));
+  } finally {
+    onOcrProgress = null;
+  }
   const paragraphs = [];
   for (const b of data.blocks ?? [])
     for (const p of b.paragraphs ?? []) {

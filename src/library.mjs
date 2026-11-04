@@ -96,19 +96,26 @@ const MAX_PARALLEL_PARSES = Math.max(
 );
 
 // Process-wide parse slots: the host is small (Render free: 512 MB).
+// A visitor's upload goes ahead of queued built-in demo documents, which
+// are parsed at boot: on a cold start the visitor must not wait behind them.
 let active = 0;
 const waiting = [];
-async function slot() {
+async function slot(priority = 0) {
   if (active < MAX_PARALLEL_PARSES) {
     active++;
     return;
   }
-  await new Promise((r) => waiting.push(r));
+  await new Promise((r) => {
+    const at = waiting.findIndex((w) => w.priority < priority);
+    const w = { priority, r };
+    if (at < 0) waiting.push(w);
+    else waiting.splice(at, 0, w);
+  });
   active++;
 }
 function freeSlot() {
   active--;
-  waiting.shift()?.();
+  waiting.shift()?.r();
 }
 
 export const libraryOf = (s) => {
@@ -129,7 +136,9 @@ export function publicEntry(e) {
     bytes: e.bytes,
     status: e.status,
     included:
-      e.status === "ready" || (e.status === "needs_review" && e.included),
+      e.status === "ready" ||
+      e.status === "partial" ||
+      (e.status === "needs_review" && e.included),
     error: e.error,
     review: e.review ?? [],
     warnings: (e.doc?.warnings ?? []).map((w) => ({
@@ -142,6 +151,11 @@ export function publicEntry(e) {
     createdAt: e.createdAt,
     updatedAt: e.updatedAt,
     timings: e.timings,
+    // age: how long this upload has been in the pipeline, so a page view
+    // can run its clock between polls without trusting the client's clock.
+    progress: e.progress
+      ? { ...e.progress, age: Date.now() - e.createdAt }
+      : null,
   };
 }
 
@@ -240,6 +254,9 @@ export function addUpload(s, bytes, filename, rebuild) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     timings: {},
+    // What the pipeline view shows: page states, counts and a short
+    // milestone log. Content-free: page numbers and counts, never text.
+    progress: { pages: [], log: [], counts: null, answerableAt: null },
   };
   lib.push(entry);
   const t0 = Date.now();
@@ -247,9 +264,79 @@ export function addUpload(s, bytes, filename, rebuild) {
     entry.status = status;
     entry.updatedAt = Date.now();
     entry.timings[status] = Date.now() - t0;
+    note({ k: "status", status });
   };
+  function note(ev) {
+    const pr = entry.progress;
+    const t = Date.now() - t0;
+    const pg = (n) => (pr.pages[n - 1] ??= { n, state: "waiting" });
+    switch (ev.k) {
+      case "open":
+        for (let n = 1; n <= ev.pages; n++) pg(n);
+        break;
+      case "text":
+        Object.assign(pg(ev.n), { state: "text", chars: ev.chars, t });
+        break;
+      case "scan":
+        Object.assign(pg(ev.n), { state: "scan", t });
+        break;
+      case "ocr-start":
+        Object.assign(pg(ev.n), { state: "ocr", p: 0, t });
+        break;
+      case "ocr":
+        // Live percentage only; not logged (it would flood the log).
+        pg(ev.n).p = ev.p;
+        entry.updatedAt = Date.now();
+        return;
+      case "ocr-done":
+        Object.assign(pg(ev.n), {
+          state: ev.paragraphs ? "ocr-done" : "unread",
+          p: 100,
+          confidence: ev.confidence,
+          uncertain: ev.uncertain,
+          t,
+        });
+        break;
+      case "ocr-skip":
+        Object.assign(pg(ev.n), { state: "unread", t });
+        break;
+      case "salvaged":
+        for (const p of pr.pages)
+          if (p.state === "scan" || p.state === "ocr") p.state = "unread";
+        break;
+      case "layout":
+      case "layout-partial":
+        pr.counts = {
+          tables: ev.tables,
+          headings: ev.headings,
+          paragraphs: ev.paragraphs,
+          furniture: ev.furniture,
+        };
+        break;
+    }
+    pr.log.push({ t, ...ev });
+    if (pr.log.length > 240) pr.log.splice(1, pr.log.length - 240);
+    entry.updatedAt = Date.now();
+  }
+  // A new document object invalidates everything derived from the old one.
+  const adopt = (doc, review) => {
+    entry.doc = doc;
+    entry.kind = doc.kind;
+    entry.review = review;
+    entry.clinical = undefined;
+    entry.haystack = undefined;
+  };
+  const indexed = () =>
+    note({
+      k: "indexed",
+      elements: entry.doc?.stats?.elements ?? null,
+      observations:
+        entry.clinical?.observations?.length ??
+        entry.clinical?.parts?.reduce((n, p) => n + p.observations.length, 0) ??
+        null,
+    });
   (async () => {
-    await slot();
+    await slot(String(s.sid ?? "").startsWith("case:") ? 0 : 1);
     try {
       if (!lib.includes(entry)) return; // removed while queued
       const cacheKey =
@@ -271,32 +358,70 @@ export function addUpload(s, bytes, filename, rebuild) {
         set("parsing");
         r = structuredClone(hit.value);
         if (r.doc) r.doc.filename = name;
+        note({ k: "cache" });
+        for (const pg of r.doc?.pages ?? [])
+          entry.progress.pages[pg.number - 1] = {
+            n: pg.number,
+            state:
+              pg.textSource === "pdf"
+                ? "text"
+                : pg.textSource === "ocr"
+                  ? "ocr-done"
+                  : "unread",
+          };
       } else {
         parseCacheStats.misses++;
-        r = await ingestFile(bytes, name, { onStage: set });
+        r = await ingestFile(bytes, name, {
+          onStage: set,
+          onEvent: note,
+          onPartial: (p) => {
+            // Text pages are readable while scanned pages are still OCR'd:
+            // index them now so questions work during OCR. Only a clean
+            // partial (nothing needing review) is indexed early, and only
+            // within the same memory budget as a final document.
+            if (!lib.includes(entry) || p.status !== "ready") return;
+            if (globalBytes() + deepBytes(p.doc) > MAX_GLOBAL_BYTES) return;
+            adopt(p.doc, p.review);
+            set("partial");
+            try {
+              rebuild(s);
+              entry.progress.answerableAt = Date.now() - t0;
+              indexed();
+            } catch {
+              /* the final result rebuilds again */
+            }
+          },
+        });
         cacheable = true;
       }
       if (!lib.includes(entry)) return; // removed while parsing
       if (!r.ok) {
+        const wasIndexed = entry.status === "partial";
         entry.error = { code: r.code, stage: r.stage, message: r.message };
         entry.original = null; // nothing derived; do not keep unreadable bytes
+        entry.doc = null;
         set("failed");
+        if (wasIndexed) rebuild(s);
         return;
       }
       // The real budget check, with actual sizes: the pre-parse 2x estimate
       // cannot see expansion of compressed formats, and concurrent uploads
       // are admitted on estimates made before either parse finished.
       // globalBytes() already counts this entry's original bytes.
-      if (globalBytes() + deepBytes(r.doc) > MAX_GLOBAL_BYTES) {
+      // (An early partial version of this entry is already counted there.)
+      const held = entry.doc ? deepBytes(entry.doc) : 0;
+      if (globalBytes() - held + deepBytes(r.doc) > MAX_GLOBAL_BYTES) {
         entry.error = {
           code: "budget_exceeded",
           stage: "indexing",
           message:
             "The server is holding as many documents as it safely can right now. Try again shortly, or remove a document.",
         };
+        const wasIndexed = entry.status === "partial";
         entry.original = null; // free the bytes; nothing is indexed
         entry.doc = null;
         set("failed");
+        if (wasIndexed) rebuild(s);
         return; // rejected results are NOT cached: fail closed before any commit
       }
       if (cacheable && r.ok) {
@@ -311,16 +436,25 @@ export function addUpload(s, bytes, filename, rebuild) {
           parseCacheTrim();
         }
       }
-      entry.doc = r.doc;
-      entry.kind = r.doc.kind;
-      entry.review = r.review;
+      const wasIndexed = entry.status === "partial";
+      adopt(r.doc, r.review);
       if (r.status === "needs_review") {
         set("needs_review");
+        // Rebuild now so the index holds exactly what review policy allows
+        // of the final document (it replaces any early text-only version;
+        // a visitor workspace includes reviewed uploads straight away).
+        try {
+          rebuild(s);
+          indexed();
+        } catch {
+          if (wasIndexed) entry.doc = null;
+        }
         return;
       }
       set("indexing"); // indexable() includes "indexing" for this build
       try {
         rebuild(s);
+        indexed();
         set("ready");
       } catch (e) {
         entry.error = {
@@ -332,12 +466,20 @@ export function addUpload(s, bytes, filename, rebuild) {
         rebuild(s);
       }
     } catch {
+      const wasIndexed = entry.status === "partial";
       entry.error = {
         code: "parse_failed",
         stage: "parsing",
         message: "This file could not be read.",
       };
+      entry.doc = null;
       set("failed");
+      if (wasIndexed)
+        try {
+          rebuild(s);
+        } catch {
+          /* already failed */
+        }
     } finally {
       freeSlot();
     }
@@ -391,6 +533,7 @@ export function indexable(s) {
       e.doc &&
       (e.status === "ready" ||
         e.status === "indexing" ||
+        e.status === "partial" ||
         (e.status === "needs_review" && e.included)),
   );
 }
