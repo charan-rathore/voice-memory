@@ -425,6 +425,83 @@ test("visitors upload their own documents and ask them anything", async () => {
     400,
   );
 });
+const uploadToNewWorkspace = async (fixture, name) => {
+  const { readFileSync } = await import("node:fs");
+  const ws = await (
+    await fetch(base + "/api/public/workspace", { method: "POST" })
+  ).json();
+  const r = await fetch(`${base}/api/public/workspace/${ws.id}/upload`, {
+    method: "POST",
+    headers: {
+      "x-file-name": name,
+      "content-type": "application/octet-stream",
+    },
+    body: readFileSync(new URL(fixture, import.meta.url)),
+  });
+  assert.equal(r.status, 202);
+  const seen = new Set();
+  let st;
+  for (let i = 0; i < 300; i++) {
+    st = await (await fetch(`${base}/api/public/workspace/${ws.id}`)).json();
+    for (const d of st.documents) seen.add(d.status);
+    if (
+      st.documents.every((d) =>
+        ["ready", "needs_review", "failed"].includes(d.status),
+      )
+    )
+      break;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return { ws, st, seen };
+};
+
+test("an upload held for review is still answerable in a visitor workspace", async () => {
+  // Regression: the workspace read its indexable documents before marking
+  // reviewed uploads as included, so a review-only workspace kept no index
+  // and every question answered "still loading" forever.
+  // text-and-blank.pdf: digital p1, a blank page (no text, no image), digital p3.
+  const { ws, st } = await uploadToNewWorkspace(
+    "../ingest/fixtures/files/text-and-blank.pdf",
+    "text-and-blank.pdf",
+  );
+  assert.equal(st.documents[0].status, "needs_review");
+  assert.ok(st.ready, "the workspace has an index");
+  const a = await ask(ws.id, "What does this document say?");
+  assert.equal(a.status, 200, JSON.stringify(a.body).slice(0, 200));
+});
+
+test("a mixed PDF is answerable before its scanned page is read, and says so as it goes", async () => {
+  // mixed.pdf: digital p1, scanned p2 (OCR), digital p3.
+  const { st } = await uploadToNewWorkspace(
+    "../ingest/fixtures/files/mixed.pdf",
+    "mixed.pdf",
+  );
+  const d = st.documents[0];
+  assert.equal(d.status, "ready");
+  const log = d.progress.log;
+  const at = (pred) => log.findIndex(pred);
+  const partial = at((e) => e.k === "status" && e.status === "partial");
+  const firstIndex = at((e) => e.k === "indexed");
+  const ocrDone = at((e) => e.k === "ocr-done");
+  assert.ok(partial >= 0, "went through partial");
+  assert.ok(
+    firstIndex > partial && firstIndex < ocrDone,
+    "indexed before OCR finished",
+  );
+  assert.deepEqual(
+    d.progress.pages.map((p) => p.state),
+    ["text", "ocr-done", "text"],
+  );
+  assert.ok(Number.isFinite(d.progress.answerableAt));
+  assert.ok(d.progress.answerableAt < d.timings.ready);
+  assert.ok(Number.isFinite(d.progress.age));
+  // the record is content-free: no excerpt of the document travels in it
+  assert.doesNotMatch(
+    JSON.stringify(d.progress),
+    /[a-z]{4,}\s[a-z]{4,}\s[a-z]{4,}/i,
+  );
+});
+
 test("bring-your-own answers complete wrapped sentences and keep one supporting passage", async () => {
   const { readFileSync } = await import("node:fs");
   const ws = await (

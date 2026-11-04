@@ -19,7 +19,11 @@ const REVIEW_CODES = new Set([
 /**
  * @returns {Promise<{doc: object, status: "ready"|"needs_review", review: string[]}>}
  */
-export async function parseBuffer(buf, filename) {
+export async function parseBuffer(
+  buf,
+  filename,
+  { onEvent = () => {}, onPartial = null } = {},
+) {
   const { kind, mime } = detectFormat(buf, filename);
   let doc;
   if (kind === "text" || kind === "markdown") {
@@ -33,9 +37,22 @@ export async function parseBuffer(buf, filename) {
       parser: { name: "vm-text/1", ocr: null },
     });
   } else {
+    // A PDF whose text pages are readable before its scans are OCR'd is
+    // handed over early (same checks as the final result, minus OCR ones),
+    // so the visitor can ask while the scanned pages are still being read.
+    const partial =
+      onPartial &&
+      (async (p) => {
+        const d = buildDocument({ ...p, kind, mime, filename, bytes: buf });
+        d.parser.pipeline = PIPELINE_VERSION;
+        const n = d.text.replace(/\s+/g, " ").trim().length;
+        if (n < LIMITS.minTextChars || d.text.length > LIMITS.maxTextChars)
+          return;
+        onPartial({ doc: d, ...reviewOf(d) });
+      });
     const parsed =
       kind === "pdf"
-        ? await parsePdf(buf)
+        ? await parsePdf(buf, { onEvent, onPartial: partial || null })
         : kind === "docx"
           ? parseDocx(buf)
           : await parseImage(buf, kind);
@@ -71,8 +88,12 @@ export async function parseBuffer(buf, filename) {
       `This document has ${doc.text.length.toLocaleString("en-US")} characters of text. The current limit is ${LIMITS.maxTextChars.toLocaleString("en-US")} per document; split it and upload the parts.`,
       { stage: "parsing" },
     );
-  // Review policy: anything that means "the text we index may not be what the
-  // page says" holds the document out of the index until a person confirms.
+  return { doc, ...reviewOf(doc) };
+}
+
+// Review policy: anything that means "the text we index may not be what the
+// page says" holds the document out of the index until a person confirms.
+function reviewOf(doc) {
   const review = [
     ...new Set(
       doc.warnings
@@ -80,5 +101,5 @@ export async function parseBuffer(buf, filename) {
         .map((w) => w.message),
     ),
   ];
-  return { doc, status: review.length ? "needs_review" : "ready", review };
+  return { status: review.length ? "needs_review" : "ready", review };
 }

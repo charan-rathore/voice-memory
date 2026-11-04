@@ -16,6 +16,7 @@
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const state = {
+    drops: [],
     case: "health",
     live: false,
     cases: Object.fromEntries((snap.cases ?? []).map((c) => [c.id, c])),
@@ -303,6 +304,9 @@
   async function uploadFiles(list) {
     const files = [...list].slice(0, 5);
     if (!files.length) return;
+    // When each file was dropped: the reading view's clock starts here.
+    const dropped = performance.now();
+    for (const f of files) if (f.size <= 4 * 1048576) state.drops.push(dropped);
     // Uploads must not wait for the demo cases to finish loading: visitor
     // workspaces are independent of them, so on a cold boot we retry the
     // workspace create instead of turning the visitor away. (This gate was
@@ -392,14 +396,29 @@
           (d) => !["ready", "needs_review", "failed"].includes(d.status),
         )
       )
-        pollTimer = setTimeout(pollWorkspace, 1200);
+        pollTimer = setTimeout(pollWorkspace, 600);
     });
   }
+  // The live reading view loads with the first upload, not the first paint.
+  let readingLoad = null;
+  const readingView = () =>
+    (readingLoad ??= new Promise((resolve, reject) => {
+      const css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = "reading.css";
+      document.head.append(css);
+      const js = document.createElement("script");
+      js.src = "reading.js";
+      js.onload = () => resolve(window.VMReading);
+      js.onerror = reject;
+      document.head.append(js);
+    }).catch(() => (readingLoad = null)));
   const STAGE = {
     uploaded: "Queued",
     validating: "Checking",
     parsing: "Reading",
     ocr: "Reading text (OCR)",
+    partial: "Ask now · reading scan",
     indexing: "Indexing",
     ready: "Ready",
     needs_review: "Ready · low OCR confidence",
@@ -409,17 +428,31 @@
     $("#upl-list").innerHTML = state.wsDocs
       .map((d) => {
         const done = d.status === "ready" || d.status === "needs_review";
-        const cls = done ? "ok" : d.status === "failed" ? "bad" : "busy";
+        const cls = done
+          ? "ok"
+          : d.status === "failed"
+            ? "bad"
+            : d.status === "partial"
+              ? "ok busy"
+              : "busy";
         const extra =
           d.status === "failed"
             ? ` — ${esc(d.error?.message ?? "")}`
             : d.stats?.pages
               ? ` · ${d.stats.pages} p`
               : "";
-        return `<li><b title="${esc(d.title)}">${esc(d.title)}</b><span class="upl-st ${cls}">${esc(STAGE[d.status] ?? d.status)}</span><span class="dim" style="font-size:12px">${extra}</span></li>`;
+        return `<li${d.id ? ` data-doc="${esc(d.id)}"` : ""}><b title="${esc(d.title)}">${esc(d.title)}</b><span class="upl-st ${cls}">${esc(STAGE[d.status] ?? d.status)}</span><span class="dim" style="font-size:12px">${extra}</span></li>`;
       })
       .join("");
+    if (state.wsDocs.some((d) => d.progress))
+      readingView().then((R) =>
+        R?.render($("#upl-flow"), state.wsDocs, { drops: state.drops }),
+      );
   }
+  $("#upl-list").addEventListener("click", (e) => {
+    const li = e.target.closest("li[data-doc]");
+    if (li && window.VMReading) window.VMReading.focus(li.dataset.doc);
+  });
   const drop = $("#drop");
   $("#files").addEventListener("change", (e) => uploadFiles(e.target.files));
   ["dragenter", "dragover"].forEach((ev) =>

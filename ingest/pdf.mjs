@@ -205,7 +205,18 @@ const LIGATURES = {
 export const fixLigatures = (s) =>
   s.replace(/[\u019f\u014c\u01a9\ufb00-\ufb04]/g, (c) => LIGATURES[c]);
 
-export async function parsePdf(buf) {
+/**
+ * Two phases, so a mostly-digital PDF with a few scanned pages is answerable
+ * long before OCR finishes: every page's text layer is read first and handed
+ * to `onPartial` (scanned pages marked ocrPending), then the scanned pages
+ * are OCR'd and the full result is returned. `onEvent` receives small,
+ * content-free progress records (page numbers, counts, OCR %) for the
+ * on-screen pipeline view; it never sees document text.
+ */
+export async function parsePdf(
+  buf,
+  { onEvent = () => {}, onPartial = null } = {},
+) {
   let doc;
   try {
     doc = await pdfjs.getDocument({
@@ -240,7 +251,9 @@ export async function parsePdf(buf) {
   const pages = [];
   const pageLines = []; // per page: lines with page/bbox
   const ocrBlocks = new Map(); // page -> blocks
+  const scans = []; // pages with no text layer, OCR'd after the text pass
   let ocrBudget = LIMITS.maxOcrPages;
+  onEvent({ k: "open", pages: doc.numPages });
   for (let n = 1; n <= doc.numPages; n++) {
     let page;
     try {
@@ -301,61 +314,9 @@ export async function parsePdf(buf) {
     };
     if (!items.length) {
       info.textSource = "none";
-      if (ocrBudget > 0) {
-        const images = await extractImages(page, pdfjs.OPS);
-        const blocks = [];
-        for (const { obj, ctm } of images) {
-          const png = imageToPng(obj);
-          if (!png) continue;
-          ocrBudget--;
-          const res = await recognize(png);
-          const toUser = (px, py) => {
-            const u = px / obj.width;
-            const v = 1 - py / obj.height;
-            return [
-              ctm[0] * u + ctm[2] * v + ctm[4],
-              ctm[1] * u + ctm[3] * v + ctm[5],
-            ];
-          };
-          for (const p of res.paragraphs) {
-            const [ux0, uy0] = toUser(p.bbox.x0, p.bbox.y1);
-            const [ux1, uy1] = toUser(p.bbox.x1, p.bbox.y0);
-            blocks.push({
-              type: "paragraph",
-              text: p.text.replace(/\n/g, " "),
-              page: n,
-              bbox: viewBox(
-                vp,
-                Math.min(ux0, ux1),
-                Math.min(uy0, uy1),
-                Math.max(ux0, ux1),
-                Math.max(uy0, uy1),
-              ),
-              method: "ocr",
-              confidence: Math.round(p.confidence),
-            });
-            for (const u of p.uncertain)
-              warnings.push({
-                code: "ocr_uncertain_number",
-                page: n,
-                message: `OCR is unsure about "${u.text}" on page ${n} (${u.confidence}% confidence). Check it against the original.`,
-              });
-          }
-        }
-        if (blocks.length) {
-          info.textSource = "ocr";
-          ocrBlocks.set(n, blocks);
-        }
-      }
-      if (info.textSource === "none")
-        warnings.push({
-          code: "no_text_layer",
-          page: n,
-          message:
-            ocrBudget <= 0
-              ? `Page ${n} has no text layer and the OCR page limit (${LIMITS.maxOcrPages}) was reached.`
-              : `Page ${n} has no readable text, even with OCR.`,
-        });
+      info.ocrPending = true;
+      scans.push({ n, page, vp, info });
+      onEvent({ k: "scan", n });
       pages.push(info);
       pageLines.push([]);
       continue;
@@ -381,8 +342,151 @@ export async function parsePdf(buf) {
     });
     pageLines.push(lines);
     pages.push(info);
+    onEvent({
+      k: "text",
+      n,
+      lines: lines.length,
+      chars: lines.reduce((a, l) => a + l.text.length, 0),
+    });
   }
 
+  const ocrWarnings = [];
+  const finish = (final) => {
+    const blocks = assemble(pageLines, pages, ocrBlocks);
+    const ws = [...warnings, ...ocrWarnings];
+    const ocrConfs = blocks
+      .filter((b) => b.method === "ocr")
+      .map((b) => b.confidence);
+    const meanOcr = ocrConfs.length
+      ? ocrConfs.reduce((a, b) => a + b, 0) / ocrConfs.length
+      : null;
+    if (meanOcr !== null && meanOcr < OCR_REVIEW_CONFIDENCE)
+      ws.push({
+        code: "ocr_low_confidence",
+        message: `Text on the scanned pages was read with ${Math.round(meanOcr)}% average OCR confidence. Review it before relying on numbers.`,
+      });
+    if (!final)
+      for (const s of scans)
+        ws.push({
+          code: "ocr_pending",
+          page: s.n,
+          message: `Page ${s.n} is a scanned image and is still being read.`,
+        });
+    const count = (t) => blocks.filter((b) => b.type === t).length;
+    onEvent({
+      k: final ? "layout" : "layout-partial",
+      tables: count("table"),
+      headings: count("heading"),
+      paragraphs: count("paragraph"),
+      furniture: count("furniture"),
+    });
+    return {
+      blocks,
+      pages: pages.map((p) => ({ ...p })),
+      warnings: ws,
+      parser: {
+        name: PDF_PARSER,
+        ocr: ocrConfs.length ? OCR_ENGINE : null,
+      },
+    };
+  };
+
+  // Phase 1 done: everything with a text layer is readable now.
+  if (scans.length && onPartial && pages.some((p) => p.textSource === "pdf"))
+    await onPartial(finish(false));
+
+  // Phase 2: OCR the scanned pages.
+  for (const { n, page, vp, info } of scans) {
+    delete info.ocrPending;
+    if (ocrBudget > 0) {
+      onEvent({ k: "ocr-start", n });
+      const images = await extractImages(page, pdfjs.OPS);
+      const blocks = [];
+      let uncertainCount = 0;
+      for (const { obj, ctm } of images) {
+        const png = imageToPng(obj);
+        if (!png) continue;
+        ocrBudget--;
+        let last = -1;
+        const res = await recognize(png, {
+          onProgress: (p) => {
+            const pct = Math.floor(p * 20) * 5;
+            if (pct !== last) {
+              last = pct;
+              onEvent({ k: "ocr", n, p: pct });
+            }
+          },
+        });
+        const toUser = (px, py) => {
+          const u = px / obj.width;
+          const v = 1 - py / obj.height;
+          return [
+            ctm[0] * u + ctm[2] * v + ctm[4],
+            ctm[1] * u + ctm[3] * v + ctm[5],
+          ];
+        };
+        for (const p of res.paragraphs) {
+          const [ux0, uy0] = toUser(p.bbox.x0, p.bbox.y1);
+          const [ux1, uy1] = toUser(p.bbox.x1, p.bbox.y0);
+          blocks.push({
+            type: "paragraph",
+            text: p.text.replace(/\n/g, " "),
+            page: n,
+            bbox: viewBox(
+              vp,
+              Math.min(ux0, ux1),
+              Math.min(uy0, uy1),
+              Math.max(ux0, ux1),
+              Math.max(uy0, uy1),
+            ),
+            method: "ocr",
+            confidence: Math.round(p.confidence),
+          });
+          for (const u of p.uncertain) {
+            uncertainCount++;
+            ocrWarnings.push({
+              code: "ocr_uncertain_number",
+              page: n,
+              message: `OCR is unsure about "${u.text}" on page ${n} (${u.confidence}% confidence). Check it against the original.`,
+            });
+          }
+        }
+      }
+      if (blocks.length) {
+        info.textSource = "ocr";
+        ocrBlocks.set(n, blocks);
+      }
+      onEvent({
+        k: "ocr-done",
+        n,
+        paragraphs: blocks.length,
+        confidence: blocks.length
+          ? Math.round(
+              blocks.reduce((a, b) => a + b.confidence, 0) / blocks.length,
+            )
+          : null,
+        uncertain: uncertainCount,
+      });
+    }
+    if (info.textSource === "none") {
+      onEvent({ k: "ocr-skip", n, budget: ocrBudget <= 0 });
+      ocrWarnings.push({
+        code: "no_text_layer",
+        page: n,
+        message:
+          ocrBudget <= 0
+            ? `Page ${n} has no text layer and the OCR page limit (${LIMITS.maxOcrPages}) was reached.`
+            : `Page ${n} has no readable text, even with OCR.`,
+      });
+    }
+  }
+  const out = finish(true);
+  await doc.destroy();
+  return out;
+}
+
+/** Reading-order blocks from text-layer lines plus any OCR'd pages. */
+function assemble(pageLines, pages, ocrBlocks) {
   // Page furniture: margin lines whose digit-normalized text repeats on 2+ pages.
   const furniture = new Set();
   if (pages.length > 1) {
@@ -542,21 +646,7 @@ export async function parsePdf(buf) {
     flushTable();
   }
   for (const b of blocks) delete b.size;
-
-  const ocrConfs = blocks
-    .filter((b) => b.method === "ocr")
-    .map((b) => b.confidence);
-  const meanOcr = ocrConfs.length
-    ? ocrConfs.reduce((a, b) => a + b, 0) / ocrConfs.length
-    : null;
-  if (meanOcr !== null && meanOcr < OCR_REVIEW_CONFIDENCE)
-    warnings.push({
-      code: "ocr_low_confidence",
-      message: `Text on the scanned pages was read with ${Math.round(meanOcr)}% average OCR confidence. Review it before relying on numbers.`,
-    });
-  const parser = { name: PDF_PARSER, ocr: ocrConfs.length ? OCR_ENGINE : null };
-  await doc.destroy();
-  return { blocks, pages, warnings, parser };
+  return blocks;
 }
 
 function finalizeTable(table) {
