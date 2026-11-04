@@ -689,7 +689,7 @@ export function createPublicApi({
             true
           );
         const focus = url.searchParams.get("focus") || "all";
-        if (!/^[\w:./%-]{1,200}$/.test(focus))
+        if (!/^[\w:./%@-]{1,200}$/.test(focus))
           return (send(res, 400, { error: "Bad focus" }), true);
         const mem = s.publicMemory ?? (s.publicMemory = createMemory());
         const g =

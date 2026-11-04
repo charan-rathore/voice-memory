@@ -2078,7 +2078,7 @@ export function createLocalServer({
       if (req.method === "GET" && req.url.startsWith("/api/graph")) {
         const focus =
           new URL(req.url, origin).searchParams.get("focus") || "overview";
-        if (!/^[\w:./%-]{1,200}$/.test(focus)) {
+        if (!/^[\w:./%@-]{1,200}$/.test(focus)) {
           res.statusCode = 400;
           res.end(JSON.stringify({ error: "Bad focus" }));
           return;

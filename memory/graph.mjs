@@ -96,6 +96,56 @@ export function approvalAuthority(quote) {
 const NO_SIGNED_RE =
   /\bno\b[^.;]{0,40}\b(?:signed|executed|signature)\b|\bnot\b[^.;]{0,25}\b(?:signed|executed)\b|\bdoes not constitute\b[^.;]{0,40}\bsignature\b/i;
 
+/**
+ * Which engagement each claim belongs to, for value-node identity: the same
+ * figure in two unrelated engagements ("$42,000" proposed for Alder, approved
+ * for Birch) is two values, never one approved node. Claims of one field and
+ * amount share a node only when their engine scope entities overlap. A claim
+ * with no scope entity joins the only engagement there is, else stays apart.
+ * Returns "" (the plain id) when the amount has a single engagement, so ids in
+ * one-engagement corpora are unchanged.
+ */
+function engagementKeys(list) {
+  const out = new Map();
+  const byValue = new Map();
+  for (const c of list) {
+    const k = canon(c.value);
+    byValue.set(k, [...(byValue.get(k) ?? []), c]);
+  }
+  for (const group of byValue.values()) {
+    const clusters = [];
+    const unscoped = [];
+    for (const c of group) {
+      const ents = new Set(c.scopeEntities ?? []);
+      if (!ents.size) {
+        unscoped.push(c);
+        continue;
+      }
+      const hits = clusters.filter((k) => [...ents].some((e) => k.ents.has(e)));
+      const into = hits[0] ?? { ents: new Set(), claims: [] };
+      if (!hits.length) clusters.push(into);
+      for (const other of hits.slice(1)) {
+        for (const e of other.ents) into.ents.add(e);
+        into.claims.push(...other.claims);
+        clusters.splice(clusters.indexOf(other), 1);
+      }
+      for (const e of ents) into.ents.add(e);
+      into.claims.push(c);
+    }
+    if (clusters.length <= 1) {
+      for (const c of group) out.set(c, "");
+      continue;
+    }
+    for (const k of clusters) {
+      const name = [...k.ents].sort((a, b) => b.length - a.length)[0];
+      for (const c of k.claims)
+        out.set(c, "@" + canon(name).replace(/\s+/g, "-"));
+    }
+    for (const c of unscoped) out.set(c, "@unscoped");
+  }
+  return out;
+}
+
 export function semanticOf(bundle) {
   const claims = extractClaims(bundle, FIELDS).filter((c) => c.value);
   const byField = new Map();
@@ -107,8 +157,9 @@ export function semanticOf(bundle) {
     const superseded = new Set(r.superseded);
     const approved = new Set(r.approved.get(f) ?? []);
     const values = new Map();
+    const engagementOf = engagementKeys(list);
     for (const c of list) {
-      const id = valueId(f, c.value);
+      const id = valueId(f, c.value) + engagementOf.get(c);
       const v = values.get(id) ?? {
         id,
         field: f,
