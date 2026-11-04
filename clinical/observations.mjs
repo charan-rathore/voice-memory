@@ -97,7 +97,7 @@ export function reportMeta(full) {
     /Report status\s*:?\s*(final|preliminary|provisional|interim|partial|amended|corrected|revised)/i.exec(
       text,
     );
-  const g = genericMeta(text);
+  const g = genericMeta(text, full);
   // No "Report status:" field: a status printed as a capitalised label in
   // the first header lines ("PRELIMINARY", "AMENDED / FINAL"). Capitals
   // only and header lines only, so prose ("superseded by the amended
@@ -209,8 +209,23 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
     if (!header) continue;
     const col = {};
     header.cells.forEach((h, i) => {
+      // "TEST / ANALYTE", "FINAL RESULT", "PRINTED REFERENCE": a qualifier
+      // or an alternative name still names the column's role.
+      const names = [
+        h.trim(),
+        ...h
+          .split(/\s*\/\s*/)
+          .map((x) =>
+            x
+              .trim()
+              .replace(
+                /^(printed|final|reported|your|lab(?:oratory)?|corrected)\s+/i,
+                "",
+              ),
+          ),
+      ];
       for (const [k, re] of Object.entries(COLS))
-        if (col[k] === undefined && re.test(h.trim())) {
+        if (col[k] === undefined && names.some((n) => re.test(n))) {
           col[k] = i;
           break; // one role per column ("Value" is the result, not a range)
         }

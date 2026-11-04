@@ -35,6 +35,8 @@ import {
 } from "./spoken-repair.mjs";
 import { promotedAnswer } from "./paraphrase.mjs";
 import { sectionAnswer } from "./doc-sections.mjs";
+import { bundleFactAnswer, recordIntent } from "./record-facts.mjs";
+import { cite as citeSpan } from "./spoken-routes.mjs";
 import {
   callLanguage,
   isHindi,
@@ -942,17 +944,50 @@ export function createVoiceAdapter({
       // same renderers, rather than an abstention.
       // Reworded beyond keyword reach: one verbatim sentence, only when the
       // calibrated paraphrase gate is unambiguous (paraphrase.mjs).
+      // A record question ("was iron prescribed?") is answered from the
+      // records' facts even when a lab answer was found.
+      if (!social && !mixedTurn && !refusal(spoken) && recordIntent(asked)) {
+        const fa = (() => {
+          try {
+            return bundleFactAnswer(asked, bundle, citeSpan);
+          } catch {
+            return null;
+          }
+        })();
+        if (fa) {
+          spoken = fa.spoken;
+          turn = {
+            ...turn,
+            spokenTurn: {
+              intent: "LOOKUP",
+              verdict: "QUOTED",
+              spoken,
+              citations: fa.citations,
+            },
+          };
+        }
+      }
       if (!social && !mixedTurn && refusal(spoken) && !isFragment(transcript)) {
         let p = null;
         try {
-          p = sectionAnswer(asked, bundle);
-          if (p)
+          // A recorded fact, from the most authoritative record first.
+          const fa = bundleFactAnswer(asked, bundle, citeSpan);
+          if (fa)
             p = {
-              spoken: p.spoken,
-              citation: p.citations[0],
-              citations: p.citations,
+              spoken: fa.spoken,
+              citation: fa.citations[0],
+              citations: fa.citations,
             };
-          else p = await promotedAnswer(asked, bundle);
+          else {
+            p = sectionAnswer(asked, bundle);
+            if (p)
+              p = {
+                spoken: p.spoken,
+                citation: p.citations[0],
+                citations: p.citations,
+              };
+            else p = await promotedAnswer(asked, bundle);
+          }
         } catch {
           p = null;
         }

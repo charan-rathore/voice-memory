@@ -50,6 +50,12 @@ import {
 } from "../clinical/answer.mjs";
 import { extractReport } from "../clinical/observations.mjs";
 import { sectionAnswer, fieldAnswer } from "./doc-sections.mjs";
+import {
+  attachRecords,
+  bundleFactAnswer,
+  recordIntent,
+} from "./record-facts.mjs";
+import { cite as citeSpan } from "./spoken-routes.mjs";
 import { detectLang, aliasesFor, nameOf } from "../clinical/explain.mjs";
 import {
   labVocabulary,
@@ -727,6 +733,7 @@ export function createLocalServer({
     if (bundle) {
       bundle.locateEvidence = locatorFor(s.sourceToEntry);
       bundle.clinical = clinicalReportsFor(bundle, docs, extractReport);
+      attachRecords(bundle, docs);
     }
     setSessionBundle(s, bundle);
     schedulePersist(s);
@@ -897,7 +904,35 @@ export function createLocalServer({
       // A section-shaped question ("what does this report suggest?", "why
       // was the scan done?") is answered with that headed section, verbatim.
       let sectioned = false;
-      if (weakLead(shown.lead) || shown.lead?.verdict === "QUOTED") {
+      // A fact stated in a record's table, from the most authoritative
+      // record that states it (signed / final / posted over estimate /
+      // draft / preliminary), with superseded provisional values named.
+      if (
+        weakLead(shown.lead) ||
+        shown.lead?.verdict === "QUOTED" ||
+        recordIntent(question)
+      ) {
+        const fa = bundleFactAnswer(question, bundle, citeSpan);
+        if (fa) {
+          sectioned = true;
+          shown.lead = {
+            text: fa.spoken,
+            verdict: "QUOTED",
+            field: null,
+            citations: fa.citations,
+            record: {
+              title: fa.record.title,
+              pages: fa.record.pages,
+              status: fa.record.status,
+              authority: fa.record.authority,
+            },
+          };
+        }
+      }
+      if (
+        !sectioned &&
+        (weakLead(shown.lead) || shown.lead?.verdict === "QUOTED")
+      ) {
         const sec = sectionAnswer(question, bundle);
         if (sec) {
           sectioned = true;
@@ -1001,6 +1036,7 @@ export function createLocalServer({
     target.library = docsIn;
     bundle.locateEvidence = locatorFor(target.sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsIn, extractReport);
+    attachRecords(bundle, docsIn);
     target.bundle = bundle;
     return target;
   };
@@ -1253,6 +1289,7 @@ export function createLocalServer({
     );
     bundle.locateEvidence = locatorFor(ws.sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsNow, extractReport);
+    attachRecords(bundle, docsNow);
     ws.bundle = bundle; // the library keeps every entry, indexed or not
     warmDense(bundle.rows);
     warmUnits(bundle);

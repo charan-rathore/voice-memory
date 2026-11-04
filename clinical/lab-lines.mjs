@@ -607,7 +607,7 @@ function stackedFields(head, order) {
   const lines = head
     .split("\n")
     .map((l) => l.replace(/^#+\s*/, "").trim())
-    .filter(Boolean);
+    .filter((l) => l && !/^\|\s*-{3}/.test(l));
   const out = {};
   for (let i = 0; i + 1 < lines.length; i++) {
     const label = lines[i];
@@ -615,27 +615,66 @@ function stackedFields(head, order) {
     // A label row: capitals, no digits, a few words.
     if (/\d/.test(label) || label !== label.toUpperCase() || label.length > 80)
       continue;
+    // A table row pair maps by cell; a joined text line by position.
+    const cellsOf = (t) =>
+      /\|/.test(t)
+        ? t
+            .replace(/^\|\s*|\s*\|$/g, "")
+            .split("|")
+            .map((c) => c.trim())
+        : null;
+    const lc = cellsOf(label);
+    const vc = cellsOf(value);
     const idLabel = /PATIENT\s*ID/.exec(label);
     if (idLabel && !out.id) {
-      // Several identifiers in one value row ("Maya Sharma / ENC-4271
-      // HLG-P1047" under "PATIENT / ENCOUNTER   PATIENT ID"): take the one
-      // sitting where the PATIENT ID label sits.
-      const want = idLabel.index / Math.max(1, label.length);
-      const m = [...value.matchAll(new RegExp(STACKED_ID.source, "g"))].sort(
-        (a, b) =>
-          Math.abs(a.index / value.length - want) -
-          Math.abs(b.index / value.length - want),
-      )[0];
+      let m = null;
+      let before = "";
+      const at = lc ? lc.findIndex((c) => /PATIENT\s*ID/.test(c)) : -1;
+      if (lc && vc && at >= 0 && vc[at]) {
+        m = STACKED_ID.exec(vc[at]);
+        before = at > 0 ? vc[at - 1] : "";
+      } else {
+        // Several identifiers in one value row ("Maya Sharma / ENC-4271
+        // HLG-P1047" under "PATIENT / ENCOUNTER   PATIENT ID"): take the one
+        // sitting where the PATIENT ID label sits.
+        const want = idLabel.index / Math.max(1, label.length);
+        m = [...value.matchAll(new RegExp(STACKED_ID.source, "g"))].sort(
+          (a, b) =>
+            Math.abs(a.index / value.length - want) -
+            Math.abs(b.index / value.length - want),
+        )[0];
+        if (m) before = value.slice(0, m.index);
+      }
       if (m) {
         out.id = m[1];
-        if (/PATIENT(?:'S)?\s*NAME|^PATIENT\b/.test(label)) {
-          const name = value
-            .slice(0, m.index)
-            .replace(/[\/|,]+\s*$/, "")
-            .trim();
-          if (/^[A-Za-z][A-Za-z.' -]{1,40}$/.test(name)) out.name = name;
-        }
+        const nameAt = lc
+          ? lc.findIndex((c) => /PATIENT(?:'S)?\s*NAME/.test(c))
+          : -1;
+        const name = (lc && vc && nameAt >= 0 ? vc[nameAt] : before)
+          .replace(/[\/|,]+\s*$/, "")
+          .trim();
+        if (
+          /PATIENT(?:'S)?\s*NAME|^\|?\s*PATIENT\b/.test(label) &&
+          /^[A-Za-z][A-Za-z.' -]{1,40}$/.test(name)
+        )
+          out.name = name;
       }
+    }
+    if (lc && vc) {
+      lc.forEach((c, k) => {
+        const role = /COLLECTED|ADMITTED|DRAWN|SAMPLED/.test(c)
+          ? "collected"
+          : /REPORT(?:ED)?\s*ISSUED|AMENDMENT\s*ISSUED|REPORTED|RELEASED/.test(
+                c,
+              )
+            ? "reported"
+            : null;
+        const d = role && vc[k] && new RegExp(STACKED_DATE.source).exec(vc[k]);
+        const x = d && /^(\d{1,2})\s+([A-Za-z]{3,9}),?\s+(\d{4})$/.exec(d[0]);
+        if (x && !out[role])
+          out[role] = { iso: toIso(x[1], x[2], x[3], order), raw: d[0] };
+      });
+      continue;
     }
     const dates = [...value.matchAll(STACKED_DATE)].map((d) => d[0]);
     if (!dates.length) continue;
@@ -661,7 +700,7 @@ function stackedFields(head, order) {
   return out;
 }
 
-export function genericMeta(text) {
+export function genericMeta(text, raw = text) {
   // Key-value headers often arrive as table cells ("| Name | : DUMMY |").
   const head = flatHeader(text.slice(0, 2500));
   const order = dateOrder(text);
@@ -692,7 +731,9 @@ export function genericMeta(text) {
     order,
   );
   const plain = dateAfter("\\bDate", head, order);
-  const stacked = stackedFields(head, order);
+  // Stacked headers are read from the raw rows: flatHeader joins a pipe
+  // table into one line, which loses which value sits under which label.
+  const stacked = stackedFields(raw.slice(0, 2500), order);
   let nameStr = name?.[1]?.trim().replace(/\s+/g, " ") ?? stacked.name ?? null;
   if (nameStr && /^(of|the|patient)$/i.test(nameStr)) nameStr = null;
   // A masked field ("XXXXXXXXX" in a public sample) identifies nobody: two

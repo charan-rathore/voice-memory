@@ -523,6 +523,7 @@ function assemble(pageLines, pages, ocrBlocks) {
       continue;
     }
     const lines = pageLines[p];
+    const runs = gridRuns(lines, body);
     let para = null;
     let table = null;
     const flushPara = () => {
@@ -584,18 +585,22 @@ function assemble(pageLines, pages, ocrBlocks) {
         prev = null;
         continue;
       }
+      const run = runs.get(l) ?? null;
       const isRow =
+        run !== null ||
         l.cells.length >= 3 ||
-        (table && l.cells.length >= 2 && l.group === table.group);
+        (table && !table.run && l.cells.length >= 2 && l.group === table.group);
       if (isRow) {
         flushPara();
         if (
           !table ||
           l.group !== table.group ||
-          (prev && prev.y - l.y > 3 * l.size)
+          (run !== null
+            ? table.run !== run
+            : table.run != null || (prev && prev.y - l.y > 3 * l.size))
         ) {
           flushTable();
-          table = { group: l.group, rows: [] };
+          table = { group: l.group, rows: [], run };
         }
         table.rows.push({ line: l });
         prev = l;
@@ -647,6 +652,69 @@ function assemble(pageLines, pages, ocrBlocks) {
   }
   for (const b of blocks) delete b.size;
   return blocks;
+}
+
+/**
+ * Tables whose rows sit far apart (forms and hospital layouts print one row
+ * every 2-3 line heights, often with only two columns: a label and its
+ * value) are found by their column grid: consecutive lines whose cells start
+ * at the same x positions, in the same reading group, within a few line
+ * heights of each other. Returns line -> run id for lines in a run of at
+ * least three rows (or two rows of three or more cells). Prose never has
+ * cells, so it never forms a run.
+ */
+function gridRuns(lines, body) {
+  const TOL = 6;
+  const out = new Map();
+  let run = null;
+  let id = 0;
+  const close = () => {
+    if (
+      run &&
+      (run.lines.length >= 3 ||
+        (run.lines.length >= 2 && run.lines.every((l) => l.cells.length >= 3)))
+    )
+      for (const l of run.lines) out.set(l, run.id);
+    run = null;
+  };
+  const near = (x, anchors) => anchors.some((a) => Math.abs(a - x) <= TOL);
+  for (const l of lines) {
+    const ok =
+      l.cells.length >= 2 &&
+      l.cells.length <= 8 &&
+      l.size < body * 1.2 &&
+      l.size < Math.max(24, body * 4);
+    if (!ok) {
+      close();
+      continue;
+    }
+    const xs = l.cells.map((c) => c.x0);
+    if (run) {
+      const last = run.lines[run.lines.length - 1];
+      const aligned =
+        Math.abs(xs[0] - run.anchors[0]) <= TOL &&
+        xs.filter((x) => near(x, run.anchors)).length >= Math.min(2, xs.length);
+      const gap = last.y - l.y;
+      // Rows of one table are evenly spaced: a gap well beyond the run's
+      // own spacing starts the next table, even on the same column grid.
+      const evenly = run.maxGap == null || gap <= run.maxGap * 1.5 + 2;
+      if (
+        l.group === run.group &&
+        gap <= 7 * Math.max(l.size, last.size) &&
+        aligned &&
+        evenly
+      ) {
+        run.maxGap = Math.max(run.maxGap ?? 0, gap);
+        run.lines.push(l);
+        for (const x of xs) if (!near(x, run.anchors)) run.anchors.push(x);
+        continue;
+      }
+      close();
+    }
+    run = { id: ++id, group: l.group, anchors: [...xs], lines: [l] };
+  }
+  close();
+  return out;
 }
 
 function finalizeTable(table) {

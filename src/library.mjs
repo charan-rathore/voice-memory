@@ -325,6 +325,7 @@ export function addUpload(s, bytes, filename, rebuild) {
     entry.review = review;
     entry.clinical = undefined;
     entry.haystack = undefined;
+    entry.records = undefined;
   };
   const indexed = () =>
     note({

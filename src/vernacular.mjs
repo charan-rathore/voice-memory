@@ -375,7 +375,15 @@ const DECISION =
 export function adviceKind(text) {
   const t = String(text ?? "");
   if (DECISION.test(t)) return "decision";
+  // "Was iron prescribed?", "Is there a prescription on the discharge
+  // list?": a question about what the record says, not a request for
+  // advice. Any advice verb keeps it advice.
+  const recordLookup =
+    /^\s*(?:was|were|did|has|had|is there|are there|what was|which)\b/i.test(
+      t,
+    ) && !/\b(should|can|could|must|ought)\b/i.test(t);
   if (
+    !recordLookup &&
     ADVICE.some((re) => re.test(t)) &&
     (MED.test(t) || /\b(dose|dosage)\b|खुराक/i.test(t))
   )
