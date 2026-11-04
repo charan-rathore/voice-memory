@@ -378,10 +378,12 @@
       if (e?.status === 404) {
         // Confirmed gone (a deploy or the idle sweep cleared it): stop
         // showing its documents as if they were still answerable.
+        state.drops = [];
+        $("#upl-flow")?.replaceChildren();
         state.wsDocs = [
           {
             title: "Earlier upload",
-            status: "failed",
+            status: "expired",
             error: {
               message:
                 "Cleared on the server (deploy or 30 idle minutes). Drop the file again to re-upload.",
@@ -408,7 +410,8 @@
     refreshWorkspace().then(() => {
       if (
         state.wsDocs.some(
-          (d) => !["ready", "needs_review", "failed"].includes(d.status),
+          (d) =>
+            !["ready", "needs_review", "failed", "expired"].includes(d.status),
         )
       )
         pollTimer = setTimeout(pollWorkspace, 600);
@@ -438,6 +441,7 @@
     ready: "Ready",
     needs_review: "Ready · low OCR confidence",
     failed: "Couldn't read",
+    expired: "Cleared",
   };
   function renderUploads() {
     $("#upl-list").innerHTML = state.wsDocs
@@ -445,13 +449,13 @@
         const done = d.status === "ready" || d.status === "needs_review";
         const cls = done
           ? "ok"
-          : d.status === "failed"
+          : d.status === "failed" || d.status === "expired"
             ? "bad"
             : d.status === "partial"
               ? "ok busy"
               : "busy";
         const extra =
-          d.status === "failed"
+          d.status === "failed" || d.status === "expired"
             ? ` — ${esc(d.error?.message ?? "")}`
             : d.stats?.pages
               ? ` · ${d.stats.pages} p`
@@ -554,6 +558,8 @@
         try {
           sessionStorage.removeItem("vm_ws");
         } catch {}
+        state.drops = [];
+        $("#upl-flow")?.replaceChildren();
         state.wsDocs = [];
         state.cases.own = { ...OWN, ready: false, documents: [] };
         renderUploads();
@@ -1666,8 +1672,22 @@
         try {
           sessionStorage.removeItem("vm_ws");
         } catch {}
-        state.wsDocs = [];
-        state.cases.own = { ...OWN, ready: false, documents: [] };
+        state.drops = [];
+        $("#upl-flow")?.replaceChildren();
+        state.wsDocs = [
+          {
+            title: "Earlier upload",
+            status: "expired",
+            error: {
+              message:
+                "Cleared on the server (deploy or 30 idle minutes). Drop the file again to re-upload.",
+            },
+          },
+        ];
+        state.cases = {
+          ...state.cases,
+          own: { ...OWN, ready: false, documents: [] },
+        };
         renderUploads();
         callState(
           "Your upload expired on the server (deploys and 30 idle minutes clear uploads). Upload it again, then call.",
