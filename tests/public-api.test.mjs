@@ -587,7 +587,7 @@ const saveEnv = () => {
   };
 };
 
-async function voiceFactory({ env = {}, mintVoice } = {}) {
+async function voiceFactory({ env = {}, mintVoice, workspaces } = {}) {
   const { createPublicApi } = await import("../src/public-api.mjs");
   const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
   process.env.BOLNA_API_KEY = "test-dummy";
@@ -609,15 +609,16 @@ async function voiceFactory({ env = {}, mintVoice } = {}) {
     },
     voiceTurns: () => [],
     voiceState: () => ({ configured: true, ready: true }),
+    ...(workspaces ? { workspaces } : {}),
   });
   const srv = createServer((req, res) => api(req, res));
   await new Promise((r) => srv.listen(0, "127.0.0.1", r));
   const b = `http://127.0.0.1:${srv.address().port}`;
-  const mint = (ip) =>
+  const mint = (ip, ws) =>
     fetch(b + "/api/public/voice/session", {
       method: "POST",
       headers: { "content-type": "application/json", "x-forwarded-for": ip },
-      body: "{}",
+      body: JSON.stringify(ws ? { user_data: { vm_ws: ws } } : {}),
     });
   return {
     b,
@@ -1237,5 +1238,36 @@ test("demo trial scope: server transcription is refused for every caller, zero p
     if (prev === undefined) delete process.env.VM_SEMANTIC_AUDIENCE;
     else process.env.VM_SEMANTIC_AUDIENCE = prev;
     await new Promise((r) => srv6.close(() => r()));
+  }
+});
+
+test("workspace-scoped mint: a dead workspace gets 410 and the allowance back", async () => {
+  const restore = saveEnv();
+  const live = new Set();
+  const wsId = "w_" + "0".repeat(32);
+  let mintedScope = null;
+  const f = await voiceFactory({
+    env: { VM_PUBLIC_CALLS_PER_IP_DAY: "1" },
+    workspaces: { get: (id) => (live.has(id) ? { live: true } : null) },
+    mintVoice: async (userData) => {
+      mintedScope = userData?.vm_ws ?? null;
+      return { fake_session: true, run_id: "run-test-ws" };
+    },
+  });
+  try {
+    // Workspace gone (deploy wiped it, or it idled out): no doomed call,
+    // and the visitor keeps their daily call.
+    const dead = await f.mint("10.0.9.1", wsId);
+    assert.equal(dead.status, 410);
+    assert.match((await dead.json()).error, /expired/i);
+    assert.equal(mintedScope, null);
+    // A live workspace mints, scoped to that workspace.
+    live.add(wsId);
+    const okMint = await f.mint("10.0.9.1", wsId);
+    assert.equal(okMint.status, 200);
+    assert.ok(mintedScope?.startsWith(wsId + ".c"));
+  } finally {
+    await f.close();
+    restore();
   }
 });

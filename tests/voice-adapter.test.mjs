@@ -392,3 +392,57 @@ test("a non-streaming side request does not supersede the spoken turn", async ()
   pending[0]();
   assert.equal((await spoken).status, 200);
 });
+
+test("workspace still being read: pending scope says so, never the demo records", async () => {
+  const a = createVoiceAdapter(),
+    t = a.bind(b());
+  a.setBundleResolver(() => ({
+    pending: true,
+    call: "c" + "0".repeat(24),
+    caseId: "w_" + "0".repeat(32),
+  }));
+  const r = await a.handle(request(t, "how many open safety items?"));
+  assert.equal(r.status, 200);
+  const text = await r.text();
+  assert.match(text, /still reading/i);
+  assert.ok(!/expired/i.test(text));
+});
+
+test("workspace whose uploads all failed says re-upload, never 'expired'", async () => {
+  const a = createVoiceAdapter(),
+    t = a.bind(b());
+  a.setBundleResolver(() => ({
+    pending: "failed",
+    call: "c" + "0".repeat(24),
+    caseId: "w_" + "0".repeat(32),
+  }));
+  const r = await a.handle(request(t, "how many open safety items?"));
+  assert.equal(r.status, 200);
+  const text = await r.text();
+  assert.match(text, /couldn't read/i);
+  assert.ok(!/expired/i.test(text));
+});
+
+test("an engine fault becomes a spoken fallback, never an internal leak", async () => {
+  const a = createVoiceAdapter(),
+    t = a.bind(b());
+  a.setBundleResolver(() => {
+    const broken = b();
+    Object.defineProperty(broken, "clinical", {
+      get() {
+        throw new Error("boom-internal-marker");
+      },
+    });
+    return { bundle: broken, call: null, caseId: "demo" };
+  });
+  const r = await a.handle(request(t, "pilot launch security review"));
+  assert.equal(r.status, 200);
+  const text = await r.text();
+  assert.match(text, /ask me again/i);
+  assert.ok(!text.includes("boom-internal-marker"));
+  // The grant survives the fault: the next clean turn answers normally.
+  a.setBundleResolver(() => null);
+  const ok = await a.handle(request(t, "pilot launch security review"));
+  assert.equal(ok.status, 200);
+  assert.match(await ok.text(), /chat.completion.chunk/);
+});

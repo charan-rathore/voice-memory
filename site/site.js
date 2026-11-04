@@ -370,11 +370,28 @@
           (d) => d.status === "ready" || d.included,
         ),
       };
-    } catch {
+    } catch (e) {
       state.ws = null;
       try {
         sessionStorage.removeItem("vm_ws");
       } catch {}
+      if (e?.status === 404) {
+        // Confirmed gone (a deploy or the idle sweep cleared it): stop
+        // showing its documents as if they were still answerable.
+        state.drops = [];
+        $("#upl-flow")?.replaceChildren();
+        state.wsDocs = [
+          {
+            title: "Earlier upload",
+            status: "expired",
+            error: {
+              message:
+                "Cleared on the server (deploy or 30 idle minutes). Drop the file again to re-upload.",
+            },
+          },
+        ];
+        state.cases.own = { ...OWN, ready: false, documents: [] };
+      }
     }
     renderUploads();
     if (state.case === "own") {
@@ -393,7 +410,8 @@
     refreshWorkspace().then(() => {
       if (
         state.wsDocs.some(
-          (d) => !["ready", "needs_review", "failed"].includes(d.status),
+          (d) =>
+            !["ready", "needs_review", "failed", "expired"].includes(d.status),
         )
       )
         pollTimer = setTimeout(pollWorkspace, 600);
@@ -423,6 +441,7 @@
     ready: "Ready",
     needs_review: "Ready · low OCR confidence",
     failed: "Couldn't read",
+    expired: "Cleared",
   };
   function renderUploads() {
     $("#upl-list").innerHTML = state.wsDocs
@@ -430,13 +449,13 @@
         const done = d.status === "ready" || d.status === "needs_review";
         const cls = done
           ? "ok"
-          : d.status === "failed"
+          : d.status === "failed" || d.status === "expired"
             ? "bad"
             : d.status === "partial"
               ? "ok busy"
               : "busy";
         const extra =
-          d.status === "failed"
+          d.status === "failed" || d.status === "expired"
             ? ` — ${esc(d.error?.message ?? "")}`
             : d.stats?.pages
               ? ` · ${d.stats.pages} p`
@@ -508,12 +527,14 @@
     }
   }
 
-  // The case or workspace on screen is the one a live call answers from.
-  // On a switch, the page moves its own call (the ticket is its secret);
-  // turns answered for the old scope are then dropped, not shown here.
-  const scopeOf = (id) => (id === "own" ? state.ws : id);
+  // A live call answers from the visitor's uploaded documents whenever an
+  // upload is present, whichever case is on screen; the demo records are
+  // the default only when no upload exists (owner rule, 2026-11-05). On a
+  // switch, the page moves its own call (the ticket is its secret); turns
+  // answered for the old scope are then dropped, not shown here.
+  const scopeOf = () => state.ws || state.case;
   function syncCallScope() {
-    const scope = scopeOf(state.case);
+    const scope = scopeOf();
     if (!state.ticket || !state.call || !scope || state.callScope === scope)
       return;
     state.callScope = scope;
@@ -528,10 +549,23 @@
         case: scope,
         gen: state.scopeGen,
       }),
-    }).catch(() => {
+    }).catch((e) => {
       // The call keeps its old scope; its turns for that scope stay off
       // this screen (pollTurns), so nothing from the wrong records shows.
       state.callScope = null;
+      if (e?.status === 404 && String(scope).startsWith("w_")) {
+        // The workspace died mid-call (idle sweep or deploy): stop showing
+        // its documents as if they were still answerable.
+        state.ws = null;
+        try {
+          sessionStorage.removeItem("vm_ws");
+        } catch {}
+        state.drops = [];
+        $("#upl-flow")?.replaceChildren();
+        state.wsDocs = [];
+        state.cases.own = { ...OWN, ready: false, documents: [] };
+        renderUploads();
+      }
     });
   }
 
@@ -1624,6 +1658,47 @@
       );
       return;
     }
+    if (state.case === "own" && !state.ws) {
+      callState("Upload your documents first, then call.");
+      return;
+    }
+    if (state.ws) {
+      // Uploaded documents govern the call from any tab, so the upload is
+      // verified live whichever case is on screen: never mint a call that
+      // can only say "your documents expired" (the server clears uploads
+      // on deploy and after 30 idle minutes), and never answer from the
+      // demo records behind the caller's back.
+      callState("Checking your upload…");
+      try {
+        await api(`/workspace/${state.ws}`);
+      } catch {
+        state.ws = null;
+        try {
+          sessionStorage.removeItem("vm_ws");
+        } catch {}
+        state.drops = [];
+        $("#upl-flow")?.replaceChildren();
+        state.wsDocs = [
+          {
+            title: "Earlier upload",
+            status: "expired",
+            error: {
+              message:
+                "Cleared on the server (deploy or 30 idle minutes). Drop the file again to re-upload.",
+            },
+          },
+        ];
+        state.cases = {
+          ...state.cases,
+          own: { ...OWN, ready: false, documents: [] },
+        };
+        renderUploads();
+        callState(
+          "Your upload expired on the server (deploys and 30 idle minutes clear uploads). Upload it again, then call.",
+        );
+        return;
+      }
+    }
     callbar.classList.add("busy");
     $("#call-label").textContent = "Connecting…";
     // Ask for the microphone first: a Bolna session is single-use and expires
@@ -1682,7 +1757,7 @@
         // The open case or workspace: voice answers from what is on screen.
         const user_data = {
           page: "landing",
-          vm_ws: scopeOf(state.case) || "demo",
+          vm_ws: scopeOf() || "demo",
         };
         state.callScope = user_data.vm_ws;
         // your own Bolna account pays for the call; no server allowance used

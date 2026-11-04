@@ -287,12 +287,13 @@ test("an expired workspace: the same explanation is spoken and shown on the call
     const t = m.body.vm_ticket;
     const vmWs = api.minted[0].user_data.vm_ws;
     assert.match(vmWs, new RegExp(`^${id}\\.c[0-9a-f]{24}$`));
-    // empty workspace = nothing to answer from (same path as expired)
+    // empty workspace = nothing to answer from: said plainly, never the
+    // demo records and never a false "expired"
     const said = await api.say(vmWs, [
       { role: "user", content: "What is SYN-0001's ferritin result?" },
     ]);
     assert.doesNotMatch(said, /50 ng\/mL|Ferritin/);
-    assert.match(said, /expired/);
+    assert.match(said, /don't have any documents/);
     const turns = await api.turns(t);
     assert.equal(turns.at(-1).case, id);
     assert.equal(turns.at(-1).lead.text, said);

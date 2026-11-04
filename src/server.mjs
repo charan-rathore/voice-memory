@@ -1349,7 +1349,19 @@ export function createLocalServer({
         const w = liveWorkspace(scope);
         // Never fall back to the fictional records for someone who was
         // asking about their own documents.
-        if (!w?.s?.bundle) return { expired: true, call, caseId: scope };
+        if (!w) return { expired: true, call, caseId: scope };
+        if (!w.s?.bundle) {
+          // Live but nothing answerable yet: uploads still being read, or
+          // every upload failed. Say which - never "expired".
+          const docs = libraryOf(w.s);
+          const pending =
+            docs.length === 0
+              ? "empty"
+              : docs.every((e) => e.status === "failed")
+                ? "failed"
+                : true;
+          return { pending, call, caseId: scope };
+        }
         return { bundle: w.s.bundle, call, caseId: scope };
       }
       if (scope === "health" || scope === "deal") {

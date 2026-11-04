@@ -338,11 +338,19 @@ export function createVoiceAdapter({
       let caseId = null;
       let scopeGone = false;
       let scopeBad = false;
+      let scopePending = null;
       try {
         const ws = resolveBundle?.(data.messages);
         if (ws?.expired) scopeGone = true;
         if (ws?.malformed) scopeBad = true;
-        if (ws && ("bundle" in ws || "expired" in ws || "malformed" in ws)) {
+        if (ws?.pending) scopePending = ws.pending;
+        if (
+          ws &&
+          ("bundle" in ws ||
+            "expired" in ws ||
+            "malformed" in ws ||
+            "pending" in ws)
+        ) {
           callTag = ws.call ?? null;
           caseId = ws.caseId ?? null;
           if (ws.bundle) bundle = ws.bundle;
@@ -409,437 +417,510 @@ export function createVoiceAdapter({
         }
         return sseOnce(said);
       }
+      if (scopePending) {
+        // Their workspace is live but has nothing answerable yet: uploads
+        // still being read, or every upload failed. Say which - never
+        // "expired", and never the demo records instead.
+        const said =
+          scopePending === "failed"
+            ? "I couldn't read those documents. Please try uploading them again on the page."
+            : scopePending === "empty"
+              ? "I don't have any documents for this call yet. Upload them on the page, then ask me again."
+              : "I'm still reading your documents. Give me a few seconds and ask me again.";
+        logTurn({ transcript: askedRaw, outcome: "scope_pending" });
+        try {
+          onTurn?.(token, {
+            question: askedRaw,
+            lead: {
+              intent: "SCOPE_PENDING",
+              verdict: "UNKNOWN",
+              spoken: said,
+              citations: [],
+            },
+            result: null,
+            scope: null,
+            call: callTag,
+            caseId,
+          });
+        } catch {
+          /* best-effort */
+        }
+        return sseOnce(said);
+      }
       // "the triglycer, sorry, the HDL" is a question about HDL: only what
       // the caller settled on is read, here and in the history the engine sees
-      const transcript = selfRepair(askedRaw);
-      if (transcript !== askedRaw) {
-        const at = data.messages.map((m) => m?.role).lastIndexOf("user");
-        data = {
-          ...data,
-          messages: data.messages.map((m, i) =>
-            i === at ? { ...m, content: transcript } : m,
-          ),
-        };
-      }
-      // Repair recogniser damage (patient ids, misheard test names) and, for
-      // a fragment or a follow-up that lost its subject, join this caller's
-      // own previous utterances. Lab questions take the first candidate the
-      // clinical layer can answer.
-      const reports = bundle?.clinical ?? [];
-      // Earlier utterances are joined in only when this one is a fragment or
-      // has no subject of its own ("and the other one?"); otherwise a deal
-      // question right after a lab question would be answered as lab.
-      const ownOnly = hasSubject(transcript) && !isFragment(transcript);
-      const candidates = voiceQuestions(
-        ownOnly ? data.messages.slice(-1) : data.messages,
-        {
-          reports,
-          ids: [
-            ...new Set(reports.map((r) => r.meta?.patient?.id).filter(Boolean)),
-          ],
-          aliasesFor,
-          text: messageText,
-        },
-      )
-        // phrased any way: drop a leading "hi, can you hear me", repair the
-        // deal's names as the recogniser spells them, and add an English
-        // rendering of a Hindi question so both reach the same intent
-        .flatMap((q) => {
-          const r = repairDealTerms(stripPreamble(q)) || q;
-          const g = glossHindi(r);
-          return [r, ...(g ? [g] : []), q];
-        })
-        .map((q) => normalizeSpoken(q) || q)
-        .filter((q, i, all) => q && all.indexOf(q) === i);
-      // Bounded per-call context, from this request's own messages only:
-      // the agent's last spoken answer and the caller's last question.
-      const prevSaid = messageText(
-        [...data.messages.slice(0, -1)]
-          .reverse()
-          .find((m) => m?.role === "assistant" && messageText(m.content).trim())
-          ?.content ?? "",
-      );
-      const prevAsked = messageText(
-        [...data.messages.slice(0, -1)]
-          .reverse()
-          .find((m) => m?.role === "user" && messageText(m.content).trim())
-          ?.content ?? "",
-      );
-      if (reports.length) {
-        let own = null;
-        try {
-          own = findTest(transcript, reports);
-        } catch {
-          own = null;
-        }
-        // "SYN-0003", said back after "whose TSH results?", answers that
-        // question: read it joined to the question it answers, first. A
-        // new question with its own test ("creatinine in September?") is a
-        // change of topic, not an answer.
-        if (
-          !own &&
-          /Whose (results|report)|Which one did you mean|किसके|kiske/i.test(
-            prevSaid,
-          ) &&
-          prevAsked
-        )
-          candidates.unshift(
-            normalizeSpoken(`${prevAsked} ${transcript}`) ||
-              `${prevAsked} ${transcript}`,
-          );
-        // "Is that normal?" four turns after "ferritin": the subject of the
-        // last answer, as the typed path keeps the last answer's field.
-        let said = null;
-        try {
-          said = findTest(prevSaid, reports);
-        } catch {
-          said = null;
-        }
-        if (said && !own && (!said.keys || said.keys.length <= 1)) {
-          // a patient is inherited only when the last answer named exactly
-          // one, and never from a "whose results?" question: no silent pick
-          const ids = [
-            ...new Set(prevSaid.match(/\b[A-Z]{2,5}-\d{3,6}\b/g) ?? []),
-          ];
-          const pid =
-            ids.length === 1 && !/Whose|which one|किसके|kiske/i.test(prevSaid)
-              ? ids[0]
-              : "";
-          // one dated report in the last answer: keep its date too
-          const dates = [
-            ...new Set(
-              prevSaid.match(
-                /\b\d{1,2} (?:January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b/g,
-              ) ?? [],
+      let busyTaken = false;
+      try {
+        const transcript = selfRepair(askedRaw);
+        if (transcript !== askedRaw) {
+          const at = data.messages.map((m) => m?.role).lastIndexOf("user");
+          data = {
+            ...data,
+            messages: data.messages.map((m, i) =>
+              i === at ? { ...m, content: transcript } : m,
             ),
-          ];
-          const day =
-            dates.length === 1 &&
-            !/\b(before|earlier|previous|since|chang\w*|improv\w*|went|up|down|compar\w*|correct\w*|amend\w*|original\w*|first|earliest|pehle)\b|पहले/i.test(
-              transcript,
-            )
-              ? dates[0]
-              : "";
-          const withCtx = `${transcript} ${pid} ${nameOf(said)} ${day}`
-            .replace(/\s+/g, " ")
-            .trim();
-          // a clear follow-up ("is that normal?", "why?") is about the last
-          // answer before anything older; otherwise it is a last resort
-          // A question that names its own subject ("is his kidney function
-          // okay?") or asks for dates is not a follow-up, however short.
-          const followUp =
-            transcript.split(/\s+/).length <= 7 &&
-            !DATE_ASK_RE.test(transcript) &&
-            !/\b(kidney|liver|thyroid|heart|sugar|diabetes|cholesterol|lipid|blood|urine|vitamin|iron|report|test)\b|किडनी|लिवर|थायरॉइड|शुगर/i.test(
-              transcript,
-            ) &&
-            /\b(it|its|that|this|those|them|again|same|normal|high|low|range|why|mean\w*|okay|ok|fine|good|bad|worried|worry)\b|ठीक|सामान्य|normal hai|theek/i.test(
-              transcript,
-            );
-          if (DATE_ASK_RE.test(transcript)) {
-            /* a date question carries no inherited subject */
-          } else if (followUp) candidates.unshift(withCtx);
-          else if (!own) candidates.push(withCtx);
+          };
         }
-      }
-      // This call's own history only (a fixed bearer is shared by callers).
-      const userHistory = data.messages
-        .slice(0, -1)
-        .filter((m) => m?.role === "user")
-        .map((m) => messageText(m.content));
-      const lang = callLanguage(transcript, userHistory);
-      // the last answer about the records: a hear-check or "you're welcome"
-      // in between is not what "say that again" means
-      const lastSpoken =
-        [...data.messages.slice(0, -1)]
-          .reverse()
-          .find(
-            (m) =>
-              m?.role === "assistant" &&
-              messageText(m.content).trim() &&
-              !isSocialReply(messageText(m.content)),
-          )?.content ?? null;
-      const social = socialTurn(repairDealTerms(transcript), {
-        lang,
-        last: lastSpoken ? messageText(lastSpoken) : null,
-      });
-      // Two subjects in one breath ("my ferritin, and what changed in the
-      // Northstar deal"): each half answered by the renderer for its records,
-      // in the caller's language, then spoken together.
-      let mixedTurn = null;
-      if (!social) {
-        const parts = splitMixed(normalizeVernacular(transcript));
-        if (parts.length >= 2 && new Set(parts.map(domainOf)).size >= 2) {
-          const said = [],
-            cites = [];
-          let verdict = null;
-          for (const part of parts) {
-            const q = normalizeSpoken(part) || part;
-            let r = null;
-            try {
-              if (domainOf(q) === "lab" && reports.length) {
-                const c =
-                  clinicalAnswer(q, reports) ?? clinicalOverview(q, reports);
-                if (c)
-                  r = {
-                    spoken: c.spoken,
-                    verdict: c.verdict,
-                    citations: c.used
-                      .map((o) => observationEvidence(o, bundle))
-                      .filter(Boolean)
-                      .map((e) => ({
-                        title: e.title,
-                        docDate: null,
-                        quote: e.quote,
-                        firstLine: e.firstLine,
-                        lastLine: e.lastLine,
-                        hash: e.hash,
-                      })),
-                    localized: true,
-                  };
-              } else {
-                const g = glossHindi(repairDealTerms(q));
-                const broad =
-                  !g &&
-                  /\b(chang\w*|happen\w*|exactly|summary|status|update|overview|badl\w*)\b|बदल|क्या\s+हुआ/i.test(
-                    q,
-                  );
-                const qs = broad
-                  ? ["What happened to the fee?", "What's still open?"]
-                  : [normalizeSpoken(g ?? repairDealTerms(q)) || q];
-                const got = qs
-                  .map((x) => spokenTurn(x, bundle, null))
-                  .filter((x) => x?.spoken && x.verdict !== "UNKNOWN");
-                if (got.length)
-                  r = {
-                    spoken: got.map((x) => x.spoken).join(" "),
-                    verdict: got[0].verdict,
-                    citations: got.flatMap((x) => x.citations ?? []),
-                    localized: false,
-                  };
-              }
-            } catch {
-              r = null;
-            }
-            if (!r) continue;
-            verdict ??= r.verdict;
-            said.push(
-              isHindi(lang) && !r.localized ? toHindi(r.spoken) : r.spoken,
-            );
-            cites.push(...r.citations);
-          }
-          if (said.length)
-            mixedTurn = {
-              spoken: said.join(" "),
-              verdict: verdict ?? "MIXED",
-              citations: cites,
-            };
-        }
-      }
-      let asked = candidates[0] || normalizeSpoken(transcript) || transcript;
-      let clinicalHit = false;
-      const deal = isDealQuestion(transcript) || isDealQuestion(asked);
-      if (reports.length && !deal) {
-        const hit = candidates.find((q) => {
-          try {
-            return clinicalAnswer(q, reports);
-          } catch {
-            return false;
-          }
-        });
-        if (hit) ((asked = hit), (clinicalHit = true));
-      }
-      // A Hindi question about the deal: the engine reads English, so ask
-      // with the English rendering (lab questions are read in Hindi already).
-      if (!clinicalHit && isHindi(lang)) {
-        const g = glossHindi(repairDealTerms(stripPreamble(transcript)));
-        if (g) asked = normalizeSpoken(g) || g;
-      }
-      // Two questions in one breath: answer the first here, the second below.
-      // Only what the caller said in THIS utterance is split. A candidate
-      // joined from earlier turns ("ferritin result? what was it before the
-      // correction?") is one follow-up, and splitting it re-answered the
-      // previous question instead of the one just asked.
-      const ownCompound =
-        splitCompound(normalizeSpoken(transcript) || transcript).length > 1;
-      const [firstQ, secondQ0] = ownCompound ? splitCompound(asked) : [asked];
-      const secondQ = mixedTurn ? null : secondQ0;
-      if (secondQ) asked = firstQ;
-      const streaming = true;
-      // Barge-in is per call. The operator's fixed bearer is shared by every
-      // caller, so one counter per bearer let caller B's turn supersede
-      // caller A's answer in flight (A heard silence). The per-call handle
-      // from vm_ws keys the counter; without one (a phone call, an older
-      // page) the bearer-wide counter is kept, as before.
-      const seqKey = callTag ?? "";
-      grant.seqs ??= new Map();
-      const sequence = (grant.seqs.get(seqKey) ?? 0) + 1;
-      grant.seqs.delete(seqKey);
-      grant.seqs.set(seqKey, sequence);
-      if (grant.seqs.size > 500)
-        grant.seqs.delete(grant.seqs.keys().next().value);
-      grant.sequence = sequence;
-      const current = () => grant.seqs.get(seqKey) === sequence;
-      grant.busy = (grant.busy ?? 0) + 1;
-      const releaseBusy = () => {
-        grant.busy = Math.max(0, (grant.busy ?? 1) - 1);
-      };
-      if (req.signal.aborted) {
-        releaseBusy();
-        logTurn({ transcript, outcome: "aborted" });
-        return new Response(null, { status: 499 });
-      }
-      let spoken, turn;
-      if (mixedTurn) {
-        spoken = mixedTurn.spoken;
-        turn = {
-          spokenTurn: {
-            intent: "MIXED",
-            verdict: mixedTurn.verdict,
-            spoken,
-            citations: mixedTurn.citations,
+        // Repair recogniser damage (patient ids, misheard test names) and, for
+        // a fragment or a follow-up that lost its subject, join this caller's
+        // own previous utterances. Lab questions take the first candidate the
+        // clinical layer can answer.
+        const reports = bundle?.clinical ?? [];
+        // Earlier utterances are joined in only when this one is a fragment or
+        // has no subject of its own ("and the other one?"); otherwise a deal
+        // question right after a lab question would be answered as lab.
+        const ownOnly = hasSubject(transcript) && !isFragment(transcript);
+        const candidates = voiceQuestions(
+          ownOnly ? data.messages.slice(-1) : data.messages,
+          {
+            reports,
+            ids: [
+              ...new Set(
+                reports.map((r) => r.meta?.patient?.id).filter(Boolean),
+              ),
+            ],
+            aliasesFor,
+            text: messageText,
           },
-        };
-      } else if (!social && adviceKind(transcript)) {
-        // Treatment, diagnosis or a decision that is the caller's to make:
-        // declined before any record can turn into advice, in the caller's
-        // language, exactly as the typed path declines it.
-        const d = declineLead(
-          adviceKind(transcript),
-          lang === "hi" ? "hi" : lang === "hinglish" ? "hinglish" : "en",
-          transcript,
+        )
+          // phrased any way: drop a leading "hi, can you hear me", repair the
+          // deal's names as the recogniser spells them, and add an English
+          // rendering of a Hindi question so both reach the same intent
+          .flatMap((q) => {
+            const r = repairDealTerms(stripPreamble(q)) || q;
+            const g = glossHindi(r);
+            return [r, ...(g ? [g] : []), q];
+          })
+          .map((q) => normalizeSpoken(q) || q)
+          .filter((q, i, all) => q && all.indexOf(q) === i);
+        // Bounded per-call context, from this request's own messages only:
+        // the agent's last spoken answer and the caller's last question.
+        const prevSaid = messageText(
+          [...data.messages.slice(0, -1)]
+            .reverse()
+            .find(
+              (m) => m?.role === "assistant" && messageText(m.content).trim(),
+            )?.content ?? "",
         );
-        spoken = d.text;
-        turn = {
-          spokenTurn: {
-            intent: "ADVICE",
-            verdict: d.verdict,
-            spoken,
-            citations: [],
-          },
-        };
-      } else if (social) {
-        // about the call itself: a fixed reply, no record facts
-        spoken = social.spoken;
-        turn = {
-          spokenTurn: {
-            intent: social.intent,
-            verdict: "SOCIAL",
-            spoken,
-            citations: [],
-          },
-        };
-      } else if (
-        /^\s*(turn (that|this|the brief) into (an? )?email|draft (an? )?email)\s*[.!]?\s*$/i.test(
-          transcript,
-        )
-      ) {
-        // The draft comes from THIS call's previous question (its own message
-        // history), never from whatever another caller on the same bearer
-        // asked last.
-        const prev = [...data.messages.slice(0, -1)]
-          .reverse()
-          .find((m) => m?.role === "user" && messageText(m.content).trim());
-        const prevQ = prev ? messageText(prev.content) : undefined;
-        let prior = null;
-        try {
-          prior = prevQ
-            ? answer(normalizeSpoken(prevQ) || prevQ, bundle)
-            : null;
-        } catch {
-          prior = null;
+        const prevAsked = messageText(
+          [...data.messages.slice(0, -1)]
+            .reverse()
+            .find((m) => m?.role === "user" && messageText(m.content).trim())
+            ?.content ?? "",
+        );
+        if (reports.length) {
+          let own = null;
+          try {
+            own = findTest(transcript, reports);
+          } catch {
+            own = null;
+          }
+          // "SYN-0003", said back after "whose TSH results?", answers that
+          // question: read it joined to the question it answers, first. A
+          // new question with its own test ("creatinine in September?") is a
+          // change of topic, not an answer.
+          if (
+            !own &&
+            /Whose (results|report)|Which one did you mean|किसके|kiske/i.test(
+              prevSaid,
+            ) &&
+            prevAsked
+          )
+            candidates.unshift(
+              normalizeSpoken(`${prevAsked} ${transcript}`) ||
+                `${prevAsked} ${transcript}`,
+            );
+          // "Is that normal?" four turns after "ferritin": the subject of the
+          // last answer, as the typed path keeps the last answer's field.
+          let said = null;
+          try {
+            said = findTest(prevSaid, reports);
+          } catch {
+            said = null;
+          }
+          if (said && !own && (!said.keys || said.keys.length <= 1)) {
+            // a patient is inherited only when the last answer named exactly
+            // one, and never from a "whose results?" question: no silent pick
+            const ids = [
+              ...new Set(prevSaid.match(/\b[A-Z]{2,5}-\d{3,6}\b/g) ?? []),
+            ];
+            const pid =
+              ids.length === 1 && !/Whose|which one|किसके|kiske/i.test(prevSaid)
+                ? ids[0]
+                : "";
+            // one dated report in the last answer: keep its date too
+            const dates = [
+              ...new Set(
+                prevSaid.match(
+                  /\b\d{1,2} (?:January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b/g,
+                ) ?? [],
+              ),
+            ];
+            const day =
+              dates.length === 1 &&
+              !/\b(before|earlier|previous|since|chang\w*|improv\w*|went|up|down|compar\w*|correct\w*|amend\w*|original\w*|first|earliest|pehle)\b|पहले/i.test(
+                transcript,
+              )
+                ? dates[0]
+                : "";
+            const withCtx = `${transcript} ${pid} ${nameOf(said)} ${day}`
+              .replace(/\s+/g, " ")
+              .trim();
+            // a clear follow-up ("is that normal?", "why?") is about the last
+            // answer before anything older; otherwise it is a last resort
+            // A question that names its own subject ("is his kidney function
+            // okay?") or asks for dates is not a follow-up, however short.
+            const followUp =
+              transcript.split(/\s+/).length <= 7 &&
+              !DATE_ASK_RE.test(transcript) &&
+              !/\b(kidney|liver|thyroid|heart|sugar|diabetes|cholesterol|lipid|blood|urine|vitamin|iron|report|test)\b|किडनी|लिवर|थायरॉइड|शुगर/i.test(
+                transcript,
+              ) &&
+              /\b(it|its|that|this|those|them|again|same|normal|high|low|range|why|mean\w*|okay|ok|fine|good|bad|worried|worry)\b|ठीक|सामान्य|normal hai|theek/i.test(
+                transcript,
+              );
+            if (DATE_ASK_RE.test(transcript)) {
+              /* a date question carries no inherited subject */
+            } else if (followUp) candidates.unshift(withCtx);
+            else if (!own) candidates.push(withCtx);
+          }
         }
-        // A minted per-call token is one call, so its own last turn is fine;
-        // the fixed operator bearer is shared and never falls back.
-        if (!prevQ && !credentials.has(token)) prior = grant.last ?? null;
-        if (
-          !prior ||
-          prior.refused ||
-          prior.unresolved ||
-          !prior.evidence?.length
-        )
-          spoken =
-            "Ask a question with supporting evidence first. I have not created or sent an email.";
-        else {
-          const reviewDraft = draft(prior, bundle);
-          turn = { draft: reviewDraft };
-          spoken =
-            "A review draft is ready on screen. Check decisions, conditions and open items before using it. Nothing has been sent.";
+        // This call's own history only (a fixed bearer is shared by callers).
+        const userHistory = data.messages
+          .slice(0, -1)
+          .filter((m) => m?.role === "user")
+          .map((m) => messageText(m.content));
+        const lang = callLanguage(transcript, userHistory);
+        // the last answer about the records: a hear-check or "you're welcome"
+        // in between is not what "say that again" means
+        const lastSpoken =
+          [...data.messages.slice(0, -1)]
+            .reverse()
+            .find(
+              (m) =>
+                m?.role === "assistant" &&
+                messageText(m.content).trim() &&
+                !isSocialReply(messageText(m.content)),
+            )?.content ?? null;
+        const social = socialTurn(repairDealTerms(transcript), {
+          lang,
+          last: lastSpoken ? messageText(lastSpoken) : null,
+        });
+        // Two subjects in one breath ("my ferritin, and what changed in the
+        // Northstar deal"): each half answered by the renderer for its records,
+        // in the caller's language, then spoken together.
+        let mixedTurn = null;
+        if (!social) {
+          const parts = splitMixed(normalizeVernacular(transcript));
+          if (parts.length >= 2 && new Set(parts.map(domainOf)).size >= 2) {
+            const said = [],
+              cites = [];
+            let verdict = null;
+            for (const part of parts) {
+              const q = normalizeSpoken(part) || part;
+              let r = null;
+              try {
+                if (domainOf(q) === "lab" && reports.length) {
+                  const c =
+                    clinicalAnswer(q, reports) ?? clinicalOverview(q, reports);
+                  if (c)
+                    r = {
+                      spoken: c.spoken,
+                      verdict: c.verdict,
+                      citations: c.used
+                        .map((o) => observationEvidence(o, bundle))
+                        .filter(Boolean)
+                        .map((e) => ({
+                          title: e.title,
+                          docDate: null,
+                          quote: e.quote,
+                          firstLine: e.firstLine,
+                          lastLine: e.lastLine,
+                          hash: e.hash,
+                        })),
+                      localized: true,
+                    };
+                } else {
+                  const g = glossHindi(repairDealTerms(q));
+                  const broad =
+                    !g &&
+                    /\b(chang\w*|happen\w*|exactly|summary|status|update|overview|badl\w*)\b|बदल|क्या\s+हुआ/i.test(
+                      q,
+                    );
+                  const qs = broad
+                    ? ["What happened to the fee?", "What's still open?"]
+                    : [normalizeSpoken(g ?? repairDealTerms(q)) || q];
+                  const got = qs
+                    .map((x) => spokenTurn(x, bundle, null))
+                    .filter((x) => x?.spoken && x.verdict !== "UNKNOWN");
+                  if (got.length)
+                    r = {
+                      spoken: got.map((x) => x.spoken).join(" "),
+                      verdict: got[0].verdict,
+                      citations: got.flatMap((x) => x.citations ?? []),
+                      localized: false,
+                    };
+                }
+              } catch {
+                r = null;
+              }
+              if (!r) continue;
+              verdict ??= r.verdict;
+              said.push(
+                isHindi(lang) && !r.localized ? toHindi(r.spoken) : r.spoken,
+              );
+              cites.push(...r.citations);
+            }
+            if (said.length)
+              mixedTurn = {
+                spoken: said.join(" "),
+                verdict: verdict ?? "MIXED",
+                citations: cites,
+              };
+          }
         }
-      } else {
-        let result = retrieval
-          ? answerFromRetrieval(
-              asked,
-              bundle,
-              await retrieval.retrieve(asked, bundle, {
-                signal: req.signal,
-              }),
-              {
-                actualMode: retrieval.actualMode,
-                embeddingModel: retrieval.embeddingModel,
-              },
-            )
-          : answer(asked, bundle, {
-              queryVector: await embedQueryReady(asked),
-              model: DENSE_MODEL_ID,
-              available: denseAvailableFor(bundle),
-            });
-        if (
-          !result ||
-          typeof result.refused !== "boolean" ||
-          !Array.isArray(result.evidence) ||
-          (!result.refused && !result.evidence.length)
-        )
-          // The engine has no answer shape for some in-corpus questions
-          // (e.g. fields outside its vocabulary). Treat that as an honest
-          // refusal for the evidence feed; the claim-graph renderer below
-          // still speaks when it has grounded citations.
-          result = { refused: true, evidence: [] };
-        for (const evidence of result.evidence)
-          validateEvidence(evidence, bundle);
+        let asked = candidates[0] || normalizeSpoken(transcript) || transcript;
+        let clinicalHit = false;
+        const deal = isDealQuestion(transcript) || isDealQuestion(asked);
+        if (reports.length && !deal) {
+          const hit = candidates.find((q) => {
+            try {
+              return clinicalAnswer(q, reports);
+            } catch {
+              return false;
+            }
+          });
+          if (hit) ((asked = hit), (clinicalHit = true));
+        }
+        // A Hindi question about the deal: the engine reads English, so ask
+        // with the English rendering (lab questions are read in Hindi already).
+        if (!clinicalHit && isHindi(lang)) {
+          const g = glossHindi(repairDealTerms(stripPreamble(transcript)));
+          if (g) asked = normalizeSpoken(g) || g;
+        }
+        // Two questions in one breath: answer the first here, the second below.
+        // Only what the caller said in THIS utterance is split. A candidate
+        // joined from earlier turns ("ferritin result? what was it before the
+        // correction?") is one follow-up, and splitting it re-answered the
+        // previous question instead of the one just asked.
+        const ownCompound =
+          splitCompound(normalizeSpoken(transcript) || transcript).length > 1;
+        const [firstQ, secondQ0] = ownCompound ? splitCompound(asked) : [asked];
+        const secondQ = mixedTurn ? null : secondQ0;
+        if (secondQ) asked = firstQ;
+        const streaming = true;
+        // Barge-in is per call. The operator's fixed bearer is shared by every
+        // caller, so one counter per bearer let caller B's turn supersede
+        // caller A's answer in flight (A heard silence). The per-call handle
+        // from vm_ws keys the counter; without one (a phone call, an older
+        // page) the bearer-wide counter is kept, as before.
+        const seqKey = callTag ?? "";
+        grant.seqs ??= new Map();
+        const sequence = (grant.seqs.get(seqKey) ?? 0) + 1;
+        grant.seqs.delete(seqKey);
+        grant.seqs.set(seqKey, sequence);
+        if (grant.seqs.size > 500)
+          grant.seqs.delete(grant.seqs.keys().next().value);
+        grant.sequence = sequence;
+        const current = () => grant.seqs.get(seqKey) === sequence;
+        grant.busy = (grant.busy ?? 0) + 1;
+        busyTaken = true;
+        const releaseBusy = () => {
+          grant.busy = Math.max(0, (grant.busy ?? 1) - 1);
+        };
         if (req.signal.aborted) {
           releaseBusy();
           logTurn({ transcript, outcome: "aborted" });
           return new Response(null, { status: 499 });
         }
-        if (grants.get(token) !== grant || grant.expires <= now()) {
-          releaseBusy();
-          return Response.json(
-            { error: "Invalid or expired session capability" },
-            { status: 401 },
+        let spoken, turn;
+        if (mixedTurn) {
+          spoken = mixedTurn.spoken;
+          turn = {
+            spokenTurn: {
+              intent: "MIXED",
+              verdict: mixedTurn.verdict,
+              spoken,
+              citations: mixedTurn.citations,
+            },
+          };
+        } else if (!social && adviceKind(transcript)) {
+          // Treatment, diagnosis or a decision that is the caller's to make:
+          // declined before any record can turn into advice, in the caller's
+          // language, exactly as the typed path declines it.
+          const d = declineLead(
+            adviceKind(transcript),
+            lang === "hi" ? "hi" : lang === "hinglish" ? "hinglish" : "en",
+            transcript,
           );
-        }
-        if (streaming && !current()) {
-          releaseBusy();
-          logTurn({ transcript, outcome: "superseded" });
-          return Response.json({ error: "Superseded turn" }, { status: 409 });
-        }
-        grant.last = result;
-        turn = { result };
-        // Deterministic spoken renderer: routes intent, resolves the field
-        // from the claim graph (per-grant inheritance for follow-ups), and
-        // fills guarded templates. Engine output above stays the authority
-        // for evidence; this layer only chooses what is spoken.
-        // Lab results across reports (bundle.clinical, set by the server for
-        // uploaded lab tables) answer first; absent for Northstar.
-        const clinical =
-          bundle.clinical?.length && !deal
-            ? (clinicalAnswer(asked, bundle.clinical) ??
-              candidates
-                .map((q) => clinicalOverview(q, bundle.clinical))
-                .find(Boolean) ??
-              null)
+          spoken = d.text;
+          turn = {
+            spokenTurn: {
+              intent: "ADVICE",
+              verdict: d.verdict,
+              spoken,
+              citations: [],
+            },
+          };
+        } else if (social) {
+          // about the call itself: a fixed reply, no record facts
+          spoken = social.spoken;
+          turn = {
+            spokenTurn: {
+              intent: social.intent,
+              verdict: "SOCIAL",
+              spoken,
+              citations: [],
+            },
+          };
+        } else if (
+          /^\s*(turn (that|this|the brief) into (an? )?email|draft (an? )?email)\s*[.!]?\s*$/i.test(
+            transcript,
+          )
+        ) {
+          // The draft comes from THIS call's previous question (its own message
+          // history), never from whatever another caller on the same bearer
+          // asked last.
+          const prev = [...data.messages.slice(0, -1)]
+            .reverse()
+            .find((m) => m?.role === "user" && messageText(m.content).trim());
+          const prevQ = prev ? messageText(prev.content) : undefined;
+          let prior = null;
+          try {
+            prior = prevQ
+              ? answer(normalizeSpoken(prevQ) || prevQ, bundle)
+              : null;
+          } catch {
+            prior = null;
+          }
+          // A minted per-call token is one call, so its own last turn is fine;
+          // the fixed operator bearer is shared and never falls back.
+          if (!prevQ && !credentials.has(token)) prior = grant.last ?? null;
+          if (
+            !prior ||
+            prior.refused ||
+            prior.unresolved ||
+            !prior.evidence?.length
+          )
+            spoken =
+              "Ask a question with supporting evidence first. I have not created or sent an email.";
+          else {
+            const reviewDraft = draft(prior, bundle);
+            turn = { draft: reviewDraft };
+            spoken =
+              "A review draft is ready on screen. Check decisions, conditions and open items before using it. Nothing has been sent.";
+          }
+        } else {
+          let result = retrieval
+            ? answerFromRetrieval(
+                asked,
+                bundle,
+                await retrieval.retrieve(asked, bundle, {
+                  signal: req.signal,
+                }),
+                {
+                  actualMode: retrieval.actualMode,
+                  embeddingModel: retrieval.embeddingModel,
+                },
+              )
+            : answer(asked, bundle, {
+                queryVector: await embedQueryReady(asked),
+                model: DENSE_MODEL_ID,
+                available: denseAvailableFor(bundle),
+              });
+          if (
+            !result ||
+            typeof result.refused !== "boolean" ||
+            !Array.isArray(result.evidence) ||
+            (!result.refused && !result.evidence.length)
+          )
+            // The engine has no answer shape for some in-corpus questions
+            // (e.g. fields outside its vocabulary). Treat that as an honest
+            // refusal for the evidence feed; the claim-graph renderer below
+            // still speaks when it has grounded citations.
+            result = { refused: true, evidence: [] };
+          for (const evidence of result.evidence)
+            validateEvidence(evidence, bundle);
+          if (req.signal.aborted) {
+            releaseBusy();
+            logTurn({ transcript, outcome: "aborted" });
+            return new Response(null, { status: 499 });
+          }
+          if (grants.get(token) !== grant || grant.expires <= now()) {
+            releaseBusy();
+            return Response.json(
+              { error: "Invalid or expired session capability" },
+              { status: 401 },
+            );
+          }
+          if (streaming && !current()) {
+            releaseBusy();
+            logTurn({ transcript, outcome: "superseded" });
+            return Response.json({ error: "Superseded turn" }, { status: 409 });
+          }
+          grant.last = result;
+          turn = { result };
+          // Deterministic spoken renderer: routes intent, resolves the field
+          // from the claim graph (per-grant inheritance for follow-ups), and
+          // fills guarded templates. Engine output above stays the authority
+          // for evidence; this layer only chooses what is spoken.
+          // Lab results across reports (bundle.clinical, set by the server for
+          // uploaded lab tables) answer first; absent for Northstar.
+          const clinical =
+            bundle.clinical?.length && !deal
+              ? (clinicalAnswer(asked, bundle.clinical) ??
+                candidates
+                  .map((q) => clinicalOverview(q, bundle.clinical))
+                  .find(Boolean) ??
+                null)
+              : null;
+          let rendered = clinical
+            ? {
+                spoken: clinical.spoken,
+                verdict: clinical.verdict,
+                field: null,
+                intent: clinical.intent,
+                citations: clinical.used
+                  .map((o) => observationEvidence(o, bundle))
+                  .filter(Boolean)
+                  .map((c) => ({
+                    title: c.title,
+                    docDate: null,
+                    quote: c.quote,
+                    firstLine: c.firstLine,
+                    lastLine: c.lastLine,
+                    hash: c.hash,
+                  })),
+              }
             : null;
-        let rendered = clinical
-          ? {
-              spoken: clinical.spoken,
-              verdict: clinical.verdict,
-              field: null,
-              intent: clinical.intent,
-              citations: clinical.used
-                .map((o) => observationEvidence(o, bundle))
-                .filter(Boolean)
-                .map((c) => ({
+          rendered ??= spokenTurn(
+            asked,
+            bundle,
+            // Context from this request's own history only: a fixed bearer is
+            // shared by every caller, so grant-level state would leak between
+            // concurrent calls.
+            historyField(bundle, data.messages.slice(0, -1)) ??
+              (credentials.has(token) ? null : (grant.lastField ?? null)),
+          );
+          // Outside the claim graph's fields: speak one verbatim sentence or
+          // table row from the engine's already-validated evidence, or keep
+          // the abstention. Deliberate abstentions (unknown entity/amount)
+          // carry no "no_field" reason and are never overridden.
+          if (!clinical && (!rendered || rendered.reason === "no_field")) {
+            const quoted = extractiveSpoken(
+              asked,
+              result,
+              bundle,
+              bundle.locateEvidence,
+              result?.queryTransform?.expanded ?? undefined,
+            );
+            if (quoted)
+              rendered = {
+                spoken: quoted.spoken,
+                verdict: quoted.verdict,
+                field: null,
+                intent: rendered?.intent ?? "LOOKUP",
+                citations: quoted.citations.map((c) => ({
                   title: c.title,
                   docDate: null,
                   quote: c.quote,
@@ -847,333 +928,347 @@ export function createVoiceAdapter({
                   lastLine: c.lastLine,
                   hash: c.hash,
                 })),
-            }
-          : null;
-        rendered ??= spokenTurn(
-          asked,
-          bundle,
-          // Context from this request's own history only: a fixed bearer is
-          // shared by every caller, so grant-level state would leak between
-          // concurrent calls.
-          historyField(bundle, data.messages.slice(0, -1)) ??
-            (credentials.has(token) ? null : (grant.lastField ?? null)),
-        );
-        // Outside the claim graph's fields: speak one verbatim sentence or
-        // table row from the engine's already-validated evidence, or keep
-        // the abstention. Deliberate abstentions (unknown entity/amount)
-        // carry no "no_field" reason and are never overridden.
-        if (!clinical && (!rendered || rendered.reason === "no_field")) {
-          const quoted = extractiveSpoken(
-            asked,
-            result,
-            bundle,
-            bundle.locateEvidence,
-            result?.queryTransform?.expanded ?? undefined,
-          );
-          if (quoted)
-            rendered = {
-              spoken: quoted.spoken,
-              verdict: quoted.verdict,
-              field: null,
-              intent: rendered?.intent ?? "LOOKUP",
-              citations: quoted.citations.map((c) => ({
-                title: c.title,
-                docDate: null,
-                quote: c.quote,
-                firstLine: c.firstLine,
-                lastLine: c.lastLine,
-                hash: c.hash,
-              })),
+              };
+          }
+          if (rendered) {
+            grant.lastField = rendered.field ?? grant.lastField ?? null;
+            grant.lastTurn = {
+              at: Date.now(),
+              intent: rendered.intent,
+              field: rendered.field,
+              verdict: rendered.verdict,
+              spoken: rendered.spoken,
+              citations: rendered.citations,
             };
+            spoken = rendered.spoken;
+            // Expose the verified spoken turn (verdict + citations) to the
+            // owner's evidence feed alongside the engine result.
+            turn = { result, spokenTurn: grant.lastTurn };
+          }
+          spoken ??=
+            grant.last.spoken ??
+            (grant.last.unresolved
+              ? "Relevant passages need review, but this question is unresolved. No supported answer or draft is available. Review the original passages on screen."
+              : grant.last.refused
+                ? "I could not find supporting evidence in these documents."
+                : `I found ${grant.last.evidence.length} relevant source passages. This local build shows excerpts rather than a synthesized answer. Review the sources on screen, including any conditions or differing decision statements.`);
         }
-        if (rendered) {
-          grant.lastField = rendered.field ?? grant.lastField ?? null;
-          grant.lastTurn = {
-            at: Date.now(),
-            intent: rendered.intent,
-            field: rendered.field,
-            verdict: rendered.verdict,
-            spoken: rendered.spoken,
-            citations: rendered.citations,
-          };
-          spoken = rendered.spoken;
-          // Expose the verified spoken turn (verdict + citations) to the
-          // owner's evidence feed alongside the engine result.
-          turn = { result, spokenTurn: grant.lastTurn };
+        const refusal = (x) =>
+          /^I (don't|do not) see that in these documents\.?$|^I could not find supporting evidence/i.test(
+            x ?? "",
+          );
+        // The second half of a compound question, from the same deterministic
+        // renderers (clinical first, then the claim graph).
+        if (!social && secondQ) {
+          let second = null;
+          try {
+            second =
+              (bundle.clinical?.length && !deal
+                ? clinicalAnswer(secondQ, bundle.clinical)
+                : null) ??
+              spokenTurn(secondQ, bundle, turn?.spokenTurn?.field ?? null);
+          } catch {
+            second = null;
+          }
+          const s2 = second?.spoken;
+          if (s2 && !refusal(s2) && s2 !== spoken)
+            spoken = refusal(spoken) ? s2 : `${spoken} ${s2}`;
+          else if (
+            !deal &&
+            refusal(spoken) &&
+            isVagueLab(secondQ) &&
+            bundle.clinical?.length
+          )
+            spoken = clarifyLab(lang);
         }
-        spoken ??=
-          grant.last.spoken ??
-          (grant.last.unresolved
-            ? "Relevant passages need review, but this question is unresolved. No supported answer or draft is available. Review the original passages on screen."
-            : grant.last.refused
-              ? "I could not find supporting evidence in these documents."
-              : `I found ${grant.last.evidence.length} relevant source passages. This local build shows excerpts rather than a synthesized answer. Review the sources on screen, including any conditions or differing decision statements.`);
-      }
-      const refusal = (x) =>
-        /^I (don't|do not) see that in these documents\.?$|^I could not find supporting evidence/i.test(
-          x ?? "",
-        );
-      // The second half of a compound question, from the same deterministic
-      // renderers (clinical first, then the claim graph).
-      if (!social && secondQ) {
-        let second = null;
-        try {
-          second =
-            (bundle.clinical?.length && !deal
-              ? clinicalAnswer(secondQ, bundle.clinical)
-              : null) ??
-            spokenTurn(secondQ, bundle, turn?.spokenTurn?.field ?? null);
-        } catch {
-          second = null;
+        // A broad question about the deal ("what exactly changed in the
+        // Northstar deal?"): the fee change and what is still open, from the
+        // same renderers, rather than an abstention.
+        // Reworded beyond keyword reach: one verbatim sentence, only when the
+        // calibrated paraphrase gate is unambiguous (paraphrase.mjs).
+        if (
+          !social &&
+          !mixedTurn &&
+          refusal(spoken) &&
+          !isFragment(transcript)
+        ) {
+          let p = null;
+          try {
+            p = sectionAnswer(asked, bundle);
+            if (p)
+              p = {
+                spoken: p.spoken,
+                citation: p.citations[0],
+                citations: p.citations,
+              };
+            else p = await promotedAnswer(asked, bundle);
+          } catch {
+            p = null;
+          }
+          if (p) {
+            spoken = p.spoken;
+            turn = {
+              ...turn,
+              spokenTurn: {
+                intent: "LOOKUP",
+                verdict: "QUOTED",
+                spoken,
+                citations: p.citations ?? [p.citation],
+              },
+            };
+          }
         }
-        const s2 = second?.spoken;
-        if (s2 && !refusal(s2) && s2 !== spoken)
-          spoken = refusal(spoken) ? s2 : `${spoken} ${s2}`;
-        else if (
+        // Only for a broad question that names this deal: an abstention about
+        // anything else (another company, an unknown amount) must stand.
+        const broadDeal =
+          /\b(northstar|deal)\b/i.test(asked + " " + (secondQ ?? "")) &&
+          /\b(chang\w*|happen\w*|exactly|summary|summari[sz]e|status|update|overview|badl\w*)\b|बदल|क्या\s+हुआ/i.test(
+            transcript,
+          );
+        if (!social && deal && broadDeal && refusal(spoken)) {
+          const parts = ["What happened to the fee?", "What's still open?"]
+            .map((q) => {
+              try {
+                return spokenTurn(q, bundle, null)?.spoken;
+              } catch {
+                return null;
+              }
+            })
+            .filter((x) => x && !refusal(x));
+          if (parts.length) spoken = parts.join(" ");
+        }
+        // "my result" without a test name: ask which, don't abstain.
+        if (
+          !social &&
           !deal &&
           refusal(spoken) &&
-          isVagueLab(secondQ) &&
-          bundle.clinical?.length
+          bundle.clinical?.length &&
+          isVagueLab(asked)
         )
           spoken = clarifyLab(lang);
-      }
-      // A broad question about the deal ("what exactly changed in the
-      // Northstar deal?"): the fee change and what is still open, from the
-      // same renderers, rather than an abstention.
-      // Reworded beyond keyword reach: one verbatim sentence, only when the
-      // calibrated paraphrase gate is unambiguous (paraphrase.mjs).
-      if (!social && !mixedTurn && refusal(spoken) && !isFragment(transcript)) {
-        let p = null;
-        try {
-          p = sectionAnswer(asked, bundle);
-          if (p)
-            p = {
-              spoken: p.spoken,
-              citation: p.citations[0],
-              citations: p.citations,
+        // A cut-off fragment gets a helpful prompt, not a flat abstention.
+        if (refusal(spoken) && isFragment(transcript))
+          spoken = fragmentReply(lang) ?? FRAGMENT_REPLY;
+        // The page has one demo case open and the caller asked about the other
+        // one: point to it instead of a bare "I don't see that". No facts from
+        // the case that is not on screen are spoken.
+        let pointed = false;
+        if (
+          !social &&
+          !mixedTurn &&
+          (refusal(spoken) ||
+            /^I (don't|do not) see .{1,80} in these documents\.?$/i.test(
+              spoken,
+            )) &&
+          (caseId === "health" || caseId === "deal")
+        ) {
+          const d = domainOf(normalizeVernacular(transcript));
+          const want =
+            caseId === "health" && (deal || d === "deal")
+              ? "deal"
+              : caseId === "deal" && !deal && d === "lab"
+                ? "lab"
+                : null;
+          if (want) {
+            pointed = true;
+            spoken = isHindi(lang)
+              ? want === "deal"
+                ? "यह Northstar deal के बारे में है, जो अभी स्क्रीन पर खुला नहीं है। Northstar टैब खोलिए और मुझसे फिर पूछिए।"
+                : "यह लैब रिपोर्ट्स के बारे में है, जो अभी स्क्रीन पर खुली नहीं हैं। Lab reports टैब खोलिए और मुझसे फिर पूछिए।"
+              : want === "deal"
+                ? "That's about the Northstar deal, which isn't open on screen right now. Switch to the Northstar tab and ask me again."
+                : "That's about the lab reports, which aren't open on screen right now. Switch to the lab reports tab and ask me again.";
+            turn = {
+              spokenTurn: {
+                intent: "OTHER_CASE",
+                verdict: "UNKNOWN",
+                spoken,
+                citations: [],
+              },
             };
-          else p = await promotedAnswer(asked, bundle);
-        } catch {
-          p = null;
-        }
-        if (p) {
-          spoken = p.spoken;
-          turn = {
-            ...turn,
-            spokenTurn: {
-              intent: "LOOKUP",
-              verdict: "QUOTED",
-              spoken,
-              citations: p.citations ?? [p.citation],
-            },
-          };
-        }
-      }
-      // Only for a broad question that names this deal: an abstention about
-      // anything else (another company, an unknown amount) must stand.
-      const broadDeal =
-        /\b(northstar|deal)\b/i.test(asked + " " + (secondQ ?? "")) &&
-        /\b(chang\w*|happen\w*|exactly|summary|summari[sz]e|status|update|overview|badl\w*)\b|बदल|क्या\s+हुआ/i.test(
-          transcript,
-        );
-      if (!social && deal && broadDeal && refusal(spoken)) {
-        const parts = ["What happened to the fee?", "What's still open?"]
-          .map((q) => {
-            try {
-              return spokenTurn(q, bundle, null)?.spoken;
-            } catch {
-              return null;
-            }
-          })
-          .filter((x) => x && !refusal(x));
-        if (parts.length) spoken = parts.join(" ");
-      }
-      // "my result" without a test name: ask which, don't abstain.
-      if (
-        !social &&
-        !deal &&
-        refusal(spoken) &&
-        bundle.clinical?.length &&
-        isVagueLab(asked)
-      )
-        spoken = clarifyLab(lang);
-      // A cut-off fragment gets a helpful prompt, not a flat abstention.
-      if (refusal(spoken) && isFragment(transcript))
-        spoken = fragmentReply(lang) ?? FRAGMENT_REPLY;
-      // The page has one demo case open and the caller asked about the other
-      // one: point to it instead of a bare "I don't see that". No facts from
-      // the case that is not on screen are spoken.
-      let pointed = false;
-      if (
-        !social &&
-        !mixedTurn &&
-        (refusal(spoken) ||
-          /^I (don't|do not) see .{1,80} in these documents\.?$/i.test(
-            spoken,
-          )) &&
-        (caseId === "health" || caseId === "deal")
-      ) {
-        const d = domainOf(normalizeVernacular(transcript));
-        const want =
-          caseId === "health" && (deal || d === "deal")
-            ? "deal"
-            : caseId === "deal" && !deal && d === "lab"
-              ? "lab"
-              : null;
-        if (want) {
-          pointed = true;
-          spoken = isHindi(lang)
-            ? want === "deal"
-              ? "यह Northstar deal के बारे में है, जो अभी स्क्रीन पर खुला नहीं है। Northstar टैब खोलिए और मुझसे फिर पूछिए।"
-              : "यह लैब रिपोर्ट्स के बारे में है, जो अभी स्क्रीन पर खुली नहीं हैं। Lab reports टैब खोलिए और मुझसे फिर पूछिए।"
-            : want === "deal"
-              ? "That's about the Northstar deal, which isn't open on screen right now. Switch to the Northstar tab and ask me again."
-              : "That's about the lab reports, which aren't open on screen right now. Switch to the lab reports tab and ask me again.";
-          turn = {
-            spokenTurn: {
-              intent: "OTHER_CASE",
-              verdict: "UNKNOWN",
-              spoken,
-              citations: [],
-            },
-          };
-        }
-      }
-      // Hindi on request or when spoken to in Hindi. Clinical answers are
-      // already rendered in the caller's language; deal templates are
-      // rendered here, with record quotes kept verbatim.
-      if (
-        isHindi(lang) &&
-        !clinicalHit &&
-        !social &&
-        !mixedTurn &&
-        !pointed &&
-        turn?.spokenTurn?.intent !== "ADVICE"
-      )
-        spoken = toHindi(spoken);
-      releaseBusy();
-      // Answer first, nothing repeated: a general explanation already spoken
-      // earlier in THIS call ("Some general background: ferritin shows...")
-      // is not read out again. Facts are never dropped, only these fixed
-      // explanation sentences, and the page shows the same words.
-      {
-        const before = data.messages
-          .slice(0, -1)
-          .filter((m) => m?.role === "assistant")
-          .map((m) => messageText(m.content))
-          .join(" ");
-        if (before)
-          spoken = spoken
-            .replace(
-              /(?:Some general background|Thodi general jaankari|थोड़ी सामान्य जानकारी): [^.।]+[.।]\s*|Your doctor can read it[^.]+\.\s*|Results just outside a range are common[^.]+\.\s*|आपके डॉक्टर इसे[^।]+।\s*|Aapke doctor ise[^.]+\.\s*/g,
-              (m) => (before.includes(m.trim()) ? "" : m),
-            )
-            .trim();
-      }
-      // The page may have moved this call to another case while the answer
-      // was being built (tab switched mid-turn). An answer for a case that is
-      // no longer on screen is not spoken: say what happened instead, with
-      // no facts, and tie the turn to the case now open. A round trip back
-      // (A -> B -> A) leaves the answer valid for what is on screen.
-      if (callTag && caseId) {
-        let now2 = null;
-        try {
-          now2 = resolveBundle?.(data.messages) ?? null;
-        } catch {
-          now2 = null;
-        }
-        const nowCase = now2?.caseId ?? null;
-        if (nowCase && nowCase !== caseId) {
-          const label =
-            nowCase === "deal"
-              ? "the Northstar deal"
-              : nowCase === "health"
-                ? "the lab reports"
-                : "your documents";
-          spoken = isHindi(lang)
-            ? `जवाब देते समय स्क्रीन ${label === "the Northstar deal" ? "Northstar deal" : label === "the lab reports" ? "लैब रिपोर्ट्स" : "आपके दस्तावेज़ों"} पर चली गई, इसलिए वह जवाब मैंने छोड़ दिया। कृपया फिर से पूछिए।`
-            : `The page switched to ${label} while I was answering, so I dropped that answer. Please ask again.`;
-          turn = {
-            spokenTurn: {
-              intent: "SCOPE_CHANGED",
-              verdict: "UNKNOWN",
-              spoken,
-              citations: [],
-            },
-          };
-          caseId = nowCase;
-        }
-      }
-      const id = "local-contract-" + randomBytes(8).toString("hex");
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          logTurn({
-            transcript,
-            normalized: asked ?? null,
-            firstByteAt: Date.now(),
-            spoken,
-            verdict: turn?.spokenTurn?.verdict ?? null,
-            outcome: "answered",
-          });
-          try {
-            onTurn?.(token, {
-              question: transcript,
-              // what was actually spoken (both halves, in the caller's
-              // language), so the page shows the same words; plus any page
-              // action the turn asks for (show the upload panel)
-              lead: turn?.spokenTurn
-                ? {
-                    ...turn.spokenTurn,
-                    spoken,
-                    action: social?.action ?? null,
-                  }
-                : null,
-              result: turn?.result ?? null,
-              scope: bundle?.scope ?? null,
-              call: callTag,
-              caseId,
-            });
-          } catch {
-            /* memory is best-effort; never break the call */
           }
-          for (const content of spoken.match(/.{1,64}(?:\s|$)|.{1,64}/g) ||
-            []) {
+        }
+        // Hindi on request or when spoken to in Hindi. Clinical answers are
+        // already rendered in the caller's language; deal templates are
+        // rendered here, with record quotes kept verbatim.
+        if (
+          isHindi(lang) &&
+          !clinicalHit &&
+          !social &&
+          !mixedTurn &&
+          !pointed &&
+          turn?.spokenTurn?.intent !== "ADVICE"
+        )
+          spoken = toHindi(spoken);
+        releaseBusy();
+        // Answer first, nothing repeated: a general explanation already spoken
+        // earlier in THIS call ("Some general background: ferritin shows...")
+        // is not read out again. Facts are never dropped, only these fixed
+        // explanation sentences, and the page shows the same words.
+        {
+          const before = data.messages
+            .slice(0, -1)
+            .filter((m) => m?.role === "assistant")
+            .map((m) => messageText(m.content))
+            .join(" ");
+          if (before)
+            spoken = spoken
+              .replace(
+                /(?:Some general background|Thodi general jaankari|थोड़ी सामान्य जानकारी): [^.।]+[.।]\s*|Your doctor can read it[^.]+\.\s*|Results just outside a range are common[^.]+\.\s*|आपके डॉक्टर इसे[^।]+।\s*|Aapke doctor ise[^.]+\.\s*/g,
+                (m) => (before.includes(m.trim()) ? "" : m),
+              )
+              .trim();
+        }
+        // The page may have moved this call to another case while the answer
+        // was being built (tab switched mid-turn). An answer for a case that is
+        // no longer on screen is not spoken: say what happened instead, with
+        // no facts, and tie the turn to the case now open. A round trip back
+        // (A -> B -> A) leaves the answer valid for what is on screen.
+        if (callTag && caseId) {
+          let now2 = null;
+          try {
+            now2 = resolveBundle?.(data.messages) ?? null;
+          } catch {
+            now2 = null;
+          }
+          const nowCase = now2?.caseId ?? null;
+          if (nowCase && nowCase !== caseId) {
+            const label =
+              nowCase === "deal"
+                ? "the Northstar deal"
+                : nowCase === "health"
+                  ? "the lab reports"
+                  : "your documents";
+            spoken = isHindi(lang)
+              ? `जवाब देते समय स्क्रीन ${label === "the Northstar deal" ? "Northstar deal" : label === "the lab reports" ? "लैब रिपोर्ट्स" : "आपके दस्तावेज़ों"} पर चली गई, इसलिए वह जवाब मैंने छोड़ दिया। कृपया फिर से पूछिए।`
+              : `The page switched to ${label} while I was answering, so I dropped that answer. Please ask again.`;
+            turn = {
+              spokenTurn: {
+                intent: "SCOPE_CHANGED",
+                verdict: "UNKNOWN",
+                spoken,
+                citations: [],
+              },
+            };
+            caseId = nowCase;
+          }
+        }
+        const id = "local-contract-" + randomBytes(8).toString("hex");
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            logTurn({
+              transcript,
+              normalized: asked ?? null,
+              firstByteAt: Date.now(),
+              spoken,
+              verdict: turn?.spokenTurn?.verdict ?? null,
+              outcome: "answered",
+            });
+            try {
+              onTurn?.(token, {
+                question: transcript,
+                // what was actually spoken (both halves, in the caller's
+                // language), so the page shows the same words; plus any page
+                // action the turn asks for (show the upload panel)
+                lead: turn?.spokenTurn
+                  ? {
+                      ...turn.spokenTurn,
+                      spoken,
+                      action: social?.action ?? null,
+                    }
+                  : null,
+                result: turn?.result ?? null,
+                scope: bundle?.scope ?? null,
+                call: callTag,
+                caseId,
+              });
+            } catch {
+              /* memory is best-effort; never break the call */
+            }
+            for (const content of spoken.match(/.{1,64}(?:\s|$)|.{1,64}/g) ||
+              []) {
+              controller.enqueue(
+                encoder.encode(
+                  "data: " +
+                    JSON.stringify({
+                      id,
+                      object: "chat.completion.chunk",
+                      choices: [
+                        { index: 0, delta: { content }, finish_reason: null },
+                      ],
+                    }) +
+                    "\n\n",
+                ),
+              );
+            }
             controller.enqueue(
               encoder.encode(
                 "data: " +
                   JSON.stringify({
                     id,
                     object: "chat.completion.chunk",
-                    choices: [
-                      { index: 0, delta: { content }, finish_reason: null },
-                    ],
+                    choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
                   }) +
-                  "\n\n",
+                  "\n\ndata: [DONE]\n\n",
               ),
             );
-          }
-          controller.enqueue(
-            encoder.encode(
-              "data: " +
-                JSON.stringify({
-                  id,
-                  object: "chat.completion.chunk",
-                  choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-                }) +
-                "\n\ndata: [DONE]\n\n",
-            ),
+            controller.close();
+          },
+        });
+        grant.turn = turn;
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-store",
+          },
+        });
+      } catch (turnError) {
+        // Evidence-integrity rejections are the fail-closed contract, not
+        // a fault: retrieval or evidence that fails its contract is
+        // refused, never smoothed over with a fallback line.
+        if (
+          /contract mismatch|does not match its original/.test(
+            turnError?.message ?? "",
+          )
+        )
+          throw turnError;
+        if (busyTaken) grant.busy = Math.max(0, (grant.busy ?? 1) - 1);
+        if (req.signal.aborted) {
+          logTurn({ transcript: askedRaw, outcome: "aborted" });
+          return new Response(null, { status: 499 });
+        }
+        if (grants.get(token) !== grant || grant.expires <= now()) {
+          return Response.json(
+            { error: "Invalid or expired session capability" },
+            { status: 401 },
           );
-          controller.close();
-        },
-      });
-      grant.turn = turn;
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-store",
-        },
-      });
+        }
+        // An unexpected engine fault must never cross the vendor boundary
+        // as a bare error or a dead turn: the caller hears one fixed line,
+        // the page shows the same words, and only the class is logged.
+        console.warn("voice turn failed:", turnError?.name ?? "error");
+        logTurn({ transcript: askedRaw, outcome: "error" });
+        const said = "I hit a problem answering that. Please ask me again.";
+        try {
+          onTurn?.(token, {
+            question: askedRaw,
+            lead: {
+              intent: "ERROR",
+              verdict: "UNKNOWN",
+              spoken: said,
+              citations: [],
+            },
+            result: null,
+            scope: null,
+            call: callTag,
+            caseId,
+          });
+        } catch {
+          /* best-effort */
+        }
+        return sseOnce(said);
+      }
     },
     // Voice lab: this grant's recent turns (transcript as received, receipt and
     // first-byte wall-clock times, interruptions). Owner diagnostics only.
