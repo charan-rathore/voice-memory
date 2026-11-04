@@ -121,3 +121,13 @@ test("graph page loads the label helper before graph.js and uses it", () => {
   assert.doesNotMatch(js, /in force/);
   assert.match(js, /VM_STATUS\.statusLabel\(n\)/);
 });
+
+test("graph colours: open, rejected and unknown statuses never use the approved colour", () => {
+  const js = readFileSync(new URL("../site/graph.js", import.meta.url), "utf8");
+  // RED on main 6edac74: `STATUS_COLOR[n.status] ?? C.teal` drew the open
+  // 40/60 vs 50/50 payment split in the "Approved" teal.
+  assert.doesNotMatch(js, /STATUS_COLOR\[n\.status\] \?\? C\.teal/);
+  assert.match(js, /\bopen: C\.coral\b/);
+  assert.match(js, /noSignedRecord\) return C\.coral/);
+});
+

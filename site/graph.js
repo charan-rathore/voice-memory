@@ -14,6 +14,7 @@
   const STATUS_COLOR = {
     current: C.teal, amended: C.teal, final: C.teal, approved: C.teal, agreed: C.teal,
     superseded: C.coral, preliminary: C.amber, proposed: C.amber, discussed: C.amber, requested: C.amber, "internal-target": C.amber, unresolved: C.coral,
+    open: C.coral, rejected: C.coral,
   };
   const SPECIAL = {
     corrects: { color: C.mark, dash: true, arrow: true, label: "corrects (amended replaces preliminary)" },
@@ -35,7 +36,7 @@
       ["topic", C.violet, "Topic"],
       ["document", C.blue, "Document"],
       ["value-proposed", C.amber, "Proposed / discussed"],
-      ["value-superseded", C.coral, "Superseded"],
+      ["value-superseded", C.coral, "Superseded, unresolved or no signed record"],
       ["value-current", C.teal, "Approved (by whom: select it)"],
       ["evidence", C.ink, "Exact sentence"],
     ],
@@ -93,7 +94,10 @@
     if (n.kind === "document") return C.blue;
     if (n.kind === "topic") return C.violet;
     if (n.kind === "evidence") return C.ink;
-    return STATUS_COLOR[n.status] ?? C.teal;
+    // A missing signature or an unknown status is never drawn in the
+    // approved colour.
+    if (n.noSignedRecord) return C.coral;
+    return STATUS_COLOR[n.status] ?? C.dim;
   }
   const labelOf = (n) =>
     n.kind === "document"
