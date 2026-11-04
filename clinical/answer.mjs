@@ -24,6 +24,8 @@ import {
   GLOSSARY,
   CRITICAL_FLAG,
   valueText,
+  aboutSomeoneElse,
+  thirdPerson,
 } from "./explain.mjs";
 import { GROUPS } from "./glossary-more.mjs";
 
@@ -1336,6 +1338,20 @@ function howFar(t, question) {
 }
 
 export function clinicalAnswer(question, reports) {
+  const out = answerFor(question, reports);
+  // "What is his TSH?" after "I uploaded my dad's report": the results are
+  // not the caller's, so the English answer says "The TSH result", never
+  // "Your TSH result".
+  if (
+    out?.spoken &&
+    (out.lang ?? detectLang(question)) === "en" &&
+    aboutSomeoneElse(question)
+  )
+    return { ...out, spoken: thirdPerson(out.spoken) };
+  return out;
+}
+
+function answerFor(question, reports) {
   if (!reports?.length) return null;
   const t = clinicalTurn(question, reports);
   if (t) return howFar(t, question);

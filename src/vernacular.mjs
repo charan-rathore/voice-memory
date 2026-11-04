@@ -24,6 +24,8 @@
 // linguistic profile for the same reason (see docs/COMPANION.md).
 
 // ------------------------------------------------------------ fillers + self-corrections
+import { aboutSomeoneElse } from "../clinical/explain.mjs";
+export { aboutSomeoneElse };
 const FILLERS =
   /\b(?:um+|uh+|erm+|hmm+|uhh+|umm+|you know|haan+ ?toh|matlab ki|basically|accha so)\b[,.]?\s*/gi;
 const CORRECTION =
@@ -425,18 +427,6 @@ const DECLINE_OTHER = {
       "Unhe koi bimari hai ya nahi, yeh main nahi bata sakti; iske liye unke doctor chahiye, jo unke symptoms aur history bhi dekhenge. Main har result lab ki chhapi range ke saath dikha sakti hoon.",
   },
 };
-const ABOUT_OTHER =
-  /\b(he|she|they|him|his|her|hers|their|them)\b|\bmy\s+(dad|father|mother|mom|mum|mummy|papa|son|daughter|wife|husband|parents?|grand(?:father|mother|pa|ma)|brother|sister|child|kid|patient)\b|\b(unko|unhe|usko|use|inko|papa\s+ko|mummy\s+ko)\b|उन्हें|उनको|उसको|पापा|मम्मी/i;
-/** True when the question is about someone other than the caller. */
-export const aboutSomeoneElse = (q) =>
-  ABOUT_OTHER.test(String(q ?? "")) &&
-  !/\b(i|me|my\s+(own|report|results?|tsh|ferritin))\b/i.test(
-    String(q ?? "").replace(
-      /\bmy\s+(dad|father|mother|mom|mum|son|daughter|wife|husband)\b/gi,
-      "",
-    ),
-  );
-
 /** The decline lead for an advice question, in the visitor's language. */
 export function declineLead(kind, lang = "en", question = "") {
   const k = DECLINE[kind] ? kind : "treatment";

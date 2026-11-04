@@ -15,6 +15,38 @@
 
 import { MORE_GLOSSARY, MORE_SOURCES } from "./glossary-more.mjs";
 
+// Whether a question is about someone other than the caller ("his TSH",
+// "my father's report", "does he have"), so answers and declines never
+// say "you" to a person the results do not belong to.
+const ABOUT_OTHER =
+  /\b(he|she|they|him|his|her|hers|their|them)\b|\bmy\s+(dad|father|mother|mom|mum|mummy|papa|son|daughter|wife|husband|parents?|grand(?:father|mother|pa|ma)|brother|sister|child|kid|patient)\b|\b(unko|unhe|usko|use|inko|papa\s+ko|mummy\s+ko)\b|उन्हें|उनको|उसको|पापा|मम्मी/i;
+/** True when the question is about someone other than the caller. */
+export const aboutSomeoneElse = (q) =>
+  ABOUT_OTHER.test(String(q ?? "")) &&
+  !/\b(i|me|my\s+(own|report|results?|tsh|ferritin))\b/i.test(
+    String(q ?? "").replace(
+      /\bmy\s+(dad|father|mother|mom|mum|son|daughter|wife|husband)\b/gi,
+      "",
+    ),
+  );
+
+/** English answer text about someone else: no "your" for their results. */
+export function thirdPerson(text) {
+  return String(text ?? "")
+    .replace(/\bYour (\S[^.]*?) result is\b/g, "The $1 result is")
+    .replace(/\bYour (\S[^.]*?) went from\b/g, "The $1 went from")
+    .replace(/\bI can't compare your two\b/g, "I can't compare the two")
+    .replace(/\b[Yy]our doctor\b/g, (m) =>
+      m[0] === "Y" ? "Their doctor" : "their doctor",
+    )
+    .replace(/\bhow you feel\b/g, "how they feel")
+    .replace(
+      /\byour (medicines|other results|history|symptoms|reports?)\b/g,
+      "their $1",
+    )
+    .replace(/\bFor your\b/g, "For their");
+}
+
 export const SOURCES = {
   range: "https://www.hc.u-tokyo.ac.jp/en/checkupresult/explanation/criteria",
   tsh: "https://medlineplus.gov/labtests/tshthyroidstimulatinghormonetest.html",

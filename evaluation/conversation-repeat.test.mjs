@@ -84,3 +84,32 @@ test("declines about someone else never say 'you'", async () => {
   const r = await speak(call(), ["Should my father take iron tablets?"]);
   assert.doesNotMatch(r.text, /\byour\b/i, r.text);
 });
+
+test("lab answers about someone else say 'The TSH result', not 'Your'", async () => {
+  const { ingestFile } = await import("../ingest/index.mjs");
+  const { extractReport } = await import("../clinical/observations.mjs");
+  const { clinicalAnswer } = await import("../clinical/answer.mjs");
+  const text = [
+    "Chain Diagnostics (synthetic)",
+    "Name : SAMPLE PATIENT    Age : 52 Years    Gender : Male",
+    "Collected : 14/3/2025 9:10:00AM    Reported : 14/3/2025 6:00:00PM    Report Status : Final",
+    "",
+    "Test Name    Results    Units    Bio. Ref. Interval",
+    "",
+    "THYROID PROFILE",
+    "TSH    25.17    µIU/mL    0.35 - 5.50",
+    "",
+  ].join("\n");
+  const r = await ingestFile(Buffer.from(text), "dad.txt");
+  const R = [{ title: "dad", sourceId: "s", ...extractReport(r.doc) }];
+  const his = clinicalAnswer("What is his TSH?", R).spoken;
+  assert.match(his, /^The TSH result is 25\.17 µIU\/mL/);
+  assert.doesNotMatch(
+    his,
+    /\b[Yy]our (TSH|doctor|medicines|other results)\b|how you feel/,
+  );
+  assert.match(
+    clinicalAnswer("What is my TSH?", R).spoken,
+    /^Your TSH result is 25\.17/,
+  );
+});
