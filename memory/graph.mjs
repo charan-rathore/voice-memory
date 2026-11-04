@@ -16,6 +16,7 @@
 // original passage.
 import { extractClaims, resolveClaims } from "../dist/engine.mjs";
 import { liveEpisodes } from "./memory.mjs";
+import { subjectOf } from "../clinical/observations.mjs";
 
 const FIELDS = [
   "fee",
@@ -206,11 +207,15 @@ export function buildGraph(bundle, mem, focus = "overview") {
       // stable patient ID is the key (two people can share a name); a report
       // with NO verified identity gets its own per-report topic, never a
       // shared "unidentified" bucket that would imply one person.
-      const pid = String(lab.meta?.patient?.id || "").trim();
-      const who = String(lab.meta?.patient?.name || pid).replace(
-        /\s*\(synthetic\)/i,
-        "",
-      );
+      // Same subject rule as the evidence engine (subjectOf): ID, else
+      // printed name, else this report alone. Masked fields count as absent.
+      const subject = subjectOf({ ...lab, sourceId: lab.sourceId });
+      const pid = subject.startsWith("doc:") ? "" : subject;
+      const who = pid
+        ? String(
+            lab.meta?.patient?.name || lab.meta?.patient?.id || pid,
+          ).replace(/\s*\(synthetic\)/i, "")
+        : "";
       const tid = pid ? `topic:lab:${pid}` : `topic:lab:unverified:${src.id}`;
       node({
         id: tid,

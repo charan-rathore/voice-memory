@@ -25,6 +25,7 @@ import {
   parseReference,
   parseResult,
   normUnit,
+  isMaskedIdentity,
 } from "./lab-lines.mjs";
 import { locate } from "../ingest/canonical.mjs";
 import { canonOf } from "./explain.mjs";
@@ -55,7 +56,7 @@ export const MONTHS = {
   nov: 11,
   dec: 12,
   जनवरी: 1,
-  "फ़रवरी": 2,
+  फ़रवरी: 2,
   फरवरी: 2,
   मार्च: 3,
   अप्रैल: 4,
@@ -355,8 +356,8 @@ const STATUS_RANK = {
  */
 export function subjectOf(r) {
   const p = r.meta?.patient;
-  if (p?.id) return p.id;
-  if (p?.name)
+  if (p?.id && !isMaskedIdentity(p.id)) return p.id;
+  if (p?.name && !isMaskedIdentity(p.name))
     return (
       "name:" +
       p.name

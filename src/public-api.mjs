@@ -24,7 +24,7 @@ import { createCallCounters } from "./public-call-counters.mjs";
 import { documentView } from "./library.mjs";
 import { buildGraph } from "../memory/graph.mjs";
 import { createMemory } from "../memory/memory.mjs";
-import { seriesFor, compare } from "../clinical/observations.mjs";
+import { seriesFor, compare, subjectOf } from "../clinical/observations.mjs";
 import { spokenText, splitSentences as splitSpoken } from "./companion.mjs";
 import { repairTestNames } from "./spoken-repair.mjs";
 import { spokenIds } from "./vernacular.mjs";
@@ -1452,10 +1452,24 @@ export function clinicalGraph(bundle) {
         }
       : null;
   };
+  // Whose report this is, exactly as the evidence engine decides it: the
+  // printed patient ID, else the printed name, else this report alone. Two
+  // reports without a verified identity are never drawn as one person.
+  const subjectLabel = (r, pid) =>
+    pid.startsWith("doc:")
+      ? `Identity not printed (${r.title ?? "this report"} only)`
+      : pid.startsWith("name:")
+        ? (r.meta.patient?.name ?? pid.slice(5))
+        : pid;
   for (const r of reports) {
-    const pid = r.meta.patient?.id ?? "unidentified";
+    const pid = subjectOf(r);
     const status = (r.meta.status ?? "unknown").toLowerCase();
-    node({ id: `patient:${pid}`, kind: "patient", label: pid });
+    node({
+      id: `patient:${pid}`,
+      kind: "patient",
+      label: subjectLabel(r, pid),
+      verified: !pid.startsWith("doc:"),
+    });
     node({
       id: `doc:${r.sourceId}`,
       kind: "document",
@@ -1489,12 +1503,12 @@ export function clinicalGraph(bundle) {
   }
   // Same collection, amended report wins: the older value is superseded.
   const pids = [
-    ...new Set(reports.map((r) => r.meta.patient?.id).filter(Boolean)),
+    ...new Set(reports.map(subjectOf).filter((pid) => !pid.startsWith("doc:"))),
   ];
   for (const pid of pids) {
     const keys = new Set(
       reports
-        .filter((r) => r.meta.patient?.id === pid)
+        .filter((r) => subjectOf(r) === pid)
         .flatMap((r) => r.observations.map((o) => o.key)),
     );
     for (const key of keys) {

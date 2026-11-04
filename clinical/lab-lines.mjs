@@ -561,6 +561,15 @@ export const flatHeader = (t) =>
     .replace(/\s*\|\s*(?=[:.-]\s)/g, " ")
     .replace(/\s*\|\s*/g, "   ");
 
+/** True for a redacted identity field: only mask characters (X, *, #),
+ * or mostly mask characters ("XXXXX1234"). */
+export function isMaskedIdentity(v) {
+  const t = String(v ?? "").replace(/[\s./-]+/g, "");
+  if (!t) return false;
+  const m = (t.match(/[xX*#•]/g) ?? []).length;
+  return m === t.length || (m >= 4 && m * 2 >= t.length);
+}
+
 /** Patient and dates from common report headers (not just the synthetic one). */
 export function genericMeta(text) {
   // Key-value headers often arrive as table cells ("| Name | : DUMMY |").
@@ -595,12 +604,16 @@ export function genericMeta(text) {
   const plain = dateAfter("\\bDate", head, order);
   let nameStr = name?.[1]?.trim().replace(/\s+/g, " ") ?? null;
   if (nameStr && /^(of|the|patient)$/i.test(nameStr)) nameStr = null;
+  // A masked field ("XXXXXXXXX" in a public sample) identifies nobody: two
+  // masked reports must never become one person.
+  if (isMaskedIdentity(nameStr)) nameStr = null;
+  const idStr = id && !isMaskedIdentity(id[2]) ? id[2].toUpperCase() : null;
   return {
     patient:
-      id || nameStr
+      idStr || nameStr
         ? {
             name: nameStr,
-            id: id ? id[2].toUpperCase() : null,
+            id: idStr,
             sex,
             age: age ? Number(age[1]) : null,
           }
