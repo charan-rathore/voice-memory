@@ -1,5 +1,9 @@
 import { contextReview } from "./context";
-import { expandQuery, type QueryTransform } from "./query-expand";
+import {
+  expandQuery,
+  equivalentRewrite,
+  type QueryTransform,
+} from "./query-expand";
 import { lineOf } from "./line-index";
 export { lineOf, lineIndexCacheStats } from "./line-index";
 import {
@@ -293,6 +297,19 @@ export function answer(
       if (widened.evidence === "positive") {
         found = widened;
         expansionUsed = expansion;
+      }
+    }
+    // Appending keeps the caller's own word ("retained"), which the
+    // evidence gate then counts as uncovered when the record only says
+    // "retention". For a verified query-equivalent phrase only, retry once
+    // with the record's term in place of the caller's. Disclosed like any
+    // expansion; thresholds unchanged.
+    const rewrite = expansionUsed ? null : equivalentRewrite(question);
+    if (rewrite) {
+      const swapped = retrieve(rewrite.expanded);
+      if (swapped.evidence === "positive") {
+        found = swapped;
+        expansionUsed = rewrite;
       }
     }
   }

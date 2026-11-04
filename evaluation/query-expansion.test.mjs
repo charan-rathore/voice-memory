@@ -103,7 +103,11 @@ const RETENTION_NEGATIVES = [
   "How long do we keep the deadline mentioned in the transcripts?",
   "Who keeps meeting notes?",
   "How do we keep transcripts confidential?",
+  "How long do we keep transcripts confidential?",
+  "How long are transcripts kept private?",
+  "Keep the deadline unchanged.",
   "How long are expense receipts retained?",
+  "Is the 90-day period still authorized?",
 ];
 
 test("retention bridge is context-bound: duration ask + transcript target", () => {
@@ -132,22 +136,59 @@ test("mariner: keep-transcripts paraphrase retrieves the 30-day record, not an a
   assert.doesNotMatch(r.answer, /could not find supporting passages/i);
 });
 
-test("mariner: retained-transcripts paraphrase never invents a wrong retention value", async () => {
-  // RESIDUAL GAP (2026-11-04): this phrasing still abstains — the disclosed
-  // bridge fires, widened retrieval finds the chunks, but the calibrated
-  // evidence gate scores the original term "retained" (absent from the
-  // corpus, which says "retention") as an uncovered distinctive term and
-  // returns insufficient. A gate-level accommodation for disclosed
-  // expansions is its own reviewed change; until then the honest failure is
-  // an abstain. What must NEVER happen is a wrong value.
+test("mariner: retained-transcripts paraphrase answers the 30-day record via a disclosed rewrite", async () => {
+  // Was a RESIDUAL GAP on main 6edac74 (this test then accepted an abstain):
+  // the appended expansion kept the caller's "retained", which the evidence
+  // gate counted as uncovered because the record says "retention". A
+  // verified query-equivalent rewrite now retries once with the record's
+  // term in place of the caller's, disclosed in queryTransform. Thresholds
+  // are unchanged, so only the guarded transcript-retention phrase can use it.
   const { MARINER_DOCS } = await import("../examples/corpus-mariner.mjs");
   const mb = importBundle(MARINER_DOCS);
   const r = answer("How long are transcripts retained?", mb);
   const hay = r.answer + " " + r.evidence.map((e) => e.quote).join(" ");
-  assert.doesNotMatch(hay, /\b90[ -]days?\b(?!.*\bnot 90)/i);
-  if (!/could not find supporting passages/i.test(r.answer)) {
-    assert.match(hay, /30[ -]days?/i, "answered but without the 30-day record");
+  assert.doesNotMatch(r.answer, /could not find supporting passages/i);
+  assert.match(hay, /retention period is 30 days/i);
+  assert.equal(
+    r.queryTransform?.original,
+    "How long are transcripts retained?",
+  );
+  assert.ok(
+    r.queryTransform.applied.some(
+      (a) => a.from === "transcripts retained" && /retention/.test(a.to),
+    ),
+    JSON.stringify(r.queryTransform),
+  );
+});
+
+test("mariner: only the guarded retention phrase is ever rewritten", async () => {
+  const { equivalentRewrite } = await import("../dist/query-expand.mjs");
+  assert.ok(equivalentRewrite("How long are transcripts retained?"));
+  assert.ok(equivalentRewrite("How long do you keep the transcripts for?"));
+  for (const q of RETENTION_NEGATIVES)
+    assert.equal(equivalentRewrite(q), null, q);
+  const { MARINER_DOCS } = await import("../examples/corpus-mariner.mjs");
+  const mb = importBundle(MARINER_DOCS);
+  for (const q of [
+    "How long do we keep transcripts confidential?",
+    "Who keeps meeting notes?",
+    "How long are expense receipts retained?",
+    "Keep the deadline unchanged.",
+  ]) {
+    const r = answer(q, mb);
+    assert.ok(
+      !r.queryTransform?.applied?.some((a) => /retention/.test(a.to)),
+      `retention transform applied to: ${q}`,
+    );
+    assert.doesNotMatch(
+      r.answer,
+      /30[ -]days?/i,
+      `retention leaked into: ${q}`,
+    );
   }
+  // a policy period is not evidence that anything was deleted
+  const del = answer("Have the transcripts been deleted?", mb);
+  assert.ok(!del.queryTransform?.applied?.some((a) => /retention/.test(a.to)));
 });
 
 test("mariner: unrelated keep/deadline questions never ground in the retention policy", async () => {
@@ -191,13 +232,45 @@ test("mariner: spoken layer speaks the 30-day record for keep-transcripts via di
     return quoted?.spoken ?? t?.spoken ?? null;
   };
   const keep = spoken("How long do you keep the transcripts?");
-  assert.match(keep ?? "", /30[ -]days?/i, "keep-question lost the 30-day record");
-  assert.doesNotMatch(keep ?? "", /\b90[ -]days?\b(?![^.\n]*\bnot 90)/i, "90-day distractor spoken as the answer");
+  assert.match(
+    keep ?? "",
+    /30[ -]days?/i,
+    "keep-question lost the 30-day record",
+  );
+  assert.doesNotMatch(
+    keep ?? "",
+    /\b90[ -]days?\b(?![^.\n]*\bnot 90)/i,
+    "90-day distractor spoken as the answer",
+  );
   assert.doesNotMatch(keep ?? "", /couldn't establish/i);
   const control = spoken("What is the retention period?");
   assert.match(control ?? "", /30[ -]days?/i);
   const retained = spoken("How long are transcripts retained?");
-  assert.doesNotMatch(retained ?? "", /\b90[ -]days?\b(?![^.\n]*\bnot 90)/i, "retained-variant spoke the 90-day distractor");
+  assert.match(
+    retained ?? "",
+    /retention period is 30 days/i,
+    "retained-variant lost the 30-day record",
+  );
+  assert.doesNotMatch(
+    retained ?? "",
+    /\b90[ -]days?\b(?![^.\n]*\bnot 90)/i,
+    "retained-variant spoke the 90-day distractor",
+  );
+  for (const q of [
+    "How long do we keep transcripts confidential?",
+    "Who keeps meeting notes?",
+    "How long are expense receipts retained?",
+    "Have the transcripts been deleted?",
+  ])
+    assert.doesNotMatch(
+      spoken(q) ?? "",
+      /30[ -]days?/i,
+      `retention spoken for: ${q}`,
+    );
+  assert.match(
+    spoken("Is the 90-day period still authorized?") ?? "",
+    /not authorized|rejected/i,
+  );
 });
 
 test("extractiveSpoken scores the original question when no transform is disclosed", async () => {
