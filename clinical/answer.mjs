@@ -9,6 +9,8 @@ import {
   subjectOf,
   markIdentityConflicts,
   MONTHS,
+  packetSegments,
+  extractSegment,
 } from "./observations.mjs";
 import {
   detectLang,
@@ -700,22 +702,48 @@ export function clinicalReportsFor(bundle, entries, extract) {
   return markIdentityConflicts(reportsOf(bundle, entries, extract));
 }
 function reportsOf(bundle, entries, extract) {
-  return bundle.sources
-    .map((src, i) => {
-      const e = entries[i];
-      if (!e?.doc) return null;
-      e.clinical ??= extract(e.doc);
-      e.haystack ??= ` ${words(e.doc.text ?? "").join(" ")} `;
-      return e.clinical.observations.length
+  return bundle.sources.flatMap((src, i) => {
+    const e = entries[i];
+    if (!e?.doc) return [];
+    // A consolidated packet holds several records; each is read as a
+    // report of its own (own patient, own date, own status) so an
+    // amendment later in the same file supersedes the preliminary value,
+    // exactly as it would across two files.
+    if (e.clinical === undefined) {
+      const parts = packetSegments(e.doc);
+      e.clinical = parts
         ? {
+            parts: parts.map((seg) => ({
+              seg,
+              ...extractSegment(e.doc, seg),
+              haystack: ` ${words(e.doc.text.slice(seg.start, seg.end)).join(" ")} `,
+            })),
+          }
+        : extract(e.doc);
+    }
+    e.haystack ??= ` ${words(e.doc.text ?? "").join(" ")} `;
+    if (e.clinical.parts)
+      return e.clinical.parts
+        .filter((p) => p.observations.length)
+        .map((p) => ({
+          sourceId: src.id,
+          title: `${src.title} · p.${p.seg.pages.length > 1 ? `${p.seg.pages[0]}-${p.seg.pages[p.seg.pages.length - 1]}` : p.seg.pages[0]}`,
+          segment: p.seg.index,
+          haystack: p.haystack,
+          meta: p.meta,
+          observations: p.observations,
+        }));
+    return e.clinical.observations.length
+      ? [
+          {
             sourceId: src.id,
             title: src.title,
             haystack: e.haystack,
             ...e.clinical,
-          }
-        : null;
-    })
-    .filter(Boolean);
+          },
+        ]
+      : [];
+  });
 }
 
 const OVERVIEW_RE =

@@ -330,7 +330,10 @@ export function addUpload(s, bytes, filename, rebuild) {
     note({
       k: "indexed",
       elements: entry.doc?.stats?.elements ?? null,
-      observations: entry.clinical?.observations?.length ?? null,
+      observations:
+        entry.clinical?.observations?.length ??
+        entry.clinical?.parts?.reduce((n, p) => n + p.observations.length, 0) ??
+        null,
     });
   (async () => {
     await slot(String(s.sid ?? "").startsWith("case:") ? 0 : 1);

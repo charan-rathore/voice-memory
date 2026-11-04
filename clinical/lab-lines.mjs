@@ -358,6 +358,13 @@ export function readLabLine(line) {
     .replace(/[}:]+$/, "")
     .trim();
   if (!validTest(test)) return null;
+  // "22 Oct sample amended to 50 ng/mL": a day of the month, not a result.
+  if (
+    /^\s*,?\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\b/i.test(
+      rest ?? "",
+    )
+  )
+    return null;
   const v = parseResult(raw);
   if (!v) return null;
   const t = tail(rest ?? "");
@@ -423,6 +430,20 @@ function validTest(t) {
   )
     return false;
   if (/\b(is|are|was|were)\b/i.test(t)) return false;
+  // An instruction or a record-status phrase, not a test name: "Use
+  // ferritin 50 ng/mL for the 22 Oct collection", "Ferritin version used".
+  if (
+    /^(use|using|see|do|don't|please|check|take|start|stop|refer|compare|interpret|ignore|keep|say|report)\b/i.test(
+      t,
+    )
+  )
+    return false;
+  if (
+    /\b(version|used|amended|corrected|superseded|replaced|preliminary|released)\b/i.test(
+      t,
+    )
+  )
+    return false;
   return true;
 }
 
@@ -571,6 +592,75 @@ export function isMaskedIdentity(v) {
 }
 
 /** Patient and dates from common report headers (not just the synthetic one). */
+// Headers printed as a row of labels over a row of values (consolidated
+// hospital packets, many PDF exports):
+//   PATIENT NAME            PATIENT ID
+//   Maya Sharma             HLG-P1047
+//   SAMPLE COLLECTED        REPORT ISSUED
+//   22 Oct 2026 10:05       22 Oct 2026 13:15
+// The text layer joins each row into one line. Values are matched to labels
+// by column order. A patient ID must contain a digit, so a name is never
+// read as an identifier.
+const STACKED_ID = /\b([A-Z]{1,8}-?[A-Z]{0,4}\d{3,}[A-Z0-9-]*)\b/;
+const STACKED_DATE = /\b\d{1,2}\s+[A-Za-z]{3,9},?\s+\d{4}\b/g;
+function stackedFields(head, order) {
+  const lines = head
+    .split("\n")
+    .map((l) => l.replace(/^#+\s*/, "").trim())
+    .filter(Boolean);
+  const out = {};
+  for (let i = 0; i + 1 < lines.length; i++) {
+    const label = lines[i];
+    const value = lines[i + 1];
+    // A label row: capitals, no digits, a few words.
+    if (/\d/.test(label) || label !== label.toUpperCase() || label.length > 80)
+      continue;
+    const idLabel = /PATIENT\s*ID/.exec(label);
+    if (idLabel && !out.id) {
+      // Several identifiers in one value row ("Maya Sharma / ENC-4271
+      // HLG-P1047" under "PATIENT / ENCOUNTER   PATIENT ID"): take the one
+      // sitting where the PATIENT ID label sits.
+      const want = idLabel.index / Math.max(1, label.length);
+      const m = [...value.matchAll(new RegExp(STACKED_ID.source, "g"))].sort(
+        (a, b) =>
+          Math.abs(a.index / value.length - want) -
+          Math.abs(b.index / value.length - want),
+      )[0];
+      if (m) {
+        out.id = m[1];
+        if (/PATIENT(?:'S)?\s*NAME|^PATIENT\b/.test(label)) {
+          const name = value
+            .slice(0, m.index)
+            .replace(/[\/|,]+\s*$/, "")
+            .trim();
+          if (/^[A-Za-z][A-Za-z.' -]{1,40}$/.test(name)) out.name = name;
+        }
+      }
+    }
+    const dates = [...value.matchAll(STACKED_DATE)].map((d) => d[0]);
+    if (!dates.length) continue;
+    const roles = [];
+    const find = (re, role) => {
+      const m = re.exec(label);
+      if (m) roles.push({ at: m.index, role });
+    };
+    find(/COLLECTED|ADMITTED|DRAWN|SAMPLED/, "collected");
+    find(
+      /REPORT(?:ED)?\s*ISSUED|AMENDMENT\s*ISSUED|REPORTED|RELEASED/,
+      "reported",
+    );
+    roles.sort((a, b) => a.at - b.at);
+    roles.forEach((r, k) => {
+      if (dates[k] && !out[r.role]) {
+        const x = /^(\d{1,2})\s+([A-Za-z]{3,9}),?\s+(\d{4})$/.exec(dates[k]);
+        if (x)
+          out[r.role] = { iso: toIso(x[1], x[2], x[3], order), raw: dates[k] };
+      }
+    });
+  }
+  return out;
+}
+
 export function genericMeta(text) {
   // Key-value headers often arrive as table cells ("| Name | : DUMMY |").
   const head = flatHeader(text.slice(0, 2500));
@@ -602,12 +692,18 @@ export function genericMeta(text) {
     order,
   );
   const plain = dateAfter("\\bDate", head, order);
-  let nameStr = name?.[1]?.trim().replace(/\s+/g, " ") ?? null;
+  const stacked = stackedFields(head, order);
+  let nameStr = name?.[1]?.trim().replace(/\s+/g, " ") ?? stacked.name ?? null;
   if (nameStr && /^(of|the|patient)$/i.test(nameStr)) nameStr = null;
   // A masked field ("XXXXXXXXX" in a public sample) identifies nobody: two
   // masked reports must never become one person.
   if (isMaskedIdentity(nameStr)) nameStr = null;
-  const idStr = id && !isMaskedIdentity(id[2]) ? id[2].toUpperCase() : null;
+  // An identifier without a digit is a label row run into the next line
+  // ("PATIENT ID" over "Maya Sharma HLG-P1047" read as ID "MAYA"): that
+  // would make two people with one first name a single patient.
+  const rawId =
+    id && /\d/.test(id[2]) && !isMaskedIdentity(id[2]) ? id[2] : stacked.id;
+  const idStr = rawId && !isMaskedIdentity(rawId) ? rawId.toUpperCase() : null;
   // A lab / accession number names an order or specimen, not a person: two
   // labs can print the same "ABC123", and one person gets a new one per visit.
   // Kept for display only; it never links reports.
@@ -629,8 +725,14 @@ export function genericMeta(text) {
           ? { name: null, id: null, sex, age: age ? Number(age[1]) : null }
           : null,
     accession,
-    collected: collected?.iso ?? plain?.iso ?? null,
-    reported: reported?.iso ?? null,
-    dateRaw: collected?.raw ?? plain?.raw ?? reported?.raw ?? null,
+    collected: stacked.collected?.iso ?? collected?.iso ?? plain?.iso ?? null,
+    reported: stacked.reported?.iso ?? reported?.iso ?? null,
+    dateRaw:
+      stacked.collected?.raw ??
+      collected?.raw ??
+      plain?.raw ??
+      stacked.reported?.raw ??
+      reported?.raw ??
+      null,
   };
 }
