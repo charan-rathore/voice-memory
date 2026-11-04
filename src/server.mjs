@@ -1648,6 +1648,10 @@ export function createLocalServer({
       res.end(
         JSON.stringify({
           ok: true,
+          // Which code is answering (set by Render on every deploy), so a
+          // preview page and this backend can be checked for a version match.
+          commit:
+            process.env.RENDER_GIT_COMMIT ?? process.env.VM_COMMIT ?? null,
           cache: { entries: answerCache.size, ...answerCache.stats },
           semantic: gemini.status(),
           // Memory only: no documents, questions or identities.
