@@ -23434,7 +23434,10 @@ function transcriptRetentionAsk(question) {
   const m = TRANSCRIPT_RETENTION_TARGET.exec(question);
   if (!m) return null;
   const rest = question.slice(m.index + m[0].length).replace(/[?.!\s]+$/, "").trim();
-  if (rest && !/^(?:for|after|before|in|on|under|during|by|once|until|from)\b/i.test(rest))
+  // Only a stranded "for" ("how long do you keep transcripts for?") or the
+  // pilot itself may follow: "for confidentiality", "under confidentiality
+  // terms" or "for legal review" ask about a different obligation.
+  if (rest && !/^for$|^(?:for|during|in)\s+(?:the|this)\s+pilot$/i.test(rest))
     return null;
   return m[0];
 }

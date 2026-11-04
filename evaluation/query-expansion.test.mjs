@@ -108,6 +108,10 @@ const RETENTION_NEGATIVES = [
   "Keep the deadline unchanged.",
   "How long are expense receipts retained?",
   "Is the 90-day period still authorized?",
+  // RED on PR #50 head d0f181a: any trailing "for/under ..." was accepted
+  "How long do we keep transcripts for confidentiality?",
+  "How long do we keep transcripts under confidentiality terms?",
+  "How long do we keep transcripts for legal review?",
 ];
 
 test("retention bridge is context-bound: duration ask + transcript target", () => {
@@ -165,12 +169,16 @@ test("mariner: only the guarded retention phrase is ever rewritten", async () =>
   const { equivalentRewrite } = await import("../dist/query-expand.mjs");
   assert.ok(equivalentRewrite("How long are transcripts retained?"));
   assert.ok(equivalentRewrite("How long do you keep the transcripts for?"));
+  assert.ok(equivalentRewrite("How long do you keep transcripts for?"));
   for (const q of RETENTION_NEGATIVES)
     assert.equal(equivalentRewrite(q), null, q);
   const { MARINER_DOCS } = await import("../examples/corpus-mariner.mjs");
   const mb = importBundle(MARINER_DOCS);
   for (const q of [
     "How long do we keep transcripts confidential?",
+    "How long do we keep transcripts for confidentiality?",
+    "How long do we keep transcripts under confidentiality terms?",
+    "How long do we keep transcripts for legal review?",
     "Who keeps meeting notes?",
     "How long are expense receipts retained?",
     "Keep the deadline unchanged.",
