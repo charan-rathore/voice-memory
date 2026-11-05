@@ -1961,15 +1961,21 @@
           // case now on screen (nor guessed from citation file names).
           // (An engine older than the page sends no case: show it on the
           // open case, as before, rather than dropping every turn.)
-          const caseId =
-            t.case === undefined
-              ? state.case
-              : /^w_/.test(t.case ?? "")
-                ? "own"
-                : t.case === "health" || t.case === "deal"
-                  ? t.case
-                  : null;
-          if (!caseId || scopeOf(caseId) !== scopeOf(state.case)) continue;
+          // Compare the turn's scope with the scope the call is on NOW.
+          // (scopeOf takes no argument: the old `scopeOf(caseId) !==
+          // scopeOf(state.case)` compared the current scope with itself, so
+          // every turn was drawn, including ones for a case the page left.)
+          const turnScope = t.case === undefined ? scopeOf() : t.case;
+          if (turnScope !== scopeOf()) continue;
+          const caseId = /^w_/.test(turnScope ?? "")
+            ? "own"
+            : turnScope === "health" || turnScope === "deal"
+              ? turnScope
+              : null;
+          if (!caseId) continue;
+          // An upload governs the call from any tab: show its answer with the
+          // records it came from, never under the demo case on screen.
+          if (caseId !== state.case) setCase(caseId, { quiet: true });
           state.askSeq++; // supersede any typed answer still arriving
           renderAnswer(
             { lead: t.lead, evidence: [] },

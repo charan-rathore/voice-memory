@@ -1,6 +1,7 @@
 import { cosineSimilarity, parseEmbedding } from "./text";
 import {
   SCORE_SEMANTICS,
+  type IdF,
   buildIdf,
   corpusVocab,
   expandQueryCues,
@@ -19,8 +20,17 @@ import { BM25Index } from "./bm25";
 // per rows array and scope, keyed by an FNV-1a fingerprint of the scoped
 // chunk ids and content hashes: an array mutated in place, or a different
 // scope, can never be served a stale index.
-const INDEX_CACHE = new WeakMap<SearchRow[], Map<string, { fp: number; index: BM25Index }>>();
-const indexStats = { builds: 0, hits: 0 };
+// The same entry also holds the corpus word statistics (IDF and vocabulary)
+// that every query needs. They used to be rebuilt from the whole corpus on
+// every call (about half of query CPU on a 240k-character document) even
+// though the index beside them was cached. They share the index's key and
+// fingerprint, so they are invalidated by exactly the same events: a new
+// rows array (upload, delete, replace, workspace change) or any change to a
+// scoped chunk's id, content hash or title (amendment, re-parse). The cached
+// Map and Set are read-only downstream: no caller mutates them.
+type CorpusEntry = { fp: number; index?: BM25Index; idf?: IdF; vocab?: Set<string> };
+const INDEX_CACHE = new WeakMap<SearchRow[], Map<string, CorpusEntry>>();
+const indexStats = { builds: 0, hits: 0, statsBuilds: 0, statsHits: 0, vectorParses: 0, vectorHits: 0 };
 export function retrieveIndexStats() {
   return { ...indexStats };
 }
@@ -35,19 +45,56 @@ function fingerprint(rows: SearchRow[]): number {
   }
   return h >>> 0;
 }
-function indexFor(all: SearchRow[], scoped: SearchRow[], scopeKey: string): BM25Index {
+function corpusEntry(all: SearchRow[], scoped: SearchRow[], scopeKey: string): CorpusEntry {
   let byScope = INDEX_CACHE.get(all);
   if (!byScope) INDEX_CACHE.set(all, (byScope = new Map()));
   const fp = fingerprint(scoped);
-  const hit = byScope.get(scopeKey);
-  if (hit && hit.fp === fp) {
+  let entry = byScope.get(scopeKey);
+  if (!entry || entry.fp !== fp) byScope.set(scopeKey, (entry = { fp }));
+  return entry;
+}
+// Parsed vectors. Chunks keep their embedding as a JSON string (the stored
+// and persisted form is unchanged); parsing it for every row on every query
+// cost ~6 ms per pass at 129 chunks. The parsed Float32Array is cached per
+// chunk object and is valid only while chunk.embedding is the same string,
+// so a re-embed (new model, dtype or text) re-parses, and a deleted chunk
+// releases its vector with the chunk (WeakMap). Float32Array is lossless
+// here: the strings are written from the model's Float32Array output.
+const VECTOR_CACHE = new WeakMap<object, { src: string; vec: Float32Array | null }>();
+function vectorOf(chunk: { embedding: string | null }): Float32Array | null {
+  const raw = chunk.embedding;
+  if (!raw) return null;
+  const hit = VECTOR_CACHE.get(chunk);
+  if (hit && hit.src === raw) {
+    indexStats.vectorHits++;
+    return hit.vec;
+  }
+  indexStats.vectorParses++;
+  const arr = parseEmbedding(raw);
+  const vec = arr ? Float32Array.from(arr) : null;
+  VECTOR_CACHE.set(chunk, { src: raw, vec });
+  return vec;
+}
+const rowText = (r: SearchRow) => `${r.title}\n${r.chunk.text}`;
+function indexFor(entry: CorpusEntry, scoped: SearchRow[]): BM25Index {
+  if (entry.index) {
     indexStats.hits++;
-    return hit.index;
+    return entry.index;
   }
   indexStats.builds++;
-  const index = new BM25Index(scoped.map((r) => ({ id: r.chunk.id, text: `${r.title}\n${r.chunk.text}` })));
-  byScope.set(scopeKey, { fp, index });
-  return index;
+  entry.index = new BM25Index(scoped.map((r) => ({ id: r.chunk.id, text: rowText(r) })));
+  return entry.index;
+}
+function corpusStats(entry: CorpusEntry, scoped: SearchRow[]): { idf: IdF; vocab: Set<string> } {
+  if (entry.idf && entry.vocab) {
+    indexStats.statsHits++;
+    return { idf: entry.idf, vocab: entry.vocab };
+  }
+  indexStats.statsBuilds++;
+  const texts = scoped.map(rowText);
+  entry.idf = buildIdf(texts);
+  entry.vocab = corpusVocab(texts);
+  return { idf: entry.idf, vocab: entry.vocab };
 }
 import { overlapTerms } from "./trace";
 import type {
@@ -176,9 +223,8 @@ export function retrieveFromRows(opts: {
   const meta = new Map<string, SearchRow>();
   for (const row of scopedRows) meta.set(row.chunk.id, row);
 
-  const texts = scopedRows.map((r) => `${r.title}\n${r.chunk.text}`);
-  const idf = buildIdf(texts);
-  const vocab = corpusVocab(texts);
+  const corpus = corpusEntry(opts.rows, scopedRows, scope.kind === "all" ? "*" : scope.corpusId);
+  const { idf, vocab } = corpusStats(corpus, scopedRows);
   const query = payloadQuery(opts.query);
   // Demo-tuned cue expansion is scoped to the seed corpus only; corpora the
   // user ingests (GitHub repos, uploads) must compete on their own text.
@@ -215,7 +261,7 @@ export function retrieveFromRows(opts: {
         modelMatch = false;
         continue;
       }
-      const vec = parseEmbedding(row.chunk.embedding);
+      const vec = vectorOf(row.chunk);
       if (!vec || vec.length !== opts.queryVector.length) continue;
       compatible += 1;
       scored.push({ id: row.chunk.id, score: cosineSimilarity(opts.queryVector, vec) });
@@ -236,7 +282,7 @@ export function retrieveFromRows(opts: {
 
   const kwStart = performance.now();
   if (opts.mode !== "dense" || !dense.length) {
-    const index = indexFor(opts.rows, scopedRows, scope.kind === "all" ? "*" : scope.corpusId);
+    const index = indexFor(corpus, scopedRows);
     const lexicalQuery = terms.join(" ") || bm25Query;
     const hits = index.search(lexicalQuery, retrieveN);
     for (const s of hits) keywordScores.set(s.id, s.score);

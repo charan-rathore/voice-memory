@@ -37,3 +37,133 @@ test("BM25 index is built once per corpus, not per query", async () => {
     answer(`What is the fee for workstream ${i}?`, b);
   assert.equal(retrieveIndexStats().builds - before, 1);
 });
+
+test("corpus word statistics are built once per corpus and invalidated with the index", async () => {
+  // RED on main: buildIdf/corpusVocab ran on every retrieval call (no
+  // statsBuilds counter existed; ~half of query CPU on a large document).
+  const { retrieveIndexStats } = await import("../dist/engine.mjs");
+  const docs = Array.from({ length: 8 }, (_, i) => ({
+    title: `s${i}.md`,
+    text: `# Note ${i}\n\nThe invoice for service ${i} totals $${2000 + i}. Payment is due monthly.`,
+  }));
+  const b = importBundle(docs);
+  const s0 = retrieveIndexStats();
+  for (let i = 0; i < 12; i++)
+    answer(`What does the invoice for service ${i} total?`, b);
+  const s1 = retrieveIndexStats();
+  assert.equal(
+    s1.statsBuilds - s0.statsBuilds,
+    1,
+    "built once for 12 questions",
+  );
+  assert.ok(s1.statsHits - s0.statsHits >= 11, "later questions reuse it");
+
+  // In-place amendment of one chunk (new text and content hash) on the SAME
+  // rows array must rebuild both the index and the word statistics.
+  const row = b.rows[3];
+  row.chunk.text = row.chunk.text.replace(
+    "Payment is due monthly.",
+    "Payment is due by zymurgy transfer.",
+  );
+  row.chunk.content_hash = "amended-" + row.chunk.content_hash;
+  const r = answer("Which payment uses zymurgy transfer?", b);
+  const s2 = retrieveIndexStats();
+  assert.equal(
+    s2.statsBuilds - s1.statsBuilds,
+    1,
+    "amendment invalidates the statistics",
+  );
+  assert.equal(
+    s2.builds - s1.builds,
+    1,
+    "and the index, by the same fingerprint",
+  );
+  const ids = [...r.evidence, ...r.reviewEvidence].map((e) => e.title);
+  assert.ok(ids.includes("s3.md"), `the amended word is findable: ${ids}`);
+
+  // A different bundle (upload, delete or workspace change) never shares them.
+  const b2 = importBundle(docs.slice(0, 4));
+  answer("What does the invoice for service 1 total?", b2);
+  assert.equal(retrieveIndexStats().statsBuilds - s2.statsBuilds, 1);
+});
+
+test("stored vectors are parsed once per chunk, re-parsed only when re-embedded", async () => {
+  // RED on main: every hybrid query JSON-parsed every row's embedding.
+  const { retrieveIndexStats } = await import("../dist/engine.mjs");
+  const docs = Array.from({ length: 6 }, (_, i) => ({
+    title: `v${i}.md`,
+    text: `# Item ${i}\n\nThe deposit for unit ${i} is $${500 + i}. Keys are returned on exit.`,
+  }));
+  const b = importBundle(docs);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
+  const vec = () => {
+    const v = Float32Array.from({ length: 16 }, rnd);
+    const n = Math.hypot(...v);
+    return Array.from(v.map((x) => x / n));
+  };
+  for (const r of b.rows) {
+    r.chunk.embedding = JSON.stringify(vec());
+    r.chunk.embedding_model = "test-model@q8";
+  }
+  const dense = { queryVector: vec(), model: "test-model@q8", available: true };
+  const s0 = retrieveIndexStats();
+  const first = answer("What is the deposit for unit 2?", b, dense);
+  const s1 = retrieveIndexStats();
+  assert.equal(s1.vectorParses - s0.vectorParses, b.rows.length);
+  for (let i = 0; i < 5; i++)
+    answer("What is the deposit for unit 2?", b, dense);
+  const s2 = retrieveIndexStats();
+  assert.equal(
+    s2.vectorParses - s1.vectorParses,
+    0,
+    "no re-parse while unchanged",
+  );
+  assert.equal(s2.vectorHits - s1.vectorHits, 5 * b.rows.length);
+  const again = answer("What is the deposit for unit 2?", b, dense);
+  assert.deepEqual(
+    again.evidence.map((e) => [e.title, e.score]),
+    first.evidence.map((e) => [e.title, e.score]),
+    "same ranking and scores from the cache",
+  );
+  // Re-embedding one chunk (new model/dtype or text) invalidates only it.
+  b.rows[1].chunk.embedding = JSON.stringify(vec());
+  answer("What is the deposit for unit 2?", b, dense);
+  assert.equal(retrieveIndexStats().vectorParses - s2.vectorParses, 1);
+  // A vector of the wrong dimension is never scored.
+  b.rows[2].chunk.embedding = JSON.stringify([1, 0, 0]);
+  const r = answer("What is the deposit for unit 2?", b, dense);
+  assert.ok(r, "a bad-dimension vector is skipped, not fatal");
+});
+
+test("evidence integrity: digest reused while the text is unchanged, recomputed after any edit", async () => {
+  // RED on main: validateEvidence re-hashed the full source for every
+  // candidate claim (~78% of answer time on a 240k-character document).
+  const { evidenceDigestStats, validateEvidence } = await import(
+    "../dist/engine.mjs"
+  );
+  const text =
+    "# Fee schedule\n\nThe initial proposal quoted a fixed engagement fee of $48,000.\n\n" +
+    "## Revision\n\nA revised fee of $42,000 was proposed and is pending approval.\n";
+  const b = importBundle([{ title: "fees.md", text }]);
+  const d0 = evidenceDigestStats();
+  let r;
+  for (let i = 0; i < 6; i++)
+    r = answer("What fee did the first proposal quote?", b);
+  const d1 = evidenceDigestStats();
+  assert.ok(
+    d1.computed - d0.computed <= 1,
+    `hashed once: ${d1.computed - d0.computed}`,
+  );
+  const e = r.evidence[0] ?? r.reviewEvidence[0];
+  assert.ok(e, "has evidence");
+  assert.equal(validateEvidence(e, b), true);
+  // Tamper with the source after the digest was memoized: the edit is a new
+  // string, so it is hashed again and the citation no longer verifies.
+  const src = b.sources.find((s) => s.id === e.sourceId);
+  src.text = src.text.replace("$48,000", "$84,000");
+  assert.throws(() => validateEvidence(e, b), /does not match its original/);
+  // Restoring the exact text verifies again (same content, same digest).
+  src.text = text.replace("$84,000", "$48,000");
+  if (src.text === text) assert.equal(validateEvidence(e, b), true);
+});

@@ -173,6 +173,29 @@ export function retrieveChunks(
     score: c.score,
   }));
 }
+// Integrity digest of a source's CURRENT text, memoized per source object.
+// validateEvidence runs for every candidate claim, and re-hashing the whole
+// source each time was ~78% of answer time on a 240k-character document
+// (~1.8 s per answer in a 2 vCPU sandbox). The memo is valid only while
+// source.text is the same string: strings are immutable, so any change to
+// the text is a new string, and a new string is hashed again. The check
+// still compares the digest of the text as it is now with the citation.
+const SOURCE_DIGESTS = new WeakMap<object, { text: string; digest: string }>();
+const digestStats = { computed: 0, reused: 0 };
+export function evidenceDigestStats() {
+  return { ...digestStats };
+}
+function currentDigest(source: { text: string }) {
+  const hit = SOURCE_DIGESTS.get(source);
+  if (hit && hit.text === source.text) {
+    digestStats.reused++;
+    return hit.digest;
+  }
+  digestStats.computed++;
+  const digest = hash(source.text);
+  SOURCE_DIGESTS.set(source, { text: source.text, digest });
+  return digest;
+}
 export function validateEvidence(
   c: any,
   bundle: ReturnType<typeof importBundle>,
@@ -181,7 +204,7 @@ export function validateEvidence(
   if (
     !source ||
     source.hash !== c.hash ||
-    hash(source.text) !== c.hash ||
+    currentDigest(source) !== c.hash ||
     !Number.isInteger(c.start) ||
     !Number.isInteger(c.end) ||
     c.start < 0 ||
