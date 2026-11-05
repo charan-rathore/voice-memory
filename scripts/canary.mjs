@@ -6,6 +6,7 @@
 // Run on a schedule it doubles as a warm-up ping for the free engine host.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { versionCheck, waitReady } from "./canary-state.mjs";
 
 const site = (
   process.argv[2] || "https://voice-memory-beige.vercel.app"
@@ -47,11 +48,48 @@ async function get(path, tries = 6) {
   }
 }
 
-const t0 = Date.now();
-const status = (await get("/api/public/status", 10)).body;
-if (!status.cases?.health || !status.cases?.deal)
-  throw Error("engine up but cases not loaded");
-const wake = Date.now() - t0;
+// Readiness: waking -> loading -> ready, within a bounded deadline. Each
+// probe busts any edge cache so a cold-boot "not loaded" is never replayed.
+const ready = await waitReady(
+  async () => {
+    try {
+      const r = await fetch(`${site}/api/public/status?t=${Date.now()}`, {
+        signal: AbortSignal.timeout(20000),
+        headers: { "cache-control": "no-cache" },
+      });
+      return { status: r.status, body: r.ok ? await r.json() : null };
+    } catch (e) {
+      return { error: String(e?.message ?? e) };
+    }
+  },
+  { deadlineMs: Number(process.env.VM_CANARY_DEADLINE_MS || 240000), sleep },
+);
+console.log(
+  `readiness: ${ready.state} after ${ready.ms} ms (${ready.detail}); seen ${ready.seen.join(" > ")}`,
+);
+if (ready.state !== "ready")
+  throw Error(
+    ready.state === "loading"
+      ? `cases still loading after ${ready.ms} ms: ${ready.detail}`
+      : ready.state === "waking"
+        ? `engine did not wake within ${ready.ms} ms: ${ready.detail}`
+        : `status failed: ${ready.detail}`,
+  );
+const wake = ready.ms;
+// Deployed version: only when an engine URL and an expected commit are given
+// (the Render host is not behind the Vercel origin for /healthz).
+if (process.env.VM_ENGINE_URL) {
+  const h = await fetch(
+    `${process.env.VM_ENGINE_URL.replace(/\/$/, "")}/healthz`,
+    { signal: AbortSignal.timeout(20000) },
+  )
+    .then((r) => r.json())
+    .catch(() => null);
+  const v = versionCheck(h, process.env.VM_EXPECT_COMMIT);
+  console.log(`deployed version: ${v.state} (${v.detail})`);
+  if (v.state === "mismatch")
+    throw Error(`deployed version mismatch: ${v.detail}`);
+}
 const problems = [];
 for (const k of KEYS) {
   const [c, q] = k.split("|");
