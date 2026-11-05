@@ -135,3 +135,34 @@ test("stored vectors are parsed once per chunk, re-parsed only when re-embedded"
   const r = answer("What is the deposit for unit 2?", b, dense);
   assert.ok(r, "a bad-dimension vector is skipped, not fatal");
 });
+
+test("evidence integrity: digest reused while the text is unchanged, recomputed after any edit", async () => {
+  // RED on main: validateEvidence re-hashed the full source for every
+  // candidate claim (~78% of answer time on a 240k-character document).
+  const { evidenceDigestStats, validateEvidence } =
+    await import("../dist/engine.mjs");
+  const text =
+    "# Fee schedule\n\nThe initial proposal quoted a fixed engagement fee of $48,000.\n\n" +
+    "## Revision\n\nA revised fee of $42,000 was proposed and is pending approval.\n";
+  const b = importBundle([{ title: "fees.md", text }]);
+  const d0 = evidenceDigestStats();
+  let r;
+  for (let i = 0; i < 6; i++)
+    r = answer("What fee did the first proposal quote?", b);
+  const d1 = evidenceDigestStats();
+  assert.ok(
+    d1.computed - d0.computed <= 1,
+    `hashed once: ${d1.computed - d0.computed}`,
+  );
+  const e = r.evidence[0] ?? r.reviewEvidence[0];
+  assert.ok(e, "has evidence");
+  assert.equal(validateEvidence(e, b), true);
+  // Tamper with the source after the digest was memoized: the edit is a new
+  // string, so it is hashed again and the citation no longer verifies.
+  const src = b.sources.find((s) => s.id === e.sourceId);
+  src.text = src.text.replace("$48,000", "$84,000");
+  assert.throws(() => validateEvidence(e, b), /does not match its original/);
+  // Restoring the exact text verifies again (same content, same digest).
+  src.text = text.replace("$84,000", "$48,000");
+  if (src.text === text) assert.equal(validateEvidence(e, b), true);
+});
