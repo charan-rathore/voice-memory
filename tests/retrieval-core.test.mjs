@@ -86,3 +86,52 @@ test("corpus word statistics are built once per corpus and invalidated with the 
   answer("What does the invoice for service 1 total?", b2);
   assert.equal(retrieveIndexStats().statsBuilds - s2.statsBuilds, 1);
 });
+
+test("stored vectors are parsed once per chunk, re-parsed only when re-embedded", async () => {
+  // RED on main: every hybrid query JSON-parsed every row's embedding.
+  const { retrieveIndexStats } = await import("../dist/engine.mjs");
+  const docs = Array.from({ length: 6 }, (_, i) => ({
+    title: `v${i}.md`,
+    text: `# Item ${i}\n\nThe deposit for unit ${i} is $${500 + i}. Keys are returned on exit.`,
+  }));
+  const b = importBundle(docs);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
+  const vec = () => {
+    const v = Float32Array.from({ length: 16 }, rnd);
+    const n = Math.hypot(...v);
+    return Array.from(v.map((x) => x / n));
+  };
+  for (const r of b.rows) {
+    r.chunk.embedding = JSON.stringify(vec());
+    r.chunk.embedding_model = "test-model@q8";
+  }
+  const dense = { queryVector: vec(), model: "test-model@q8", available: true };
+  const s0 = retrieveIndexStats();
+  const first = answer("What is the deposit for unit 2?", b, dense);
+  const s1 = retrieveIndexStats();
+  assert.equal(s1.vectorParses - s0.vectorParses, b.rows.length);
+  for (let i = 0; i < 5; i++)
+    answer("What is the deposit for unit 2?", b, dense);
+  const s2 = retrieveIndexStats();
+  assert.equal(
+    s2.vectorParses - s1.vectorParses,
+    0,
+    "no re-parse while unchanged",
+  );
+  assert.equal(s2.vectorHits - s1.vectorHits, 5 * b.rows.length);
+  const again = answer("What is the deposit for unit 2?", b, dense);
+  assert.deepEqual(
+    again.evidence.map((e) => [e.title, e.score]),
+    first.evidence.map((e) => [e.title, e.score]),
+    "same ranking and scores from the cache",
+  );
+  // Re-embedding one chunk (new model/dtype or text) invalidates only it.
+  b.rows[1].chunk.embedding = JSON.stringify(vec());
+  answer("What is the deposit for unit 2?", b, dense);
+  assert.equal(retrieveIndexStats().vectorParses - s2.vectorParses, 1);
+  // A vector of the wrong dimension is never scored.
+  b.rows[2].chunk.embedding = JSON.stringify([1, 0, 0]);
+  const r = answer("What is the deposit for unit 2?", b, dense);
+  assert.ok(r, "a bad-dimension vector is skipped, not fatal");
+});

@@ -245,7 +245,7 @@ export function slugify(input: string): string {
   return slug || "document";
 }
 
-export function cosineSimilarity(a: number[], b: number[]): number {
+export function cosineSimilarity(a: ArrayLike<number>, b: ArrayLike<number>): number {
   const n = Math.min(a.length, b.length);
   let dot = 0;
   let na = 0;

@@ -30,7 +30,7 @@ import { BM25Index } from "./bm25";
 // Map and Set are read-only downstream: no caller mutates them.
 type CorpusEntry = { fp: number; index?: BM25Index; idf?: IdF; vocab?: Set<string> };
 const INDEX_CACHE = new WeakMap<SearchRow[], Map<string, CorpusEntry>>();
-const indexStats = { builds: 0, hits: 0, statsBuilds: 0, statsHits: 0 };
+const indexStats = { builds: 0, hits: 0, statsBuilds: 0, statsHits: 0, vectorParses: 0, vectorHits: 0 };
 export function retrieveIndexStats() {
   return { ...indexStats };
 }
@@ -52,6 +52,28 @@ function corpusEntry(all: SearchRow[], scoped: SearchRow[], scopeKey: string): C
   let entry = byScope.get(scopeKey);
   if (!entry || entry.fp !== fp) byScope.set(scopeKey, (entry = { fp }));
   return entry;
+}
+// Parsed vectors. Chunks keep their embedding as a JSON string (the stored
+// and persisted form is unchanged); parsing it for every row on every query
+// cost ~6 ms per pass at 129 chunks. The parsed Float32Array is cached per
+// chunk object and is valid only while chunk.embedding is the same string,
+// so a re-embed (new model, dtype or text) re-parses, and a deleted chunk
+// releases its vector with the chunk (WeakMap). Float32Array is lossless
+// here: the strings are written from the model's Float32Array output.
+const VECTOR_CACHE = new WeakMap<object, { src: string; vec: Float32Array | null }>();
+function vectorOf(chunk: { embedding: string | null }): Float32Array | null {
+  const raw = chunk.embedding;
+  if (!raw) return null;
+  const hit = VECTOR_CACHE.get(chunk);
+  if (hit && hit.src === raw) {
+    indexStats.vectorHits++;
+    return hit.vec;
+  }
+  indexStats.vectorParses++;
+  const arr = parseEmbedding(raw);
+  const vec = arr ? Float32Array.from(arr) : null;
+  VECTOR_CACHE.set(chunk, { src: raw, vec });
+  return vec;
 }
 const rowText = (r: SearchRow) => `${r.title}\n${r.chunk.text}`;
 function indexFor(entry: CorpusEntry, scoped: SearchRow[]): BM25Index {
@@ -239,7 +261,7 @@ export function retrieveFromRows(opts: {
         modelMatch = false;
         continue;
       }
-      const vec = parseEmbedding(row.chunk.embedding);
+      const vec = vectorOf(row.chunk);
       if (!vec || vec.length !== opts.queryVector.length) continue;
       compatible += 1;
       scored.push({ id: row.chunk.id, score: cosineSimilarity(opts.queryVector, vec) });
