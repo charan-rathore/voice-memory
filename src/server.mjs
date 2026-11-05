@@ -929,10 +929,11 @@ export function createLocalServer({
           fa &&
           openLead &&
           !(
-            fa.record.authority === "authoritative" &&
+            fa.record?.authority === "authoritative" &&
             (fa.superseded?.length ||
               !String(shown.lead.text).includes(
-                String(fa.lead.value).match(/\d[\d,.]*/)?.[0] ?? "\u0000",
+                String(fa.lead?.value ?? "").match(/\d[\d,.]*/)?.[0] ??
+                  "\u0000",
               ))
           )
         )
@@ -944,12 +945,14 @@ export function createLocalServer({
             verdict: "QUOTED",
             field: null,
             citations: fa.citations,
-            record: {
-              title: fa.record.title,
-              pages: fa.record.pages,
-              status: fa.record.status,
-              authority: fa.record.authority,
-            },
+            record: fa.record
+              ? {
+                  title: fa.record.title,
+                  pages: fa.record.pages,
+                  status: fa.record.status,
+                  authority: fa.record.authority,
+                }
+              : null,
           };
         }
       }

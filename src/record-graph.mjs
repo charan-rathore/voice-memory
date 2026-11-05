@@ -120,7 +120,7 @@ export function recordGraph(bundle) {
             start: f.start,
             end: f.end,
             quote: source.text.slice(f.start, f.end),
-            page: rec.pages?.[0] ?? null,
+            page: f.pages?.[0] ?? rec.pages?.[0] ?? null,
           },
         });
         edge({ from: rid, to: id, kind: "records" });
@@ -156,11 +156,11 @@ export function recordGraph(bundle) {
         const winner = winners[winners.length - 1];
         for (const x of group)
           if (
-            // records about different patients never replace each other
+            // records about different patients never replace each other,
+            // and an unidentified record never replaces a known patient's
             !(
-              x.rec.patient &&
-              winner.rec.patient &&
-              x.rec.patient !== winner.rec.patient
+              x.rec.patient !== winner.rec.patient &&
+              (x.rec.patient || winner.rec.patient)
             ) &&
             RANK[x.rec.authority] < top &&
             kindKey(x.f.value, kind) !== kindKey(winner.f.value, kind)
