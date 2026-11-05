@@ -139,8 +139,9 @@ test("stored vectors are parsed once per chunk, re-parsed only when re-embedded"
 test("evidence integrity: digest reused while the text is unchanged, recomputed after any edit", async () => {
   // RED on main: validateEvidence re-hashed the full source for every
   // candidate claim (~78% of answer time on a 240k-character document).
-  const { evidenceDigestStats, validateEvidence } =
-    await import("../dist/engine.mjs");
+  const { evidenceDigestStats, validateEvidence } = await import(
+    "../dist/engine.mjs"
+  );
   const text =
     "# Fee schedule\n\nThe initial proposal quoted a fixed engagement fee of $48,000.\n\n" +
     "## Revision\n\nA revised fee of $42,000 was proposed and is pending approval.\n";
