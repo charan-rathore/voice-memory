@@ -415,18 +415,14 @@ function tail(rest) {
       }
     }
   }
-  if (s && s.length <= 80) {
+  if (s) {
     const f2 = /^(Low|High|Borderline)\s+/i.exec(s);
     if (f2 && !flag) flag = f2[1];
-    // A judged range is only ever a fully supported shape: one clean range
-    // (RANGE_FULL), or sex-labelled bands the patient's sex can resolve.
-    // Anything else that still contains a range ("3.5-5.0 - not flagged
-    // HIGH", "3.5-5.0 - obsolete range, do not use", "Desirable: <40,
-    // High: >60") is kept as printed provenance, never judged: the
-    // qualification is unknown, and unknown prose is not a range.
-    if (judgedWhole(s)) range = s;
-    else if (RANGE_START.test(s) && (RANGE_SHAPE.test(s) || QUAL_REF.test(s)))
-      rangeRaw = s;
+    // Comparison stays length-bounded and full-string only. Preservation
+    // is separate: a printed interval behind unsupported prose or a long
+    // qualification must not disappear merely because it cannot be judged.
+    if (s.length <= 80 && judgedWhole(s)) range = s;
+    else if (RANGE_SHAPE.test(s) || QUAL_REF.test(s)) rangeRaw = s;
   }
   return { flag, unit: normUnit(unit), range, rangeRaw };
 }

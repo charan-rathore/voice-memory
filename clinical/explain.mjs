@@ -646,8 +646,10 @@ export function explainOne(o, date, lang) {
       ? t.valueEmbedded(o, sayDate(date, lang))
       : t.value(o, sayDate(date, lang)),
   ];
-  if (CRITICAL_FLAG.test(o.flag ?? "")) parts.push(t.critical);
-  else if (o.ref?.adultOnly) parts.push(t.adultOnly);
+  if (CRITICAL_FLAG.test(o.flag ?? "")) {
+    parts.push(t.critical);
+    if (pos === "unknown" && o.rangeRaw) parts.push(t.unjudged(o.rangeRaw));
+  } else if (o.ref?.adultOnly) parts.push(t.adultOnly);
   else if (pos === "unknown" && o.rangeRaw) parts.push(t.unjudged(o.rangeRaw));
   else parts.push(r && pos !== "unknown" ? t[pos](r) : t.unknown());
   if (o.flagConflict) parts.push(t.flagConflict(o));

@@ -775,3 +775,52 @@ test("a printed parenthesised range and flag reach the spoken answer", () => {
   );
   assert.doesNotMatch(a.spoken, /doesn't give a range/i);
 });
+
+for (const note of [
+  "3.5-5.0 - obsolete range, do not use; replaced by a corrected interval issued by the laboratory",
+  "historically withdrawn: 3.5-5.0",
+]) {
+  test(`qualified reference survives: ${note}`, () => {
+    const line = `Serum potassium: 6.1 mmol/L ${note}`;
+    const parsed = readLabLine(line);
+    assert.equal(parsed.range, null);
+    assert.equal(parsed.rangeRaw, note);
+    const rep = {
+      title: "synthetic-reference.txt",
+      sourceId: "synthetic-reference.txt",
+      ...extractReport({
+        text: `Patient: SYN-001\nDate of report: 07 Nov 2026\n${line}`,
+        elements: [],
+      }),
+    };
+    const answer = clinicalTurn("What is the potassium result?", [rep]);
+    assert.ok(answer.spoken.includes(note), answer.spoken);
+    assert.match(answer.spoken, /haven't compared|can't judge/i);
+    assert.doesNotMatch(
+      answer.spoken,
+      /doesn't give a range|above this lab|below this lab|within this lab/i,
+    );
+  });
+}
+
+test("a critical flag does not hide an unjudged printed reference", () => {
+  const note = "3.5-5.0 - obsolete range, do not use";
+  const line = `Serum potassium: 6.1 Critical mmol/L ${note}`;
+  const rep = {
+    title: "synthetic-critical.txt",
+    sourceId: "synthetic-critical.txt",
+    ...extractReport({
+      text: `Patient: SYN-001\nDate of report: 07 Nov 2026\n${line}`,
+      elements: [],
+    }),
+  };
+  assert.equal(rep.observations[0].flag, "Critical");
+  const answer = clinicalTurn("What is the potassium result?", [rep]);
+  assert.match(answer.spoken, /marked this result as critical/i);
+  assert.ok(answer.spoken.includes(note), answer.spoken);
+  assert.match(answer.spoken, /haven't compared|can't judge/i);
+  assert.doesNotMatch(
+    answer.spoken,
+    /doesn't give a range|above this lab|below this lab|within this lab/i,
+  );
+});
