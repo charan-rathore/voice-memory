@@ -124,3 +124,60 @@ test("untrusted document IDs cannot collapse sources; scoped stable IDs must be 
   assert.notEqual(fresh.sources[0].id, fresh.sources[1].id);
   assert.throws(() => importBundle(docs, { scope: "workspace-a" }), /unique/);
 });
+
+test("fenced examples never create section nodes and actual heading offsets survive", () => {
+  const body =
+    '# Runtime\n\nWorkers checkpoint offsets after each batch.\n\n````markdown\n## Example heading only\n```\n## Still inside the example\n```\n````\n\n   ~~~python\n# Configuration comment\nprint("ready")\n   ~~~\n\n## Recovery ###\n\nA replacement worker resumes from the committed checkpoint and preserves partition order.';
+  const b = make([{ id: "readme", title: "Runtime guide", text: body }]);
+  const g = documentGraph(b);
+  const sections = g.nodes.filter((n) => n.kind === "section");
+  assert.deepEqual(
+    sections.map((n) => n.label),
+    ["Runtime", "Recovery"],
+  );
+  const recovery = sections.find((n) => n.label === "Recovery");
+  assert.equal(recovery.start, body.indexOf("## Recovery"));
+  assert.ok(
+    !g.nodes.some((n) =>
+      /Example heading only|Still inside the example|Configuration comment/.test(
+        n.label,
+      ),
+    ),
+  );
+});
+
+test("large source headings cannot multiply unbounded labels across graph passages", () => {
+  const b = make([
+    {
+      id: "long-heading",
+      title: "Notes",
+      text:
+        "# " +
+        "A".repeat(5000) +
+        "\n\nWorkers checkpoint offsets and resume safely after a restart.",
+    },
+  ]);
+  const g = documentGraph(b);
+  assert.ok(g.nodes.filter((n) => n.kind === "chunk").length > 0);
+  for (const n of g.nodes)
+    assert.ok(
+      String(n.label).length <= 180,
+      "display labels stay bounded independently of source text",
+    );
+});
+
+test("section coverage reports real omissions rather than an exactly full budget", () => {
+  const b = make([
+    {
+      id: "two",
+      title: "Guide",
+      text: "# First\nWorkers preserve their checkpoint after each batch.\n\n## Second\nConsumers resume reading from the committed offset.",
+    },
+  ]);
+  const exact = documentGraph(b, { maxSections: 2 });
+  assert.equal(exact.coverage.limited, false);
+  const limited = documentGraph(b, { maxSections: 1 });
+  assert.equal(limited.coverage.limited, true);
+  assert.equal(limited.coverage.omittedSections, 1);
+  assert.notEqual(exact.generation, limited.generation);
+});

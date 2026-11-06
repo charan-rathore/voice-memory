@@ -90,7 +90,7 @@
     g ??= snapshot;
     const status = $("#graph-status");
     status.hidden = !!g && !snapshot && !g.coverage?.limited;
-    status.textContent = !g ? "This graph is unavailable. Try selecting the case again." : snapshot ? "Showing a saved demo graph while the engine reconnects." : g.coverage?.limited ? `Showing ${g.coverage.shownChunks} of ${g.coverage.anchoredChunks} grounded passages. Ask a question to search the full document index.` : "";
+    status.textContent = !g ? "This graph is unavailable. Try selecting the case again." : snapshot ? "Showing a saved demo graph while the engine reconnects." : g.coverage?.limited ? `Showing ${g.coverage.shownChunks} of ${g.coverage.anchoredChunks} grounded passages.${g.coverage.omittedSections ? ` ${g.coverage.omittedSections} section nodes are omitted in this view.` : ""} Ask a question to search the full document index.` : "";
     if (g?.generation && id === caseId && g.generation === generation) return;
     generation = g?.generation ?? null;
     build(g || { nodes: [], edges: [] }, id);
@@ -142,7 +142,7 @@
     for (let i = 0; i < 260; i++) step(1);
     fit(false);
     if (oldSelection) {
-      const replacement = byId.get(oldSelection.id) || byId.get(`doc:${oldSelection.evidence?.sourceId}`);
+      const replacement = byId.get(oldSelection.id) || byId.get(`doc:${oldSelection.evidence?.sourceId ?? oldSelection.sourceId}`);
       if (replacement) select(replacement, { zoom: false });
     }
   }

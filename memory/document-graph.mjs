@@ -1,5 +1,43 @@
 import { createHash } from "node:crypto";
 
+// Bump when projection rules change so already-open clients rebuild even
+// when canonical source text is unchanged.
+const PROJECTION_VERSION = "document-graph/2";
+
+const displayLabel = (value) => {
+  const text = String(value);
+  return text.length > 160 ? text.slice(0, 157) + "…" : text;
+};
+
+function sectionBoundaries(source) {
+  const boundaries = [{ start: 0, label: displayLabel(source.title) }];
+  let fence = null,
+    offset = 0;
+  for (const line of source.text.split("\n")) {
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) {
+      if (
+        marker &&
+        marker[1][0] === fence.character &&
+        marker[1].length >= fence.length &&
+        !marker[2].trim()
+      )
+        fence = null;
+    } else if (marker && !(marker[1][0] === "`" && marker[2].includes("`"))) {
+      fence = { character: marker[1][0], length: marker[1].length };
+    } else {
+      const heading = /^ {0,3}#{1,6}[ \t]+(.+)$/.exec(line);
+      const label = heading?.[1].replace(/[ \t]+#+[ \t]*$/, "").trim();
+      if (label) {
+        if (offset === 0) boundaries[0].label = displayLabel(label);
+        else boundaries.push({ start: offset, label: displayLabel(label) });
+      }
+    }
+    offset += line.length + 1;
+  }
+  return boundaries;
+}
+
 // Structural links only: sections and passages share the retrieval engine's
 // canonical source and anchors. Containment/sequence never assert causality.
 export function documentGraph(
@@ -8,6 +46,7 @@ export function documentGraph(
 ) {
   const nodes = new Map();
   const edges = [];
+  const omittedSections = new Set();
   let shown = 0,
     sectionsShown = 0,
     anchored = 0;
@@ -18,14 +57,9 @@ export function documentGraph(
     nodes.set(documentId, {
       id: documentId,
       kind: "document",
-      label: source.title,
+      label: displayLabel(source.title),
     });
-    const headings = [...source.text.matchAll(/^ {0,3}#{1,6}[ \t]+(.+)$/gm)];
-    const boundaries = [{ start: 0, label: source.title }];
-    for (const h of headings) {
-      if (h.index === 0) boundaries[0].label = h[1].trim();
-      else boundaries.push({ start: h.index, label: h[1].trim() });
-    }
+    const boundaries = sectionBoundaries(source);
     const sections = boundaries.map((b, i) => ({
       ...b,
       end: boundaries[i + 1]?.start ?? source.text.length,
@@ -48,10 +82,16 @@ export function documentGraph(
       shown++;
       const id = `chunk:${row.chunk.id}`;
       const quote = source.text.slice(anchor.start, anchor.end);
+      const enclosing = sections.find(
+        (section) =>
+          anchor.start >= section.start && anchor.start < section.end,
+      );
       nodes.set(id, {
         id,
         kind: "chunk",
-        label: row.chunk.heading || `Passage ${row.chunk.ordinal + 1}`,
+        label: enclosing
+          ? `${enclosing.label} · passage ${row.chunk.ordinal + 1}`
+          : `Passage ${row.chunk.ordinal + 1}`,
         ordinal: row.chunk.ordinal,
         provisional: !!source.provisional,
         evidence: { sourceId: source.id, ...anchor, quote, hash: source.hash },
@@ -61,7 +101,10 @@ export function documentGraph(
         if (anchor.start >= section.end || anchor.end <= section.start)
           continue;
         if (!nodes.has(section.id)) {
-          if (sectionsShown >= maxSections) continue;
+          if (sectionsShown >= maxSections) {
+            omittedSections.add(section.id);
+            continue;
+          }
           sectionsShown++;
           nodes.set(section.id, {
             id: section.id,
@@ -82,9 +125,12 @@ export function documentGraph(
   return {
     generation: createHash("sha256")
       .update(
-        JSON.stringify(
+        JSON.stringify([
+          PROJECTION_VERSION,
+          maxChunks,
+          maxSections,
           bundle.sources.map((s) => [s.id, s.hash, s.provisional ?? false]),
-        ),
+        ]),
       )
       .digest("hex"),
     nodes: [...nodes.values()],
@@ -94,7 +140,8 @@ export function documentGraph(
       shownChunks: shown,
       omittedChunks: anchored - shown,
       shownSections: sectionsShown,
-      limited: anchored > shown || sectionsShown >= maxSections,
+      omittedSections: omittedSections.size,
+      limited: anchored > shown || omittedSections.size > 0,
     },
   };
 }
