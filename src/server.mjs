@@ -19,6 +19,7 @@ import {
 } from "./conversation.mjs";
 import {
   importBundle,
+  identifierRequest,
   answer,
   draft,
   validateEvidence,
@@ -837,6 +838,10 @@ export function createLocalServer({
           },
         };
       const { raw, shown } = await deterministicAnswer(s, question, ctx);
+      // A missing identifier binding cannot be rescued with a different field
+      // or a provider-generated interpretation of nearby numbers.
+      if (identifierRequest(question)) return { raw, shown };
+
       // Understand first, verify after: intent-specific rescue (grounded
       // background, composed summaries, model interpretation, verified
       // model claims) and the final "does this answer the question" audit.
@@ -917,6 +922,8 @@ export function createLocalServer({
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
       shown.lead = leadFor(question, raw, bundle, ctx || null);
+      if (identifierRequest(question)) return { raw, shown };
+
       if (repairedLab && shown.lead) shown.lead.interpretedAs = question;
       // Reworded beyond keyword reach: one verbatim sentence with its
       // citation, only when the calibrated paraphrase gate is unambiguous.

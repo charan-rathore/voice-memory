@@ -7,6 +7,7 @@ import { terms } from "./spoken-extract.mjs";
 // are not backed by a cited claim.
 import {
   answer,
+  identifierRequest,
   extractClaims,
   resolveClaims,
   questionFields,
@@ -1322,6 +1323,17 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   if (!bundle?.sources?.length) return null;
   // Speech notation -> document notation (numbers, ordinals, fillers).
   const question = normalizeSpoken(rawQuestion);
+  if (identifierRequest(question)) {
+    const result = answer(question, bundle);
+    return {
+      spoken: result.spoken,
+      verdict: result.refused ? "UNKNOWN" : "QUOTED",
+      field: null,
+      intent: "IDENTIFIER",
+      citations: result.evidence,
+    };
+  }
+
   // Temporal memory: "what was the fee as of 10 September?" is answered from
   // the records dated on/before that day only, and says so.
   const asOf = bundle.asOf ? null : parseAsOf(question, bundle);

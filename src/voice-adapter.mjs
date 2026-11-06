@@ -1,3 +1,4 @@
+import { identifierRequest } from "../dist/engine.mjs";
 /** OpenAI-compatible streaming contract for a future Bolna custom LLM.
  * Disabled unless explicitly instantiated by a caller. No public listener,
  * credential creation, account configuration or real calls in this module.
@@ -805,6 +806,18 @@ export function createVoiceAdapter({
               verdict: "SOCIAL",
               spoken,
               citations: [],
+            },
+          };
+        } else if (identifierRequest(transcript)) {
+          grant.last = answer(transcript, bundle);
+          spoken = grant.last.spoken;
+          turn = {
+            result: grant.last,
+            spokenTurn: {
+              intent: "IDENTIFIER",
+              verdict: grant.last.refused ? "UNKNOWN" : "QUOTED",
+              spoken,
+              citations: grant.last.evidence,
             },
           };
         } else if (

@@ -2741,10 +2741,10 @@ var require_schemas = __commonJS({
       exports.$ZodStringFormat.init(inst, def);
     });
     function isValidCIDRv6(value) {
-      const parts = value.split("/");
-      if (parts.length !== 2)
+      const parts2 = value.split("/");
+      if (parts2.length !== 2)
         return false;
-      const [address, prefix] = parts;
+      const [address, prefix] = parts2;
       if (!prefix)
         return false;
       const prefixNum = Number(prefix);
@@ -3375,8 +3375,8 @@ var require_schemas = __commonJS({
       const _normalized = util.cached(() => normalizeDef(def));
       const memo = core.globalConfig.memoizer;
       const generateFastpass = (shape) => {
-        const normalized = _normalized.value;
-        const syms = normalized.symbolKeys;
+        const normalized2 = _normalized.value;
+        const syms = normalized2.symbolKeys;
         const doc = new doc_js_1.Doc(["payload", "ctx"], { shape, inst, memo, syms });
         const parseStr = (k) => `shape[${k}]._zod.run({ value: input[${k}], issues: [] }, ctx)`;
         const prefixStr = (id, k) => `
@@ -3394,11 +3394,11 @@ var require_schemas = __commonJS({
         doc.write(`const input = payload.value;`);
         const ids = /* @__PURE__ */ Object.create(null);
         let counter = 0;
-        for (const key of normalized.allKeys) {
+        for (const key of normalized2.allKeys) {
           ids[key] = `key_${counter++}`;
         }
         doc.write(memo ? `const newResult = memo.alloc(inst, payload, {}, ctx);` : `const newResult = {};`);
-        for (const key of normalized.allKeys) {
+        for (const key of normalized2.allKeys) {
           if (key === "__proto__")
             continue;
           const id = ids[key];
@@ -17952,10 +17952,10 @@ var require_api = __commonJS({
       });
     }
     // @__NO_SIDE_EFFECTS__
-    function _templateLiteral(Class, parts, params) {
+    function _templateLiteral(Class, parts2, params) {
       return new Class({
         type: "template_literal",
-        parts,
+        parts: parts2,
         ...util.normalizeParams(params)
       });
     }
@@ -18401,15 +18401,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         for (const key in object.properties) {
           if (Object.prototype.hasOwnProperty.call(properties, key))
             continue;
-          const parts = [];
+          const parts2 = [];
           for (const other of objects) {
             const part = other.properties?.[key] ?? undeclaredConstraint(other);
             if (part === null || part === void 0)
               continue;
-            if (!parts.some((seen) => JSON.stringify(seen) === JSON.stringify(part)))
-              parts.push(part);
+            if (!parts2.some((seen) => JSON.stringify(seen) === JSON.stringify(part)))
+              parts2.push(part);
           }
-          const merged = parts.length === 1 ? parts[0] : foldObjects(parts) ?? { allOf: parts };
+          const merged = parts2.length === 1 ? parts2[0] : foldObjects(parts2) ?? { allOf: parts2 };
           (0, util_js_1.assignProp)(properties, key, merged);
         }
         for (const key of object.required ?? [])
@@ -21540,10 +21540,10 @@ var require_schemas2 = __commonJS({
       exports.ZodType.init(inst, def);
       inst._zod.processJSONSchema = (ctx, json2, params) => processors.templateLiteralProcessor(inst, ctx, json2, params);
     });
-    function templateLiteral(parts, params) {
+    function templateLiteral(parts2, params) {
       return new exports.ZodTemplateLiteral({
         type: "template_literal",
-        parts,
+        parts: parts2,
         ...index_js_1.util.normalizeParams(params)
       });
     }
@@ -22057,24 +22057,24 @@ var require_from_json_schema = __commonJS({
       seen.add(value);
       try {
         if (Array.isArray(value)) {
-          const parts2 = [];
+          const parts3 = [];
           for (const item of value) {
             const key = canonicalKey(item, seen);
             if (key === null)
               return null;
-            parts2.push(key);
+            parts3.push(key);
           }
-          return `a${parts2.length}:[${parts2.join(",")}]`;
+          return `a${parts3.length}:[${parts3.join(",")}]`;
         }
         const keys = Object.keys(value).sort();
-        const parts = [];
+        const parts2 = [];
         for (const k of keys) {
           const key = canonicalKey(value[k], seen);
           if (key === null)
             return null;
-          parts.push(`${k.length}:${k}=${key}`);
+          parts2.push(`${k.length}:${k}=${key}`);
         }
-        return `o${parts.length}:{${parts.join(",")}}`;
+        return `o${parts2.length}:{${parts2.join(",")}}`;
       } finally {
         seen.delete(value);
       }
@@ -22594,23 +22594,23 @@ var require_from_json_schema = __commonJS({
       if (typeof schema === "boolean") {
         return schema ? z2.any() : z2.never();
       }
-      let normalized;
+      let normalized2;
       try {
-        normalized = JSON.parse(JSON.stringify(schema));
+        normalized2 = JSON.parse(JSON.stringify(schema));
       } catch {
         throw new Error("fromJSONSchema input is not valid JSON (possibly cyclic); use $defs/$ref for recursive schemas");
       }
-      const version = detectVersion(normalized, params?.defaultTarget);
-      const defs = normalized.$defs || normalized.definitions || {};
+      const version = detectVersion(normalized2, params?.defaultTarget);
+      const defs = normalized2.$defs || normalized2.definitions || {};
       const ctx = {
         version,
         defs,
         refs: /* @__PURE__ */ new Map(),
         processing: /* @__PURE__ */ new Set(),
-        rootSchema: normalized,
+        rootSchema: normalized2,
         registry: params?.registry ?? registries_js_1.globalRegistry
       };
-      return convertSchema(normalized, ctx);
+      return convertSchema(normalized2, ctx);
     }
     (function() {
       var keys = Object.getOwnPropertyNames(exports);
@@ -22672,21 +22672,21 @@ var require_visit = __commonJS({
         const h = fnOrHandlers[node._zod.def.type];
         return h ? h(node, rewritten) : node;
       };
-      const cache = /* @__PURE__ */ new Map();
+      const cache2 = /* @__PURE__ */ new Map();
       function run(s) {
-        const cached = cache.get(s);
+        const cached = cache2.get(s);
         if (cached === RESOLVING) {
           return new schemas.$ZodLazy({
             type: "lazy",
-            getter: () => cache.get(s)
+            getter: () => cache2.get(s)
           });
         }
         if (cached !== void 0)
           return cached;
-        cache.set(s, RESOLVING);
+        cache2.set(s, RESOLVING);
         const inner = mapInner(s);
         const mapped = fn(inner, inner !== s);
-        cache.set(s, mapped);
+        cache2.set(s, mapped);
         return mapped;
       }
       function mapInner(s) {
@@ -23284,6 +23284,283 @@ var require_zod = __commonJS({
   }
 });
 
+// src/identifier-support.ts
+var fields = /\b(permit|licen[cs]e|certificate|reference|serial|part|registration|tracking|booking|reservation|account|policy|ticket|application)\s+(?:numbers?|codes?|ids?|identifiers?|no\.?)(?=\s|[?.!]|$)/i;
+var qualifiers = new Set(
+  "parking entry booking operating safety work building residence driving driver export import medical insurance purchase sales tax business vehicle customer annual temporary permanent".split(
+    " "
+  )
+);
+var stop = new Set(
+  "what what's which is are the a an give me show tell provide list please".split(
+    " "
+  )
+);
+var escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var normalized = (s) => s.normalize("NFKC").toLowerCase().replace(/[’]/g, "'").replace(/\s+/g, " ").trim();
+var canonical = (s) => s.toLowerCase().replace("licence", "license");
+function identifierRequest(question) {
+  question = question.replace(/[’]/g, "'");
+  if (!/^\s*(?:what(?:'s| is| are)|which(?: is| are)?|give(?: me)?|show(?: me)?|tell me|provide|list)\b/i.test(
+    question
+  ))
+    return null;
+  const match = fields.exec(question);
+  if (!match) return null;
+  if (/\b(?:cost|price|fees?|status|approval|expiry|expiration|validity|format|length|checksum)\b/i.test(
+    question.slice(0, match.index)
+  ))
+    return null;
+  const tail = question.slice(match.index + match[0].length).replace(/[?.!]+$/, "").trim();
+  if (tail && !/^for\s+(?:the\s+)?[\w '-]+$/i.test(tail)) return null;
+  const words = question.slice(0, match.index).trim().split(/\s+/).filter((w) => !stop.has(normalized(w)));
+  const modifiers = [];
+  while (words.length && qualifiers.has(normalized(words.at(-1))))
+    modifiers.unshift(normalized(words.pop()));
+  const subject = [...words, tail.replace(/^for\s+(?:the\s+)?/i, "")].filter(Boolean).join(" ").trim().replace(/'s$/i, "");
+  if (/\b(?:and|or|not|without)\b/i.test(subject)) return null;
+  const field = canonical(match[1]);
+  return {
+    field,
+    qualifiers: modifiers,
+    subject,
+    label: [...modifiers, field, "number"].join(" ")
+  };
+}
+var cache = /* @__PURE__ */ new WeakMap();
+function parts(source) {
+  const old = cache.get(source);
+  if (old?.text === source.text) return old;
+  const lines = [], clauses = [];
+  let fence = null;
+  for (const line of source.text.matchAll(/[^\n]+/g)) {
+    const row = {
+      start: line.index,
+      end: line.index + line[0].length,
+      text: line[0]
+    };
+    const marker = /^\s*(`{3,}|~{3,})(.*)$/.exec(row.text);
+    if (marker) {
+      if (!fence) fence = { character: marker[1][0], length: marker[1].length };
+      else if (marker[1][0] === fence.character && marker[1].length >= fence.length && !marker[2].trim())
+        fence = null;
+      lines.push({ ...row, text: "" });
+      continue;
+    }
+    if (fence) continue;
+    lines.push(row);
+    let offset = 0;
+    for (const piece of line[0].split(/(?<=[.!?;])\s+/)) {
+      const at = line[0].indexOf(piece, offset);
+      offset = at + piece.length;
+      clauses.push({
+        start: row.start + at,
+        end: row.start + offset,
+        text: piece
+      });
+    }
+  }
+  const context = lines.slice(0, 12).find(
+    (line) => /^\s*(?:#{1,6}\s*)?(?:status\s*:\s*)?(?:draft\b|preliminary\b|proposed document\b|template\b|example\b|sample\b)/i.test(
+      line.text
+    )
+  ) ?? null;
+  const indexed = { text: source.text, lines, clauses, context };
+  cache.set(source, indexed);
+  return indexed;
+}
+function labelPattern(request) {
+  const noun = request.field === "license" ? "licen[cs]es?" : escape(request.field) + "s?";
+  return [...request.qualifiers.map(escape), noun].join("\\s+") + "(?:\\s+(?:numbers?|codes?|ids?|identifiers?|no\\.?))?";
+}
+function valueOf(raw) {
+  const value = raw.trim().replace(/[.,;]+$/, "");
+  if (/^(?:(?:is|has been)\s+)?(?:not (?:yet )?assigned|unassigned|not available|unknown|pending assignment|none)(?:[.!]|$)/i.test(
+    value
+  ))
+    return value;
+  if (/\b(?:example|sample|placeholder|template|format)\b/i.test(value))
+    return null;
+  const first = /^["'`]?([^\s,"'`!?;]+)["'`]?/.exec(value)?.[1];
+  if (!first || !/^[a-z0-9][a-z0-9._/-]*$/i.test(first) || !/\d/.test(first))
+    return null;
+  return first;
+}
+var subjectMatches = (request, value) => !request.subject || normalized(value) === normalized(request.subject);
+function lookupIdentifier(question, sources) {
+  const request = identifierRequest(question);
+  if (!request) return null;
+  const facts = [];
+  let overflow = false;
+  const add = (source, span, value, spoken = span.text) => {
+    if (facts.some(
+      (f) => f.source === source && f.start === span.start && f.end === span.end && f.value === value
+    ))
+      return;
+    const context = parts(source).context;
+    if (context && context.start < span.start) {
+      if (/\b(?:template|example|sample)\b/i.test(context.text)) return;
+      spoken = `Source context: ${context.text.replace(/^\s*#+\s*/, "")}
+${spoken}`;
+      span = {
+        start: context.start,
+        end: span.end,
+        text: source.text.slice(context.start, span.end)
+      };
+    }
+    if (span.end - span.start > 8192) {
+      overflow = true;
+      return;
+    }
+    if (facts.length >= 32) {
+      overflow = true;
+      return;
+    }
+    facts.push({ source, start: span.start, end: span.end, value, spoken });
+  };
+  const label = labelPattern(request), subject = escape(request.subject).replace(/\s+/g, "\\s+");
+  const relation = "(?:is|was|remains|:|=)";
+  const before = request.subject ? `\\b${subject}(?:'s)?\\s+(?:(?:device|session|project|unit)\\s+)?(?:(?:has|holds|uses)\\s+)?${label}` : `\\b${label}`;
+  const after = request.subject ? `\\b${label}\\s+for\\s+(?:the\\s+)?${subject}` : before;
+  const bindings = [.../* @__PURE__ */ new Set([before, after])].map(
+    (p) => new RegExp(`${p}\\s*(?:${relation}\\s*)?(.+)$`, "i")
+  );
+  const headerLabel = new RegExp(`^${label}$`, "i");
+  for (const source of sources) {
+    const { lines, clauses } = parts(source);
+    for (const clause of clauses) {
+      if (/[?]/.test(clause.text) || /\b(?:example|sample|placeholder|template|format)\b/i.test(
+        clause.text
+      ) || /^\s*(?:>|["'`]|please\b|print\b|assign\b|ensure\b|set\b)/i.test(
+        clause.text
+      ))
+        continue;
+      for (const binding of bindings) {
+        const match = binding.exec(clause.text);
+        if (!match) continue;
+        const value = valueOf(match[1]);
+        if (value) add(source, clause, value);
+      }
+    }
+    let table = null;
+    const cells = (text) => text.trim().replace(/^\||\|$/g, "").split("|").map((x) => x.trim());
+    for (const line of lines) {
+      if (!line.text.includes("|")) {
+        table = null;
+        continue;
+      }
+      if (line.text.includes("\\|")) {
+        if (table) overflow = true;
+        table = null;
+        continue;
+      }
+      const row = cells(line.text), matching = row.flatMap((c, i) => headerLabel.test(c) ? [i] : []), field = matching[0] ?? -1;
+      if (matching.length > 1) {
+        overflow = true;
+        table = null;
+        continue;
+      }
+      if (field >= 0) {
+        table = {
+          header: line,
+          field,
+          entity: row.findIndex(
+            (c) => /^(?:entity|subject|session|project|name|device)$/i.test(c)
+          ),
+          columns: row.length
+        };
+        continue;
+      }
+      if (!table || row.every((c) => /^:?-+:?$/.test(c))) continue;
+      if (row.length !== table.columns) {
+        if (!request.subject || row.some((c) => subjectMatches(request, c)))
+          overflow = true;
+        continue;
+      }
+      if (request.subject && (table.entity < 0 || !subjectMatches(request, row[table.entity])))
+        continue;
+      const value = valueOf(row[table.field]);
+      if (!value) continue;
+      const span = {
+        start: table.header.start,
+        end: line.end,
+        text: source.text.slice(table.header.start, line.end)
+      };
+      const owner = table.entity >= 0 ? row[table.entity] : "";
+      add(
+        source,
+        span,
+        value,
+        [owner, `${cells(table.header.text)[table.field]}: ${row[table.field]}`].filter(Boolean).join(" \u2014 ")
+      );
+    }
+    let record = null, pending = null;
+    const recordField = new RegExp(`^\\s*${label}\\s*:\\s*(.*)$`, "i");
+    let previousEnd = 0;
+    for (const line of lines) {
+      if (!line.text.trim()) {
+        record = null;
+        pending = null;
+        previousEnd = line.end;
+        continue;
+      }
+      if (source.text.slice(previousEnd, line.start).includes("\n\n")) {
+        record = null;
+        pending = null;
+      }
+      previousEnd = line.end;
+      const owner = /^\s*(?:Entity|Subject|Session|Project|Name|Device)\s*:\s*(.+)$/i.exec(
+        line.text
+      );
+      if (owner) {
+        record = { start: line.start, entity: owner[1].trim() };
+        pending = null;
+        continue;
+      }
+      if (!record || !subjectMatches(request, record.entity)) continue;
+      const field = recordField.exec(line.text);
+      if (field) {
+        pending = field[1].trim() ? null : line;
+        const value = valueOf(field[1]);
+        if (value)
+          add(
+            source,
+            {
+              start: record.start,
+              end: line.end,
+              text: source.text.slice(record.start, line.end)
+            },
+            value,
+            `${record.entity} \u2014 ${line.text.trim()}`
+          );
+        continue;
+      }
+      if (pending) {
+        const value = valueOf(line.text);
+        if (value)
+          add(
+            source,
+            {
+              start: record.start,
+              end: line.end,
+              text: source.text.slice(record.start, line.end)
+            },
+            value,
+            `${record.entity} \u2014 ${pending.text.trim()} ${line.text.trim()}`
+          );
+        pending = null;
+      }
+    }
+  }
+  const values = new Set(facts.map((f) => f.value.trim()));
+  return {
+    request,
+    facts,
+    ambiguous: overflow || values.size > 1,
+    supported: !overflow && values.size === 1
+  };
+}
+
 // src/context.ts
 function contextReview(bundle, validate) {
   const groups = { changes: [], open: [], conditions: [], decisions: [] };
@@ -23690,7 +23967,7 @@ function sectionDateOf(line) {
     return mon[3] + "-" + MONTH_ABBR[mon[1].slice(0, 3).toLowerCase()] + "-" + mon[2].padStart(2, "0");
   return null;
 }
-function extractClaims(bundle, fields) {
+function extractClaims(bundle, fields2) {
   let claims = [];
   for (const source of bundle.sources) {
     const dateMatch = source.text.match(/Date:\s*([0-9-]+)/);
@@ -23732,7 +24009,7 @@ function extractClaims(bundle, fields) {
           scopeEntities
         };
         const push = (field, value, anchorIdx = 0, force) => {
-          if (!fields.includes(field)) return;
+          if (!fields2.includes(field)) return;
           const clause = clauseAround(seg, anchorIdx);
           let status = force?.status ?? statusOf(clause);
           if (docExecuted && status === "discussed") status = "approved";
@@ -24300,13 +24577,13 @@ function insideIdentifier(text, index) {
 var FRACTION_UNITS = /^(?:\s+|-)(?:cups?|tsp|tbsp|teaspoons?|tablespoons?|kgs?|gms?|mg|ml|cl|litres?|liters?|oz|lbs?|pounds?|inch(?:es)?|cms?|mm|kms?|metres?|meters?|ft|feet|hours?|hrs?|minutes?|mins?|seconds?|secs?|dozen|plates?|scoops?|servings?|slices?|glasses?|packets?|bowls?|handfuls?|pinch(?:es)?|g|l|m)\b(?!\s*:)/;
 function isQuantityFraction(text, index, length) {
   const token = text.slice(index, index + length);
-  const parts = /^(\d{1,2})\/(\d{1,2})$/.exec(token);
-  if (!parts) return false;
+  const parts2 = /^(\d{1,2})\/(\d{1,2})$/.exec(token);
+  if (!parts2) return false;
   const before = text.slice(0, index);
-  if ((parts[2] === "5" || parts[2] === "10") && Number(parts[1]) <= Number(parts[2]) && /:\s*$/.test(before)) {
+  if ((parts2[2] === "5" || parts2[2] === "10") && Number(parts2[1]) <= Number(parts2[2]) && /:\s*$/.test(before)) {
     return true;
   }
-  if (Number(parts[1]) >= Number(parts[2]) || Number(parts[2]) > 16) return false;
+  if (Number(parts2[1]) >= Number(parts2[2]) || Number(parts2[2]) > 16) return false;
   if (/(?:^|[^\w.\-/])\d+\s+$/.test(before)) return true;
   const after = text.slice(index + length);
   if (/^\s*%/.test(after)) return true;
@@ -24386,9 +24663,9 @@ function parseMetricTargetLine(raw) {
   const targetParen = /\(target:\s*([^)]+)\)/i.exec(text);
   if (targetParen) {
     const body = text.replace(/\s*\(target:\s*[^)]+\)/i, "").trim();
-    const parts = splitOnFirstSeparator(body);
-    const label = (parts ? parts[0] : body).replace(/:$/, "").trim().slice(0, 120);
-    const detail = parts ? parts[1] : "";
+    const parts2 = splitOnFirstSeparator(body);
+    const label = (parts2 ? parts2[0] : body).replace(/:$/, "").trim().slice(0, 120);
+    const detail = parts2 ? parts2[1] : "";
     if (label.length < 2) return null;
     return {
       label,
@@ -24422,9 +24699,9 @@ function parseSignalLine(raw) {
   const item = splitListItem(raw);
   const text = item ? item.text : raw;
   const { body, suffix } = extractParenSuffix(text);
-  const parts = splitOnFirstSeparator(body);
-  if (!parts) return null;
-  const [label, value] = parts;
+  const parts2 = splitOnFirstSeparator(body);
+  if (!parts2) return null;
+  const [label, value] = parts2;
   if (label.length < 1 || label.length > 60 || value.length < 1) return null;
   if (!/[0-9%$€£#<>]/.test(value)) return null;
   const entry = { label, value };
@@ -24730,9 +25007,9 @@ function parseRiskLine(raw) {
     severity = normalizeSeverity(suffix);
     rest = body;
   }
-  const parts = splitOnFirstSeparator(rest);
-  if (!parts) return null;
-  let [risk, mitigation] = parts;
+  const parts2 = splitOnFirstSeparator(rest);
+  if (!parts2) return null;
+  let [risk, mitigation] = parts2;
   const mitigationMarker = /^mitigation\s*[:—–-]\s*/i.exec(mitigation);
   if (mitigationMarker) mitigation = mitigation.slice(mitigationMarker[0].length).trim();
   if (!severity) {
@@ -24872,9 +25149,9 @@ function parseSignalLineLenient(raw) {
   if (metric) return metric;
   const text = entryText(raw);
   if (!text) return null;
-  const parts = splitOnFirstSeparator(text);
-  if (parts) {
-    const [label, value] = parts;
+  const parts2 = splitOnFirstSeparator(text);
+  if (parts2) {
+    const [label, value] = parts2;
     if (label.length >= 1 && label.length <= 120 && value.length >= 1) {
       const entry = { label, value: value.slice(0, 120) };
       const trend = trendOf(value);
@@ -25163,19 +25440,19 @@ function matchHeading(line, nextLine) {
   return null;
 }
 function classifyHeading(text) {
-  const normalized = text.toLowerCase().replace(/^\d+(\.\d+)*\.?\s*/, "").replace(/^(slide|deck|page|section)\s+\d+\s*[-—–:.]?\s*/i, "").replace(/\s*\(.*\)\s*$/, "").replace(/:$/, "").replace(/[—–]/g, "-").replace(/\s*-\s*/g, " - ").replace(/\s+/g, " ").trim();
-  const compact = normalized.replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
-  const direct = HEADING_KEYWORDS[normalized] ?? HEADING_KEYWORDS[compact];
+  const normalized2 = text.toLowerCase().replace(/^\d+(\.\d+)*\.?\s*/, "").replace(/^(slide|deck|page|section)\s+\d+\s*[-—–:.]?\s*/i, "").replace(/\s*\(.*\)\s*$/, "").replace(/:$/, "").replace(/[—–]/g, "-").replace(/\s*-\s*/g, " - ").replace(/\s+/g, " ").trim();
+  const compact = normalized2.replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
+  const direct = HEADING_KEYWORDS[normalized2] ?? HEADING_KEYWORDS[compact];
   if (direct) return direct;
   const keywords = Object.entries(HEADING_KEYWORDS).sort((a, b) => b[0].length - a[0].length);
   for (const [keyword, kind] of keywords) {
-    if (normalized === keyword || compact === keyword) return kind;
-    if (normalized.startsWith(keyword + " ") || normalized.endsWith(" " + keyword)) return kind;
-    if (normalized.includes(" " + keyword + " ")) return kind;
+    if (normalized2 === keyword || compact === keyword) return kind;
+    if (normalized2.startsWith(keyword + " ") || normalized2.endsWith(" " + keyword)) return kind;
+    if (normalized2.includes(" " + keyword + " ")) return kind;
     if (compact.startsWith(keyword + " ") || compact.endsWith(" " + keyword)) return kind;
     if (compact.includes(" " + keyword + " ")) return kind;
   }
-  if (/^as an?\s+/i.test(normalized)) return "actions";
+  if (/^as an?\s+/i.test(normalized2)) return "actions";
   return null;
 }
 function kindClaimedByHeading(headingText) {
@@ -25489,8 +25766,8 @@ function splitSentences(text) {
   if (flat === "") return [];
   const out = [];
   let buffer = "";
-  const parts = flat.split(/(?<=[.!?])\s+/);
-  for (const part of parts) {
+  const parts2 = flat.split(/(?<=[.!?])\s+/);
+  for (const part of parts2) {
     buffer = buffer === "" ? part : `${buffer} ${part}`;
     if (ABBREVIATIONS.test(buffer) || /\d\.$/.test(buffer)) continue;
     out.push(buffer.trim());
@@ -28081,20 +28358,20 @@ function inferResearchQuestion(summaries, title) {
   );
   const hypothesis = textsOf(summaries, ["hypothesis"]).find((s) => !isGarbledProse(s)) ?? pool.find((s) => /\bhypothes/i.test(s) && !isGarbledProse(s));
   const questionCore = questionLike ? clean(questionLike, 320) : whether ? clean(whether, 320) : gap ? clean(gap, 320) : pool.find((s) => claimScore(s) >= 2) ? clean(pool.find((s) => claimScore(s) >= 2), 320) : `What does \u201C${title}\u201D actually establish?`;
-  const parts = [];
+  const parts2 = [];
   if (gap && (questionLike || whether) && gap !== questionLike && gap !== whether) {
     const g = clean(gap, 220);
     const w = clean(questionLike ?? whether ?? "", 220);
-    if (g) parts.push(g);
-    if (w) parts.push(`The work tests ${w.replace(/^Whether\s+/i, "whether ")}`);
+    if (g) parts2.push(g);
+    if (w) parts2.push(`The work tests ${w.replace(/^Whether\s+/i, "whether ")}`);
   } else if (questionCore) {
-    parts.push(questionCore);
+    parts2.push(questionCore);
   }
   if (hypothesis && hypothesis !== whether && hypothesis !== gap && hypothesis !== questionLike) {
     const h = clean(hypothesis, 220);
-    if (h) parts.push(`Hypothesis under test: ${h}`);
+    if (h) parts2.push(`Hypothesis under test: ${h}`);
   }
-  const summary = parts.length > 0 ? clamp(parts.join(" "), LIMITS.maxFieldLength) : questionCore;
+  const summary = parts2.length > 0 ? clamp(parts2.join(" "), LIMITS.maxFieldLength) : questionCore;
   const problem = gap ? clean(gap) || void 0 : void 0;
   const goal = hypothesis ? clean(hypothesis) || void 0 : questionLike ? clean(questionLike) || void 0 : whether ? clean(whether) || void 0 : void 0;
   return {
@@ -28961,19 +29238,19 @@ function jaccard(a, b) {
   return inter / (a.size + b.size - inter);
 }
 function toMarkdown(segments) {
-  const parts = [];
+  const parts2 = [];
   for (const segment of segments) {
-    if (segment.page != null) parts.push(`<!-- page:${segment.page} -->`);
+    if (segment.page != null) parts2.push(`<!-- page:${segment.page} -->`);
     if (segment.title && (segment.kind === "section" || segment.kind === "image")) {
       const level = segment.headingLevel ?? 2;
-      parts.push(`${"#".repeat(level)} ${segment.title}`);
+      parts2.push(`${"#".repeat(level)} ${segment.title}`);
     }
     if (segment.lines.length) {
-      parts.push(segment.lines.map((l) => l.text).join("\n"));
+      parts2.push(segment.lines.map((l) => l.text).join("\n"));
     }
-    parts.push("");
+    parts2.push("");
   }
-  return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  return parts2.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
 }
 function buildDocumentGraph(segments) {
   const nodes = [];
@@ -29374,14 +29651,14 @@ function parseText(input) {
 function graphWarnings(graph, segmentCount) {
   if (segmentCount === 0) return [];
   const types = new Set(graph.nodes.map((n) => n.type));
-  const parts = [
+  const parts2 = [
     `Segmented into ${segmentCount} semantic chunks`,
     `graph ${graph.nodes.length} nodes / ${graph.edges.length} links`
   ];
-  if (types.has("table")) parts.push("tables preserved");
-  if (types.has("image")) parts.push("embedded visuals linked");
-  if (types.has("requirement") || types.has("decision")) parts.push("requirements grounded");
-  return [{ code: "text.understood", message: `${parts.join("; ")}.` }];
+  if (types.has("table")) parts2.push("tables preserved");
+  if (types.has("image")) parts2.push("embedded visuals linked");
+  if (types.has("requirement") || types.has("decision")) parts2.push("requirements grounded");
+  return [{ code: "text.understood", message: `${parts2.join("; ")}.` }];
 }
 function graphTypeToKind(type) {
   switch (type) {
@@ -29521,28 +29798,28 @@ function linkActionsToDecisions2(blocks) {
 }
 function understandingWarnings(understanding) {
   const inferred = understanding.signals.length + understanding.decisions.length + understanding.risks.length + understanding.timeline.length + understanding.actions.length;
-  const parts = [];
-  parts.push(
+  const parts2 = [];
+  parts2.push(
     `Read ${understanding.distilled} distinct statements as a ${understanding.intent.kind} (${understanding.archetype.label}, timeline ${understanding.archetype.timelineMode})`
   );
   if (understanding.anchor.confidence !== "none" && understanding.anchor.value) {
-    parts.push(`anchor ${understanding.anchor.value}`);
+    parts2.push(`anchor ${understanding.anchor.value}`);
   } else {
-    parts.push("no date anchor");
+    parts2.push("no date anchor");
   }
-  if (understanding.redundant > 0) parts.push(`set aside ${understanding.redundant} restatements`);
+  if (understanding.redundant > 0) parts2.push(`set aside ${understanding.redundant} restatements`);
   if (inferred > 0) {
-    parts.push(
+    parts2.push(
       `inferred ${inferred} memories from meaning (S${understanding.signals.length}/D${understanding.decisions.length}/R${understanding.risks.length}/T${understanding.timeline.length}/A${understanding.actions.length})`
     );
   }
   if (understanding.heroInsights.length > 0) {
-    parts.push(
+    parts2.push(
       `selected ${understanding.heroInsights.length} hero insight${understanding.heroInsights.length === 1 ? "" : "s"}`
     );
   }
   if (inferred === 0 && understanding.redundant === 0 && understanding.distilled === 0) return [];
-  return [{ code: "text.understood", message: `${parts.join(", ")}.` }];
+  return [{ code: "text.understood", message: `${parts2.join(", ")}.` }];
 }
 function buildBlock(kind, matched, ctx) {
   const { label, warnings } = ctx;
@@ -30813,8 +31090,8 @@ function classifyEvidence(opts) {
   };
   const requestedCredentials = opts.query.match(/\b(?:passwords?|credentials?|api[ _-]?keys?|database_url|secrets?)\b/gi) ?? [];
   const missingCredentials = requestedCredentials.filter((term) => {
-    const normalized = term.toLowerCase().replace(/[ _-]/g, "").replace(/s$/, "");
-    return !packedText.toLowerCase().replace(/[ _-]/g, "").includes(normalized);
+    const normalized2 = term.toLowerCase().replace(/[ _-]/g, "").replace(/s$/, "");
+    return !packedText.toLowerCase().replace(/[ _-]/g, "").includes(normalized2);
   });
   if (missingCredentials.length) {
     return gate("insufficient", "The requested credential field is not present in the retrieved passages; topic overlap does not establish its value.", { ...stats, clearedForInsufficient: true });
@@ -31312,11 +31589,11 @@ var CODE_BOUNDARY = {
 };
 function splitOnce(text, separator) {
   if (!separator) return [text];
-  const parts = text.split(separator);
-  if (parts.length === 1) return parts;
+  const parts2 = text.split(separator);
+  if (parts2.length === 1) return parts2;
   const out = [];
-  for (let i = 0; i < parts.length; i += 1) {
-    const piece = i === 0 ? parts[i] : `${separator}${parts[i]}`;
+  for (let i = 0; i < parts2.length; i += 1) {
+    const piece = i === 0 ? parts2[i] : `${separator}${parts2[i]}`;
     if (piece.length) out.push(piece);
   }
   return out;
@@ -31336,10 +31613,10 @@ function recursiveSplit(text, seps, targetChars) {
     }
     return pieces;
   }
-  const parts = splitOnce(text, sep);
+  const parts2 = splitOnce(text, sep);
   const acc = [];
   let buf = "";
-  for (const part of parts) {
+  for (const part of parts2) {
     if ((buf + part).length <= targetChars) {
       buf += part;
       continue;
@@ -31405,9 +31682,9 @@ function splitCodeUnits(body, language, targetChars) {
     buf.push(line);
     if (bufChars > targetChars * 1.6) {
       const joined = buf.join("\n");
-      const parts = recursiveSplit(joined, ["\n\n", "\n"], targetChars);
-      units.push(...parts.slice(0, -1));
-      const tail = parts[parts.length - 1] ?? "";
+      const parts2 = recursiveSplit(joined, ["\n\n", "\n"], targetChars);
+      units.push(...parts2.slice(0, -1));
+      const tail = parts2[parts2.length - 1] ?? "";
       buf = tail.split("\n");
       bufChars = tail.length;
       hasContent = tail.trim().length > 0;
@@ -31604,8 +31881,8 @@ ${text}` : text;
   }));
 }
 function chunkDocument(body, opts = {}) {
-  const normalized = body.replace(/\r\n/g, "\n").trim();
-  if (!normalized) return [];
+  const normalized2 = body.replace(/\r\n/g, "\n").trim();
+  if (!normalized2) return [];
   const chunkSize = opts.chunkSize ?? CHUNK_SIZE_TOKENS;
   const overlap2 = opts.overlap ?? CHUNK_OVERLAP_TOKENS;
   const kind = opts.kind ?? "prose";
@@ -31614,7 +31891,7 @@ function chunkDocument(body, opts = {}) {
   const extras = { symbol: null, filepath, language, chunkKind: kind };
   if (kind === "code") {
     const targetChars = chunkSize * 4;
-    const units = splitCodeUnits(normalized, language, targetChars);
+    const units = splitCodeUnits(normalized2, language, targetChars);
     return units.map((text, ordinal) => ({
       ordinal,
       text,
@@ -31626,7 +31903,7 @@ function chunkDocument(body, opts = {}) {
       chunkKind: "code"
     }));
   }
-  return chunkProse(normalized, chunkSize, overlap2, extras);
+  return chunkProse(normalized2, chunkSize, overlap2, extras);
 }
 
 // vendor/web/src/lib/rag/extractive.ts
@@ -31852,8 +32129,50 @@ function answer(question, bundle, dense) {
       corpusScope: { kind: "corpus", corpusId: bundle.scope }
     });
   };
-  const fields = questionFields(question);
+  const fields2 = questionFields(question);
   let found = retrieve(question);
+  const identifier = lookupIdentifier(question, bundle.sources);
+  if (identifier) {
+    const result2 = answerFromRetrieval(
+      question,
+      bundle,
+      found,
+      {
+        actualMode: found.actualMode,
+        embeddingModel: found.actualMode === "keyword" ? null : dense?.model ?? null
+      },
+      start
+    );
+    const bound = identifier.facts.map((fact) => {
+      const source = bundle.sources.find((s) => s.id === fact.source.id);
+      if (!source)
+        throw Error("Identifier source does not match its original document.");
+      return {
+        sourceId: source.id,
+        title: source.title,
+        hash: source.hash,
+        start: fact.start,
+        end: fact.end,
+        firstLine: lineOf(source.text, fact.start),
+        lastLine: lineOf(source.text, fact.end),
+        quote: source.text.slice(fact.start, fact.end)
+      };
+    });
+    bound.forEach((e) => validateEvidence(e, bundle));
+    result2.reviewEvidence = identifier.supported ? [] : bound.length ? bound : result2.evidence;
+    result2.evidence = identifier.supported ? bound : [];
+    result2.supported = identifier.supported;
+    result2.refused = !identifier.supported;
+    result2.unresolved = identifier.ambiguous;
+    result2.evidenceStatus = identifier.supported ? "positive" : identifier.ambiguous ? "ambiguous" : "insufficient";
+    result2.answer = identifier.supported ? [...new Set(identifier.facts.map((f) => f.spoken))].join("\n") : identifier.ambiguous ? "The requested identifier is unresolved in these documents. Review the source records." : "I couldn't bind the requested identifier to this subject in these documents.";
+    result2.spoken = result2.answer;
+    result2.partial = identifier.supported && result2.context.reviewNeeded;
+    if (!result2.partial) result2.partialNotice = null;
+    result2.mode = "Local source-bound identifier lookup with exact citations.";
+    result2.latencyMs = Math.round(performance.now() - start);
+    return result2;
+  }
   let expansionUsed = null;
   if (found.evidence !== "positive") {
     const expansion = expandQuery(question);
@@ -31918,7 +32237,7 @@ function answer(question, bundle, dense) {
     }
   }
   let rephraseUsed = null;
-  if (found.evidence === "negative_not_found" && fields.length === 0) {
+  if (found.evidence === "negative_not_found" && fields2.length === 0) {
     const entities = /* @__PURE__ */ new Map();
     for (const s of bundle.sources) {
       const h1 = s.text.split("\n").find((l) => l.startsWith("#")) ?? "";
@@ -31971,14 +32290,14 @@ function answer(question, bundle, dense) {
     expansionUsed?.expanded ?? rephraseUsed?.rephrased ?? void 0
   );
   let claimsVerdict = false;
-  if (fields.length) {
+  if (fields2.length) {
     const extractedClaims = extractClaims(bundle, [
-      .../* @__PURE__ */ new Set([...fields, "signedAgreement"])
+      .../* @__PURE__ */ new Set([...fields2, "signedAgreement"])
     ]);
     const agNegClaims = extractedClaims.filter(
       (c) => c.field === "signedAgreement" && c.status === "unresolved"
     );
-    const allClaims = fields.includes("signedAgreement") ? extractedClaims : extractedClaims.filter((c) => c.field !== "signedAgreement");
+    const allClaims = fields2.includes("signedAgreement") ? extractedClaims : extractedClaims.filter((c) => c.field !== "signedAgreement");
     allClaims.forEach((c) => validateEvidence(c, bundle));
     const qPhase = /expansion|national\b|\b20\d{2}\b|phase\s*(2|two|ii)\b/i.test(question) ? "expansion" : /\bpilot\b|first phase|phase\s*(1|one)\b/i.test(question) ? "pilot" : null;
     const offPhase = qPhase ? allClaims.filter(
@@ -32044,7 +32363,7 @@ function answer(question, bundle, dense) {
     );
     if (actorM && yesNoQ) {
       const actor = /steering|committee|board/i.test(actorM[1]) ? "body" : /customer|client/i.test(actorM[1]) ? "client" : "internal";
-      const relevant = claims.filter((c) => fields.includes(c.field));
+      const relevant = claims.filter((c) => fields2.includes(c.field));
       const actorClaims = relevant.filter(
         (c) => (c.authority ?? "unspecified") === actor
       );
@@ -32053,14 +32372,14 @@ function answer(question, bundle, dense) {
       );
       if (!actorApproved.length) {
         let negs = actorClaims.filter((c) => c.status === "unresolved");
-        if (!negs.length && (fields.includes("signoffWho") || fields.includes("signedAgreement") || fields.includes("signoffTiming")))
+        if (!negs.length && (fields2.includes("signoffWho") || fields2.includes("signedAgreement") || fields2.includes("signoffTiming")))
           negs = claims.filter(
             (c) => c.field === "signedAgreement" && c.status === "unresolved" && (actor !== "client" || /client|customer/i.test(c.value))
           );
         const didApprove = claims.filter(
-          (c) => (c.authority ?? "unspecified") === actor && c.status === "approved" && !isLimitClaim(c) && !fields.includes(c.field)
+          (c) => (c.authority ?? "unspecified") === actor && c.status === "approved" && !isLimitClaim(c) && !fields2.includes(c.field)
         );
-        const otherApproved = fields.flatMap((f) => approved.get(f) ?? []).filter((c) => !isLimitClaim(c));
+        const otherApproved = fields2.flatMap((f) => approved.get(f) ?? []).filter((c) => !isLimitClaim(c));
         if (negs.length || didApprove.length) {
           claimsVerdict = true;
           result.refused = false;
@@ -32088,10 +32407,10 @@ function answer(question, bundle, dense) {
     const monthAsk = question.match(
       new RegExp("\\b(" + MONTH_NAMES + ")\\b", "i")
     );
-    if (!claimsVerdict && (histAsk || monthAsk) && fields.length) {
+    if (!claimsVerdict && (histAsk || monthAsk) && fields2.length) {
       const pool = [[...active.values()].flat(), ...superseded].flat();
       const fieldClaims = pool.filter(
-        (c) => fields.includes(c.field) && !isLimitClaim(c)
+        (c) => fields2.includes(c.field) && !isLimitClaim(c)
       );
       if (fieldClaims.length) {
         let chosen = [];
@@ -32161,7 +32480,7 @@ function answer(question, bundle, dense) {
       "Undated-period record(s)"
     );
     if (claimsVerdict) {
-    } else if (qYear && fields.includes("scope") && offYear.length && !claims.some((c) => c.field === "scope")) {
+    } else if (qYear && fields2.includes("scope") && offYear.length && !claims.some((c) => c.field === "scope")) {
       result.refused = true;
       result.supported = false;
       result.unresolved = false;
@@ -32170,7 +32489,7 @@ function answer(question, bundle, dense) {
       result.evidenceStatus = "insufficient";
       result.answer = `The documents do not tie a region scope to ${qYear}: no record states a region count for that year.` + yearNote;
       result.spoken = result.answer;
-    } else if (fields.includes("signoffTiming") && !claims.some((c) => c.field === "signoffTiming")) {
+    } else if (fields2.includes("signoffTiming") && !claims.some((c) => c.field === "signoffTiming")) {
       const conditions = claims.filter((c) => c.field === "signoffWho");
       result.refused = true;
       result.supported = false;
@@ -32180,7 +32499,7 @@ function answer(question, bundle, dense) {
       result.evidenceStatus = "insufficient";
       result.answer = "The record mentions sign-off only as a condition; no timing for sign-off is established in these documents." + (conditions.length ? " Related condition: " + conditions.map((c) => `"${c.quote}" (${c.title})`).join("; ") : "");
       result.spoken = result.answer;
-    } else if (fields.includes("signedAgreement") && claims.some((c) => c.field === "signedAgreement")) {
+    } else if (fields2.includes("signedAgreement") && claims.some((c) => c.field === "signedAgreement")) {
       claimsVerdict = true;
       const recorded = claims.filter((c) => c.field === "signedAgreement");
       result.refused = false;
@@ -32362,7 +32681,7 @@ function answer(question, bundle, dense) {
         result.answer = "Record status: " + approvedNotes.join(" ") + phaseNote + yearNote + retrievalTail;
         result.spoken = "Record status: " + approvedNotes.join(" ") + " The cited passages are on screen.";
       }
-      if (fields.includes("signoffWho") && result.supported) {
+      if (fields2.includes("signoffWho") && result.supported) {
         const who = claims.filter((c) => c.field === "signoffWho");
         if (who.length) {
           const named = [...new Set(who.map((c) => c.value))].join(" and ");
@@ -32621,9 +32940,11 @@ export {
   draft,
   evidenceDigestStats,
   extractClaims,
+  identifierRequest,
   importBundle,
   lineIndexCacheStats,
   lineOf,
+  lookupIdentifier,
   questionFields,
   resolveClaims,
   retrieveChunks,
