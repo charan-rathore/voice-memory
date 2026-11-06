@@ -934,6 +934,8 @@ const SAY = {
       `${nameOf(o)} ${valueOf(o)}, ${rangeWords(where, r, "en")}`,
     gQual: (o) =>
       `${nameOf(o)} ${o.qual}${o.ref?.expected ? (position(o) === "within" ? ", as expected" : `, where the lab expects ${o.ref.expected}`) : ""}`,
+    gRaw: (o) =>
+      `${nameOf(o)} ${valueOf(o)}, printed reference "${o.rangeRaw}" not compared`,
     gNoRange: (o) => `${nameOf(o)} ${valueOf(o)}, no range printed`,
     which: (ids) =>
       `These reports belong to more than one person (${ids.join(", ")}). Whose report should I look at?`,
@@ -977,6 +979,8 @@ const SAY = {
     gOut: (o, where, r) =>
       `${nameOf(o)} ${valueOf(o)}, सीमा ${span(r, "hi")} से ${where}`,
     gQual: (o) => `${nameOf(o)} ${QUAL_HI[o.qual] ?? o.qual}`,
+    gRaw: (o) =>
+      `${nameOf(o)} ${valueOf(o)}, छपा संदर्भ "${o.rangeRaw}" से तुलना नहीं की`,
     gNoRange: (o) => `${nameOf(o)} ${valueOf(o)}, सीमा नहीं छपी`,
     which: (ids) =>
       `ये रिपोर्ट्स एक से ज़्यादा लोगों की हैं (${ids.join(", ")})। मैं किसकी रिपोर्ट देखूं?`,
@@ -1020,6 +1024,8 @@ const SAY = {
     gOut: (o, where, r) =>
       `${nameOf(o)} ${valueOf(o)}, range ${span(r, "hinglish")} se ${where}`,
     gQual: (o) => `${nameOf(o)} ${o.qual}`,
+    gRaw: (o) =>
+      `${nameOf(o)} ${valueOf(o)}, printed reference "${o.rangeRaw}" se compare nahi kiya`,
     gNoRange: (o) => `${nameOf(o)} ${valueOf(o)}, range nahi chhapi`,
     which: (ids) =>
       `Yeh reports ek se zyada logon ki hain (${ids.join(", ")}). Main kiski report dekhoon?`,
@@ -1149,7 +1155,7 @@ export function groupAnswer(question, reports, keys, label = null) {
     const pos = position(o);
     const r = rangeOf(o);
     if (o.qual) return S.gQual(o);
-    if (pos === "unknown" || !r) return S.gNoRange(o);
+    if (pos === "unknown" || !r) return o.rangeRaw ? S.gRaw(o) : S.gNoRange(o);
     if (pos === "within") return S.gWithin(o, r);
     return S.gOut(o, S[pos], r);
   });
