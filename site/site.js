@@ -31,7 +31,6 @@
     ticket: null,
     callScope: null, // scope the live call answers from
     askSeq: 0, // typed answers older than the latest ask or case switch are dropped
-    seenTurns: new Set(),
     lang: /^hi\b/i.test(navigator.language || "") ? "hi" : "en",
     visuals: {},
   };
@@ -732,18 +731,28 @@
     if (!state.ticket || !state.call || !scope || state.callScope === scope)
       return;
     state.callScope = scope;
+    const call = state.call;
+    const ticket = state.ticket;
     // A counter per switch: the server applies only the newest update, so
     // quick A -> B -> A switches cannot leave the call on B.
     state.scopeGen = (state.scopeGen ?? 0) + 1;
+    const generation = state.scopeGen;
     api("/voice/scope", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        ticket: state.ticket,
+        ticket,
         case: scope,
-        gen: state.scopeGen,
+        gen: generation,
       }),
     }).catch((e) => {
+      if (
+        state.call !== call ||
+        state.ticket !== ticket ||
+        state.scopeGen !== generation ||
+        scopeOf() !== scope
+      )
+        return;
       // The call keeps its old scope; its turns for that scope stay off
       // this screen (pollTurns), so nothing from the wrong records shows.
       state.callScope = null;
@@ -759,6 +768,7 @@
         state.wsDocs = [];
         state.cases.own = { ...OWN, ready: false, documents: [] };
         renderUploads();
+        discardOwnContext();
       }
     });
   }
@@ -1851,7 +1861,26 @@
       { capture: true, passive: true },
     );
 
-  async function startCall() {
+  let callPending = null;
+  function startCall() {
+    if (state.call) return stopCall();
+    if (callPending) return callPending;
+    // Starting a new conversation retires the prior call's evidence feed.
+    state.ticket = null;
+    state.callScope = null;
+    callbar.classList.add("busy");
+    const pending = connectCall().finally(() => {
+      if (callPending !== pending) return;
+      callPending = null;
+      if (!state.call) {
+        callbar.classList.remove("busy");
+        $("#call-label").textContent = "Call Voice Memory";
+      }
+    });
+    callPending = pending;
+    return pending;
+  }
+  async function connectCall() {
     // Server gate first: when minting is closed, never ask for the
     // microphone - say so and stop. The buttons are hidden in this state;
     // this guard is the programmatic backstop.
@@ -1877,6 +1906,7 @@
       return;
     }
     if (state.ws) {
+      const checkedWorkspace = state.ws;
       // Uploaded documents govern the call from any tab, so the upload is
       // verified live whichever case is on screen: never mint a call that
       // can only say "your documents expired" (the server clears uploads
@@ -1884,8 +1914,14 @@
       // demo records behind the caller's back.
       callState("Checking your upload…");
       try {
-        await api(`/workspace/${state.ws}`);
+        await api(`/workspace/${checkedWorkspace}`);
       } catch (e) {
+        if (state.ws !== checkedWorkspace) {
+          callState(
+            "Your documents changed while the call was being checked. Start the call again from your current workspace.",
+          );
+          return;
+        }
         if (e?.status !== 404 && e?.status !== 410) {
           callState(
             "Your upload could not be checked right now. Your documents are still here. Try calling again in a moment.",
@@ -1916,6 +1952,12 @@
         discardOwnContext();
         callState(
           "Your upload expired on the server (deploys and 30 idle minutes clear uploads). Upload it again, then call.",
+        );
+        return;
+      }
+      if (state.ws !== checkedWorkspace) {
+        callState(
+          "Your documents changed while the call was being checked. Start the call again from your current workspace.",
         );
         return;
       }
@@ -1975,6 +2017,7 @@
     const call = new window.BolnaWebCall({
       ...(audio ? { audio } : {}),
       getSession: async () => {
+        if (state.call !== call) throw new Error("This call was cancelled.");
         // The open case or workspace: voice answers from what is on screen.
         const user_data = {
           page: "landing",
@@ -1999,17 +2042,22 @@
         const body = await r.json().catch(() => ({}));
         if (!r.ok)
           throw new Error(body.error || "Couldn't start a call right now.");
+        if (state.call !== call) throw new Error("This call was cancelled.");
         state.ticket = body.vm_ticket;
         return body;
       },
     });
     state.call = call;
     call.on("state-change", (s) => {
+      if (state.call !== call) return;
       if (s === "connecting") callState("Connecting to Bolna…");
       if (s === "ringing") callState("Ringing…");
     });
-    call.on("media-permission", () => callState("Microphone on · connecting…"));
+    call.on("media-permission", () => {
+      if (state.call === call) callState("Microphone on · connecting…");
+    });
     call.on("call-start", () => {
+      if (state.call !== call) return;
       emit("vm:call", "start");
       callbar.classList.remove("busy");
       callbar.classList.add("live");
@@ -2017,9 +2065,10 @@
       callState(
         `<b>Live${state.mic ? " · " + esc(state.mic) : ""}.</b> Ask: “${esc(state.cases[state.case]?.suggestions?.[0] ?? "What is SYN-0001's ferritin result?")}”`,
       );
-      pollTurns();
+      startTurnPolling();
     });
     call.on("volume-level", (v) => {
+      if (state.call !== call) return;
       // The motion module draws a spline waveform from these levels; the
       // bars below are the fallback when it isn't loaded.
       document.dispatchEvent(new CustomEvent("vm:level", { detail: v }));
@@ -2029,6 +2078,7 @@
       );
     });
     call.on("error", (e) => {
+      if (state.call !== call) return;
       const msg = {
         microphone_denied:
           "Microphone blocked. Allow it in the address bar, then call again.",
@@ -2040,15 +2090,18 @@
       }[e.code];
       callState(esc(msg ?? e.message ?? "The call couldn't start."));
     });
-    call.on("call-end", ({ reason }) => endUi(reason));
+    call.on("call-end", ({ reason }) => endUi(reason, call));
     try {
       await call.start();
     } catch {
-      endUi("failed");
+      endUi("failed", call);
     }
   }
 
-  function endUi(reason) {
+  function endUi(reason, call = state.call) {
+    if (state.call !== call) return;
+    const endedTicket = state.ticket;
+    callPending = null;
     emit("vm:call", "end");
     document.dispatchEvent(new CustomEvent("vm:level", { detail: -1 }));
     callbar.classList.remove("live", "busy");
@@ -2058,24 +2111,39 @@
       callState("Call ended. The answers stay on screen with their sources.");
     state.call = null;
     state.callScope = null;
-    setTimeout(() => (state.ticket = null), 20000);
+    setTimeout(() => {
+      if (state.ticket === endedTicket) state.ticket = null;
+    }, 20000);
   }
   function stopCall() {
     state.call?.stop();
   }
 
-  async function pollTurns() {
-    while (state.ticket) {
+  let pollingTicket = null;
+  function startTurnPolling() {
+    const ticket = state.ticket;
+    if (!ticket || pollingTicket === ticket) return;
+    pollingTicket = ticket;
+    pollTurns(ticket).finally(() => {
+      if (pollingTicket === ticket) pollingTicket = null;
+    });
+  }
+  async function pollTurns(ticket) {
+    const seenTurns = new Set();
+    while (ticket && state.ticket === ticket) {
       try {
         const { turns } = await api(
-          `/voice/turns?ticket=${state.ticket}`,
+          `/voice/turns?ticket=${encodeURIComponent(ticket)}`,
           {},
           6000,
         );
+        if (state.ticket !== ticket) return;
         for (const t of turns ?? []) {
           const key = t.at + t.question;
-          if (state.seenTurns.has(key)) continue;
-          state.seenTurns.add(key);
+          if (seenTurns.has(key)) continue;
+          seenTurns.add(key);
+          if (seenTurns.size > 256)
+            seenTurns.delete(seenTurns.values().next().value);
           // The server says which case answered. A turn answered for a
           // scope this page has since left is dropped, never drawn over the
           // case now on screen (nor guessed from citation file names).
@@ -2103,6 +2171,7 @@
           );
         }
       } catch (e) {
+        if (state.ticket !== ticket) return;
         // The server cuts the ticket at the per-call max duration (and a
         // restart drops all tickets): end the call so the audio actually
         // stops, not just the evidence feed.
