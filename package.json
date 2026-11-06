@@ -10,7 +10,7 @@
     "test:boundaries": "node --test --test-force-exit tests/server.test.mjs tests/voice-adapter.test.mjs tests/synthesis.test.mjs tests/provider.test.mjs tests/retrieval-bridge.test.mjs tests/fictional-sample.test.mjs tests/cache.test.mjs tests/motion.test.mjs tests/persistence.test.mjs tests/public-api.test.mjs tests/public-narrate.test.mjs tests/voice-companion.test.mjs tests/mcp.test.mjs tests/byo-voice.test.mjs tests/record-facts.test.mjs tests/upload-progress.test.mjs tests/document-graph.test.mjs tests/workspace-lifecycle.test.mjs",
     "test:browser": "node tests/browser-check.mjs && node tests/notes-check.mjs && node tests/site-check.mjs && node tests/voice-sync-check.mjs",
     "format:check": "prettier --check \"src/*.{mjs,ts}\" \"tests/*.mjs\" \"tests/vendor/*\" \"scripts/*.mjs\" \"*.{mjs,json}\" \"mcp/*.mjs\" public/* memory/* evaluation/vault/*",
-    "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:vault && npm run test:browser && npm run test:graph && npm run test:upload-ui && npm run test:controls-ui && npm run test:cold-connect-ui",
+    "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:vault && npm run test:browser && npm run test:graph && npm run test:upload-ui && npm run test:controls-ui && npm run test:cold-connect-ui && npm run test:document-ui",
     "test:evaluation": "node --test evaluation/*.test.mjs",
     "test:ingest": "node --test --test-concurrency=1 ingest/*.test.mjs",
     "bench:ingest": "node ingest/bench.mjs",
@@ -33,7 +33,8 @@
     "eval:packets": "node evaluation/semantic/run.mjs . current packets.json && node evaluation/semantic/run.mjs . current packets-heldout2.json && node evaluation/semantic/run.mjs . current packets-heldout3.json",
     "test:upload-ui": "node tests/upload-ui-check.mjs",
     "test:controls-ui": "node tests/controls-ui-check.mjs",
-    "test:cold-connect-ui": "node tests/cold-connect-ui-check.mjs"
+    "test:cold-connect-ui": "node tests/cold-connect-ui-check.mjs",
+    "test:document-ui": "node tests/generic-doc-ui-check.mjs && node tests/source-viewer-isolation-ui-check.mjs && node tests/workspace-recovery-ui-check.mjs && node tests/late-workspace-answer-ui-check.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "5.2.8",

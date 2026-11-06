@@ -47,6 +47,7 @@ for (let i = 0; i < 80; i++) {
   await new Promise((r) => setTimeout(r, 200));
   if (i === 79) {
     dev.kill();
+    await browser.close();
     throw Error("local site failed to start");
   }
 }
@@ -90,11 +91,36 @@ try {
   } finally {
     clearTimeout(requestTimer);
   }
+  let releaseSource;
+  const sourceGate = new Promise((r) => (releaseSource = r));
+  let sawSource;
+  const sourceRequested = new Promise((r) => (sawSource = r));
+  await page.route("**/api/public/doc/w_*/*", async (route) => {
+    const response = await route.fetch();
+    sawSource();
+    await sourceGate;
+    await route.fulfill({ response });
+  });
+  await page.locator("#files-btn").click();
+  await page.locator("#viewer-body .file-card").first().click();
+  await sourceRequested;
   releaseCases();
   await page
     .locator("#engine-note")
     .filter({ hasText: "Live engine connected" })
     .waitFor();
+  releaseSource();
+  await page
+    .locator("#viewer-body .vw-text")
+    .filter({ hasText: "bounded queue" })
+    .waitFor({ timeout: 5000 })
+    .catch(async (error) => {
+      console.log(
+        "source pane after delayed connection:",
+        await page.locator("#viewer-body").innerText(),
+      );
+      throw error;
+    });
   await page.locator("#q").fill("What does the bounded queue do?");
   await page.locator(".ask-go").click();
   await page.waitForFunction(

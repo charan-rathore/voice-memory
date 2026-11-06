@@ -47,6 +47,7 @@ for (let i = 0; i < 80; i++) {
   await new Promise((r) => setTimeout(r, 200));
   if (i === 79) {
     dev.kill();
+    await browser.close();
     throw Error("local site failed to start");
   }
 }

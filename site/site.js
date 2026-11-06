@@ -203,10 +203,17 @@
           state.voiceOut = s.voiceOut ?? null;
           syncVoiceClasses();
           note(
-            "Live engine connected. Every answer is computed now from the fictional records.",
+            state.case === "own"
+              ? "Live engine connected. Your document workspace is selected."
+              : "Live engine connected. Every answer is computed now from the fictional records.",
           );
           renderRail();
-          if (!$("#viewer-body .page, #viewer-body .vw-text"))
+          // An opened reader may still be fetching text/PDF pages. Only
+          // refresh the placeholder or grid, never replace that reader.
+          if (
+            !$("#viewer-body").firstElementChild ||
+            $("#viewer-body .viewer-empty, #viewer-body .case-files")
+          )
             showEmptyViewer();
           if ($("#answer .overview")) renderOverview();
           return;
@@ -290,6 +297,20 @@
   try {
     state.ws = sessionStorage.getItem("vm_ws");
   } catch {}
+  function discardOwnContext() {
+    state.context.own = "";
+    state.thread = state.thread.filter((t) => t.caseId !== "own");
+    renderThread();
+    if (state.case !== "own") return;
+    // Workspace identity changed while an old request may still be in flight.
+    state.askSeq++;
+    state.current = null;
+    state.currentCites = [];
+    $(".ask-go").disabled = false;
+    renderRail();
+    renderOverview("own");
+    showEmptyViewer();
+  }
   let workspacePending = null;
   function ensureWorkspace() {
     // Concurrent drops share one creation; a temporary read error never
@@ -303,6 +324,21 @@
         } catch (e) {
           if (e?.status !== 404 && e?.status !== 410) throw e;
           state.ws = null;
+          try {
+            sessionStorage.removeItem("vm_ws");
+          } catch {}
+          // Keep new drops that have not been sent; completed rows belong
+          // to the expired workspace and cannot remain marked Ready here.
+          state.wsDocs = state.wsDocs.filter(
+            (d) => String(d.id).startsWith("local:") && !d.serverId,
+          );
+          state.drops = state.wsDocs
+            .map((d) => d.local?.since)
+            .filter(Number.isFinite);
+          state.cases.own = { ...OWN, ready: false, documents: [] };
+          state.ownReady = 0;
+          discardOwnContext();
+          renderUploads();
         }
       }
       const w = await api("/workspace", { method: "POST" });
@@ -501,6 +537,7 @@
           },
         ];
         state.cases.own = { ...OWN, ready: false, documents: [] };
+        discardOwnContext();
         outcome = "gone";
       } else {
         // Transient (network blip, engine waking): keep the workspace and
@@ -854,10 +891,13 @@
     )
       return;
     if (!v || !window.VMVisual) {
+      const documents = c?.documents ?? [];
       $("#ov-body").innerHTML =
-        id === "own"
-          ? `<p class="ov-empty">Upload a lab report and its results appear here, each placed on the lab's own printed range.</p>`
-          : "";
+        id !== "own"
+          ? ""
+          : documents.length
+            ? `<p class="ov-empty"><b>${documents.length} document${documents.length === 1 ? " is" : "s are"} available.</b> Ask a question or open a source to inspect its text.</p><p><a class="chip" href="graph.html?case=own">Explore document connections →</a></p>`
+            : `<p class="ov-empty">Upload a PDF, Word document, text file or image to ask questions about it.</p>`;
       return;
     }
     window.VMVisual.render($("#ov-body"), v, {
@@ -1280,7 +1320,7 @@
       </button>`
       : "";
     return `<div class="case-files">
-      <p class="case-files-intro"><b>${docs.length} documents in this case.</b> ${esc(meta.intro)}</p>
+      <p class="case-files-intro"><b>${docs.length} document${docs.length === 1 ? "" : "s"} in this case.</b> ${esc(meta.intro)}</p>
       <div class="file-grid">${cards}</div>
       ${latest}
     </div>`;
@@ -1725,20 +1765,26 @@
   }
 
   async function docText(title) {
-    if (state.docText[title] && state.case !== "own")
-      return state.docText[title];
+    const own = state.case === "own";
+    const workspace = state.ws;
+    if (state.docText[title] && !own) return state.docText[title];
     try {
-      // Visitor documents come from their workspace, not the demo cases:
-      // don't gate them on demo-case readiness either (see ask()).
-      if (!state.live && state.case !== "own") throw 0;
-      const cid = state.case === "own" ? "own" : "deal";
+      if (!state.live && !own) throw 0;
+      const cid = own ? "own" : "deal";
       const d = (state.cases[cid]?.documents ?? []).find(
         (x) => x.title === title,
       );
       if (!d) throw 0;
       const { document } = await api(`/doc/${apiCase(cid)}/${d.id}`);
+      // Visitor sources never share the demo's title-keyed cache. A failed
+      // read must not substitute a same-title snapshot or older workspace.
+      if (own)
+        return state.case === "own" && state.ws === workspace
+          ? document.text
+          : null;
       state.docText[title] = document.text;
     } catch {
+      if (own) return null;
       if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
       const saved = window.VM_SNAPSHOT_ANSWERS?.docs?.[title];
       if (saved) state.docText[title] = saved;
@@ -1867,6 +1913,7 @@
           own: { ...OWN, ready: false, documents: [] },
         };
         renderUploads();
+        discardOwnContext();
         callState(
           "Your upload expired on the server (deploys and 30 idle minutes clear uploads). Upload it again, then call.",
         );
