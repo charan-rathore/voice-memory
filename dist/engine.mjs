@@ -31676,17 +31676,30 @@ function anchorChunk(src, chunk, from) {
 function importBundle(docs, options = {}) {
   if (!Array.isArray(docs) || !docs.length || docs.length > 16)
     throw Error("Add between 1 and 16 text documents.");
+  if (options.scope !== void 0 && (typeof options.scope !== "string" || !options.scope || options.scope.length > 256))
+    throw Error(
+      "A stable workspace scope must be a nonempty string of up to 256 characters."
+    );
   const scope = options.scope ?? "voice-" + randomUUID();
+  const documentIds = /* @__PURE__ */ new Set();
   const sources = docs.map((d) => {
     if (typeof d.title !== "string" || typeof d.text !== "string" || d.text.length < 40 || d.text.length > MAX_DOC_CHARS || d.title.length > 160)
       throw Error(
         "Each document needs a title and 40-250,000 characters of text."
       );
+    const stableId = options.scope !== void 0 ? d.id : void 0;
+    if (stableId !== void 0) {
+      if (typeof stableId !== "string" || !stableId || documentIds.has(stableId))
+        throw Error(
+          "Stable document IDs must be nonempty and unique within a workspace."
+        );
+      documentIds.add(stableId);
+    }
     const text = d.text.replace(/\r\n?/g, "\n");
     const memory = parseText({ text, label: d.title });
     if (!memory.ok) throw Error("memoRABLE could not import this document.");
     return {
-      id: d.id ? hash(`${scope}\0${d.id}`) : randomUUID(),
+      id: stableId ? hash(`${scope}\0${stableId}`) : randomUUID(),
       title: d.title,
       text,
       hash: hash(text),

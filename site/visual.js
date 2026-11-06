@@ -1339,6 +1339,19 @@
   // a fresh stage, and the choice must survive all of them - "Hide chart"
   // that springs back open reads as broken and keeps the viewer covered.
   let stageMin = false;
+  // Opening the source browser is an explicit choice to inspect evidence.
+  // Fold the sticky chart so it cannot intercept document-card clicks.
+  document.addEventListener("vm:source", () => {
+    stageMin = true;
+    for (const st of document.querySelectorAll(".stage")) {
+      st.classList.add("min");
+      const button = st.querySelector(".st-min");
+      if (button) {
+        button.setAttribute("aria-expanded", "false");
+        button.textContent = R(st.dataset.lang || "en").showChart;
+      }
+    }
+  });
   function mountStage(board) {
     const rep = REPORTS.get(board.dataset.rep);
     if (!rep) return;
@@ -1384,7 +1397,8 @@
       if (board.isConnected) return;
       watch.disconnect();
       st.remove();
-      rep.opts.stageHost?.closest(".desk")?.classList.remove("has-stage");
+      if (!rep.opts.stageHost?.querySelector(".stage"))
+        rep.opts.stageHost?.closest(".desk")?.classList.remove("has-stage");
     });
     watch.observe(document.body, { childList: true, subtree: true });
   }

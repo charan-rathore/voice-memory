@@ -358,8 +358,19 @@ export function createVoiceAdapter({
           if (ws.bundle) bundle = ws.bundle;
         } else if (ws) bundle = ws;
       } catch {
-        bundle = grant.bundle;
+        // A failed scope lookup cannot safely fall back to demo records.
+        scopeBad = true;
       }
+      const versionOf = (b) =>
+        JSON.stringify([
+          b?.scope,
+          ...(b?.sources ?? []).map((source) => [
+            source.id,
+            source.hash,
+            source.title,
+          ]),
+        ]);
+      const startingVersion = versionOf(bundle);
       const askedRaw = latestUser(data.messages);
       if (!askedRaw) {
         return Response.json(
@@ -595,7 +606,7 @@ export function createVoiceAdapter({
         const lang = callLanguage(transcript, userHistory);
         // the last answer about the records: a hear-check or "you're welcome"
         // in between is not what "say that again" means
-        const lastSpoken =
+        const clientLastSpoken =
           [...data.messages.slice(0, -1)]
             .reverse()
             .find(
@@ -604,8 +615,24 @@ export function createVoiceAdapter({
                 messageText(m.content).trim() &&
                 !isSocialReply(messageText(m.content)),
             )?.content ?? null;
+        // Scoped calls repeat only a server-produced evidence answer from
+        // this call and source version. Client assistant text is not proof.
+        const replayKey =
+          callTag && caseId ? JSON.stringify([callTag, caseId]) : null;
+        const savedReplay = replayKey
+          ? grant.recordAnswers?.get(replayKey)
+          : null;
+        const guardedReplay =
+          !!callTag || (typeof caseId === "string" && /^w_/.test(caseId));
+        const lastSpoken = guardedReplay
+          ? savedReplay?.version === startingVersion
+            ? savedReplay.spoken
+            : null
+          : clientLastSpoken;
         const social = socialTurn(repairDealTerms(transcript), {
           lang,
+          uploaded:
+            typeof caseId === "string" && /^w_[0-9a-f]{32}$/.test(caseId),
           last: lastSpoken ? messageText(lastSpoken) : null,
         });
         // Two subjects in one breath ("my ferritin, and what changed in the
@@ -1159,7 +1186,7 @@ export function createVoiceAdapter({
         // no longer on screen is not spoken: say what happened instead, with
         // no facts, and tie the turn to the case now open. A round trip back
         // (A -> B -> A) leaves the answer valid for what is on screen.
-        if (callTag && caseId) {
+        if (caseId && resolveBundle) {
           let now2 = null;
           try {
             now2 = resolveBundle?.(data.messages) ?? null;
@@ -1167,7 +1194,27 @@ export function createVoiceAdapter({
             now2 = null;
           }
           const nowCase = now2?.caseId ?? null;
-          if (nowCase && nowCase !== caseId) {
+          // Explicit no-upload demo scope uses the fixed grant's bundle.
+          // Unavailable uploaded scopes never take this fallback.
+          const currentBundle =
+            nowCase === "demo" ? (now2?.bundle ?? grant.bundle) : now2?.bundle;
+          const readable =
+            currentBundle && !now2.expired && !now2.malformed && !now2.pending;
+          const unchanged =
+            readable && versionOf(currentBundle) === startingVersion;
+          if (!readable || (nowCase === caseId && !unchanged)) {
+            spoken = isHindi(lang)
+              ? "आपके दस्तावेज़ बदल गए हैं या अभी उपलब्ध नहीं हैं। कृपया फिर से पूछिए।"
+              : "Your documents changed or became unavailable while I was answering. Please ask again.";
+            turn = {
+              spokenTurn: {
+                intent: "SCOPE_CHANGED",
+                verdict: "UNKNOWN",
+                spoken,
+                citations: [],
+              },
+            };
+          } else if (nowCase !== caseId) {
             const label =
               nowCase === "deal"
                 ? "the Northstar deal"
@@ -1187,6 +1234,29 @@ export function createVoiceAdapter({
             };
             caseId = nowCase;
           }
+        }
+        if (grants.get(token) !== grant || grant.expires <= now()) {
+          return Response.json(
+            { error: "Invalid or expired session capability" },
+            { status: 401 },
+          );
+        }
+        if (
+          replayKey &&
+          !social &&
+          turn?.spokenTurn?.intent !== "SCOPE_CHANGED" &&
+          ((turn?.result?.evidence?.length ?? 0) > 0 ||
+            (turn?.spokenTurn?.citations?.length ?? 0) > 0)
+        ) {
+          const cache = (grant.recordAnswers ??= new Map());
+          cache.delete(replayKey);
+          if (Buffer.byteLength(spoken, "utf8") <= 8192)
+            cache.set(replayKey, { version: startingVersion, spoken });
+          // The shared fixed grant serves many callers; keep separate,
+          // bounded entries (at most 128 KiB of spoken UTF-8 per grant),
+          // and let grant expiry/revocation release them. Oversized answers
+          // are never truncated into a potentially misleading replay.
+          while (cache.size > 16) cache.delete(cache.keys().next().value);
         }
         const id = "local-contract-" + randomBytes(8).toString("hex");
         const encoder = new TextEncoder();

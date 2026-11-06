@@ -114,3 +114,13 @@ test("new generations replace stale passages and sequence edges after source edi
   );
   assert.notEqual(documentGraph(b).generation, gb.generation);
 });
+
+test("untrusted document IDs cannot collapse sources; scoped stable IDs must be unique", () => {
+  const docs = [
+    { id: "duplicate", title: "One", text },
+    { id: "duplicate", title: "Two", text },
+  ];
+  const fresh = importBundle(docs);
+  assert.notEqual(fresh.sources[0].id, fresh.sources[1].id);
+  assert.throws(() => importBundle(docs, { scope: "workspace-a" }), /unique/);
+});

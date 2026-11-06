@@ -538,7 +538,7 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
 /* ------------------------------------------------------------ the stage */
 .desk.has-stage { overflow: clip; }
 .desk.has-stage .desk-right { display: flex; flex-direction: column; }
-.desk.has-stage .desk-right > .viewer { flex: 1; }
+.desk.has-stage .desk-right > .viewer { flex: 1; position: relative; inset: auto; }
 .stage { position: relative; display: grid; grid-template-rows: auto 1fr; color: var(--m-ink); background-color: var(--m-bg); background-image: linear-gradient(rgba(88, 196, 221, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(88, 196, 221, 0.08) 1px, transparent 1px), linear-gradient(rgba(88, 196, 221, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(88, 196, 221, 0.035) 1px, transparent 1px); background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px; font-family: var(--sans); }
 .desk-right > .stage { position: sticky; top: 72px; z-index: 2; max-height: calc(100vh - 88px); border-bottom: 1px solid rgba(88, 196, 221, 0.18); }
 .rp-detail > .stage { border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(88, 196, 221, 0.18); }
@@ -552,6 +552,8 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
 .st-crumbs i { font-style: normal; color: var(--m-ink3); }
 .st-body { position: relative; overflow: auto; overscroll-behavior: contain; }
 .stage.min .st-body { display: none; }
+/* A folded chart must not stick over source buttons while the viewer scrolls. */
+.desk-right > .stage.min { position: relative; top: auto; grid-template-rows: auto; flex: 0 0 auto; max-height: none; }
 .st-scene { padding: 16px 18px 18px; display: grid; gap: 10px; animation: st-in 520ms var(--m-smooth) both; }
 .st-scene.leaving { inset: 0 0 auto 0; animation: st-out 240ms var(--m-smooth) forwards; pointer-events: none; }
 @keyframes st-in { from { opacity: 0; transform: translateY(8px) scale(0.99); } }

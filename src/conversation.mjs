@@ -117,15 +117,45 @@ export function stripPreamble(text) {
     .trim();
 }
 
+// Uploaded sessions must not steer callers toward the fictional demo.
+const UPLOADED_SAY = {
+  en: {
+    hear: "Yes, I can hear you. Ask about the documents you uploaded.",
+    greet:
+      "Hi! I'm Voice Memory. Ask about your uploaded documents and I'll look for the supporting passage.",
+    help: "Ask a question about your uploaded documents. I can find relevant passages and show their exact source. If the documents do not support an answer, I'll say so.",
+    nothing:
+      "I haven't given a document answer yet. Ask about the documents you uploaded.",
+    hindi:
+      "ज़रूर, अब मैं हिंदी में जवाब दूँगी। अपने अपलोड किए हुए दस्तावेज़ों के बारे में पूछिए।",
+  },
+  hi: {
+    hear: "हाँ, मैं आपको सुन पा रही हूँ। अपने अपलोड किए हुए दस्तावेज़ों के बारे में पूछिए।",
+    greet:
+      "नमस्ते! मैं Voice Memory हूँ। अपने अपलोड किए हुए दस्तावेज़ों के बारे में पूछिए; मैं उनका स्रोत खोजूँगी।",
+    help: "अपने अपलोड किए हुए दस्तावेज़ों के बारे में सवाल पूछिए। मैं संबंधित अंश और उनका स्रोत दिखा सकती हूँ। अगर जवाब दस्तावेज़ों में नहीं है, तो मैं बता दूँगी।",
+    nothing:
+      "मैंने अभी दस्तावेज़ों से कोई जवाब नहीं दिया है। अपने अपलोड किए हुए दस्तावेज़ों के बारे में पूछिए।",
+    hindi:
+      "ज़रूर, अब मैं हिंदी में जवाब दूँगी। अपने अपलोड किए हुए दस्तावेज़ों के बारे में पूछिए।",
+  },
+};
+
 /**
  * A reply for a turn that is about the call, or null when the turn asks
  * about the records (those go to the engine). `last` is this call's
  * previous spoken answer, for "say that again".
  */
-export function socialTurn(text, { lang = "en", last = null } = {}) {
+export function socialTurn(
+  text,
+  { lang = "en", last = null, uploaded = false } = {},
+) {
   const t = String(text ?? "").trim();
   if (!t) return null;
-  const say = SAY[isHindi(lang) ? "hi" : "en"];
+  const language = isHindi(lang) ? "hi" : "en";
+  const say = uploaded
+    ? { ...SAY[language], ...UPLOADED_SAY[language] }
+    : SAY[language];
   const domain = DOMAIN.test(stripPreamble(t));
   if (R.switch.test(t) && !domain)
     return {
@@ -176,7 +206,9 @@ export function socialTurn(text, { lang = "en", last = null } = {}) {
       return {
         intent: k.toUpperCase(),
         spoken: say[k],
-        ...(k === "help" ? { action: { type: "upload", soft: true } } : {}),
+        ...(k === "help" && !uploaded
+          ? { action: { type: "upload", soft: true } }
+          : {}),
       };
   // a thank-you at the end of a longer sentence ("no more, thank you")
   if (
@@ -223,7 +255,7 @@ function asksAfterCourtesy(t) {
 export function isSocialReply(text) {
   const t = String(text ?? "").trim();
   if (!t) return false;
-  for (const lang of Object.values(SAY))
+  for (const lang of [...Object.values(SAY), ...Object.values(UPLOADED_SAY)])
     for (const v of Object.values(lang))
       if (typeof v === "string" && v.trim() === t) return true;
   return false;

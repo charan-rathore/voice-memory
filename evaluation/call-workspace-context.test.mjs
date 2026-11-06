@@ -262,3 +262,48 @@ test("a mid-call scope switch moves the call's corpus, and back", async () => {
     await api.close();
   }
 });
+
+test("an unregistered call handle never falls back to its embedded demo scope", async () => {
+  const api = await boot();
+  try {
+    const said = await api.say(
+      "health.c" + "f".repeat(24),
+      "What is SYN-0001's ferritin result?",
+    );
+    assert.doesNotMatch(said, /50 ng\/mL/);
+    assert.match(said, /start it again|which documents|ended/i);
+  } finally {
+    await api.close();
+  }
+});
+
+test("an expired registered call cannot retrieve or replay a still-live uploaded workspace", async () => {
+  const api = await boot();
+  const realNow = Date.now;
+  try {
+    const { id } = await api.upload(WAREHOUSE, "warehouse.txt");
+    await api.mint({ vm_ws: id });
+    const handle = api.minted[0].user_data.vm_ws;
+    assert.match(
+      await api.say(
+        handle,
+        "How many open safety items did the east warehouse record?",
+      ),
+      /14/,
+    );
+    const expiredAt = realNow() + 21 * 60000;
+    Date.now = () => expiredAt;
+    const lookup = await api.say(
+      handle,
+      "How many open safety items did the east warehouse record?",
+    );
+    assert.doesNotMatch(lookup, /14|fourteen/);
+    assert.match(lookup, /start it again|which documents|ended/i);
+    const said = await api.say(handle, "Say that again");
+    assert.doesNotMatch(said, /14|fourteen/);
+    assert.match(said, /start it again|which documents|ended/i);
+  } finally {
+    Date.now = realNow;
+    await api.close();
+  }
+});

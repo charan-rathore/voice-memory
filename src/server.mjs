@@ -574,12 +574,21 @@ export function createLocalServer({
         if (t - v.at > VOICE_CALL_MS) voiceCalls.delete(c);
       voiceCalls.set(call, { scope, at: t, gen: 0 });
     },
+    resolve(call) {
+      const entry = voiceCalls.get(call);
+      if (!entry) return null;
+      if (Date.now() - entry.at > VOICE_CALL_MS) {
+        voiceCalls.delete(call);
+        return null;
+      }
+      return entry;
+    },
     // `gen` is the page's own switch counter. Scope updates can arrive out of
     // order (A -> B -> A sent quickly, B delivered last); an update older
     // than the one already applied is ignored, so the server ends on what
     // the page shows. Returns the scope in force, or false.
     setScope(call, scope, gen = null) {
-      const v = voiceCalls.get(call);
+      const v = this.resolve(call);
       if (!v) return false;
       if (Number.isSafeInteger(gen) && gen <= v.gen) return v.scope;
       if (scope.startsWith("w_") && !liveWorkspace(scope)) return false;
@@ -1419,7 +1428,9 @@ export function createLocalServer({
       if (!hit) return { malformed: true, call: null, caseId: null };
       const call = hit[2] ?? null;
       // A live public call's scope is what its page has open now.
-      const scope = (call && voiceCalls.get(call)?.scope) || hit[1];
+      const registered = call ? voiceCallsApi.resolve(call) : null;
+      if (call && !registered) return { malformed: true, call, caseId: hit[1] };
+      const scope = registered?.scope ?? hit[1];
       if (scope.startsWith("w_")) {
         const w = liveWorkspace(scope);
         // Never fall back to the fictional records for someone who was

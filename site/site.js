@@ -189,7 +189,12 @@
         const s = await api("/status", {}, 8000);
         if (s.cases.health && s.cases.deal) {
           const { cases } = await api("/cases");
-          state.cases = Object.fromEntries(cases.map((c) => [c.id, c]));
+          // Demo readiness may arrive after an independent visitor upload.
+          // Merge it without discarding that workspace's ready document set.
+          state.cases = {
+            ...state.cases,
+            ...Object.fromEntries(cases.map((c) => [c.id, c])),
+          };
           state.live = true;
           byoEnabled = s.byoVoice?.enabled === true;
           if ($("#byo")) $("#byo").hidden = !byoEnabled;
@@ -823,7 +828,11 @@
     if (v && id !== "own") state.visuals[k] = v;
     return v;
   }
+  let overviewSeq = 0;
   async function renderOverview(id = state.case) {
+    const seq = ++overviewSeq;
+    const lang = state.lang;
+    const workspace = state.ws;
     const c = state.cases[id] ?? snap.cases?.find((x) => x.id === id);
     const langBar = `<div class="ov-lang" role="group" aria-label="Narration language">${LANGS.map(
       ([k, label]) =>
@@ -835,8 +844,15 @@
         <p class="dim ov-hint">Pick a question, type or dictate your own.</p>
       </div>`;
     await deskNear;
-    const [v] = await Promise.all([overviewFor(id, state.lang), loadVisual()]);
-    if (state.case !== id || !$("#ov-body")) return;
+    const [v] = await Promise.all([overviewFor(id, lang), loadVisual()]);
+    if (
+      seq !== overviewSeq ||
+      state.case !== id ||
+      state.lang !== lang ||
+      (id === "own" && state.ws !== workspace) ||
+      !$("#ov-body")
+    )
+      return;
     if (!v || !window.VMVisual) {
       $("#ov-body").innerHTML =
         id === "own"
@@ -2251,6 +2267,7 @@
       });
     if (t.matches("[data-jump]")) return jumpTo(Number(t.dataset.jump));
     if (t.matches("[data-files]")) {
+      emit("vm:source", { title: null, cited: false });
       showEmptyViewer();
       if (matchMedia("(max-width: 1060px)").matches)
         $("#viewer").scrollIntoView({

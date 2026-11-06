@@ -24,7 +24,17 @@ const dev = spawn(process.execPath, ["scripts/site-dev.mjs"], {
   stdio: "ignore",
 });
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium
+  .launch({
+    headless: true,
+    ...(process.env.CHROME_PATH
+      ? { executablePath: process.env.CHROME_PATH }
+      : {}),
+  })
+  .catch((error) => {
+    dev.kill();
+    throw error;
+  });
 const results = [];
 const origin = `http://127.0.0.1:${port}`;
 for (let i = 0; i < 80; i++) {
