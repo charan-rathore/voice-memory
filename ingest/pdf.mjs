@@ -155,7 +155,9 @@ async function extractImages(page, OPS) {
       try {
         const obj = await new Promise((resolve, reject) => {
           const t = setTimeout(() => reject(Error("image timeout")), 10000);
-          page.objs.get(args[0], (o) => {
+          // pdf.js promotes image objects reused across pages to commonObjs.
+          const objects = args[0].startsWith("g_") ? page.commonObjs : page.objs;
+          objects.get(args[0], (o) => {
             clearTimeout(t);
             resolve(o);
           });
