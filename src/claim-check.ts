@@ -1,3 +1,4 @@
+import { nonMonetaryCost } from "../vendor/web/src/lib/rag/query-intent";
 /** Narrow claim-to-source/state checks for the voice demo.
  *
  * Deterministic field extraction over exact original lines. Every claim keeps
@@ -133,7 +134,7 @@ export function questionFields(q: string): ClaimField[] {
   // engagement fee (a fee is not an issued invoice).
   if (
     /\bfee|retainer|\brate\b|\bprice|how much|cost|charg|money|commercial|paid|pay\b/i.test(
-      q,
+      nonMonetaryCost(q) ? q.replace(/\bcost(?:s|ing)?\b/gi, "") : q,
     )
   )
     out.add("fee");

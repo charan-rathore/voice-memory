@@ -27,6 +27,21 @@ const pass = (name) => (results.push(name), console.log("ok - " + name));
 
 // A stand-in for window.BolnaWebCall: same events, no audio, no network.
 const BOLNA_STUB = () => {
+  // Transport and microphone are fixtures: no host microphone permission
+  // or audio device is needed to verify the page's scope contract.
+  Object.defineProperty(navigator, "mediaDevices", {
+    configurable: true,
+    value: {
+      getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }),
+      enumerateDevices: async () => [
+        {
+          kind: "audioinput",
+          deviceId: "default",
+          label: "Synthetic microphone",
+        },
+      ],
+    },
+  });
   window.BolnaWebCall = class {
     constructor(opts) {
       this.opts = opts;

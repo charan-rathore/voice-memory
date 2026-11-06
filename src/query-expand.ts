@@ -1,3 +1,4 @@
+import { nonMonetaryCost } from "../vendor/web/src/lib/rag/query-intent";
 /** Deterministic query normalization + explicit expansion for the voice demo.
  *
  * Constraints (from review): expansion widens recall only; it never rewrites
@@ -119,7 +120,11 @@ export function expandQuery(question: string): ExpandedQuery {
     if (!tok || protectedToken(tok)) continue;
     for (const v of morphologyVariants(tok)) push(tok, v, "morphology");
     for (const [key, vals] of DICTIONARY) {
-      if (key === tok && !key.includes(" "))
+      if (
+        key === tok &&
+        !key.includes(" ") &&
+        !(key === "cost" && nonMonetaryCost(question))
+      )
         for (const v of vals) push(tok, v, "dictionary");
     }
   }

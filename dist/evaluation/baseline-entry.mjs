@@ -627,6 +627,17 @@ function distinctiveTerms(query) {
   );
 }
 
+// vendor/web/src/lib/rag/query-intent.ts
+function nonMonetaryCost(query) {
+  if (/\b(?:fees?|prices?|pricing|money|dollars?|rupees?|euros?|billing|payment|retainer)\b|[$€£₹]/i.test(
+    query
+  ))
+    return false;
+  return /\bcost(?:s|ing)?\s+(?:(?:me|you|him|her|us|them|the\s+\w+)\s+)?(?:(?:my|your|his|her|our|their|a|the)\s+)?(?:job|role|part|life|lives|time|sleep|trust|reputation|friendship)\b/i.test(
+    query
+  );
+}
+
 // vendor/web/src/lib/rag/evidence.ts
 var MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 function extractQueryDates(query) {
@@ -764,7 +775,8 @@ function classifyEvidence(opts) {
   if (missingArtifacts.length) {
     return gate("insufficient", "The named artifact identifier is not present in the retrieved passages. Similar vocabulary does not answer this question.", { ...stats, clearedForInsufficient: true });
   }
-  const requestedCommercial = opts.query.match(/\b(?:slas?|uptime|pricing|prices?|costs?|contractual|warrant(?:y|ies)|discounts?|refunds?|billing)\b/gi) ?? [];
+  const commercialQuery = nonMonetaryCost(opts.query) ? opts.query.replace(/\bcost(?:s|ing)?\b/gi, "") : opts.query;
+  const requestedCommercial = commercialQuery.match(/\b(?:slas?|uptime|pricing|prices?|costs?|contractual|warrant(?:y|ies)|discounts?|refunds?|billing)\b/gi) ?? [];
   const missingCommercial = [...new Set(requestedCommercial.map((t) => t.toLowerCase()))].filter(
     (term) => !hasTerm(packedLower, term)
   );
@@ -932,7 +944,7 @@ function overlapTerms(query, text, limit = 5) {
 
 // vendor/web/src/lib/rag/retrieve-core.ts
 var INDEX_CACHE = /* @__PURE__ */ new WeakMap();
-var indexStats = { builds: 0, hits: 0 };
+var indexStats = { builds: 0, hits: 0, statsBuilds: 0, statsHits: 0, vectorParses: 0, vectorHits: 0 };
 function fingerprint(rows) {
   let h = 2166136261;
   for (const r of rows) {
@@ -944,20 +956,50 @@ function fingerprint(rows) {
   }
   return h >>> 0;
 }
-function indexFor(all, scoped, scopeKey) {
+function corpusEntry(all, scoped, scopeKey) {
   let byScope = INDEX_CACHE.get(all);
   if (!byScope) INDEX_CACHE.set(all, byScope = /* @__PURE__ */ new Map());
   const fp = fingerprint(scoped);
-  const hit = byScope.get(scopeKey);
-  if (hit && hit.fp === fp) {
+  let entry = byScope.get(scopeKey);
+  if (!entry || entry.fp !== fp) byScope.set(scopeKey, entry = { fp });
+  return entry;
+}
+var VECTOR_CACHE = /* @__PURE__ */ new WeakMap();
+function vectorOf(chunk) {
+  const raw = chunk.embedding;
+  if (!raw) return null;
+  const hit = VECTOR_CACHE.get(chunk);
+  if (hit && hit.src === raw) {
+    indexStats.vectorHits++;
+    return hit.vec;
+  }
+  indexStats.vectorParses++;
+  const arr = parseEmbedding(raw);
+  const vec = arr ? Float32Array.from(arr) : null;
+  VECTOR_CACHE.set(chunk, { src: raw, vec });
+  return vec;
+}
+var rowText = (r) => `${r.title}
+${r.chunk.text}`;
+function indexFor(entry, scoped) {
+  if (entry.index) {
     indexStats.hits++;
-    return hit.index;
+    return entry.index;
   }
   indexStats.builds++;
-  const index = new BM25Index(scoped.map((r) => ({ id: r.chunk.id, text: `${r.title}
-${r.chunk.text}` })));
-  byScope.set(scopeKey, { fp, index });
-  return index;
+  entry.index = new BM25Index(scoped.map((r) => ({ id: r.chunk.id, text: rowText(r) })));
+  return entry.index;
+}
+function corpusStats(entry, scoped) {
+  if (entry.idf && entry.vocab) {
+    indexStats.statsHits++;
+    return { idf: entry.idf, vocab: entry.vocab };
+  }
+  indexStats.statsBuilds++;
+  const texts = scoped.map(rowText);
+  entry.idf = buildIdf(texts);
+  entry.vocab = corpusVocab(texts);
+  return { idf: entry.idf, vocab: entry.vocab };
 }
 function toRetrieved(chunkId, meta, score, rank, retriever) {
   const row = meta.get(chunkId);
@@ -1010,10 +1052,8 @@ function retrieveFromRows(opts) {
   const scopedRows = scope.kind === "all" ? opts.rows : opts.rows.filter((r) => (r.corpusId || r.chunk.corpus_id || SEED_CORPUS_ID) === scope.corpusId);
   const meta = /* @__PURE__ */ new Map();
   for (const row of scopedRows) meta.set(row.chunk.id, row);
-  const texts = scopedRows.map((r) => `${r.title}
-${r.chunk.text}`);
-  const idf = buildIdf(texts);
-  const vocab = corpusVocab(texts);
+  const corpus = corpusEntry(opts.rows, scopedRows, scope.kind === "all" ? "*" : scope.corpusId);
+  const { idf, vocab } = corpusStats(corpus, scopedRows);
   const query = payloadQuery(opts.query);
   const cues = scope.kind === "corpus" && scope.corpusId === SEED_CORPUS_ID ? expandQueryCues(query) : [];
   const terms = [.../* @__PURE__ */ new Set([...queryTerms(query, vocab), ...cues])];
@@ -1043,7 +1083,7 @@ ${r.chunk.text}`);
         modelMatch = false;
         continue;
       }
-      const vec = parseEmbedding(row.chunk.embedding);
+      const vec = vectorOf(row.chunk);
       if (!vec || vec.length !== opts.queryVector.length) continue;
       compatible += 1;
       scored.push({ id: row.chunk.id, score: cosineSimilarity(opts.queryVector, vec) });
@@ -1059,7 +1099,7 @@ ${r.chunk.text}`);
   const denseMs = performance.now() - denseStart;
   const kwStart = performance.now();
   if (opts.mode !== "dense" || !dense.length) {
-    const index = indexFor(opts.rows, scopedRows, scope.kind === "all" ? "*" : scope.corpusId);
+    const index = indexFor(corpus, scopedRows);
     const lexicalQuery = terms.join(" ") || bm25Query;
     const hits = index.search(lexicalQuery, retrieveN);
     for (const s of hits) keywordScores.set(s.id, s.score);

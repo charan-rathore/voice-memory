@@ -1286,8 +1286,14 @@ export function createLocalServer({
   const sweepWorkspaces = () => {
     for (const [id, w] of workspaces)
       if (Date.now() - w.at > WS_IDLE_MS) dropWorkspace(id);
-    while (workspaces.size >= WS_MAX)
-      dropWorkspace(workspaces.keys().next().value);
+    while (workspaces.size >= WS_MAX) {
+      // Map insertion order is creation order, not recent use: an active
+      // caller's older workspace must not be discarded ahead of idle ones.
+      let oldest = null;
+      for (const [id, w] of workspaces)
+        if (!oldest || w.at < oldest.at) oldest = { id, at: w.at };
+      dropWorkspace(oldest.id);
+    }
   };
   const workspaceSweepTimer = setInterval(() => {
     for (const [id, w] of workspaces)
@@ -1307,11 +1313,14 @@ export function createLocalServer({
       return;
     }
     const bundle = importBundle(
-      docsNow.map((e) => ({ title: e.title, text: e.doc.text })),
+      docsNow.map((e) => ({ id: e.id, title: e.title, text: e.doc.text })),
+      { scope: ws.sid },
     );
     ws.sourceToEntry = new Map(
       bundle.sources.map((src, i) => [src.id, docsNow[i]]),
     );
+    for (let i = 0; i < bundle.sources.length; i++)
+      bundle.sources[i].provisional = docsNow[i].status === "partial";
     bundle.locateEvidence = locatorFor(ws.sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsNow, extractReport);
     attachRecords(bundle, docsNow);

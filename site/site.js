@@ -285,22 +285,32 @@
   try {
     state.ws = sessionStorage.getItem("vm_ws");
   } catch {}
-  async function ensureWorkspace() {
-    if (state.ws) {
-      try {
-        await api(`/workspace/${state.ws}`);
-        return state.ws;
-      } catch {
-        state.ws = null;
+  let workspacePending = null;
+  function ensureWorkspace() {
+    // Concurrent drops share one creation; a temporary read error never
+    // silently splits an existing library into a new workspace.
+    if (workspacePending) return workspacePending;
+    workspacePending = (async () => {
+      if (state.ws) {
+        try {
+          await api(`/workspace/${state.ws}`);
+          return state.ws;
+        } catch (e) {
+          if (e?.status !== 404 && e?.status !== 410) throw e;
+          state.ws = null;
+        }
       }
-    }
-    const w = await api("/workspace", { method: "POST" });
-    state.ws = w.id;
-    try {
-      sessionStorage.setItem("vm_ws", w.id);
-    } catch {}
-    syncCallScope();
-    return w.id;
+      const w = await api("/workspace", { method: "POST" });
+      state.ws = w.id;
+      try {
+        sessionStorage.setItem("vm_ws", w.id);
+      } catch {}
+      syncCallScope();
+      return w.id;
+    })().finally(() => {
+      workspacePending = null;
+    });
+    return workspacePending;
   }
   // One upload over XHR: fetch cannot report upload progress, and the bytes
   // actually leaving the browser are the first stage the reading view shows.
@@ -337,7 +347,7 @@
     });
   }
   async function uploadFiles(list) {
-    const files = [...list].slice(0, 5);
+    const files = [...list];
     if (!files.length) return;
     if (state.case !== "own") setCase("own");
     // Every file shows up the moment it is dropped, with what is really
@@ -348,18 +358,19 @@
       id: `local:${dropped}:${i}`,
       title: f.name,
       filename: f.name,
-      status: f.size > 4 * 1048576 ? "failed" : "sending",
+      status: i >= 5 || f.size > 4 * 1048576 ? "failed" : "sending",
       error:
-        f.size > 4 * 1048576 ? { message: `${f.name} is over 4 MB.` } : null,
+        i >= 5
+          ? { message: "Upload up to five files at a time." }
+          : f.size > 4 * 1048576
+            ? { message: `${f.name} is over 4 MB.` }
+            : null,
       bytes: f.size,
       local: { phase: "connecting", sent: 0, total: f.size, since: dropped },
       progress: { pages: [], log: [], counts: null, age: 0 },
     }));
     for (const f of files) if (f.size <= 4 * 1048576) state.drops.push(dropped);
-    state.wsDocs = [
-      ...state.wsDocs.filter((d) => !String(d.id).startsWith("local:")),
-      ...local,
-    ];
+    state.wsDocs = [...state.wsDocs, ...local];
     renderUploads();
     readingView();
     // Uploads must not wait for the demo cases to finish loading: visitor
@@ -415,8 +426,11 @@
   }
   async function refreshWorkspace() {
     if (!state.ws) return renderUploads();
+    let outcome = "ok";
+    const workspaceId = state.ws;
     try {
-      const st = await api(`/workspace/${state.ws}`);
+      const st = await api(`/workspace/${workspaceId}`);
+      if (state.ws !== workspaceId) return "stale";
       const failed = state.wsDocs.filter(
         (d) =>
           d.status === "failed" &&
@@ -461,13 +475,14 @@
         ),
       };
     } catch (e) {
-      state.ws = null;
-      try {
-        sessionStorage.removeItem("vm_ws");
-      } catch {}
-      if (e?.status === 404) {
+      if (state.ws !== workspaceId) return "stale";
+      if (e?.status === 404 || e?.status === 410) {
         // Confirmed gone (a deploy or the idle sweep cleared it): stop
         // showing its documents as if they were still answerable.
+        state.ws = null;
+        try {
+          sessionStorage.removeItem("vm_ws");
+        } catch {}
         state.drops = [];
         $("#upl-flow")?.replaceChildren();
         state.wsDocs = [
@@ -481,24 +496,45 @@
           },
         ];
         state.cases.own = { ...OWN, ready: false, documents: [] };
+        outcome = "gone";
+      } else {
+        // Transient (network blip, engine waking): keep the workspace and
+        // let polling back off and recover. Chips say so after a few
+        // failures instead of freezing on a stale stage forever.
+        state.wsFail = (state.wsFail ?? 0) + 1;
+        outcome = "transient";
       }
     }
+    if (outcome !== "transient") state.wsFail = 0;
     renderUploads();
     if (state.case === "own") {
       renderRail();
       const ready = (state.cases.own?.documents ?? []).length;
-      if (ready !== state.ownReady && $("#answer .overview")) {
+      if (ready !== state.ownReady) {
         state.ownReady = ready;
-        delete state.visuals["own|" + state.lang];
-        renderOverview("own");
+        // The Documents pane must follow the upload list: refresh it while
+        // it shows the placeholder or the file grid, never over an open
+        // document.
+        if ($("#viewer-body .viewer-empty") || $("#viewer-body .case-files"))
+          showEmptyViewer();
+        if ($("#answer .overview")) {
+          delete state.visuals["own|" + state.lang];
+          renderOverview("own");
+        }
       }
     }
+    return outcome;
   }
   let pollTimer = null;
   function pollWorkspace() {
     clearTimeout(pollTimer);
-    refreshWorkspace().then(() => {
+    refreshWorkspace().then((outcome) => {
+      const backoff =
+        outcome === "transient"
+          ? Math.min(2000 * (state.wsFail ?? 1), 10000)
+          : 600;
       if (
+        outcome === "transient" ||
         state.wsDocs.some(
           (d) =>
             !["ready", "needs_review", "failed", "expired"].includes(
@@ -512,7 +548,7 @@
                 8),
         )
       )
-        pollTimer = setTimeout(pollWorkspace, 600);
+        pollTimer = setTimeout(pollWorkspace, backoff);
     });
   }
   // The live reading view loads with the first upload, not the first paint.
@@ -553,19 +589,34 @@
             : d.status === "partial"
               ? "ok busy"
               : "busy";
+        const stage =
+          (state.wsFail ?? 0) >= 3 &&
+          !done &&
+          d.status !== "failed" &&
+          d.status !== "expired"
+            ? "Reconnecting"
+            : (STAGE[d.status] ?? d.status);
         const extra =
           d.status === "failed" || d.status === "expired"
             ? ` — ${esc(d.error?.message ?? "")}`
             : d.stats?.pages
               ? ` · ${d.stats.pages} p`
               : "";
-        return `<li${d.id ? ` data-doc="${esc(d.id)}"` : ""}><b title="${esc(d.title)}">${esc(d.title)}</b><span class="upl-st ${cls}">${esc(STAGE[d.status] ?? d.status)}</span><span class="dim" style="font-size:12px">${extra}</span></li>`;
+        return `<li${d.id ? ` data-doc="${esc(d.id)}"` : ""}><b title="${esc(d.title)}">${esc(d.title)}</b><span class="upl-st ${cls}">${esc(stage)}</span><span class="dim" style="font-size:12px">${extra}</span></li>`;
       })
       .join("");
     if (state.wsDocs.some((d) => d.progress))
-      readingView().then((R) =>
-        R?.render($("#upl-flow"), state.wsDocs, { drops: state.drops }),
-      );
+      readingView()
+        .then((R) => {
+          try {
+            R?.render($("#upl-flow"), state.wsDocs, { drops: state.drops });
+          } catch (e) {
+            // A view bug must not take the upload list and polling down
+            // with it: the list above is the truthful fallback.
+            console.error("reading view failed", e);
+          }
+        })
+        .catch(() => {});
   }
   $("#upl-list").addEventListener("click", (e) => {
     const li = e.target.closest("li[data-doc]");
@@ -1772,7 +1823,13 @@
       callState("Checking your upload…");
       try {
         await api(`/workspace/${state.ws}`);
-      } catch {
+      } catch (e) {
+        if (e?.status !== 404 && e?.status !== 410) {
+          callState(
+            "Your upload could not be checked right now. Your documents are still here. Try calling again in a moment.",
+          );
+          return;
+        }
         state.ws = null;
         try {
           sessionStorage.removeItem("vm_ws");

@@ -185,12 +185,17 @@ test("a failed upload is not 'no upload': said plainly, never the default record
 });
 
 test("an expired workspace is not 'no upload': said plainly, never the default records", async () => {
-  const api = await boot({ VM_WS_IDLE_MIN: "0.0005" }); // ~30 ms
+  // A 30 ms real deadline could expire before upload on a loaded test host.
+  // Advance the clock only AFTER upload and mint, then exercise the real
+  // expiration path without racing parser/network scheduling.
+  const api = await boot({ VM_WS_IDLE_MIN: "1" });
+  const realNow = Date.now;
   try {
     const { id } = await api.upload(WAREHOUSE, "warehouse.txt");
     const m = await api.mint({ vm_ws: id });
     assert.equal(m.status, 200);
-    await new Promise((r) => setTimeout(r, 150));
+    const expiredAt = realNow() + 61000;
+    Date.now = () => expiredAt;
     const said = await api.say(
       api.minted[0].user_data.vm_ws,
       "How many open safety items did the east warehouse record?",
@@ -198,6 +203,7 @@ test("an expired workspace is not 'no upload': said plainly, never the default r
     assert.match(said, /expired/i);
     assert.doesNotMatch(said, /ferritin|50 ng\/mL|14 open/i);
   } finally {
+    Date.now = realNow;
     await api.close();
   }
 });

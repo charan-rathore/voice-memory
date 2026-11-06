@@ -9,7 +9,9 @@ await new Promise((r) => app.listen(PORT, "127.0.0.1", r));
 mkdirSync("/tmp/vm-shots", { recursive: true });
 const browser = await chromium.launch({
   headless: true,
-  executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome",
+  ...(process.env.CHROME_PATH
+    ? { executablePath: process.env.CHROME_PATH }
+    : {}),
   args: ["--no-sandbox"],
 });
 const fail = (m) => {

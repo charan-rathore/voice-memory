@@ -73,26 +73,41 @@
   resize();
 
   // ------------------------------------------------------------ data
+  let loadVersion = 0;
+  let generation = null;
+  let pollLoading = false;
   async function load(id) {
+    const version = ++loadVersion;
     let g = null;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 6000);
     try {
-      const ctl = new AbortController();
-      setTimeout(() => ctl.abort(), 6000);
       const r = await fetch(`/api/public/graph/${id}`, { signal: ctl.signal });
       if (r.ok) g = await r.json();
-    } catch {
-      /* fall back to snapshot */
-    }
-    g ??= snap.graphs?.[id];
-    if (!g) return;
-    build(g, id);
+    } catch {} finally { clearTimeout(timer); }
+    if (version !== loadVersion) return;
+    const snapshot = !g && snap.graphs?.[id];
+    g ??= snapshot;
+    const status = $("#graph-status");
+    status.hidden = !!g && !snapshot && !g.coverage?.limited;
+    status.textContent = !g ? "This graph is unavailable. Try selecting the case again." : snapshot ? "Showing a saved demo graph while the engine reconnects." : g.coverage?.limited ? `Showing ${g.coverage.shownChunks} of ${g.coverage.anchoredChunks} grounded passages. Ask a question to search the full document index.` : "";
+    if (g?.generation && id === caseId && g.generation === generation) return;
+    generation = g?.generation ?? null;
+    build(g || { nodes: [], edges: [] }, id);
   }
+
+  setInterval(async () => {
+    if (caseId !== wsId || document.hidden || pollLoading) return;
+    pollLoading = true;
+    try { await load(caseId); } finally { pollLoading = false; }
+  }, 8000);
 
   const radiusOf = (n) => (n.kind === "patient" ? 20 : n.kind === "document" ? 0 : n.kind === "topic" ? 7 : n.kind === "evidence" ? 4 : 11);
   function colorOf(n) {
     if (n.kind === "patient") return C.mark;
     if (n.kind === "document") return C.blue;
-    if (n.kind === "topic") return C.violet;
+    if (n.kind === "topic" || n.kind === "section") return C.violet;
+    if (n.kind === "chunk") return C.teal;
     if (n.kind === "evidence") return C.ink;
     // A missing signature or an unknown status is never drawn in the
     // approved colour.
@@ -109,6 +124,7 @@
   function build(g, id) {
     caseId = id;
     document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.case === id)));
+    const oldSelection = selected;
     const prev = new Map(nodes.map((n) => [n.id, n]));
     nodes = g.nodes.map((n, i) => {
       const p = prev.get(n.id);
@@ -122,20 +138,37 @@
     for (const e of edges) { e.a.deg++; e.b.deg++; }
     selected = null; focusSet = null; closePanel();
     legend();
+    renderNodeList();
     for (let i = 0; i < 260; i++) step(1);
     fit(false);
+    if (oldSelection) {
+      const replacement = byId.get(oldSelection.id) || byId.get(`doc:${oldSelection.evidence?.sourceId}`);
+      if (replacement) select(replacement, { zoom: false });
+    }
   }
 
+  function renderNodeList(query = "") {
+    const list = $("#accessible-nodes");
+    list.replaceChildren();
+    for (const n of nodes.filter(n => `${n.label ?? ""} ${n.kind}`.toLowerCase().includes(query))) {
+      const li = document.createElement("li");
+      const button = document.createElement("button");
+      button.textContent = `${n.kind}: ${n.label || "Exact sentence"}`;
+      button.onclick = () => { select(n); $("#close").focus(); };
+      li.append(button); list.append(li);
+    }
+  }
   function legend() {
     $("#lg-nodes").innerHTML = NODE_LEGEND[kindOf()]
       .map(([k, col, label]) => `<li><span class="sw" style="${k === "document" ? `border:2px solid ${col};border-radius:4px` : k.startsWith("value") ? `background:${col};clip-path:polygon(25% 5%,75% 5%,100% 50%,75% 95%,25% 95%,0 50%)` : `background:${col};border-radius:50%`}"></span>${label}</li>`)
       .join("");
+    if (nodes.some(n => n.kind === "chunk")) $("#lg-nodes").innerHTML += `<li><span class="sw" style="background:${C.violet}"></span>Section</li><li><span class="sw" style="background:${C.teal}"></span>Grounded passage</li>`;
     const kinds = new Set(edges.map((e) => e.kind));
     $("#lg-edges").innerHTML = Object.entries(SPECIAL)
       .filter(([k]) => kinds.has(k))
       .map(([, s]) => `<li><span class="sw ln${s.dash ? " dash" : ""}" style="border-color:${s.color}"></span>${s.label}</li>`)
-      .join("") + `<li><span class="sw ln" style="border-color:rgba(160,170,200,.35)"></span>records / measures / cites</li>`;
-    $("#lg-sub").textContent = caseId === wsId ? "Your uploaded documents: every value and sentence the engine indexed, and how they connect." : kindOf() === "health" ? "Two synthetic patients, four reports and every lab value, with the edges the engine answers from." : "Seven fictional deal records: each value, its status, and the exact sentences behind it.";
+      .join("") + `<li><span class="sw ln" style="border-color:rgba(160,170,200,.35)"></span>records / measures / cites / contains / overlaps / next in document</li>`;
+    $("#lg-sub").textContent = caseId === wsId ? "Your documents, sections and grounded passages. Structural links show containment and source order; they do not assert meaning or causality." : kindOf() === "health" ? "Two synthetic patients, four reports and every lab value, with the edges the engine answers from." : "Seven fictional deal records: each value, its status, and the exact sentences behind it.";
     $("#lg-count").textContent = `${nodes.length} nodes · ${edges.length} edges · computed from the documents`;
   }
 
@@ -359,6 +392,7 @@
   document.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => { stopStory(); load(b.dataset.case); history.replaceState(null, "", `?case=${b.dataset.case === wsId ? "own" : b.dataset.case}`); }));
   $("#find").addEventListener("input", (e) => {
     const q = e.target.value.trim().toLowerCase();
+    renderNodeList(q);
     if (!q) { focusSet = null; return; }
     const hits = nodes.filter((n) => String(n.label ?? "").toLowerCase().includes(q) || String(n.test ?? "").toLowerCase().includes(q));
     focusSet = new Set(hits.flatMap((n) => [...neighbours(n)]));
@@ -374,7 +408,7 @@
   }
   function closePanel() { $("#panel").hidden = true; }
   function openPanel(n) {
-    const kind = { patient: "Patient", document: "Document", topic: kindOf() === "health" ? "Test" : "Topic", value: "Value", evidence: "Exact sentence" }[n.kind] ?? n.kind;
+    const kind = { patient: "Patient", document: "Document", topic: kindOf() === "health" ? "Test" : "Topic", value: "Value", evidence: "Exact sentence", section: "Section", chunk: "Grounded passage" }[n.kind] ?? n.kind;
     $("#p-kind").textContent = kind;
     $("#p-title").textContent = n.kind === "evidence" ? "Cited sentence" : labelOf(n);
     const links = edges
@@ -387,6 +421,7 @@
     $("#p-body").innerHTML = `
       ${n.status ? `<span class="chip c-${esc(n.noSignedRecord ? "unresolved" : n.status)}">${esc(window.VM_STATUS.statusLabel(n))}</span>` : ""}
       ${n.date ? `<span style="margin-left:8px;color:var(--ink-3);font-size:12.5px">${esc(n.date)}</span>` : ""}
+      ${n.provisional ? '<p class="viewer-note">Partial reading: this passage may change when OCR finishes.</p>' : ""}
       ${quote ? `<p class="quote"><small>${esc(ev?.page ? "page " + ev.page + " · " : "")}exact source text</small>${esc(/^\s*\|/.test(quote) ? String(quote).split("|").map((x) => x.trim()).filter(Boolean).join(" · ") : String(quote).replace(/^\d+\.\s*/, ""))}</p>` : ""}
       <p class="p-sec">Connections (${links.length})</p>
       <ul class="links">${links

@@ -79,3 +79,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
     text-overflow: ellipsis;
   }
 }
+
+#node-list { margin-top: 12px; max-height: 32vh; overflow: auto; pointer-events: auto; }
+#node-list summary { cursor: pointer; }
+#accessible-nodes { display: grid; gap: 6px; margin-top: 8px; }
+#accessible-nodes button { text-align: left; color: inherit; background: transparent; border: 1px solid #566079; border-radius: 6px; padding: 6px; width: 100%; cursor: pointer; }
+#accessible-nodes button:focus-visible { outline: 2px solid #af9cff; }
+#graph-status { pointer-events: none; }
+
+@media (max-width: 760px) {
+  .legend { display: block; top: 112px; left: 10px; width: min(290px, calc(100vw - 20px)); padding: 8px; }
+  .legend > :not(#node-list) { display: none; }
+  #node-list { margin: 0; max-height: 23vh; }
+}

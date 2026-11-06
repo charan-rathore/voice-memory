@@ -74,7 +74,9 @@ try {
   }
   browser = await chromium.launch({
     headless: true,
-    executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome",
+    ...(process.env.CHROME_PATH
+      ? { executablePath: process.env.CHROME_PATH }
+      : {}),
     args: ["--no-sandbox"],
   });
   const page = await browser.newPage({
