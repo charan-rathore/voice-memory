@@ -11,6 +11,7 @@ import {
   seriesFor,
 } from "./observations.mjs";
 import { clinicalTurn, clinicalAnswer } from "./answer.mjs";
+import { readLabLine } from "./lab-lines.mjs";
 
 const gold = JSON.parse(
   readFileSync(new URL("./fixtures/gold.json", import.meta.url), "utf8"),
@@ -518,7 +519,7 @@ test("a child's result is never judged against an adult band, even glued to numb
   );
   assert.match(
     t.spoken,
-    /adult ranges?|haven't judged|not judged/i,
+    /adult ranges?|haven't judged|not judged|can't judge|haven't compared/i,
     "the child/adult-range caveat is spoken",
   );
 });
@@ -538,4 +539,288 @@ test("anonymous reports are never attributed to the caller (graph audit #1)", as
   // a single anonymous document on its own still answers from itself
   const solo = clinicalTurn("What is the latest creatinine?", [anon[0]]);
   assert.equal(solo.verdict, "LATEST", solo.spoken);
+});
+
+test("parenthesised reference ranges and trailing flags are read, never glued", () => {
+  const cases = [
+    [
+      "Serum potassium: 6.1 mmol/L (reference 3.5-5.0) - flagged HIGH",
+      "3.5-5.0",
+      "HIGH",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L (reference range 3.5-5.0) - flagged HIGH",
+      "3.5-5.0",
+      "HIGH",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L reference 3.5-5.0 flagged HIGH",
+      "3.5-5.0",
+      "HIGH",
+    ],
+    ["Serum potassium: 6.1 mmol/L reference range 3.5-5.0 H", "3.5-5.0", "H"],
+    ["Serum potassium: 6.1 mmol/L 3.5-5.0 H", "3.5-5.0", "H"],
+    ["Serum potassium 6.1 mmol/L (3.5-5.0) H", "3.5-5.0", "H"],
+    ["Serum potassium: 6.1 mmol/L (3.5-5.0)", "3.5-5.0", null],
+    ["TSH: 0.05 mIU/L (0.40-4.00) L", "0.40-4.00", "L"],
+    ["Hemoglobin: 13.8 g/dL (12-16)", "12-16", null],
+    ["Vitamin D: 18 ng/mL <30 L", "<30", "L"],
+    // Negation, history and unsupported prose are never read as a current
+    // flag and never judged as a range: the printed text is kept as raw
+    // provenance (rangeRaw), not compared and not denied.
+    [
+      "Serum potassium: 6.1 mmol/L (reference 3.5-5.0) - not flagged HIGH",
+      null,
+      null,
+      "3.5-5.0 - not flagged HIGH",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L (reference 3.5-5.0) - previously HIGH",
+      null,
+      null,
+      "3.5-5.0 - previously HIGH",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L 3.5-5.0 tentatively HIGH",
+      null,
+      null,
+      "3.5-5.0 tentatively HIGH",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L (reference 3.5-5.0) - obsolete range, do not use",
+      null,
+      null,
+      "3.5-5.0 - obsolete range, do not use",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L (reference 3.5-5.0) - replaced by 4.0-7.0",
+      null,
+      null,
+      "3.5-5.0 - replaced by 4.0-7.0",
+    ],
+    // A label's presence never overrides full-suffix validation: qualified
+    // sex/age band strings are kept as provenance, never judged or flagged.
+    [
+      "Serum potassium: 6.1 mmol/L (reference Male:3.5-5.0 Female:3.0-4.5) - obsolete range, do not use",
+      null,
+      null,
+      "Male:3.5-5.0 Female:3.0-4.5 - obsolete range, do not use",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L Male: 3.5-5.0 - not flagged HIGH",
+      null,
+      null,
+      "Male: 3.5-5.0 - not flagged HIGH",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L 3.5-5.0 - replaced by adult:4.0-7.0",
+      null,
+      null,
+      "3.5-5.0 - replaced by adult:4.0-7.0",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L 3.5-5.0 - adults previously HIGH",
+      null,
+      null,
+      "3.5-5.0 - adults previously HIGH",
+    ],
+    // Sex-labelled and band-labelled strings are provenance, never judged:
+    // applicability is resolved nowhere safe, so the numbers stay quoted.
+    [
+      "Hemoglobin: 13.8 g/dL Male: 13.5-18 Female: 12-16",
+      null,
+      null,
+      "Male: 13.5-18 Female: 12-16",
+    ],
+    [
+      "Hemoglobin: 11.3 g/dL 11.5-15.5child;13-17adult L",
+      null,
+      null,
+      "11.5-15.5child;13-17adult L",
+    ],
+    // The resolver never picks between duplicate or foreign applicability
+    // bands: duplicate same-sex bands, duplicate adult bands, a lone age
+    // span and a sole opposite-sex band all stay quoted, never judged.
+    [
+      "Serum potassium: 6.1 mmol/L Male:3.5-5.0 Male:4.0-7.0",
+      null,
+      null,
+      "Male:3.5-5.0 Male:4.0-7.0",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L 11.5-15.5child;13-17adult;14-18adult",
+      null,
+      null,
+      "11.5-15.5child;13-17adult;14-18adult",
+    ],
+    ["Serum potassium: 6.1 mmol/L 13-99 YRS", null, null, "13-99 YRS"],
+    [
+      "Serum potassium: 6.1 mmol/L (reference Female: 3.0-4.5)",
+      null,
+      null,
+      "Female: 3.0-4.5",
+    ],
+    ["Neutrophils: 67% (Normal Range: 45 - 70 %)", "45 - 70 %", null],
+    // An unknown word before the range is qualification prose, never a
+    // label: kept as provenance, never judged.
+    [
+      "Serum potassium: 6.1 mmol/L (reference obsolete:3.5-5.0)",
+      null,
+      null,
+      "obsolete:3.5-5.0",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L withdrawn: 3.5-5.0",
+      null,
+      null,
+      "withdrawn: 3.5-5.0",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L do not use:3.5-5.0",
+      null,
+      null,
+      "do not use:3.5-5.0",
+    ],
+    // Distinct unlabelled bands: nobody may pick between them.
+    [
+      "Serum potassium: 6.1 mmol/L (reference3.5-5.0);4.0-7.0",
+      null,
+      null,
+      "3.5-5.0 ;4.0-7.0",
+    ],
+  ];
+  for (const [line, range, flag, rangeRaw = null] of cases) {
+    const r = readLabLine(line);
+    assert.ok(r, line);
+    assert.equal(r.range, range, line);
+    assert.equal(r.flag, flag, line);
+    assert.equal(r.rangeRaw ?? null, rangeRaw, line);
+  }
+  // A flag with no printed range stays a flag; no range is invented.
+  const bare = readLabLine("Serum potassium: 6.1 mmol/L flagged HIGH");
+  assert.equal(bare.range, null);
+  assert.equal(bare.flag, "HIGH");
+  // A line without a printed range still has none.
+  const none = readLabLine("Creatinine: 1.2 mg/dL");
+  assert.equal(none.range, null);
+  assert.equal(none.flag, null);
+});
+
+test("a qualified printed range is quoted, never judged or denied", () => {
+  for (const ref of [
+    "3.5-5.0 - obsolete range, do not use",
+    "3.5-5.0 - replaced by 4.0-7.0",
+    "3.5-5.0 - not flagged HIGH",
+    "obsolete:3.5-5.0",
+    "withdrawn: 3.5-5.0",
+    "3.5-5.0;4.0-7.0",
+  ]) {
+    const doc = {
+      text: `SYN-UP-001 - Voice Memory Rehearsal Record (Synthetic)\nPatient: SYN-UP-001 (fictional)\nDate of report: 07 Nov 2026\nLaboratory results:\n- Serum potassium: 6.1 mmol/L (reference ${ref})\n- Serum sodium: 139 mmol/L (reference 136-145)\n`,
+      elements: [],
+    };
+    const r = extractReport(doc);
+    const rep = { title: "syn-up-001.pdf", sourceId: "syn-up-001.pdf", ...r };
+    const t = clinicalTurn("What is the patient's potassium level?", [rep]);
+    assert.match(t.spoken, /6\.1/, ref);
+    // never compared against the qualified range
+    assert.doesNotMatch(t.spoken, /above this lab's printed range/i, ref);
+    assert.doesNotMatch(t.spoken, /below this lab's printed range/i, ref);
+    assert.doesNotMatch(t.spoken, /within this lab's range/i, ref);
+    // never a false absent claim
+    assert.doesNotMatch(t.spoken, /doesn't give a range/i, ref);
+    // the printed note is quoted as provenance, with the abstention stated
+    assert.match(t.spoken, /3\.5-5\.0/, ref);
+    assert.match(t.spoken, /can't judge|haven't compared/i, ref);
+  }
+});
+
+test("a qualified sex-band range is quoted, never judged, for an adult male", () => {
+  const doc = {
+    text: "SYN-UP-002 - Voice Memory Rehearsal Record (Synthetic)\nPatient: SYN-UP-002 (fictional)\nAge: 34 Yrs\nSex: Male\nDate of report: 07 Nov 2026\nLaboratory results:\n- Serum potassium: 6.1 mmol/L (reference Male:3.5-5.0 Female:3.0-4.5) - obsolete range, do not use\n",
+    elements: [],
+  };
+  const r = extractReport(doc);
+  const rep = { title: "syn-up-002.pdf", sourceId: "syn-up-002.pdf", ...r };
+  const t = clinicalTurn("What is the patient's potassium level?", [rep]);
+  assert.match(t.spoken, /6\.1/);
+  assert.doesNotMatch(t.spoken, /above this lab's printed range/i);
+  assert.doesNotMatch(t.spoken, /below this lab's printed range/i);
+  assert.doesNotMatch(t.spoken, /within this lab's range/i);
+  assert.doesNotMatch(t.spoken, /doesn't give a range/i);
+  assert.match(t.spoken, /Male:3\.5-5\.0 Female:3\.0-4\.5/);
+  assert.match(t.spoken, /can't judge|haven't compared/i);
+});
+
+test("a printed parenthesised range and flag reach the spoken answer", () => {
+  const doc = {
+    text: "SYN-UP-001 - Voice Memory Rehearsal Record (Synthetic)\nPatient: SYN-UP-001 (fictional)\nDate of report: 07 Nov 2026\nLaboratory results:\n- Serum potassium: 6.1 mmol/L (reference 3.5-5.0) - flagged HIGH\n- Serum sodium: 139 mmol/L (reference 136-145)\n",
+    elements: [],
+  };
+  const r = extractReport(doc);
+  const obs = r.observations.find((o) => /potassium/i.test(o.test));
+  assert.ok(obs, "potassium observation extracted");
+  assert.equal(obs.value, 6.1);
+  assert.equal(obs.unit, "mmol/L");
+  assert.equal(obs.range, "3.5-5.0");
+  assert.equal(obs.flag, "HIGH");
+  const rep = { title: "syn-up-001.pdf", sourceId: "syn-up-001.pdf", ...r };
+  const a = clinicalAnswer("What is the patient's potassium level?", [rep]);
+  assert.ok(a?.spoken, "an answer is spoken");
+  assert.match(a.spoken, /6\.1/);
+  assert.match(
+    a.spoken,
+    /above this lab's printed range of 3\.5 to 5\.0/,
+    "the printed range and the comparison are spoken",
+  );
+  assert.doesNotMatch(a.spoken, /doesn't give a range/i);
+});
+
+for (const note of [
+  "3.5-5.0 - obsolete range, do not use; replaced by a corrected interval issued by the laboratory",
+  "historically withdrawn: 3.5-5.0",
+]) {
+  test(`qualified reference survives: ${note}`, () => {
+    const line = `Serum potassium: 6.1 mmol/L ${note}`;
+    const parsed = readLabLine(line);
+    assert.equal(parsed.range, null);
+    assert.equal(parsed.rangeRaw, note);
+    const rep = {
+      title: "synthetic-reference.txt",
+      sourceId: "synthetic-reference.txt",
+      ...extractReport({
+        text: `Patient: SYN-001\nDate of report: 07 Nov 2026\n${line}`,
+        elements: [],
+      }),
+    };
+    const answer = clinicalTurn("What is the potassium result?", [rep]);
+    assert.ok(answer.spoken.includes(note), answer.spoken);
+    assert.match(answer.spoken, /haven't compared|can't judge/i);
+    assert.doesNotMatch(
+      answer.spoken,
+      /doesn't give a range|above this lab|below this lab|within this lab/i,
+    );
+  });
+}
+
+test("a critical flag does not hide an unjudged printed reference", () => {
+  const note = "3.5-5.0 - obsolete range, do not use";
+  const line = `Serum potassium: 6.1 Critical mmol/L ${note}`;
+  const rep = {
+    title: "synthetic-critical.txt",
+    sourceId: "synthetic-critical.txt",
+    ...extractReport({
+      text: `Patient: SYN-001\nDate of report: 07 Nov 2026\n${line}`,
+      elements: [],
+    }),
+  };
+  assert.equal(rep.observations[0].flag, "Critical");
+  const answer = clinicalTurn("What is the potassium result?", [rep]);
+  assert.match(answer.spoken, /marked this result as critical/i);
+  assert.ok(answer.spoken.includes(note), answer.spoken);
+  assert.match(answer.spoken, /haven't compared|can't judge/i);
+  assert.doesNotMatch(
+    answer.spoken,
+    /doesn't give a range|above this lab|below this lab|within this lab/i,
+  );
 });

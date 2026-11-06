@@ -906,6 +906,9 @@ const SAY = {
     qualOnly: (a) => `${a}.`,
     noRange: (m) =>
       ` ${m} other result${m === 1 ? " has" : "s have"} no printed range, so I haven't judged ${m === 1 ? "it" : "them"}.`,
+    qualified: (m) =>
+      ` ${m} other result${m === 1 ? " has" : "s have"} a printed reference with a qualification I can't judge, so I haven't judged ${m === 1 ? "it" : "them"}.`,
+
     symptoms:
       "A lab report shows test results, not symptoms, so I can only tell you what the numbers say. ",
     child: (age, m) =>
@@ -953,6 +956,9 @@ const SAY = {
     qualOnly: (a) => `${a}।`,
     noRange: (m) =>
       ` ${m} नतीजों की सीमा नहीं छपी है, इसलिए मैंने उन्हें नहीं आंका।`,
+    qualified: (m) =>
+      ` ${m} अन्य नतीजे ऐसे संदर्भ के साथ छपे हैं जिसे मैं नहीं आंक सकती, इसलिए मैंने उन्हें नहीं आंका है।`,
+
     symptoms:
       "लैब रिपोर्ट में जांच के नतीजे होते हैं, लक्षण नहीं, इसलिए मैं सिर्फ़ यह बता सकती हूं कि नंबर क्या कहते हैं। ",
     child: (age, m) =>
@@ -993,6 +999,9 @@ const SAY = {
     qualOnly: (a) => `${a}.`,
     noRange: (m) =>
       ` ${m} results ki range nahi chhapi, isliye maine unhe judge nahi kiya.`,
+    qualified: (m) =>
+      ` ${m} aur results ke saath aisa reference chhapa hai jise main judge nahi kar sakti, isliye maine unhe judge nahi kiya hai.`,
+
     symptoms:
       "Lab report mein test results hote hain, symptoms nahi, isliye main sirf yeh bata sakti hoon ki numbers kya kehte hain. ",
     child: (age, m) =>
@@ -1209,8 +1218,12 @@ export function reportSummary(question, reports) {
       spoken += S.rest(judged.length - flagged.length);
   }
   const unjudged = obs.length - judged.length - adultOnly;
+  const qualified = obs.filter(
+    (o) => o.rangeRaw && position(o) === "unknown" && !o.ref?.adultOnly,
+  ).length;
   if (child && adultOnly) spoken += S.child(child.meta.patient.age, adultOnly);
-  if (unjudged > 0) spoken += S.noRange(unjudged);
+  if (unjudged - qualified > 0) spoken += S.noRange(unjudged - qualified);
+  if (qualified > 0) spoken += S.qualified(qualified);
   if (critical) spoken += S.critical(critical);
   else if (flagged.length) spoken += S.gentle;
   else spoken += S.calm;

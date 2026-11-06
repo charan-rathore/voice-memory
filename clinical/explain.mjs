@@ -455,6 +455,8 @@ const T = {
     below: (r) => `That's below this lab's printed range of ${span(r, "en")}.`,
     above: (r) => `That's above this lab's printed range of ${span(r, "en")}.`,
     unknown: () => `The report doesn't give a range I can compare it with.`,
+    unjudged: (raw) =>
+      `The report prints "${String(raw).replace(/"/g, "'")}" with it. That is more than a plain range, which I can't judge, so I haven't compared the result against it.`,
     adultOnly: `The ranges printed for it are adult ranges and this report is for a child, so I won't judge it against them; a doctor can, using ranges for the child's age.`,
     qualValue: (o, date) =>
       `Your ${nameOf(o)} result is ${o.qual}, from ${date}.`,
@@ -509,6 +511,8 @@ const T = {
     above: (r) => `यह इस लैब की छपी सीमा (${span(r, "hi")}) से ज़्यादा है।`,
     unknown: () =>
       `रिपोर्ट में ऐसी सीमा नहीं दी गई है जिससे मैं इसकी तुलना कर सकूं।`,
+    unjudged: (raw) =>
+      `रिपोर्ट में इसके साथ "${String(raw).replace(/"/g, "'")}" छपा है, जो कोई सादी सीमा नहीं है जिसे मैं आंक सकूं, इसलिए मैंने नतीजे की उससे तुलना नहीं की है।`,
     adultOnly: `इसके लिए छपी सीमाएं वयस्कों की हैं और यह रिपोर्ट एक बच्चे की है, इसलिए मैं इसे उनसे नहीं आंकूंगी; डॉक्टर बच्चे की उम्र की सीमा से इसे देख सकते हैं।`,
     qualValue: (o, date) =>
       `आपका ${nameOf(o)} नतीजा ${QUAL_HI[o.qual] ?? o.qual} है, ${date} की जांच से।`,
@@ -562,6 +566,8 @@ const T = {
       `Yeh is lab ki printed range (${span(r, "hinglish")}) se zyada hai.`,
     unknown: () =>
       `Report mein aisi range nahi di gayi jisse main iski tulna kar sakoon.`,
+    unjudged: (raw) =>
+      `Report mein iske saath "${String(raw).replace(/"/g, "'")}" chhapa hai, jo koi plain range nahi hai jise main judge kar sakoon, isliye maine result ki usse tulna nahi ki hai.`,
     adultOnly: `Iske liye chhapi ranges adults ki hain aur yeh report ek bachche ki hai, isliye main ise unse judge nahi karungi; doctor bachche ki umar ki range se ise dekh sakte hain.`,
     qualValue: (o, date) =>
       `Aapka ${nameOf(o)} result ${o.qual} hai, ${date} ki jaanch se.`,
@@ -640,8 +646,11 @@ export function explainOne(o, date, lang) {
       ? t.valueEmbedded(o, sayDate(date, lang))
       : t.value(o, sayDate(date, lang)),
   ];
-  if (CRITICAL_FLAG.test(o.flag ?? "")) parts.push(t.critical);
-  else if (o.ref?.adultOnly) parts.push(t.adultOnly);
+  if (CRITICAL_FLAG.test(o.flag ?? "")) {
+    parts.push(t.critical);
+    if (pos === "unknown" && o.rangeRaw) parts.push(t.unjudged(o.rangeRaw));
+  } else if (o.ref?.adultOnly) parts.push(t.adultOnly);
+  else if (pos === "unknown" && o.rangeRaw) parts.push(t.unjudged(o.rangeRaw));
   else parts.push(r && pos !== "unknown" ? t[pos](r) : t.unknown());
   if (o.flagConflict) parts.push(t.flagConflict(o));
   const g = GLOSSARY[o.canon ?? o.key];
