@@ -796,8 +796,14 @@ export function createLocalServer({
       (first.match(/\b[A-Z][A-Za-z #./]{1,20}:/g) ?? []).length >= 2
     );
   };
+  // A stable workspace ID is an access boundary, not an index generation.
+  // Weak keys do not retain old bundles after their workspace is rebuilt.
+  const answerGenerations = new WeakMap();
+  let nextAnswerGeneration = 0;
   async function resolveAnswer(s, question, ctx, opts = {}) {
     const bundle = s.bundle;
+    if (!answerGenerations.has(bundle))
+      answerGenerations.set(bundle, ++nextAnswerGeneration);
     // May this document set's passages go to the model? Fictional demo
     // cases: yes. A visitor's own documents: only with their consent, and
     // only outside VM_SEMANTIC_AUDIENCE=demo trial scope (see scope.mjs).
@@ -807,7 +813,9 @@ export function createLocalServer({
     // answer cached while the embedder was cold or warming must not
     // outlive that state (see denseCacheSuffix in dense.mjs).
     const key = answerCache.key(
-      bundle.scope + denseCacheSuffix(bundle) + mode,
+      JSON.stringify([bundle.scope, answerGenerations.get(bundle)]) +
+        denseCacheSuffix(bundle) +
+        mode,
       question,
       ctx,
       detectLang(question),

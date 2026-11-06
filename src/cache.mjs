@@ -1,12 +1,12 @@
 // Answer cache with request coalescing ("singleflight").
 //
 // Correctness comes from the key, not from invalidation bookkeeping:
-//   key = bundle.scope + context + language + normalized question
-// bundle.scope is a fresh random id for every index build, so uploading,
-// removing or re-importing documents changes every key at once (old entries
-// age out of the LRU), and two sessions can never share an entry because
-// their scopes differ. Values are stored serialized, so no caller can mutate
-// a shared object.
+//   key = caller snapshot identity + context + language + normalized question
+// The server includes both the workspace scope and a per-bundle generation.
+// A stable workspace scope alone cannot invalidate answers after an upload.
+// Rebuilding the index changes the generation, while different workspaces
+// remain isolated. Old entries age out of the bounded LRU. Values are stored
+// serialized, so no caller can mutate a shared object.
 //
 // Coalescing: concurrent misses for the same key share one computation.
 export function normalizeQuestion(q) {
