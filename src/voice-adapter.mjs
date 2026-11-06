@@ -665,7 +665,14 @@ export function createVoiceAdapter({
                         .map((o) => observationEvidence(o, bundle))
                         .filter(Boolean)
                         .map((e) => ({
+                          // sourceId/start/end ride to the turn feed's
+                          // decorateResult, which resolves documentId and
+                          // the page bbox; stripped anchors made voice
+                          // citations unverifiable.
                           title: e.title,
+                          sourceId: e.sourceId,
+                          start: e.start,
+                          end: e.end,
                           docDate: null,
                           quote: e.quote,
                           firstLine: e.firstLine,
@@ -918,7 +925,11 @@ export function createVoiceAdapter({
                   .map((o) => observationEvidence(o, bundle))
                   .filter(Boolean)
                   .map((c) => ({
+                    // Anchors pass through: see the mixed-turn note above.
                     title: c.title,
+                    sourceId: c.sourceId,
+                    start: c.start,
+                    end: c.end,
                     docDate: null,
                     quote: c.quote,
                     firstLine: c.firstLine,
@@ -955,7 +966,11 @@ export function createVoiceAdapter({
                 field: null,
                 intent: rendered?.intent ?? "LOOKUP",
                 citations: quoted.citations.map((c) => ({
+                  // Anchors pass through: see the mixed-turn note above.
                   title: c.title,
+                  sourceId: c.sourceId ?? null,
+                  start: c.start ?? null,
+                  end: c.end ?? null,
                   docDate: null,
                   quote: c.quote,
                   firstLine: c.firstLine,

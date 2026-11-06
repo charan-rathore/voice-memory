@@ -407,3 +407,180 @@ test("a workspace id spoken by the caller cannot select that workspace", async (
     await api.close();
   }
 });
+
+test("voice turn citations carry anchors (demo case)", async () => {
+  const api = await boot();
+  try {
+    const m = await api.mint({ page: "landing", vm_ws: "health" });
+    assert.equal(m.status, 200);
+    const handle = vmWsOf(api.minted[0]);
+    const [spoken] = await conversation(api, handle, [
+      "What is SYN-0001's ferritin result?",
+    ]);
+    assert.match(spoken, /50 ng\/mL/);
+    const turns = (await api.turns(m.body.vm_ticket)).body.turns;
+    const cite = turns
+      .at(-1)
+      ?.lead?.citations?.find((c) => /amended/.test(c.title ?? ""));
+    assert.ok(cite, "a citation from the amended report");
+    assert.ok(cite.documentId, "documentId resolved");
+    assert.equal(typeof cite.start, "number", "start anchor");
+    assert.equal(typeof cite.end, "number", "end anchor");
+    assert.ok(cite.end > cite.start, "bounds valid");
+    assert.ok(cite.quote?.length > 10, "quote present");
+    assert.equal(
+      cite.end - cite.start,
+      cite.quote.length,
+      "quote is the exact canonical slice",
+    );
+    assert.ok(
+      Array.isArray(cite.location?.pages) && cite.location.pages.length,
+      "page bbox located",
+    );
+  } finally {
+    await api.close();
+  }
+});
+
+test("voice turn citations carry anchors (uploaded workspace document)", async () => {
+  const api = await boot();
+  try {
+    const ws = await (
+      await fetch(api.b + "/api/public/workspace", { method: "POST" })
+    ).json();
+    const text =
+      "SYN-UP-001 - Rehearsal Record (Synthetic)\nDate of report: 07 Nov 2026\nLaboratory results:\n- Serum potassium: 6.1 mmol/L (reference 3.5-5.0) - flagged HIGH\n- Serum sodium: 139 mmol/L (reference 136-145)\n";
+    const up = await fetch(`${api.b}/api/public/workspace/${ws.id}/upload`, {
+      method: "POST",
+      headers: {
+        "x-file-name": "syn-up-001.txt",
+        "content-type": "text/plain",
+      },
+      body: text,
+    });
+    assert.equal(up.status, 202);
+    let docId = null;
+    for (let i = 0; i < 50; i++) {
+      const st = await (
+        await fetch(`${api.b}/api/public/workspace/${ws.id}`)
+      ).json();
+      if (st.ready) {
+        docId = st.documents[0]?.id;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.ok(docId, "workspace doc indexed");
+    const m = await api.mint({ page: "landing", vm_ws: ws.id });
+    assert.equal(m.status, 200);
+    const handle = vmWsOf(api.minted[0]);
+    const [spoken] = await conversation(api, handle, [
+      "What is the patient's potassium level?",
+    ]);
+    assert.match(spoken, /6\.1/);
+    // the printed range is spoken with its comparison, never denied
+    assert.match(spoken, /3\.5 to 5\.0|3\.5-5\.0/);
+    assert.doesNotMatch(spoken, /doesn't give a range/i);
+    const turns = (await api.turns(m.body.vm_ticket)).body.turns;
+    const cite = turns.at(-1)?.lead?.citations?.[0];
+    assert.ok(cite, "a citation on the uploaded document");
+    assert.equal(cite.documentId, docId, "citation owns the uploaded doc");
+    assert.equal(typeof cite.start, "number", "start anchor");
+    assert.equal(typeof cite.end, "number", "end anchor");
+    assert.ok(cite.end > cite.start, "bounds valid");
+    assert.ok(cite.quote?.includes("6.1"), "quote carries the result line");
+    assert.equal(
+      text.slice(cite.start, cite.end),
+      cite.quote,
+      "quote is the exact slice of the uploaded text",
+    );
+  } finally {
+    await api.close();
+  }
+});
+
+test("voice extractive answer citations carry anchors", async () => {
+  const api = await boot();
+  try {
+    const ws = await (
+      await fetch(api.b + "/api/public/workspace", { method: "POST" })
+    ).json();
+    const text =
+      "Private note for the facilities team.\n\nLocker code: 4471.\n\nThe cleaning crew visits on Tuesdays.\n";
+    const up = await fetch(`${api.b}/api/public/workspace/${ws.id}/upload`, {
+      method: "POST",
+      headers: { "x-file-name": "ops.txt", "content-type": "text/plain" },
+      body: text,
+    });
+    assert.equal(up.status, 202);
+    let docId = null;
+    for (let i = 0; i < 50; i++) {
+      const st = await (
+        await fetch(`${api.b}/api/public/workspace/${ws.id}`)
+      ).json();
+      if (st.ready) {
+        docId = st.documents[0]?.id;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.ok(docId, "workspace doc indexed");
+    const m = await api.mint({ page: "landing", vm_ws: ws.id });
+    assert.equal(m.status, 200);
+    const handle = vmWsOf(api.minted[0]);
+    const [spoken] = await conversation(api, handle, [
+      "What is the locker code?",
+    ]);
+    assert.match(spoken, /4471/);
+    const turns = (await api.turns(m.body.vm_ticket)).body.turns;
+    const cite = turns.at(-1)?.lead?.citations?.[0];
+    assert.ok(cite, "a citation on the extractive answer");
+    assert.equal(cite.documentId, docId, "citation owns the uploaded doc");
+    assert.equal(typeof cite.start, "number", "start anchor");
+    assert.equal(typeof cite.end, "number", "end anchor");
+    assert.ok(cite.end > cite.start, "bounds valid");
+    assert.equal(
+      text.slice(cite.start, cite.end),
+      cite.quote,
+      "quote is the exact slice of the uploaded text",
+    );
+  } finally {
+    await api.close();
+  }
+});
+
+test("voice mixed turn citations carry anchors on both halves", async () => {
+  const api = await boot();
+  try {
+    const m = await api.mint({ page: "landing", vm_ws: "demo" });
+    assert.equal(m.status, 200);
+    const handle = vmWsOf(api.minted[0]);
+    const [spoken] = await conversation(api, handle, [
+      "What is SYN-0001's ferritin result, and was the $42,000 revision finalized?",
+    ]);
+    assert.match(spoken, /50 ng\/mL/);
+    assert.match(spoken, /42,000/);
+    const turns = (await api.turns(m.body.vm_ticket)).body.turns;
+    const cites = turns.at(-1)?.lead?.citations ?? [];
+    assert.ok(cites.length >= 2, "both halves cited");
+    const clinical = cites.find((c) => /amended/.test(c.title ?? ""));
+    assert.ok(clinical, "the clinical half is cited");
+    for (const c of cites) {
+      assert.ok(c.documentId, `documentId resolved on ${c.title}`);
+      assert.equal(typeof c.start, "number", `start anchor on ${c.title}`);
+      assert.equal(typeof c.end, "number", `end anchor on ${c.title}`);
+      assert.ok(c.end > c.start, `bounds valid on ${c.title}`);
+      assert.equal(
+        c.end - c.start,
+        c.quote?.length,
+        `quote is the exact canonical slice on ${c.title}`,
+      );
+    }
+    assert.ok(
+      Array.isArray(clinical.location?.pages) && clinical.location.pages.length,
+      "page bbox located on the clinical half",
+    );
+  } finally {
+    await api.close();
+  }
+});
