@@ -25,6 +25,15 @@ const LANES = [
   [["clinical", "test:clinical"]],
   [["vault", "test:vault"]],
   [["graph", "test:graph"]],
+  // Keep the complete browser regression set in the full verification path.
+  // Serialize these server/browser fixtures to bound concurrent Chromium use.
+  [
+    ["upload-ui", "test:upload-ui"],
+    ["controls-ui", "test:controls-ui"],
+    ["cold-connect-ui", "test:cold-connect-ui"],
+    ["document-ui", "test:document-ui"],
+    ["call-ui", "test:call-ui"],
+  ],
   // Benches are in `npm run verify`, so full mode runs them for coverage
   // parity; the --fast push gate excludes them (measurements, not gates).
   [
