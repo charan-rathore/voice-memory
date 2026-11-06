@@ -1980,30 +1980,39 @@
     // Ask for the microphone first: a Bolna session is single-use and expires
     // in about two minutes, so it is minted only once the mic is granted.
     callState("Allow the microphone to start the call…");
+    // Each connect re-picks the device: never show a mic label from a
+    // previous call when this one falls back to default audio.
+    state.mic = null;
     let audio;
     try {
       const pre = await navigator.mediaDevices.getUserMedia({ audio: true });
       pre.getTracks().forEach((tr) => tr.stop());
       // Virtual loopback devices (BlackHole, Teams, Soundflower…) are often the
       // system default on creators' Macs and send silence. Prefer a real mic.
-      const mics = (await navigator.mediaDevices.enumerateDevices()).filter(
-        (d) => d.kind === "audioinput",
-      );
-      const virtual =
-        /blackhole|virtual|loopback|soundflower|teams|zoom|obs|aggregate|vb-audio|cable/i;
-      const real = mics.filter((d) => !virtual.test(d.label));
-      const pick =
-        real.find((d) => d.deviceId === "default") ??
-        real.find((d) => /built-in|internal|microphone|mic/i.test(d.label)) ??
-        real[0];
-      if (pick) {
-        audio = {
-          deviceId: { exact: pick.deviceId },
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        };
-        state.mic = pick.label.replace(/^Default - /, "");
+      // Enumeration only picks the device: the mic is already granted, so a
+      // listing failure must fall back to default audio, not report a block.
+      try {
+        const mics = (await navigator.mediaDevices.enumerateDevices()).filter(
+          (d) => d.kind === "audioinput",
+        );
+        const virtual =
+          /blackhole|virtual|loopback|soundflower|teams|zoom|obs|aggregate|vb-audio|cable/i;
+        const real = mics.filter((d) => !virtual.test(d.label));
+        const pick =
+          real.find((d) => d.deviceId === "default") ??
+          real.find((d) => /built-in|internal|microphone|mic/i.test(d.label)) ??
+          real[0];
+        if (pick) {
+          audio = {
+            deviceId: { exact: pick.deviceId },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          };
+          state.mic = pick.label.replace(/^Default - /, "");
+        }
+      } catch {
+        /* device listing unavailable: proceed with SDK default audio */
       }
     } catch {
       callbar.classList.remove("busy");
