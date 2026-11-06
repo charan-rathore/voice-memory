@@ -185,12 +185,17 @@ test("a failed upload is not 'no upload': said plainly, never the default record
 });
 
 test("an expired workspace is not 'no upload': said plainly, never the default records", async () => {
-  const api = await boot({ VM_WS_IDLE_MIN: "0.0005" }); // ~30 ms
+  // A 30 ms real deadline could expire before upload on a loaded test host.
+  // Advance the clock only AFTER upload and mint, then exercise the real
+  // expiration path without racing parser/network scheduling.
+  const api = await boot({ VM_WS_IDLE_MIN: "1" });
+  const realNow = Date.now;
   try {
     const { id } = await api.upload(WAREHOUSE, "warehouse.txt");
     const m = await api.mint({ vm_ws: id });
     assert.equal(m.status, 200);
-    await new Promise((r) => setTimeout(r, 150));
+    const expiredAt = realNow() + 61000;
+    Date.now = () => expiredAt;
     const said = await api.say(
       api.minted[0].user_data.vm_ws,
       "How many open safety items did the east warehouse record?",
@@ -198,6 +203,7 @@ test("an expired workspace is not 'no upload': said plainly, never the default r
     assert.match(said, /expired/i);
     assert.doesNotMatch(said, /ferritin|50 ng\/mL|14 open/i);
   } finally {
+    Date.now = realNow;
     await api.close();
   }
 });
@@ -253,6 +259,51 @@ test("a mid-call scope switch moves the call's corpus, and back", async () => {
     assert.match(back, /14/);
     assert.doesNotMatch(back, /ferritin/i);
   } finally {
+    await api.close();
+  }
+});
+
+test("an unregistered call handle never falls back to its embedded demo scope", async () => {
+  const api = await boot();
+  try {
+    const said = await api.say(
+      "health.c" + "f".repeat(24),
+      "What is SYN-0001's ferritin result?",
+    );
+    assert.doesNotMatch(said, /50 ng\/mL/);
+    assert.match(said, /start it again|which documents|ended/i);
+  } finally {
+    await api.close();
+  }
+});
+
+test("an expired registered call cannot retrieve or replay a still-live uploaded workspace", async () => {
+  const api = await boot();
+  const realNow = Date.now;
+  try {
+    const { id } = await api.upload(WAREHOUSE, "warehouse.txt");
+    await api.mint({ vm_ws: id });
+    const handle = api.minted[0].user_data.vm_ws;
+    assert.match(
+      await api.say(
+        handle,
+        "How many open safety items did the east warehouse record?",
+      ),
+      /14/,
+    );
+    const expiredAt = realNow() + 21 * 60000;
+    Date.now = () => expiredAt;
+    const lookup = await api.say(
+      handle,
+      "How many open safety items did the east warehouse record?",
+    );
+    assert.doesNotMatch(lookup, /14|fourteen/);
+    assert.match(lookup, /start it again|which documents|ended/i);
+    const said = await api.say(handle, "Say that again");
+    assert.doesNotMatch(said, /14|fourteen/);
+    assert.match(said, /start it again|which documents|ended/i);
+  } finally {
+    Date.now = realNow;
     await api.close();
   }
 });

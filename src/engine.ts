@@ -76,10 +76,23 @@ function anchorChunk(
 
 // Workspaces hold up to 10 documents (library.mjs); the built-in voice corpus
 // of every fictional case holds 11, so the engine's own bound is 16.
-export function importBundle(docs: Array<{ title: string; text: string }>) {
+export function importBundle(
+  docs: Array<{ id?: string; title: string; text: string }>,
+  options: { scope?: string } = {},
+) {
   if (!Array.isArray(docs) || !docs.length || docs.length > 16)
     throw Error("Add between 1 and 16 text documents.");
-  const scope = "voice-" + randomUUID();
+  if (
+    options.scope !== undefined &&
+    (typeof options.scope !== "string" ||
+      !options.scope ||
+      options.scope.length > 256)
+  )
+    throw Error(
+      "A stable workspace scope must be a nonempty string of up to 256 characters.",
+    );
+  const scope = options.scope ?? "voice-" + randomUUID();
+  const documentIds = new Set<string>();
   const sources = docs.map((d) => {
     if (
       typeof d.title !== "string" ||
@@ -91,11 +104,23 @@ export function importBundle(docs: Array<{ title: string; text: string }>) {
       throw Error(
         "Each document needs a title and 40-250,000 characters of text.",
       );
+    const stableId = options.scope !== undefined ? d.id : undefined;
+    if (stableId !== undefined) {
+      if (
+        typeof stableId !== "string" ||
+        !stableId ||
+        documentIds.has(stableId)
+      )
+        throw Error(
+          "Stable document IDs must be nonempty and unique within a workspace.",
+        );
+      documentIds.add(stableId);
+    }
     const text = d.text.replace(/\r\n?/g, "\n");
     const memory = parseText({ text, label: d.title });
     if (!memory.ok) throw Error("memoRABLE could not import this document.");
     return {
-      id: randomUUID(),
+      id: stableId ? hash(`${scope}\0${stableId}`) : randomUUID(),
       title: d.title,
       text,
       hash: hash(text),
@@ -106,9 +131,13 @@ export function importBundle(docs: Array<{ title: string; text: string }>) {
   let unanchored = 0;
   const rows: SearchRow[] = sources.flatMap((s) => {
     let cursor = 0;
+    const occurrences = new Map<string, number>();
     return chunkDocument(s.text)
       .map((c) => {
-        const id = randomUUID();
+        const contentKey = hash(c.text);
+        const occurrence = occurrences.get(contentKey) ?? 0;
+        occurrences.set(contentKey, occurrence + 1);
+        const id = hash(`${s.id}\0${contentKey}\0${occurrence}`);
         const a = anchorChunk(s.text, c.text, cursor);
         if (a) {
           anchors.set(id, a);

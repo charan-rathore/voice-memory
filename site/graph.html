@@ -31,6 +31,7 @@
       <p class="lg-title small">Edges</p>
       <ul id="lg-edges"></ul>
       <p class="lg-count" id="lg-count"></p>
+      <details id="node-list"><summary>Browse nodes (keyboard accessible)</summary><ul id="accessible-nodes" aria-label="Graph nodes"></ul></details>
     </aside>
 
     <aside class="panel" id="panel" aria-live="polite" hidden>
@@ -47,6 +48,7 @@
       <button id="story" class="play">▶ How the answer was chosen</button>
     </nav>
     <p class="story-cap" id="story-cap" aria-live="polite"></p>
+    <p id="graph-status" class="story-cap" role="status" hidden></p>
 
     <script src="snapshot-graphs.js" defer></script>
     <script src="status-labels.js" defer></script>

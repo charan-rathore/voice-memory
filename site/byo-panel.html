@@ -1,4 +1,5 @@
               <div class="byo-body">
+                <p id="byo-feedback" role="status" aria-live="polite"></p>
                 <p class="byo-lede">Your account pays for the voice; this engine still decides every reply and the line it rests on.</p>
                 <fieldset>
                   <legend>Call on your Bolna account</legend>
@@ -11,6 +12,7 @@
                   <p class="byo-fine">Bolna, Vapi, Retell or ElevenLabs Agents: choose a custom / OpenAI-compatible LLM and paste these. The key answers only the documents you are viewing (or your own workspace), for up to 24 hours. Workspace keys also expire with the workspace or a server restart.</p>
                   <button type="button" class="tool" id="byo-llm-get">Get a URL and key</button>
                   <dl class="byo-llm" id="byo-llm" hidden>
+                    <dt>Document scope</dt><dd><span data-k="scope"></span></dd>
                     <dt>Base URL</dt><dd><code data-k="url"></code><button type="button" class="tool" data-copy>Copy</button></dd>
                     <dt>API key</dt><dd><code data-k="key"></code><button type="button" class="tool" data-copy>Copy</button></dd>
                     <dt>Model</dt><dd><code data-k="model"></code><button type="button" class="tool" data-copy>Copy</button></dd>
@@ -26,5 +28,5 @@
                   <label class="byo-check"><input id="byo-remember" type="checkbox" /> Remember on this device</label>
                   <button type="button" class="tool" id="byo-clear">Forget my keys</button>
                 </div>
-                <p class="byo-fine">Provider keys stay in this browser (this tab, unless you tick Remember). Only save keys on a device you trust. Each provider key is sent to this server only with the call or Listen request that needs it and is used for that request only; server code does not persist it or include it in application logs. Provider account terms and charges still apply. Forget my keys also revokes any URL key issued here.</p>
+                <p class="byo-fine">Provider keys stay in this browser (this tab, unless you tick Remember). Only save keys on a device you trust. Each provider key is sent to this server only with the call or Listen request that needs it and is used for that request only; server code does not persist it or include it in application logs. Provider account terms and charges still apply. Forget my keys requests revocation of URL keys issued during this page session; failed requests remain pending until retried.</p>
               </div>

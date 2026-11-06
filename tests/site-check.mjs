@@ -74,7 +74,9 @@ try {
   }
   browser = await chromium.launch({
     headless: true,
-    executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome",
+    ...(process.env.CHROME_PATH
+      ? { executablePath: process.env.CHROME_PATH }
+      : {}),
     args: ["--no-sandbox"],
   });
   const page = await browser.newPage({
@@ -97,7 +99,13 @@ try {
     );
   await page.locator(".ask-go").click();
   const lead = page.locator("#answer .a-lead");
-  await lead.waitFor({ timeout: 60000 });
+  await lead.waitFor({ timeout: 60000 }).catch(async (error) => {
+    console.log(
+      "own PDF answer state:",
+      await page.locator("#answer").innerText(),
+    );
+    throw error;
+  });
   const leadText = await lead.innerText();
   if (!leadText.includes("27 March 2027"))
     fail(`answer missing the deadline: ${leadText.slice(0, 200)}`);

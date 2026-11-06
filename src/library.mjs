@@ -266,14 +266,19 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
   lib.push(entry);
   const t0 = Date.now();
   const set = (status) => {
+    // ONE clock reading for the timing and its log event: two Date.now()
+    // calls can straddle a millisecond, and the reading view replays the
+    // log only up to the final timing - an event stamped 1 ms later would
+    // be cut, freezing the view mid-read on a settled document.
+    const now = Date.now();
     entry.status = status;
-    entry.updatedAt = Date.now();
-    entry.timings[status] = Date.now() - t0;
-    note({ k: "status", status });
+    entry.updatedAt = now;
+    entry.timings[status] = now - t0;
+    note({ k: "status", status }, now - t0);
   };
-  function note(ev) {
+  function note(ev, at) {
     const pr = entry.progress;
-    const t = Date.now() - t0;
+    const t = at ?? Date.now() - t0;
     const pg = (n) => (pr.pages[n - 1] ??= { n, state: "waiting" });
     switch (ev.k) {
       case "open":
@@ -378,6 +383,15 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
                 : pg.textSource === "ocr"
                   ? "ocr-done"
                   : "unread",
+            // A reused reading must show the same per-page facts as the
+            // first one; without these the tile renders "undefined%".
+            ...(pg.textSource === "ocr"
+              ? {
+                  p: 100,
+                  confidence: pg.ocrConfidence ?? null,
+                  uncertain: pg.ocrUncertain ?? 0,
+                }
+              : {}),
           };
       } else {
         parseCacheStats.misses++;

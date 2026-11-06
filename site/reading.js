@@ -179,6 +179,14 @@
     if (!s.pages.length && doc.progress?.pages?.length && s.cached)
       s.pages = doc.progress.pages.map((p) => ({ ...p }));
     if (!s.textAt && s.cached && s.finalAt != null) s.textAt = s.finalAt;
+    // The server's status is authoritative: a settled document is done even
+    // when the terminal log event falls outside the replay window (an older
+    // server could stamp it 1 ms after the final timing). Live view only:
+    // a replay (livePages null) keeps its honest mid-flight states.
+    if (livePages && s.finalAt == null && TERMINAL.has(doc.status)) {
+      s.finalAt = tau;
+      if (doc.status !== "failed" && s.textAt == null) s.textAt = tau;
+    }
     return s;
   }
 
@@ -568,7 +576,9 @@
           : p.state === "ocr-done"
             ? p.uncertain
               ? `${p.uncertain} to check`
-              : `${p.confidence}%`
+              : p.confidence != null
+                ? `${p.confidence}%`
+                : "read"
             : p.state === "unread"
               ? "unread"
               : p.state === "scan"
@@ -583,7 +593,9 @@
             : p.state === "ocr"
               ? `Page ${p.n}: OCR ${p.p ?? 0}%`
               : p.state === "ocr-done"
-                ? `Page ${p.n}: OCR ${p.confidence}% mean confidence${p.uncertain ? `, ${p.uncertain} uncertain numbers` : ""}`
+                ? p.confidence != null
+                  ? `Page ${p.n}: OCR ${p.confidence}% mean confidence${p.uncertain ? `, ${p.uncertain} uncertain numbers` : ""}`
+                  : `Page ${p.n}: read by OCR`
                 : p.state === "unread"
                   ? `Page ${p.n}: not read`
                   : `Page ${p.n}`;

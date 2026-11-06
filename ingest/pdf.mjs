@@ -462,15 +462,19 @@ export async function parsePdf(
         info.textSource = "ocr";
         ocrBlocks.set(n, blocks);
       }
+      // Kept on the page record itself so a cached parse can re-stamp the
+      // same per-page facts (the reading view's page tiles read them).
+      info.ocrConfidence = blocks.length
+        ? Math.round(
+            blocks.reduce((a, b) => a + b.confidence, 0) / blocks.length,
+          )
+        : null;
+      info.ocrUncertain = uncertainCount;
       onEvent({
         k: "ocr-done",
         n,
         paragraphs: blocks.length,
-        confidence: blocks.length
-          ? Math.round(
-              blocks.reduce((a, b) => a + b.confidence, 0) / blocks.length,
-            )
-          : null,
+        confidence: info.ocrConfidence,
         uncertain: uncertainCount,
       });
     }

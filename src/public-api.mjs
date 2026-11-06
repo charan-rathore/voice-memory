@@ -23,6 +23,7 @@ import path from "node:path";
 import { createCallCounters } from "./public-call-counters.mjs";
 import { documentView } from "./library.mjs";
 import { buildGraph } from "../memory/graph.mjs";
+import { documentGraph } from "../memory/document-graph.mjs";
 import { recordGraph } from "./record-graph.mjs";
 import { createMemory } from "../memory/memory.mjs";
 import { seriesFor, compare, subjectOf } from "../clinical/observations.mjs";
@@ -705,6 +706,7 @@ export function createPublicApi({
             ? mergeGraphs(
                 s.bundle.clinical?.length ? clinicalGraph(s.bundle) : null,
                 recordGraph(s.bundle),
+                documentGraph(s.bundle),
                 s.bundle.sources.some((src) => !labSources.has(src.id))
                   ? fullGraph(s.bundle, mem)
                   : null,
@@ -1419,6 +1421,8 @@ export function fullGraph(bundle, memory) {
     for (const e of g.edges)
       edges.set(e.id ?? `${e.from}->${e.to}:${e.kind}`, e);
   };
+  const structural = documentGraph(bundle);
+  add(structural);
   const overview = buildGraph(bundle, memory, "overview");
   add(overview);
   for (const t of overview.nodes.filter((n) => n.kind === "topic")) {
@@ -1435,6 +1439,8 @@ export function fullGraph(bundle, memory) {
     focus: "all",
     nodes: [...nodes.values()],
     edges: [...edges.values()],
+    coverage: structural.coverage,
+    generation: structural.generation,
   };
 }
 
@@ -1586,6 +1592,8 @@ export function clinicalGraph(bundle) {
 }
 
 function mergeGraphs(...gs) {
+  const structural = gs.find((g) => g?.coverage);
+  const coverage = structural?.coverage;
   const nodes = new Map();
   const edges = new Map();
   for (const g of gs.filter(Boolean)) {
@@ -1595,6 +1603,7 @@ function mergeGraphs(...gs) {
   }
   return {
     focus: "all",
+    ...(coverage ? { coverage, generation: structural.generation } : {}),
     nodes: [...nodes.values()],
     edges: [...edges.values()],
   };

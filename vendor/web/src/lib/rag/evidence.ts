@@ -1,3 +1,4 @@
+import { nonMonetaryCost } from "./query-intent";
 import { distinctiveTerms, payloadQuery, type RerankSignals } from "./ranking";
 import { contentTokens, tokenSetMatches } from "./text";
 import type { EvidenceGate, EvidenceKind, RetrievedChunk } from "./types";
@@ -177,7 +178,8 @@ export function classifyEvidence(opts: {
   }
 
   // Commercial/contractual fact fields must be stated explicitly in the passages.
-  const requestedCommercial = opts.query.match(/\b(?:slas?|uptime|pricing|prices?|costs?|contractual|warrant(?:y|ies)|discounts?|refunds?|billing)\b/gi) ?? [];
+  const commercialQuery = nonMonetaryCost(opts.query) ? opts.query.replace(/\bcost(?:s|ing)?\b/gi, "") : opts.query;
+  const requestedCommercial = commercialQuery.match(/\b(?:slas?|uptime|pricing|prices?|costs?|contractual|warrant(?:y|ies)|discounts?|refunds?|billing)\b/gi) ?? [];
   const missingCommercial = [...new Set(requestedCommercial.map((t) => t.toLowerCase()))].filter(
     (term) => !hasTerm(packedLower, term),
   );

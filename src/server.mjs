@@ -574,12 +574,21 @@ export function createLocalServer({
         if (t - v.at > VOICE_CALL_MS) voiceCalls.delete(c);
       voiceCalls.set(call, { scope, at: t, gen: 0 });
     },
+    resolve(call) {
+      const entry = voiceCalls.get(call);
+      if (!entry) return null;
+      if (Date.now() - entry.at > VOICE_CALL_MS) {
+        voiceCalls.delete(call);
+        return null;
+      }
+      return entry;
+    },
     // `gen` is the page's own switch counter. Scope updates can arrive out of
     // order (A -> B -> A sent quickly, B delivered last); an update older
     // than the one already applied is ignored, so the server ends on what
     // the page shows. Returns the scope in force, or false.
     setScope(call, scope, gen = null) {
-      const v = voiceCalls.get(call);
+      const v = this.resolve(call);
       if (!v) return false;
       if (Number.isSafeInteger(gen) && gen <= v.gen) return v.scope;
       if (scope.startsWith("w_") && !liveWorkspace(scope)) return false;
@@ -787,8 +796,14 @@ export function createLocalServer({
       (first.match(/\b[A-Z][A-Za-z #./]{1,20}:/g) ?? []).length >= 2
     );
   };
+  // A stable workspace ID is an access boundary, not an index generation.
+  // Weak keys do not retain old bundles after their workspace is rebuilt.
+  const answerGenerations = new WeakMap();
+  let nextAnswerGeneration = 0;
   async function resolveAnswer(s, question, ctx, opts = {}) {
     const bundle = s.bundle;
+    if (!answerGenerations.has(bundle))
+      answerGenerations.set(bundle, ++nextAnswerGeneration);
     // May this document set's passages go to the model? Fictional demo
     // cases: yes. A visitor's own documents: only with their consent, and
     // only outside VM_SEMANTIC_AUDIENCE=demo trial scope (see scope.mjs).
@@ -798,7 +813,9 @@ export function createLocalServer({
     // answer cached while the embedder was cold or warming must not
     // outlive that state (see denseCacheSuffix in dense.mjs).
     const key = answerCache.key(
-      bundle.scope + denseCacheSuffix(bundle) + mode,
+      JSON.stringify([bundle.scope, answerGenerations.get(bundle)]) +
+        denseCacheSuffix(bundle) +
+        mode,
       question,
       ctx,
       detectLang(question),
@@ -1286,8 +1303,14 @@ export function createLocalServer({
   const sweepWorkspaces = () => {
     for (const [id, w] of workspaces)
       if (Date.now() - w.at > WS_IDLE_MS) dropWorkspace(id);
-    while (workspaces.size >= WS_MAX)
-      dropWorkspace(workspaces.keys().next().value);
+    while (workspaces.size >= WS_MAX) {
+      // Map insertion order is creation order, not recent use: an active
+      // caller's older workspace must not be discarded ahead of idle ones.
+      let oldest = null;
+      for (const [id, w] of workspaces)
+        if (!oldest || w.at < oldest.at) oldest = { id, at: w.at };
+      dropWorkspace(oldest.id);
+    }
   };
   const workspaceSweepTimer = setInterval(() => {
     for (const [id, w] of workspaces)
@@ -1307,11 +1330,14 @@ export function createLocalServer({
       return;
     }
     const bundle = importBundle(
-      docsNow.map((e) => ({ title: e.title, text: e.doc.text })),
+      docsNow.map((e) => ({ id: e.id, title: e.title, text: e.doc.text })),
+      { scope: ws.sid },
     );
     ws.sourceToEntry = new Map(
       bundle.sources.map((src, i) => [src.id, docsNow[i]]),
     );
+    for (let i = 0; i < bundle.sources.length; i++)
+      bundle.sources[i].provisional = docsNow[i].status === "partial";
     bundle.locateEvidence = locatorFor(ws.sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsNow, extractReport);
     attachRecords(bundle, docsNow);
@@ -1410,7 +1436,9 @@ export function createLocalServer({
       if (!hit) return { malformed: true, call: null, caseId: null };
       const call = hit[2] ?? null;
       // A live public call's scope is what its page has open now.
-      const scope = (call && voiceCalls.get(call)?.scope) || hit[1];
+      const registered = call ? voiceCallsApi.resolve(call) : null;
+      if (call && !registered) return { malformed: true, call, caseId: hit[1] };
+      const scope = registered?.scope ?? hit[1];
       if (scope.startsWith("w_")) {
         const w = liveWorkspace(scope);
         // Never fall back to the fictional records for someone who was
@@ -1451,6 +1479,7 @@ export function createLocalServer({
   const byoVoice = createVoiceAdapter({
     ttlMs: 30 * 60 * 1000,
     hardTtlMs: BYO_HARD_MS,
+    allowClientReplay: false,
   });
   const byoEnabled = process.env.VM_BYO_VOICE === "on";
   const byoKeys = new Map(); // token -> { at, scope, bundle }
@@ -1498,6 +1527,16 @@ export function createLocalServer({
     }
     return true;
   };
+  // Scope comes only from the admitted bearer, never caller-supplied history.
+  // Re-read at final emission so revocation and workspace changes fail closed.
+  byoVoice.setBundleResolver((_messages, token) => {
+    const key = byoKeys.get(token);
+    if (!key || Date.now() - key.at > BYO_HARD_MS)
+      return { expired: true, caseId: key?.scope ?? "unavailable" };
+    const bundle = byoBundle(key.scope);
+    if (!bundle) return { expired: true, caseId: key.scope };
+    return { bundle, caseId: key.scope, call: null };
+  });
   // Ceilings across all visitors, so many addresses cannot add up to an
   // unbounded load on the engine: keys issued per hour, turns per day.
   const BYO_KEYS_HOUR = Number(process.env.VM_BYO_KEYS_PER_HOUR || 300);

@@ -30,11 +30,16 @@
     call: null,
     ticket: null,
     callScope: null, // scope the live call answers from
+    keyScopeSeq: 0, // invalidates pending capabilities on every scope transition
     askSeq: 0, // typed answers older than the latest ask or case switch are dropped
-    seenTurns: new Set(),
     lang: /^hi\b/i.test(navigator.language || "") ? "hi" : "en",
     visuals: {},
   };
+
+  function invalidateKeyScope() {
+    state.keyScopeSeq++;
+    document.dispatchEvent(new Event("vm-key-scope-change"));
+  }
 
   const esc = (s) =>
     String(s ?? "").replace(
@@ -189,7 +194,12 @@
         const s = await api("/status", {}, 8000);
         if (s.cases.health && s.cases.deal) {
           const { cases } = await api("/cases");
-          state.cases = Object.fromEntries(cases.map((c) => [c.id, c]));
+          // Demo readiness may arrive after an independent visitor upload.
+          // Merge it without discarding that workspace's ready document set.
+          state.cases = {
+            ...state.cases,
+            ...Object.fromEntries(cases.map((c) => [c.id, c])),
+          };
           state.live = true;
           byoEnabled = s.byoVoice?.enabled === true;
           if ($("#byo")) $("#byo").hidden = !byoEnabled;
@@ -198,10 +208,17 @@
           state.voiceOut = s.voiceOut ?? null;
           syncVoiceClasses();
           note(
-            "Live engine connected. Every answer is computed now from the fictional records.",
+            state.case === "own"
+              ? "Live engine connected. Your document workspace is selected."
+              : "Live engine connected. Every answer is computed now from the fictional records.",
           );
           renderRail();
-          if (!$("#viewer-body .page, #viewer-body .vw-text"))
+          // An opened reader may still be fetching text/PDF pages. Only
+          // refresh the placeholder or grid, never replace that reader.
+          if (
+            !$("#viewer-body").firstElementChild ||
+            $("#viewer-body .viewer-empty, #viewer-body .case-files")
+          )
             showEmptyViewer();
           if ($("#answer .overview")) renderOverview();
           return;
@@ -283,24 +300,66 @@
     ],
   };
   try {
+    invalidateKeyScope();
     state.ws = sessionStorage.getItem("vm_ws");
   } catch {}
-  async function ensureWorkspace() {
-    if (state.ws) {
-      try {
-        await api(`/workspace/${state.ws}`);
-        return state.ws;
-      } catch {
-        state.ws = null;
+  function discardOwnContext() {
+    state.context.own = "";
+    state.thread = state.thread.filter((t) => t.caseId !== "own");
+    renderThread();
+    if (state.case !== "own") return;
+    // Workspace identity changed while an old request may still be in flight.
+    state.askSeq++;
+    state.current = null;
+    state.currentCites = [];
+    $(".ask-go").disabled = false;
+    renderRail();
+    renderOverview("own");
+    showEmptyViewer();
+  }
+  let workspacePending = null;
+  function ensureWorkspace() {
+    // Concurrent drops share one creation; a temporary read error never
+    // silently splits an existing library into a new workspace.
+    if (workspacePending) return workspacePending;
+    workspacePending = (async () => {
+      if (state.ws) {
+        try {
+          await api(`/workspace/${state.ws}`);
+          return state.ws;
+        } catch (e) {
+          if (e?.status !== 404 && e?.status !== 410) throw e;
+          invalidateKeyScope();
+          state.ws = null;
+          try {
+            sessionStorage.removeItem("vm_ws");
+          } catch {}
+          // Keep new drops that have not been sent; completed rows belong
+          // to the expired workspace and cannot remain marked Ready here.
+          state.wsDocs = state.wsDocs.filter(
+            (d) => String(d.id).startsWith("local:") && !d.serverId,
+          );
+          state.drops = state.wsDocs
+            .map((d) => d.local?.since)
+            .filter(Number.isFinite);
+          state.cases.own = { ...OWN, ready: false, documents: [] };
+          state.ownReady = 0;
+          discardOwnContext();
+          renderUploads();
+        }
       }
-    }
-    const w = await api("/workspace", { method: "POST" });
-    state.ws = w.id;
-    try {
-      sessionStorage.setItem("vm_ws", w.id);
-    } catch {}
-    syncCallScope();
-    return w.id;
+      const w = await api("/workspace", { method: "POST" });
+      invalidateKeyScope();
+      state.ws = w.id;
+      try {
+        sessionStorage.setItem("vm_ws", w.id);
+      } catch {}
+      syncCallScope();
+      return w.id;
+    })().finally(() => {
+      workspacePending = null;
+    });
+    return workspacePending;
   }
   // One upload over XHR: fetch cannot report upload progress, and the bytes
   // actually leaving the browser are the first stage the reading view shows.
@@ -337,7 +396,7 @@
     });
   }
   async function uploadFiles(list) {
-    const files = [...list].slice(0, 5);
+    const files = [...list];
     if (!files.length) return;
     if (state.case !== "own") setCase("own");
     // Every file shows up the moment it is dropped, with what is really
@@ -348,18 +407,19 @@
       id: `local:${dropped}:${i}`,
       title: f.name,
       filename: f.name,
-      status: f.size > 4 * 1048576 ? "failed" : "sending",
+      status: i >= 5 || f.size > 4 * 1048576 ? "failed" : "sending",
       error:
-        f.size > 4 * 1048576 ? { message: `${f.name} is over 4 MB.` } : null,
+        i >= 5
+          ? { message: "Upload up to five files at a time." }
+          : f.size > 4 * 1048576
+            ? { message: `${f.name} is over 4 MB.` }
+            : null,
       bytes: f.size,
       local: { phase: "connecting", sent: 0, total: f.size, since: dropped },
       progress: { pages: [], log: [], counts: null, age: 0 },
     }));
     for (const f of files) if (f.size <= 4 * 1048576) state.drops.push(dropped);
-    state.wsDocs = [
-      ...state.wsDocs.filter((d) => !String(d.id).startsWith("local:")),
-      ...local,
-    ];
+    state.wsDocs = [...state.wsDocs, ...local];
     renderUploads();
     readingView();
     // Uploads must not wait for the demo cases to finish loading: visitor
@@ -415,8 +475,11 @@
   }
   async function refreshWorkspace() {
     if (!state.ws) return renderUploads();
+    let outcome = "ok";
+    const workspaceId = state.ws;
     try {
-      const st = await api(`/workspace/${state.ws}`);
+      const st = await api(`/workspace/${workspaceId}`);
+      if (state.ws !== workspaceId) return "stale";
       const failed = state.wsDocs.filter(
         (d) =>
           d.status === "failed" &&
@@ -461,13 +524,15 @@
         ),
       };
     } catch (e) {
-      state.ws = null;
-      try {
-        sessionStorage.removeItem("vm_ws");
-      } catch {}
-      if (e?.status === 404) {
+      if (state.ws !== workspaceId) return "stale";
+      if (e?.status === 404 || e?.status === 410) {
         // Confirmed gone (a deploy or the idle sweep cleared it): stop
         // showing its documents as if they were still answerable.
+        invalidateKeyScope();
+        state.ws = null;
+        try {
+          sessionStorage.removeItem("vm_ws");
+        } catch {}
         state.drops = [];
         $("#upl-flow")?.replaceChildren();
         state.wsDocs = [
@@ -481,24 +546,46 @@
           },
         ];
         state.cases.own = { ...OWN, ready: false, documents: [] };
+        discardOwnContext();
+        outcome = "gone";
+      } else {
+        // Transient (network blip, engine waking): keep the workspace and
+        // let polling back off and recover. Chips say so after a few
+        // failures instead of freezing on a stale stage forever.
+        state.wsFail = (state.wsFail ?? 0) + 1;
+        outcome = "transient";
       }
     }
+    if (outcome !== "transient") state.wsFail = 0;
     renderUploads();
     if (state.case === "own") {
       renderRail();
       const ready = (state.cases.own?.documents ?? []).length;
-      if (ready !== state.ownReady && $("#answer .overview")) {
+      if (ready !== state.ownReady) {
         state.ownReady = ready;
-        delete state.visuals["own|" + state.lang];
-        renderOverview("own");
+        // The Documents pane must follow the upload list: refresh it while
+        // it shows the placeholder or the file grid, never over an open
+        // document.
+        if ($("#viewer-body .viewer-empty") || $("#viewer-body .case-files"))
+          showEmptyViewer();
+        if ($("#answer .overview")) {
+          delete state.visuals["own|" + state.lang];
+          renderOverview("own");
+        }
       }
     }
+    return outcome;
   }
   let pollTimer = null;
   function pollWorkspace() {
     clearTimeout(pollTimer);
-    refreshWorkspace().then(() => {
+    refreshWorkspace().then((outcome) => {
+      const backoff =
+        outcome === "transient"
+          ? Math.min(2000 * (state.wsFail ?? 1), 10000)
+          : 600;
       if (
+        outcome === "transient" ||
         state.wsDocs.some(
           (d) =>
             !["ready", "needs_review", "failed", "expired"].includes(
@@ -512,7 +599,7 @@
                 8),
         )
       )
-        pollTimer = setTimeout(pollWorkspace, 600);
+        pollTimer = setTimeout(pollWorkspace, backoff);
     });
   }
   // The live reading view loads with the first upload, not the first paint.
@@ -553,19 +640,34 @@
             : d.status === "partial"
               ? "ok busy"
               : "busy";
+        const stage =
+          (state.wsFail ?? 0) >= 3 &&
+          !done &&
+          d.status !== "failed" &&
+          d.status !== "expired"
+            ? "Reconnecting"
+            : (STAGE[d.status] ?? d.status);
         const extra =
           d.status === "failed" || d.status === "expired"
             ? ` — ${esc(d.error?.message ?? "")}`
             : d.stats?.pages
               ? ` · ${d.stats.pages} p`
               : "";
-        return `<li${d.id ? ` data-doc="${esc(d.id)}"` : ""}><b title="${esc(d.title)}">${esc(d.title)}</b><span class="upl-st ${cls}">${esc(STAGE[d.status] ?? d.status)}</span><span class="dim" style="font-size:12px">${extra}</span></li>`;
+        return `<li${d.id ? ` data-doc="${esc(d.id)}"` : ""}><b title="${esc(d.title)}">${esc(d.title)}</b><span class="upl-st ${cls}">${esc(stage)}</span><span class="dim" style="font-size:12px">${extra}</span></li>`;
       })
       .join("");
     if (state.wsDocs.some((d) => d.progress))
-      readingView().then((R) =>
-        R?.render($("#upl-flow"), state.wsDocs, { drops: state.drops }),
-      );
+      readingView()
+        .then((R) => {
+          try {
+            R?.render($("#upl-flow"), state.wsDocs, { drops: state.drops });
+          } catch (e) {
+            // A view bug must not take the upload list and polling down
+            // with it: the list above is the truthful fallback.
+            console.error("reading view failed", e);
+          }
+        })
+        .catch(() => {});
   }
   $("#upl-list").addEventListener("click", (e) => {
     const li = e.target.closest("li[data-doc]");
@@ -607,6 +709,7 @@
       state.cases.own ??= { ...OWN, documents: [] };
       refreshWorkspace();
     }
+    if (state.case !== id) invalidateKeyScope();
     if (state.case !== id) state.askSeq++; // an answer still arriving is stale
     state.case = id;
     syncCallScope();
@@ -639,24 +742,35 @@
     if (!state.ticket || !state.call || !scope || state.callScope === scope)
       return;
     state.callScope = scope;
+    const call = state.call;
+    const ticket = state.ticket;
     // A counter per switch: the server applies only the newest update, so
     // quick A -> B -> A switches cannot leave the call on B.
     state.scopeGen = (state.scopeGen ?? 0) + 1;
+    const generation = state.scopeGen;
     api("/voice/scope", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        ticket: state.ticket,
+        ticket,
         case: scope,
-        gen: state.scopeGen,
+        gen: generation,
       }),
     }).catch((e) => {
+      if (
+        state.call !== call ||
+        state.ticket !== ticket ||
+        state.scopeGen !== generation ||
+        scopeOf() !== scope
+      )
+        return;
       // The call keeps its old scope; its turns for that scope stay off
       // this screen (pollTurns), so nothing from the wrong records shows.
       state.callScope = null;
       if (e?.status === 404 && String(scope).startsWith("w_")) {
         // The workspace died mid-call (idle sweep or deploy): stop showing
         // its documents as if they were still answerable.
+        invalidateKeyScope();
         state.ws = null;
         try {
           sessionStorage.removeItem("vm_ws");
@@ -666,6 +780,7 @@
         state.wsDocs = [];
         state.cases.own = { ...OWN, ready: false, documents: [] };
         renderUploads();
+        discardOwnContext();
       }
     });
   }
@@ -772,7 +887,11 @@
     if (v && id !== "own") state.visuals[k] = v;
     return v;
   }
+  let overviewSeq = 0;
   async function renderOverview(id = state.case) {
+    const seq = ++overviewSeq;
+    const lang = state.lang;
+    const workspace = state.ws;
     const c = state.cases[id] ?? snap.cases?.find((x) => x.id === id);
     const langBar = `<div class="ov-lang" role="group" aria-label="Narration language">${LANGS.map(
       ([k, label]) =>
@@ -784,13 +903,23 @@
         <p class="dim ov-hint">Pick a question, type or dictate your own.</p>
       </div>`;
     await deskNear;
-    const [v] = await Promise.all([overviewFor(id, state.lang), loadVisual()]);
-    if (state.case !== id || !$("#ov-body")) return;
+    const [v] = await Promise.all([overviewFor(id, lang), loadVisual()]);
+    if (
+      seq !== overviewSeq ||
+      state.case !== id ||
+      state.lang !== lang ||
+      (id === "own" && state.ws !== workspace) ||
+      !$("#ov-body")
+    )
+      return;
     if (!v || !window.VMVisual) {
+      const documents = c?.documents ?? [];
       $("#ov-body").innerHTML =
-        id === "own"
-          ? `<p class="ov-empty">Upload a lab report and its results appear here, each placed on the lab's own printed range.</p>`
-          : "";
+        id !== "own"
+          ? ""
+          : documents.length
+            ? `<p class="ov-empty"><b>${documents.length} document${documents.length === 1 ? " is" : "s are"} available.</b> Ask a question or open a source to inspect its text.</p><p><a class="chip" href="graph.html?case=own">Explore document connections →</a></p>`
+            : `<p class="ov-empty">Upload a PDF, Word document, text file or image to ask questions about it.</p>`;
       return;
     }
     window.VMVisual.render($("#ov-body"), v, {
@@ -1213,7 +1342,7 @@
       </button>`
       : "";
     return `<div class="case-files">
-      <p class="case-files-intro"><b>${docs.length} documents in this case.</b> ${esc(meta.intro)}</p>
+      <p class="case-files-intro"><b>${docs.length} document${docs.length === 1 ? "" : "s"} in this case.</b> ${esc(meta.intro)}</p>
       <div class="file-grid">${cards}</div>
       ${latest}
     </div>`;
@@ -1658,20 +1787,26 @@
   }
 
   async function docText(title) {
-    if (state.docText[title] && state.case !== "own")
-      return state.docText[title];
+    const own = state.case === "own";
+    const workspace = state.ws;
+    if (state.docText[title] && !own) return state.docText[title];
     try {
-      // Visitor documents come from their workspace, not the demo cases:
-      // don't gate them on demo-case readiness either (see ask()).
-      if (!state.live && state.case !== "own") throw 0;
-      const cid = state.case === "own" ? "own" : "deal";
+      if (!state.live && !own) throw 0;
+      const cid = own ? "own" : "deal";
       const d = (state.cases[cid]?.documents ?? []).find(
         (x) => x.title === title,
       );
       if (!d) throw 0;
       const { document } = await api(`/doc/${apiCase(cid)}/${d.id}`);
+      // Visitor sources never share the demo's title-keyed cache. A failed
+      // read must not substitute a same-title snapshot or older workspace.
+      if (own)
+        return state.case === "own" && state.ws === workspace
+          ? document.text
+          : null;
       state.docText[title] = document.text;
     } catch {
+      if (own) return null;
       if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
       const saved = window.VM_SNAPSHOT_ANSWERS?.docs?.[title];
       if (saved) state.docText[title] = saved;
@@ -1738,7 +1873,26 @@
       { capture: true, passive: true },
     );
 
-  async function startCall() {
+  let callPending = null;
+  function startCall() {
+    if (state.call) return stopCall();
+    if (callPending) return callPending;
+    // Starting a new conversation retires the prior call's evidence feed.
+    state.ticket = null;
+    state.callScope = null;
+    callbar.classList.add("busy");
+    const pending = connectCall().finally(() => {
+      if (callPending !== pending) return;
+      callPending = null;
+      if (!state.call) {
+        callbar.classList.remove("busy");
+        $("#call-label").textContent = "Call Voice Memory";
+      }
+    });
+    callPending = pending;
+    return pending;
+  }
+  async function connectCall() {
     // Server gate first: when minting is closed, never ask for the
     // microphone - say so and stop. The buttons are hidden in this state;
     // this guard is the programmatic backstop.
@@ -1764,6 +1918,7 @@
       return;
     }
     if (state.ws) {
+      const checkedWorkspace = state.ws;
       // Uploaded documents govern the call from any tab, so the upload is
       // verified live whichever case is on screen: never mint a call that
       // can only say "your documents expired" (the server clears uploads
@@ -1771,8 +1926,21 @@
       // demo records behind the caller's back.
       callState("Checking your upload…");
       try {
-        await api(`/workspace/${state.ws}`);
-      } catch {
+        await api(`/workspace/${checkedWorkspace}`);
+      } catch (e) {
+        if (state.ws !== checkedWorkspace) {
+          callState(
+            "Your documents changed while the call was being checked. Start the call again from your current workspace.",
+          );
+          return;
+        }
+        if (e?.status !== 404 && e?.status !== 410) {
+          callState(
+            "Your upload could not be checked right now. Your documents are still here. Try calling again in a moment.",
+          );
+          return;
+        }
+        invalidateKeyScope();
         state.ws = null;
         try {
           sessionStorage.removeItem("vm_ws");
@@ -1794,8 +1962,15 @@
           own: { ...OWN, ready: false, documents: [] },
         };
         renderUploads();
+        discardOwnContext();
         callState(
           "Your upload expired on the server (deploys and 30 idle minutes clear uploads). Upload it again, then call.",
+        );
+        return;
+      }
+      if (state.ws !== checkedWorkspace) {
+        callState(
+          "Your documents changed while the call was being checked. Start the call again from your current workspace.",
         );
         return;
       }
@@ -1855,6 +2030,7 @@
     const call = new window.BolnaWebCall({
       ...(audio ? { audio } : {}),
       getSession: async () => {
+        if (state.call !== call) throw new Error("This call was cancelled.");
         // The open case or workspace: voice answers from what is on screen.
         const user_data = {
           page: "landing",
@@ -1879,17 +2055,22 @@
         const body = await r.json().catch(() => ({}));
         if (!r.ok)
           throw new Error(body.error || "Couldn't start a call right now.");
+        if (state.call !== call) throw new Error("This call was cancelled.");
         state.ticket = body.vm_ticket;
         return body;
       },
     });
     state.call = call;
     call.on("state-change", (s) => {
+      if (state.call !== call) return;
       if (s === "connecting") callState("Connecting to Bolna…");
       if (s === "ringing") callState("Ringing…");
     });
-    call.on("media-permission", () => callState("Microphone on · connecting…"));
+    call.on("media-permission", () => {
+      if (state.call === call) callState("Microphone on · connecting…");
+    });
     call.on("call-start", () => {
+      if (state.call !== call) return;
       emit("vm:call", "start");
       callbar.classList.remove("busy");
       callbar.classList.add("live");
@@ -1897,9 +2078,10 @@
       callState(
         `<b>Live${state.mic ? " · " + esc(state.mic) : ""}.</b> Ask: “${esc(state.cases[state.case]?.suggestions?.[0] ?? "What is SYN-0001's ferritin result?")}”`,
       );
-      pollTurns();
+      startTurnPolling();
     });
     call.on("volume-level", (v) => {
+      if (state.call !== call) return;
       // The motion module draws a spline waveform from these levels; the
       // bars below are the fallback when it isn't loaded.
       document.dispatchEvent(new CustomEvent("vm:level", { detail: v }));
@@ -1909,6 +2091,7 @@
       );
     });
     call.on("error", (e) => {
+      if (state.call !== call) return;
       const msg = {
         microphone_denied:
           "Microphone blocked. Allow it in the address bar, then call again.",
@@ -1920,15 +2103,18 @@
       }[e.code];
       callState(esc(msg ?? e.message ?? "The call couldn't start."));
     });
-    call.on("call-end", ({ reason }) => endUi(reason));
+    call.on("call-end", ({ reason }) => endUi(reason, call));
     try {
       await call.start();
     } catch {
-      endUi("failed");
+      endUi("failed", call);
     }
   }
 
-  function endUi(reason) {
+  function endUi(reason, call = state.call) {
+    if (state.call !== call) return;
+    const endedTicket = state.ticket;
+    callPending = null;
     emit("vm:call", "end");
     document.dispatchEvent(new CustomEvent("vm:level", { detail: -1 }));
     callbar.classList.remove("live", "busy");
@@ -1938,24 +2124,39 @@
       callState("Call ended. The answers stay on screen with their sources.");
     state.call = null;
     state.callScope = null;
-    setTimeout(() => (state.ticket = null), 20000);
+    setTimeout(() => {
+      if (state.ticket === endedTicket) state.ticket = null;
+    }, 20000);
   }
   function stopCall() {
     state.call?.stop();
   }
 
-  async function pollTurns() {
-    while (state.ticket) {
+  let pollingTicket = null;
+  function startTurnPolling() {
+    const ticket = state.ticket;
+    if (!ticket || pollingTicket === ticket) return;
+    pollingTicket = ticket;
+    pollTurns(ticket).finally(() => {
+      if (pollingTicket === ticket) pollingTicket = null;
+    });
+  }
+  async function pollTurns(ticket) {
+    const seenTurns = new Set();
+    while (ticket && state.ticket === ticket) {
       try {
         const { turns } = await api(
-          `/voice/turns?ticket=${state.ticket}`,
+          `/voice/turns?ticket=${encodeURIComponent(ticket)}`,
           {},
           6000,
         );
+        if (state.ticket !== ticket) return;
         for (const t of turns ?? []) {
           const key = t.at + t.question;
-          if (state.seenTurns.has(key)) continue;
-          state.seenTurns.add(key);
+          if (seenTurns.has(key)) continue;
+          seenTurns.add(key);
+          if (seenTurns.size > 256)
+            seenTurns.delete(seenTurns.values().next().value);
           // The server says which case answered. A turn answered for a
           // scope this page has since left is dropped, never drawn over the
           // case now on screen (nor guessed from citation file names).
@@ -1983,6 +2184,7 @@
           );
         }
       } catch (e) {
+        if (state.ticket !== ticket) return;
         // The server cuts the ticket at the per-call max duration (and a
         // restart drops all tickets): end the call so the audio actually
         // stops, not just the evidence feed.
@@ -2194,6 +2396,7 @@
       });
     if (t.matches("[data-jump]")) return jumpTo(Number(t.dataset.jump));
     if (t.matches("[data-files]")) {
+      emit("vm:source", { title: null, cited: false });
       showEmptyViewer();
       if (matchMedia("(max-width: 1060px)").matches)
         $("#viewer").scrollIntoView({
@@ -2390,57 +2593,131 @@
       if ($("#answer .overview")) renderOverview();
     };
     for (const el of Object.values(f)) el?.addEventListener("change", save);
-    $("#byo-clear")?.addEventListener("click", () => {
+    const feedback = (text) => {
+      $("#byo-feedback").textContent = text;
+    };
+    const box = $("#byo-llm");
+    const hideKey = () => {
+      box.hidden = true;
+      box.querySelectorAll("[data-k]").forEach((el) => {
+        el.textContent = "";
+      });
+    };
+    document.addEventListener("vm-key-scope-change", () => {
+      const visible = !box.hidden;
+      hideKey();
+      if (visible)
+        feedback(
+          "Document scope changed. Request a new key for the selected documents.",
+        );
+    });
+    let keyEpoch = 0;
+    // Memory-only ownership survives failed revocation until a confirmed retry.
+    const shownKeys = new Set();
+    const revoking = new Map();
+    const revoke = (key) => {
+      if (revoking.has(key)) return revoking.get(key);
+      const work = (async () => {
+        try {
+          const response = await fetch("/api/public/llm/key", {
+            method: "DELETE",
+            headers: { authorization: `Bearer ${key}` },
+          });
+          if (response.ok || response.status === 401) shownKeys.delete(key);
+        } catch {
+          /* Retain ownership for an explicit retry. */
+        } finally {
+          revoking.delete(key);
+        }
+      })();
+      revoking.set(key, work);
+      return work;
+    };
+    $("#byo-clear")?.addEventListener("click", async () => {
+      const epoch = ++keyEpoch;
       byo.clear();
-      revokeShown();
+      hideKey();
       syncVoiceClasses();
       fill();
-      $("#byo-llm").hidden = true;
       if ($("#answer .overview")) renderOverview();
+      feedback("Local keys cleared. Checking URL key revocation…");
+      await Promise.all([...shownKeys].map(revoke));
+      if (epoch !== keyEpoch) return;
+      feedback(
+        shownKeys.size
+          ? "Local keys cleared. URL key revocation is pending; use Forget my keys to retry."
+          : "Local keys cleared. URL keys issued in this page session have been revoked.",
+      );
     });
-    // custom-LLM keys issued on this page, kept only in memory so Clear can revoke them
-    const shownKeys = new Set();
-    const revokeShown = () => {
-      for (const key of shownKeys)
-        fetch("/api/public/llm/key", {
-          method: "DELETE",
-          headers: { authorization: `Bearer ${key}` },
-        }).catch(() => {});
-      shownKeys.clear();
-    };
     $("#byo-llm-get")?.addEventListener("click", async (e) => {
       const btn = e.currentTarget;
-      btn.disabled = true;
       const scope = state.case === "own" ? state.ws : state.case;
+      if (!scope) {
+        feedback("Upload a document before creating a workspace key.");
+        return;
+      }
+      const epoch = ++keyEpoch,
+        scopeSeq = state.keyScopeSeq;
+      const stale = () => epoch !== keyEpoch || scopeSeq !== state.keyScopeSeq;
+      btn.disabled = true;
+      feedback("Creating a key for the current documents…");
       try {
         const k = await api("/llm/key", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ case: scope || "demo" }),
+          body: JSON.stringify({ case: scope }),
         });
-        const box = $("#byo-llm");
-        box.querySelector('[data-k="url"]').textContent = k.baseUrl;
         shownKeys.add(k.apiKey);
+        if (stale() || k.scope !== scope) {
+          await revoke(k.apiKey);
+          if (shownKeys.has(k.apiKey) && box.hidden && epoch !== keyEpoch)
+            feedback(
+              "URL key revocation is pending; use Forget my keys to retry.",
+            );
+          if (epoch === keyEpoch)
+            feedback(
+              shownKeys.has(k.apiKey)
+                ? "Documents changed. Revocation of the unused key is pending; use Forget my keys to retry."
+                : "Documents changed. The unused key was revoked; request a new key.",
+            );
+          return;
+        }
+        box.querySelector('[data-k="scope"]').textContent =
+          scope === "health"
+            ? "Lab report demo"
+            : scope === "deal"
+              ? "Northstar deal demo"
+              : scope === "demo"
+                ? "Demo documents"
+                : "Your uploaded workspace";
+        box.querySelector('[data-k="url"]').textContent = k.baseUrl;
         box.querySelector('[data-k="key"]').textContent = k.apiKey;
         box.querySelector('[data-k="model"]').textContent = k.model;
         box.querySelector('[data-k="until"]').textContent = new Date(
           k.expiresAt,
         ).toLocaleString();
         box.hidden = false;
-      } catch (err) {
-        $("#byo-state").textContent = err.message;
+        feedback("Key created for the selected documents.");
+      } catch {
+        if (!stale()) feedback("The key could not be created. Please retry.");
       } finally {
         btn.disabled = false;
       }
     });
-    root.addEventListener("click", (e) => {
+    root.addEventListener("click", async (e) => {
       const c = e.target.closest("[data-copy]");
       if (!c) return;
       const text = c.previousElementSibling?.textContent ?? "";
-      navigator.clipboard?.writeText(text).then(() => {
+      try {
+        if (!navigator.clipboard) throw Error("Clipboard unavailable");
+        await navigator.clipboard.writeText(text);
         c.textContent = "Copied";
         setTimeout(() => (c.textContent = "Copy"), 1200);
-      });
+      } catch {
+        feedback(
+          "Copy was unavailable. Select the displayed value and copy it manually.",
+        );
+      }
     });
     fill();
     syncVoiceClasses();

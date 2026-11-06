@@ -1,3 +1,8 @@
+import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+const shots = process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-shots");
+mkdirSync(shots, { recursive: true });
 import { chromium } from "playwright";
 import { server } from "../src/server.mjs";
 await new Promise((r) => server.listen(4317, "127.0.0.1", r));
@@ -5,7 +10,9 @@ let browser;
 try {
   browser = await chromium.launch({
     headless: true,
-    executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome",
+    ...(process.env.CHROME_PATH
+      ? { executablePath: process.env.CHROME_PATH }
+      : {}),
     args: ["--no-sandbox"],
   });
   const page = await browser.newPage({
@@ -28,7 +35,7 @@ try {
   // Open the first cited passage (scoped: the page has other disclosures).
   await page.locator("#evidence summary").first().click();
   await page.screenshot({
-    path: "/downloads/bolna-local-desktop.png",
+    path: join(shots, "bolna-local-desktop.png"),
     fullPage: true,
   });
   if (
@@ -47,12 +54,12 @@ try {
   await page.getByRole("button", { name: "Turn this into a draft" }).click();
   await page.getByRole("heading", { name: "Your follow-up draft" }).waitFor();
   await page.screenshot({
-    path: "/downloads/bolna-local-draft.png",
+    path: join(shots, "bolna-local-draft.png"),
     fullPage: true,
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({
-    path: "/downloads/bolna-local-phone.png",
+    path: join(shots, "bolna-local-phone.png"),
     fullPage: true,
   });
   if (

@@ -1,3 +1,8 @@
+import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+const shots = process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-shots");
+mkdirSync(shots, { recursive: true });
 // Browser check for conversational voice notes.
 //
 // Speech in and out is replaced with deterministic fakes (headless Chromium
@@ -19,7 +24,9 @@ let browser;
 try {
   browser = await chromium.launch({
     headless: true,
-    executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome",
+    ...(process.env.CHROME_PATH
+      ? { executablePath: process.env.CHROME_PATH }
+      : {}),
     args: ["--no-sandbox"],
   });
 
@@ -182,7 +189,7 @@ try {
     await page.evaluate(() => window.vmNotes.add("क्या बजट मंज़ूर हुआ?"));
     await until(4, "done", "speaking");
     await page.screenshot({
-      path: "/downloads/voice-notes.png",
+      path: join(shots, "voice-notes.png"),
       fullPage: true,
     });
     await page.close();
