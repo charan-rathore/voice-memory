@@ -60,6 +60,7 @@ try {
     "empty-own",
     "revoke-failure",
     "copy-denied",
+    "display-switch",
   ]) {
     const page = await browser.newPage();
     const errors = [];
@@ -150,7 +151,11 @@ try {
         await page.locator('[data-k="scope"]').textContent(),
         /Lab report demo/,
       );
-      if (mode === "revoke-failure") {
+      if (mode === "display-switch") {
+        await page.locator('.case-tab[data-case="deal"]').click();
+        assert.equal(await page.locator("#byo-llm").isVisible(), false);
+        assert.equal(await page.locator('[data-k="key"]').textContent(), "");
+      } else if (mode === "revoke-failure") {
         await page.locator("#byo-clear").click();
         await page.waitForTimeout(150);
         assert.match(

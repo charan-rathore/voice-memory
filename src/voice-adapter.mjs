@@ -1208,7 +1208,7 @@ export function createVoiceAdapter({
           const unchanged =
             readable &&
             versionOf(currentBundle) === startingVersion &&
-            (allowClientReplay || currentBundle === bundle);
+            currentBundle === bundle;
           if (!readable || (nowCase === caseId && !unchanged)) {
             spoken = isHindi(lang)
               ? "आपके दस्तावेज़ बदल गए हैं या अभी उपलब्ध नहीं हैं। कृपया फिर से पूछिए।"

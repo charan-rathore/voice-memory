@@ -36,6 +36,11 @@
     visuals: {},
   };
 
+  function invalidateKeyScope() {
+    state.keyScopeSeq++;
+    document.dispatchEvent(new Event("vm-key-scope-change"));
+  }
+
   const esc = (s) =>
     String(s ?? "").replace(
       /[&<>"']/g,
@@ -295,7 +300,7 @@
     ],
   };
   try {
-    state.keyScopeSeq++;
+    invalidateKeyScope();
     state.ws = sessionStorage.getItem("vm_ws");
   } catch {}
   function discardOwnContext() {
@@ -324,7 +329,7 @@
           return state.ws;
         } catch (e) {
           if (e?.status !== 404 && e?.status !== 410) throw e;
-          state.keyScopeSeq++;
+          invalidateKeyScope();
           state.ws = null;
           try {
             sessionStorage.removeItem("vm_ws");
@@ -344,7 +349,7 @@
         }
       }
       const w = await api("/workspace", { method: "POST" });
-      state.keyScopeSeq++;
+      invalidateKeyScope();
       state.ws = w.id;
       try {
         sessionStorage.setItem("vm_ws", w.id);
@@ -523,7 +528,7 @@
       if (e?.status === 404 || e?.status === 410) {
         // Confirmed gone (a deploy or the idle sweep cleared it): stop
         // showing its documents as if they were still answerable.
-        state.keyScopeSeq++;
+        invalidateKeyScope();
         state.ws = null;
         try {
           sessionStorage.removeItem("vm_ws");
@@ -704,7 +709,7 @@
       state.cases.own ??= { ...OWN, documents: [] };
       refreshWorkspace();
     }
-    if (state.case !== id) state.keyScopeSeq++;
+    if (state.case !== id) invalidateKeyScope();
     if (state.case !== id) state.askSeq++; // an answer still arriving is stale
     state.case = id;
     syncCallScope();
@@ -765,7 +770,7 @@
       if (e?.status === 404 && String(scope).startsWith("w_")) {
         // The workspace died mid-call (idle sweep or deploy): stop showing
         // its documents as if they were still answerable.
-        state.keyScopeSeq++;
+        invalidateKeyScope();
         state.ws = null;
         try {
           sessionStorage.removeItem("vm_ws");
@@ -1935,7 +1940,7 @@
           );
           return;
         }
-        state.keyScopeSeq++;
+        invalidateKeyScope();
         state.ws = null;
         try {
           sessionStorage.removeItem("vm_ws");
@@ -2598,6 +2603,14 @@
         el.textContent = "";
       });
     };
+    document.addEventListener("vm-key-scope-change", () => {
+      const visible = !box.hidden;
+      hideKey();
+      if (visible)
+        feedback(
+          "Document scope changed. Request a new key for the selected documents.",
+        );
+    });
     let keyEpoch = 0;
     // Memory-only ownership survives failed revocation until a confirmed retry.
     const shownKeys = new Set();
