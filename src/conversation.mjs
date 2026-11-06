@@ -148,7 +148,12 @@ const UPLOADED_SAY = {
  */
 export function socialTurn(
   text,
-  { lang = "en", last = null, uploaded = false } = {},
+  {
+    lang = "en",
+    last = null,
+    uploaded = false,
+    repeatUnavailable = false,
+  } = {},
 ) {
   const t = String(text ?? "").trim();
   if (!t) return null;
@@ -172,7 +177,16 @@ export function socialTurn(
       )
         ? shorterOf(last)
         : last;
-    return { intent: "REPEAT", spoken: short || say.nothing };
+    return {
+      intent: "REPEAT",
+      spoken:
+        short ||
+        (repeatUnavailable
+          ? language === "hi"
+            ? "दोहराने के लिए कोई सत्यापित जवाब उपलब्ध नहीं है। कृपया अपना सवाल फिर से पूछिए।"
+            : "I don't have a verified reply available to repeat. Please ask your question again."
+          : say.nothing),
+    };
   }
   // "I can't see it on the screen" (even mid-question about a result)
   if (

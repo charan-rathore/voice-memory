@@ -67,6 +67,8 @@ export function createVoiceAdapter({
   // Called after each answered turn with (token, {question, lead, result,
   // scope}). The server routes it into the owning session's episodic memory.
   onTurn = null,
+  // Standalone keys have no trusted conversation identity for replay.
+  allowClientReplay = true,
 } = {}) {
   let resolveBundle = null;
   if (
@@ -342,7 +344,7 @@ export function createVoiceAdapter({
       let scopeBad = false;
       let scopePending = null;
       try {
-        const ws = resolveBundle?.(data.messages);
+        const ws = resolveBundle?.(data.messages, token);
         if (ws?.expired) scopeGone = true;
         if (ws?.malformed) scopeBad = true;
         if (ws?.pending) scopePending = ws.pending;
@@ -623,7 +625,9 @@ export function createVoiceAdapter({
           ? grant.recordAnswers?.get(replayKey)
           : null;
         const guardedReplay =
-          !!callTag || (typeof caseId === "string" && /^w_/.test(caseId));
+          !allowClientReplay ||
+          !!callTag ||
+          (typeof caseId === "string" && /^w_/.test(caseId));
         const lastSpoken = guardedReplay
           ? savedReplay?.version === startingVersion
             ? savedReplay.spoken
@@ -634,6 +638,7 @@ export function createVoiceAdapter({
           uploaded:
             typeof caseId === "string" && /^w_[0-9a-f]{32}$/.test(caseId),
           last: lastSpoken ? messageText(lastSpoken) : null,
+          repeatUnavailable: guardedReplay && !lastSpoken,
         });
         // Two subjects in one breath ("my ferritin, and what changed in the
         // Northstar deal"): each half answered by the renderer for its records,
@@ -1189,7 +1194,7 @@ export function createVoiceAdapter({
         if (caseId && resolveBundle) {
           let now2 = null;
           try {
-            now2 = resolveBundle?.(data.messages) ?? null;
+            now2 = resolveBundle?.(data.messages, token) ?? null;
           } catch {
             now2 = null;
           }
@@ -1201,7 +1206,9 @@ export function createVoiceAdapter({
           const readable =
             currentBundle && !now2.expired && !now2.malformed && !now2.pending;
           const unchanged =
-            readable && versionOf(currentBundle) === startingVersion;
+            readable &&
+            versionOf(currentBundle) === startingVersion &&
+            (allowClientReplay || currentBundle === bundle);
           if (!readable || (nowCase === caseId && !unchanged)) {
             spoken = isHindi(lang)
               ? "आपके दस्तावेज़ बदल गए हैं या अभी उपलब्ध नहीं हैं। कृपया फिर से पूछिए।"

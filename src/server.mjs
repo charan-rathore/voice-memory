@@ -1471,6 +1471,7 @@ export function createLocalServer({
   const byoVoice = createVoiceAdapter({
     ttlMs: 30 * 60 * 1000,
     hardTtlMs: BYO_HARD_MS,
+    allowClientReplay: false,
   });
   const byoEnabled = process.env.VM_BYO_VOICE === "on";
   const byoKeys = new Map(); // token -> { at, scope, bundle }
@@ -1518,6 +1519,16 @@ export function createLocalServer({
     }
     return true;
   };
+  // Scope comes only from the admitted bearer, never caller-supplied history.
+  // Re-read at final emission so revocation and workspace changes fail closed.
+  byoVoice.setBundleResolver((_messages, token) => {
+    const key = byoKeys.get(token);
+    if (!key || Date.now() - key.at > BYO_HARD_MS)
+      return { expired: true, caseId: key?.scope ?? "unavailable" };
+    const bundle = byoBundle(key.scope);
+    if (!bundle) return { expired: true, caseId: key.scope };
+    return { bundle, caseId: key.scope, call: null };
+  });
   // Ceilings across all visitors, so many addresses cannot add up to an
   // unbounded load on the engine: keys issued per hour, turns per day.
   const BYO_KEYS_HOUR = Number(process.env.VM_BYO_KEYS_PER_HOUR || 300);

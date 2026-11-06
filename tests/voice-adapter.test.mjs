@@ -446,3 +446,57 @@ test("an engine fault becomes a spoken fallback, never an internal leak", async 
   assert.equal(ok.status, 200);
   assert.match(await ok.text(), /chat.completion.chunk/);
 });
+
+test("standalone resolver rechecks the admitted bearer and bundle identity before emission", async () => {
+  for (const change of [
+    "unchanged",
+    "replacement",
+    "unavailable",
+    "exception",
+  ]) {
+    let finish;
+    const original = b();
+    let current = original;
+    const reads = [];
+    const adapter = createVoiceAdapter({
+      allowClientReplay: false,
+      retrieval: {
+        actualMode: "keyword",
+        embeddingModel: null,
+        retrieve: async () =>
+          new Promise((resolve) => {
+            finish = () =>
+              resolve({
+                actualMode: "keyword",
+                corpusId: original.scope,
+                corpusScope: "corpus",
+                evidence: "insufficient",
+                chunks: [],
+              });
+          }),
+      },
+    });
+    const token = adapter.bind(original);
+    adapter.setBundleResolver((_messages, admitted) => {
+      reads.push(admitted);
+      if (current === "throw") throw Error("unavailable");
+      return { bundle: current, caseId: "health", expired: !current };
+    });
+    const pending = adapter.handle(
+      request(token, "pilot launch security review"),
+    );
+    for (let i = 0; i < 100 && !finish; i++)
+      await new Promise((r) => setImmediate(r));
+    assert.ok(finish);
+    if (change === "replacement") current = { ...original };
+    if (change === "unavailable") current = null;
+    if (change === "exception") current = "throw";
+    finish();
+    const response = await pending;
+    const output = await response.text();
+    assert.deepEqual(reads, [token, token]);
+    if (change === "unchanged")
+      assert.doesNotMatch(output, /became unavailable/);
+    else assert.match(output, /became unavailable/);
+  }
+});

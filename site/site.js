@@ -30,6 +30,7 @@
     call: null,
     ticket: null,
     callScope: null, // scope the live call answers from
+    keyScopeSeq: 0, // invalidates pending capabilities on every scope transition
     askSeq: 0, // typed answers older than the latest ask or case switch are dropped
     lang: /^hi\b/i.test(navigator.language || "") ? "hi" : "en",
     visuals: {},
@@ -294,6 +295,7 @@
     ],
   };
   try {
+    state.keyScopeSeq++;
     state.ws = sessionStorage.getItem("vm_ws");
   } catch {}
   function discardOwnContext() {
@@ -322,6 +324,7 @@
           return state.ws;
         } catch (e) {
           if (e?.status !== 404 && e?.status !== 410) throw e;
+          state.keyScopeSeq++;
           state.ws = null;
           try {
             sessionStorage.removeItem("vm_ws");
@@ -341,6 +344,7 @@
         }
       }
       const w = await api("/workspace", { method: "POST" });
+      state.keyScopeSeq++;
       state.ws = w.id;
       try {
         sessionStorage.setItem("vm_ws", w.id);
@@ -519,6 +523,7 @@
       if (e?.status === 404 || e?.status === 410) {
         // Confirmed gone (a deploy or the idle sweep cleared it): stop
         // showing its documents as if they were still answerable.
+        state.keyScopeSeq++;
         state.ws = null;
         try {
           sessionStorage.removeItem("vm_ws");
@@ -699,6 +704,7 @@
       state.cases.own ??= { ...OWN, documents: [] };
       refreshWorkspace();
     }
+    if (state.case !== id) state.keyScopeSeq++;
     if (state.case !== id) state.askSeq++; // an answer still arriving is stale
     state.case = id;
     syncCallScope();
@@ -759,6 +765,7 @@
       if (e?.status === 404 && String(scope).startsWith("w_")) {
         // The workspace died mid-call (idle sweep or deploy): stop showing
         // its documents as if they were still answerable.
+        state.keyScopeSeq++;
         state.ws = null;
         try {
           sessionStorage.removeItem("vm_ws");
@@ -1928,6 +1935,7 @@
           );
           return;
         }
+        state.keyScopeSeq++;
         state.ws = null;
         try {
           sessionStorage.removeItem("vm_ws");
@@ -2580,57 +2588,123 @@
       if ($("#answer .overview")) renderOverview();
     };
     for (const el of Object.values(f)) el?.addEventListener("change", save);
-    $("#byo-clear")?.addEventListener("click", () => {
+    const feedback = (text) => {
+      $("#byo-feedback").textContent = text;
+    };
+    const box = $("#byo-llm");
+    const hideKey = () => {
+      box.hidden = true;
+      box.querySelectorAll("[data-k]").forEach((el) => {
+        el.textContent = "";
+      });
+    };
+    let keyEpoch = 0;
+    // Memory-only ownership survives failed revocation until a confirmed retry.
+    const shownKeys = new Set();
+    const revoking = new Map();
+    const revoke = (key) => {
+      if (revoking.has(key)) return revoking.get(key);
+      const work = (async () => {
+        try {
+          const response = await fetch("/api/public/llm/key", {
+            method: "DELETE",
+            headers: { authorization: `Bearer ${key}` },
+          });
+          if (response.ok || response.status === 401) shownKeys.delete(key);
+        } catch {
+          /* Retain ownership for an explicit retry. */
+        } finally {
+          revoking.delete(key);
+        }
+      })();
+      revoking.set(key, work);
+      return work;
+    };
+    $("#byo-clear")?.addEventListener("click", async () => {
+      const epoch = ++keyEpoch;
       byo.clear();
-      revokeShown();
+      hideKey();
       syncVoiceClasses();
       fill();
-      $("#byo-llm").hidden = true;
       if ($("#answer .overview")) renderOverview();
+      feedback("Local keys cleared. Checking URL key revocation…");
+      await Promise.all([...shownKeys].map(revoke));
+      if (epoch !== keyEpoch) return;
+      feedback(
+        shownKeys.size
+          ? "Local keys cleared. URL key revocation is pending; use Forget my keys to retry."
+          : "Local keys cleared. URL keys issued in this page session have been revoked.",
+      );
     });
-    // custom-LLM keys issued on this page, kept only in memory so Clear can revoke them
-    const shownKeys = new Set();
-    const revokeShown = () => {
-      for (const key of shownKeys)
-        fetch("/api/public/llm/key", {
-          method: "DELETE",
-          headers: { authorization: `Bearer ${key}` },
-        }).catch(() => {});
-      shownKeys.clear();
-    };
     $("#byo-llm-get")?.addEventListener("click", async (e) => {
       const btn = e.currentTarget;
-      btn.disabled = true;
       const scope = state.case === "own" ? state.ws : state.case;
+      if (!scope) {
+        feedback("Upload a document before creating a workspace key.");
+        return;
+      }
+      const epoch = ++keyEpoch,
+        scopeSeq = state.keyScopeSeq;
+      const stale = () => epoch !== keyEpoch || scopeSeq !== state.keyScopeSeq;
+      btn.disabled = true;
+      feedback("Creating a key for the current documents…");
       try {
         const k = await api("/llm/key", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ case: scope || "demo" }),
+          body: JSON.stringify({ case: scope }),
         });
-        const box = $("#byo-llm");
-        box.querySelector('[data-k="url"]').textContent = k.baseUrl;
         shownKeys.add(k.apiKey);
+        if (stale() || k.scope !== scope) {
+          await revoke(k.apiKey);
+          if (shownKeys.has(k.apiKey) && box.hidden && epoch !== keyEpoch)
+            feedback(
+              "URL key revocation is pending; use Forget my keys to retry.",
+            );
+          if (epoch === keyEpoch)
+            feedback(
+              shownKeys.has(k.apiKey)
+                ? "Documents changed. Revocation of the unused key is pending; use Forget my keys to retry."
+                : "Documents changed. The unused key was revoked; request a new key.",
+            );
+          return;
+        }
+        box.querySelector('[data-k="scope"]').textContent =
+          scope === "health"
+            ? "Lab report demo"
+            : scope === "deal"
+              ? "Northstar deal demo"
+              : scope === "demo"
+                ? "Demo documents"
+                : "Your uploaded workspace";
+        box.querySelector('[data-k="url"]').textContent = k.baseUrl;
         box.querySelector('[data-k="key"]').textContent = k.apiKey;
         box.querySelector('[data-k="model"]').textContent = k.model;
         box.querySelector('[data-k="until"]').textContent = new Date(
           k.expiresAt,
         ).toLocaleString();
         box.hidden = false;
-      } catch (err) {
-        $("#byo-state").textContent = err.message;
+        feedback("Key created for the selected documents.");
+      } catch {
+        if (!stale()) feedback("The key could not be created. Please retry.");
       } finally {
         btn.disabled = false;
       }
     });
-    root.addEventListener("click", (e) => {
+    root.addEventListener("click", async (e) => {
       const c = e.target.closest("[data-copy]");
       if (!c) return;
       const text = c.previousElementSibling?.textContent ?? "";
-      navigator.clipboard?.writeText(text).then(() => {
+      try {
+        if (!navigator.clipboard) throw Error("Clipboard unavailable");
+        await navigator.clipboard.writeText(text);
         c.textContent = "Copied";
         setTimeout(() => (c.textContent = "Copy"), 1200);
-      });
+      } catch {
+        feedback(
+          "Copy was unavailable. Select the displayed value and copy it manually.",
+        );
+      }
     });
     fill();
     syncVoiceClasses();
