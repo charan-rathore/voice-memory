@@ -289,10 +289,14 @@ const splitCells = (line) =>
     .split("|")
     .map((c) => c.trim());
 
-const RANGE_SHAPE = new RegExp(
-  `(${NUM})\\s*(?:-|–|to)\\s*(${NUM})|^[<>≤≥]\\s*(${NUM})|up\\s*to\\s*(${NUM})|\\+/-|^(negative|non[- ]?reactive|not detected|absent|nil)\\b`,
-  "i",
-);
+// Collapse numeric runs before scanning for reference shape. Every input
+// character is visited a bounded number of times; never retry NUM at every
+// digit offset in an arbitrarily long suffix. This permits preservation,
+// not comparison: the original string remains the quoted evidence.
+const hasRangeShape = (text) =>
+  /0\s*(?:-|–|—|to)\s*0|[<>≤≥]\s*0|\bup\s*to\s*0|\+\/-|\b(?:negative|non[- ]?reactive|not detected|absent|nil)\b/i.test(
+    text.replace(/[\d.,]+/g, "0"),
+  );
 
 // A range starts like one: optional labels ("Low", "Male:", "13-99 YRS,",
 // "Adults:"), then a number, a bound or a qualitative word. Prose that merely
@@ -310,7 +314,7 @@ const RANGE_START =
 // multi-band strings are qualification nobody may safely apply: the string
 // is kept as printed provenance and never judged.
 const RANGE_FULL = new RegExp(
-  `^(?:(?:low|high|borderline)\\s+)?(?:(?:${NUM})\\s*(?:-|–|—|to)\\s*(?:${NUM})|[<>≤≥]\\s*(?:${NUM})|up\\s*to\\s*(?:${NUM})|upto\\s*(?:${NUM})|\\+/-|negative|non[- ]?reactive|not detected|absent|nil|normal)$`,
+  `^(?:(?:low|high|borderline)\\s+)?(?:(?:${NUM})\\s*(?:-|–|—|to)\\s*(?:${NUM})|[<>≤≥]\\s*(?:${NUM})|up\\s*to\\s*(?:${NUM})|upto\\s*(?:${NUM})|(?:${NUM})\\s*\\+/-\\s*(?:${NUM})|negative|non[- ]?reactive|not detected|absent|nil|normal)$`,
   "i",
 );
 
@@ -383,10 +387,7 @@ function tail(rest) {
     const pm = /^\(([^()]*)\)\s*(.*)$/.exec(s);
     if (pm) {
       const inner = pm[1].replace(RANGE_LABEL, "").trim();
-      if (
-        RANGE_START.test(inner) &&
-        (RANGE_SHAPE.test(inner) || QUAL_REF.test(inner))
-      )
+      if (hasRangeShape(inner) || QUAL_REF.test(inner))
         s = inner + (pm[2] ? " " + pm[2].trim() : "");
     }
   }
@@ -422,7 +423,7 @@ function tail(rest) {
     // is separate: a printed interval behind unsupported prose or a long
     // qualification must not disappear merely because it cannot be judged.
     if (s.length <= 80 && judgedWhole(s)) range = s;
-    else if (RANGE_SHAPE.test(s) || QUAL_REF.test(s)) rangeRaw = s;
+    else if (hasRangeShape(s) || QUAL_REF.test(s)) rangeRaw = s;
   }
   return { flag, unit: normUnit(unit), range, rangeRaw };
 }
@@ -606,7 +607,15 @@ export function readLabText(text) {
             .filter((c) => /(male|female)/i.test(c))
             .join(" ")
         : trimmed;
-      if (extra) prev.range = [prev.range, extra].filter(Boolean).join(" ");
+      if (extra) {
+        // A separate applicability band never replaces the first reference.
+        // Preserve the complete printed note and refuse all comparison.
+        prev.rangeRaw = [prev.rangeRaw || prev.range, extra]
+          .filter(Boolean)
+          .join(" ");
+        prev.range = null;
+        prev.end = start + line.length;
+      }
       continue;
     }
     const h = HEADING_RE.exec(trimmed.replace(/^#+\s*/, ""));

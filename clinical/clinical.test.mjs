@@ -10,7 +10,7 @@ import {
   compare,
   seriesFor,
 } from "./observations.mjs";
-import { clinicalTurn, clinicalAnswer } from "./answer.mjs";
+import { clinicalTurn, clinicalAnswer, groupAnswer } from "./answer.mjs";
 import { readLabLine } from "./lab-lines.mjs";
 
 const gold = JSON.parse(
@@ -823,4 +823,70 @@ test("a critical flag does not hide an unjudged printed reference", () => {
     answer.spoken,
     /doesn't give a range|above this lab|below this lab|within this lab/i,
   );
+});
+
+test("long numeric suffix scan stays bounded and retains long qualified notes", () => {
+  const start = performance.now();
+  readLabLine("Serum potassium: 6.1 mmol/L " + "9".repeat(20000));
+  assert.ok(
+    performance.now() - start < 250,
+    "20k digits must not trigger quadratic scan",
+  );
+  const note = "historically withdrawn " + "9".repeat(20000) + " - 5.0";
+  assert.equal(
+    readLabLine("Serum potassium: 6.1 mmol/L " + note).rangeRaw,
+    note,
+  );
+});
+
+test("conflicting continuation bands stay together and unjudged", () => {
+  const rep = {
+    title: "synthetic.txt",
+    sourceId: "s",
+    ...extractReport({
+      text: "Patient: SYN-1\nAge: 34 Yrs\nSex: Male\nDate of report: 07 Nov 2026\nSerum potassium: 6.1 mmol/L Male:3.5-5.0\nMale:4.0-7.0",
+      elements: [],
+    }),
+  };
+  const o = rep.observations[0];
+  assert.equal(o.range, null);
+  assert.equal(o.rangeRaw, "Male:3.5-5.0 Male:4.0-7.0");
+  const a = clinicalTurn("What is the potassium result?", [rep]);
+  assert.match(a.spoken, /Male:3\.5-5\.0 Male:4\.0-7\.0/);
+  assert.doesNotMatch(
+    a.spoken,
+    /within this lab|above this lab|below this lab|doesn't give a range/,
+  );
+});
+
+test("grouped answers acknowledge qualified printed references", () => {
+  const rep = {
+    title: "synthetic.txt",
+    sourceId: "s",
+    ...extractReport({
+      text: "Patient: SYN-1\nAge: 34 Yrs\nSex: Male\nDate of report: 07 Nov 2026\nALT: 90 U/L Male:21-72",
+      elements: [],
+    }),
+  };
+  const a = groupAnswer(
+    "What about my liver tests?",
+    [rep],
+    rep.observations.map((o) => o.key),
+    "liver tests",
+  );
+  assert.ok(a.spoken.includes("Male:21-72"), a.spoken);
+  assert.doesNotMatch(a.spoken, /no range printed|above the|within /);
+});
+
+test("plain numeric plus-minus intervals remain comparable", () => {
+  const rep = {
+    title: "synthetic.txt",
+    sourceId: "s",
+    ...extractReport({
+      text: "Patient: SYN-1\nDate of report: 07 Nov 2026\nSerum potassium: 6.1 mmol/L 4.0 +/- 1.0",
+      elements: [],
+    }),
+  };
+  const a = clinicalTurn("What is the potassium result?", [rep]);
+  assert.match(a.spoken, /above this lab's printed range of 3 to 5/);
 });
