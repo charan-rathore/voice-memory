@@ -309,6 +309,7 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
       unit: normUnit(r.unit),
       unitRaw: r.unit,
       range: r.range,
+      rangeRaw: r.rangeRaw ?? null,
       flag: r.flag,
       flagConflict: flagConflict(r, r.range, r.flag),
       qual: r.qual,

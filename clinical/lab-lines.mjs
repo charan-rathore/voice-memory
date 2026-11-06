@@ -263,11 +263,67 @@ const RANGE_SHAPE = new RegExp(
 const RANGE_START =
   /^(?:(?:low|high|borderline)\s+)?(?:[A-Za-z][A-Za-z/ ]{0,14}\s*[:=-]\s*)?(?:\d+\s*-\s*\d+\s*(?:yrs?|years?)\s*,?\s*)?(?:[A-Za-z/]{1,6}\s*[:=]\s*)?(?:[<>≤≥]|up\s*to|upto|\d|\.\d|negative|non[- ]?reactive|not\s+detected|absent|nil)/i;
 
+// RANGE_START anchored at both ends: true only when the whole string is a
+// range, nothing else. A trailing flag is split off only when the head left
+// behind matches this - a head like "3.5-5.0 - not" (from "- not flagged
+// HIGH") is not a range, so no split happens and no flag is asserted.
+const RANGE_FULL = new RegExp(
+  // Leading labels are the known applicability vocabulary only (sex and
+  // age/adult bands; "Low"/"Borderline" qualifiers). An unknown word before
+  // the range ("obsolete:3.5-5.0", "withdrawn:...", "do not use:...") is
+  // qualification prose, never a label: the string is not judged.
+  `^(?:(?:low|high|borderline)\\s+)?(?:(?:male|female|men|women|m\\/f|m|f|adults?|child(?:ren)?|paediatric|pediatric|neonate|infant)\\s*[:=-]\\s*)?(?:\\d+\\s*-\\s*\\d+\\s*(?:yrs?|years?)\\s*,?\\s*)?(?:(?:${NUM})\\s*(?:-|\u2013|\u2014|to)\\s*(?:${NUM})|[<>\u2264\u2265]\\s*(?:${NUM})|up\\s*to\\s*(?:${NUM})|upto\\s*(?:${NUM})|\\+/-|negative|non[- ]?reactive|not detected|absent|nil|normal)$`,
+  "i",
+);
+
+// The whole string is one judged range: a clean range (RANGE_FULL),
+// sex-labelled bands, age/adult bands, or any of those with one trailing
+// unit token from the unit vocabulary ("45 - 70 %"). Prose tails never
+// qualify: the head left after removing a unit must itself be RANGE_FULL.
+const judgedWhole = (str) => {
+  if (RANGE_FULL.test(str) || SEX_FULL.test(str) || BAND_FULL.test(str))
+    return true;
+  const toks = str.split(/\s+/).filter(Boolean);
+  for (let k = Math.min(2, toks.length - 1); k >= 1; k--)
+    if (
+      looksUnit(toks.slice(-k).join(" ")) &&
+      RANGE_FULL.test(toks.slice(0, -k).join(" "))
+    )
+      return true;
+  return false;
+};
+
+// Complete band grammars, matched to the END of the string with no
+// residual prose. A label's presence never accepts a string: only a full
+// parse does. Sex segments are "M: 13-17 F: 12.0-15.0" (the colon/equals
+// forms RANGE_START already required); band segments are a range with an
+// optional glued age/adult word, ";"- or ","-separated
+// ("11.5-15.5child;13-17adult"). parseReference resolves the sex bands by
+// patient sex and itself refuses a child/adult mismatch.
+const SEG_RANGE = `(?:${NUM})\\s*(?:-|\u2013|\u2014|to)\\s*(?:${NUM})|[<>\u2264\u2265]\\s*(?:${NUM})|up\\s*to\\s*(?:${NUM})`;
+const SEX_SEG = `(?:male|female|men|women|m\\/f|m|f)\\s*[:=]\\s*(?:${SEG_RANGE})`;
+const SEX_FULL = new RegExp(
+  // Optional leading age band, the "Indian grouping" print format:
+  // "13-99 YRS,Male:13.5-18". parseReference ignores the prefix and picks
+  // the patient's sex band.
+  `^(?:\\d+\\s*-\\s*\\d+\\s*(?:yrs?|years?|y|months?|mo)\\s*,\\s*)?${SEX_SEG}(?:(?:\\s*[,;/]\\s*|\\s+)${SEX_SEG})*$`,
+  "i",
+);
+// Every band segment must CARRY its applicability label: several unlabelled
+// intervals ("3.5-5.0;4.0-7.0") are distinct bands nobody may pick between,
+// so the string is kept as provenance and abstains.
+const BAND_SEG = `(?:${SEG_RANGE})\\s*(?:yrs?|years?|y|months?|mo|adults?|child(?:ren)?|paediatric|pediatric|neonate|infant)`;
+const BAND_FULL = new RegExp(`^${BAND_SEG}(?:\\s*[;,]\\s*${BAND_SEG})*$`, "i");
+
+const RANGE_LABEL =
+  /^(normal\s*range|normal|reference\s*range|reference|ref\.?\s*range|bio\.?\s*ref\.?\s*(?:interval|range)?|range)\s*[:=-]?\s*/i;
+
 /** Split the text after the result into flag, unit and range, by shape. */
 function tail(rest) {
   let flag = null,
     unit = null,
-    range = null;
+    range = null,
+    rangeRaw = null;
   let s = rest.trim();
   const f =
     /^(H|L|HH|LL|High|Low|Borderline|Abnormal|Critical|\*+|↑|↓)(?=\s|$)/.exec(
@@ -299,21 +355,60 @@ function tail(rest) {
         }
       }
   }
+  s = s.trim();
+  // Printed reports often wrap the reference in parentheses: "(reference
+  // 3.5-5.0)", "(13-17) H". Unwrap a leading parenthesised segment only
+  // when its inside is range-shaped; "(Calculated)" and note parens stay.
+  {
+    const pm = /^\(([^()]*)\)\s*(.*)$/.exec(s);
+    if (pm) {
+      const inner = pm[1].replace(RANGE_LABEL, "").trim();
+      if (
+        RANGE_START.test(inner) &&
+        (RANGE_SHAPE.test(inner) || QUAL_REF.test(inner))
+      )
+        s = inner + (pm[2] ? " " + pm[2].trim() : "");
+    }
+  }
   s = s
-    .trim()
     .replace(/^\((.*)\)$/, "$1")
-    .replace(
-      /^(normal\s*range|normal|reference\s*range|reference|ref\.?\s*range|bio\.?\s*ref\.?\s*(?:interval|range)?|range)\s*[:=-]?\s*/i,
-      "",
-    )
+    .replace(RANGE_LABEL, "")
     .trim();
+  // A flag after the range belongs to the value, not the range text:
+  // "3.5-5.0 H", "3.5-5.0 flagged High", "0.40-4.00 - L". Only split it off
+  // a range-shaped head so prose or qualifiers are never eaten.
+  if (!flag && s) {
+    const tf =
+      /\s*(?:-|\u2013|\u2014)?\s*(?:flag(?:ged)?\s+)?(HH|LL|Higher|High|Lower|Low|Borderline|Abnormal|Critical|H|L|\*+|\u2191|\u2193)\.?\s*$/i.exec(
+        s,
+      );
+    if (tf) {
+      const head = s.slice(0, tf.index).trim();
+      // Strict full-suffix grammar: the head must be nothing but a range.
+      // Prose between the range and the flag word ("- not flagged HIGH",
+      // "- previously H", "tentatively H") keeps the whole suffix glued to
+      // the range text verbatim and asserts no flag - a negation or a
+      // history word is not a current flag.
+      if (!head || judgedWhole(head)) {
+        flag = tf[1];
+        s = head;
+      }
+    }
+  }
   if (s && s.length <= 80) {
     const f2 = /^(Low|High|Borderline)\s+/i.exec(s);
     if (f2 && !flag) flag = f2[1];
-    if (RANGE_START.test(s) && (RANGE_SHAPE.test(s) || QUAL_REF.test(s)))
-      range = s;
+    // A judged range is only ever a fully supported shape: one clean range
+    // (RANGE_FULL), or sex-labelled bands the patient's sex can resolve.
+    // Anything else that still contains a range ("3.5-5.0 - not flagged
+    // HIGH", "3.5-5.0 - obsolete range, do not use", "Desirable: <40,
+    // High: >60") is kept as printed provenance, never judged: the
+    // qualification is unknown, and unknown prose is not a range.
+    if (judgedWhole(s)) range = s;
+    else if (RANGE_START.test(s) && (RANGE_SHAPE.test(s) || QUAL_REF.test(s)))
+      rangeRaw = s;
   }
-  return { flag, unit: normUnit(unit), range };
+  return { flag, unit: normUnit(unit), range, rangeRaw };
 }
 
 /**
@@ -377,10 +472,12 @@ export function readLabLine(line) {
     /[a-z]/i.test(test.replace(/\b(ratio|index|score)\b/gi, ""));
   // A number with neither a unit nor a range is too weak to call a result
   // ("Age 23", "Bill 189455"); a qualitative result needs no unit.
-  if (v.qual == null && !t.unit && !t.range && !dimensionless) return null;
+  if (v.qual == null && !t.unit && !t.range && !t.rangeRaw && !dimensionless)
+    return null;
   if (
     v.qual == null &&
     t.range == null &&
+    !t.rangeRaw &&
     !dimensionless &&
     !/[a-z]/i.test(t.unit ?? "")
   )
@@ -394,6 +491,7 @@ export function readLabLine(line) {
     notation: v.notation,
     unit: t.unit,
     range: t.range,
+    rangeRaw: t.rangeRaw,
     flag: t.flag,
   };
 }
