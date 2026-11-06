@@ -186,6 +186,10 @@ export function parseReference(text, sex = null, age = null) {
   const q = QUAL_REF.exec(s);
   if (q)
     return { expected: q[1].toLowerCase().replace(/[- ]+/g, " "), text: s };
+  // A lone age span ("13-99 YRS") is an applicable-age band, not a lab
+  // reference interval.
+  if (/^\d+\s*-\s*\d+\s*(?:yrs?|years?|y|mos?|months?)\.?$/.test(s))
+    return null;
   // Decision thresholds with several categories ("Low: <40, High: >60",
   // "Borderline: 150-199 High: 200-499") are not one reference interval.
   if (
@@ -208,34 +212,67 @@ export function parseReference(text, sex = null, age = null) {
       (sex === "male" && /^(male|m|men)$/.test(who)) ||
       (sex === "female" && /^(female|f|women)$/.test(who));
     const pick = segs.filter((g) => fits(g.who));
-    const all = segs
-      .map((g) => interval(g.body.replace(AGE_SPAN, "")))
-      .filter(Boolean);
-    const same =
-      all.length &&
-      all.every((r) => r.lowN === all[0].lowN && r.highN === all[0].highN);
-    const r = pick.length
-      ? interval(pick[0].body.replace(AGE_SPAN, ""))
-      : same
-        ? all[0]
+    const rs = (list) =>
+      list.map((g) => interval(g.body.replace(AGE_SPAN, ""))).filter(Boolean);
+    const same = (list) =>
+      list.length > 0 &&
+      list.every((r) => r.lowN === list[0].lowN && r.highN === list[0].highN);
+    if (pick.length) {
+      // Duplicate bands for the same sex must agree; conflicting ones
+      // abstain rather than adopting the first.
+      const prs = rs(pick);
+      return prs.length === pick.length && same(prs)
+        ? { ...prs[0], text: s }
         : null;
-    return r ? { ...r, text: s } : null;
+    }
+    // No band fits this patient. A genuinely multi-label print whose bands
+    // all agree ("Male:35-104 Female: 35-104") carries one value for
+    // everyone; a sole opposite-sex band is not this patient's range.
+    if (labels.length > 1) {
+      const all = rs(segs);
+      if (all.length === segs.length && same(all))
+        return { ...all[0], text: s };
+    }
+    return null;
   }
   // Age-labelled alternatives ("Adult:0-1  Premature:..."): adult/unlabelled only.
   const parts = s
     .split(/\s{2,}|;|\|/)
     .flatMap((p) => p.split(/(?<=\d)\s+(?=[A-Za-z][A-Za-z ]*\s*:)/));
-  const adult = parts.find((p) => /^adults?\s*[:-]/i.test(p.trim()));
-  if (adult) {
-    const r = interval(
-      adult.replace(/^adults?\s*[:-]/i, "").replace(AGE_SPAN, ""),
-    );
-    return r ? { ...r, text: s } : null;
+  const adult = parts.filter((p) => /^adults?\s*[:-]/i.test(p.trim()));
+  if (adult.length) {
+    // Duplicate adult bands must agree; conflicting ones abstain.
+    const rs = adult
+      .map((p) =>
+        interval(
+          p
+            .trim()
+            .replace(/^adults?\s*[:-]/i, "")
+            .replace(AGE_SPAN, ""),
+        ),
+      )
+      .filter(Boolean);
+    const same =
+      rs.length > 0 &&
+      rs.every((r) => r.lowN === rs[0].lowN && r.highN === rs[0].highN);
+    return rs.length === adult.length && same ? { ...rs[0], text: s } : null;
   }
   const plain = parts
     .map((p) => p.trim())
     .filter((p) => p && !CHILD_LABEL.test(p));
   if (!plain.length) return null;
+  // Distinct unlabelled bands abstain: nobody may pick between them.
+  // Identical duplicates coalesce to the one value they all print.
+  if (plain.length > 1) {
+    const prs = plain
+      .map((p) => interval(p.replace(AGE_SPAN, "")))
+      .filter(Boolean);
+    if (
+      prs.length !== plain.length ||
+      !prs.every((r) => r.lowN === prs[0].lowN && r.highN === prs[0].highN)
+    )
+      return null;
+  }
   const body = plain[0]
     .replace(AGE_SPAN, "")
     .replace(/^[A-Za-z ]{1,20}:\s*/, "")
@@ -267,53 +304,36 @@ const RANGE_START =
 // range, nothing else. A trailing flag is split off only when the head left
 // behind matches this - a head like "3.5-5.0 - not" (from "- not flagged
 // HIGH") is not a range, so no split happens and no flag is asserted.
+// A judged range is nothing but the range itself, with an optional severity
+// qualifier ("Low 13.0-17.0"). Applicability labels (sex, age and adult
+// bands), unknown prose before the range ("obsolete:3.5-5.0") and
+// multi-band strings are qualification nobody may safely apply: the string
+// is kept as printed provenance and never judged.
 const RANGE_FULL = new RegExp(
-  // Leading labels are the known applicability vocabulary only (sex and
-  // age/adult bands; "Low"/"Borderline" qualifiers). An unknown word before
-  // the range ("obsolete:3.5-5.0", "withdrawn:...", "do not use:...") is
-  // qualification prose, never a label: the string is not judged.
-  `^(?:(?:low|high|borderline)\\s+)?(?:(?:male|female|men|women|m\\/f|m|f|adults?|child(?:ren)?|paediatric|pediatric|neonate|infant)\\s*[:=-]\\s*)?(?:\\d+\\s*-\\s*\\d+\\s*(?:yrs?|years?)\\s*,?\\s*)?(?:(?:${NUM})\\s*(?:-|\u2013|\u2014|to)\\s*(?:${NUM})|[<>\u2264\u2265]\\s*(?:${NUM})|up\\s*to\\s*(?:${NUM})|upto\\s*(?:${NUM})|\\+/-|negative|non[- ]?reactive|not detected|absent|nil|normal)$`,
+  `^(?:(?:low|high|borderline)\\s+)?(?:(?:${NUM})\\s*(?:-|–|—|to)\\s*(?:${NUM})|[<>≤≥]\\s*(?:${NUM})|up\\s*to\\s*(?:${NUM})|upto\\s*(?:${NUM})|\\+/-|negative|non[- ]?reactive|not detected|absent|nil|normal)$`,
   "i",
 );
 
-// The whole string is one judged range: a clean range (RANGE_FULL),
-// sex-labelled bands, age/adult bands, or any of those with one trailing
-// unit token from the unit vocabulary ("45 - 70 %"). Prose tails never
-// qualify: the head left after removing a unit must itself be RANGE_FULL.
+// An age unit never counts as a measurement unit: "13-99 YRS" is an age
+// band, not a range carrying a unit.
+const AGE_UNIT = /^(yrs?|years?|y|mos?|months?)$/i;
+// The whole string is one judged range: a clean range (RANGE_FULL), or one
+// with a single trailing measurement unit ("45 - 70 %"). Prose tails,
+// applicability labels, sex bands and age bands never qualify.
 const judgedWhole = (str) => {
-  if (RANGE_FULL.test(str) || SEX_FULL.test(str) || BAND_FULL.test(str))
-    return true;
+  if (RANGE_FULL.test(str)) return true;
   const toks = str.split(/\s+/).filter(Boolean);
-  for (let k = Math.min(2, toks.length - 1); k >= 1; k--)
+  for (let k = Math.min(2, toks.length - 1); k >= 1; k--) {
+    const u = toks.slice(-k).join(" ");
     if (
-      looksUnit(toks.slice(-k).join(" ")) &&
+      !AGE_UNIT.test(u) &&
+      looksUnit(u) &&
       RANGE_FULL.test(toks.slice(0, -k).join(" "))
     )
       return true;
+  }
   return false;
 };
-
-// Complete band grammars, matched to the END of the string with no
-// residual prose. A label's presence never accepts a string: only a full
-// parse does. Sex segments are "M: 13-17 F: 12.0-15.0" (the colon/equals
-// forms RANGE_START already required); band segments are a range with an
-// optional glued age/adult word, ";"- or ","-separated
-// ("11.5-15.5child;13-17adult"). parseReference resolves the sex bands by
-// patient sex and itself refuses a child/adult mismatch.
-const SEG_RANGE = `(?:${NUM})\\s*(?:-|\u2013|\u2014|to)\\s*(?:${NUM})|[<>\u2264\u2265]\\s*(?:${NUM})|up\\s*to\\s*(?:${NUM})`;
-const SEX_SEG = `(?:male|female|men|women|m\\/f|m|f)\\s*[:=]\\s*(?:${SEG_RANGE})`;
-const SEX_FULL = new RegExp(
-  // Optional leading age band, the "Indian grouping" print format:
-  // "13-99 YRS,Male:13.5-18". parseReference ignores the prefix and picks
-  // the patient's sex band.
-  `^(?:\\d+\\s*-\\s*\\d+\\s*(?:yrs?|years?|y|months?|mo)\\s*,\\s*)?${SEX_SEG}(?:(?:\\s*[,;/]\\s*|\\s+)${SEX_SEG})*$`,
-  "i",
-);
-// Every band segment must CARRY its applicability label: several unlabelled
-// intervals ("3.5-5.0;4.0-7.0") are distinct bands nobody may pick between,
-// so the string is kept as provenance and abstains.
-const BAND_SEG = `(?:${SEG_RANGE})\\s*(?:yrs?|years?|y|months?|mo|adults?|child(?:ren)?|paediatric|pediatric|neonate|infant)`;
-const BAND_FULL = new RegExp(`^${BAND_SEG}(?:\\s*[;,]\\s*${BAND_SEG})*$`, "i");
 
 const RANGE_LABEL =
   /^(normal\s*range|normal|reference\s*range|reference|ref\.?\s*range|bio\.?\s*ref\.?\s*(?:interval|range)?|range)\s*[:=-]?\s*/i;
@@ -339,7 +359,7 @@ function tail(rest) {
     // try the longest unit prefix (handles "mg / dL", "U/ L")
     for (let k = Math.min(3, toks.length); k >= 1; k--) {
       const cand = toks.slice(0, k).join(" ");
-      if (looksUnit(cand)) {
+      if (!AGE_UNIT.test(cand) && looksUnit(cand)) {
         unit = cand;
         s = toks.slice(k).join(" ");
         break;
@@ -348,7 +368,7 @@ function tail(rest) {
     if (!unit)
       for (let k = Math.min(3, toks.length); k >= 1; k--) {
         const cand = toks.slice(-k).join(" ");
-        if (looksUnit(cand) && toks.length > k) {
+        if (!AGE_UNIT.test(cand) && looksUnit(cand) && toks.length > k) {
           unit = cand;
           s = toks.slice(0, -k).join(" ");
           break;

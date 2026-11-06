@@ -519,7 +519,7 @@ test("a child's result is never judged against an adult band, even glued to numb
   );
   assert.match(
     t.spoken,
-    /adult ranges?|haven't judged|not judged/i,
+    /adult ranges?|haven't judged|not judged|can't judge|haven't compared/i,
     "the child/adult-range caveat is spoken",
   );
 });
@@ -624,16 +624,41 @@ test("parenthesised reference ranges and trailing flags are read, never glued", 
       null,
       "3.5-5.0 - adults previously HIGH",
     ],
-    // Clean compositional forms still judge.
+    // Sex-labelled and band-labelled strings are provenance, never judged:
+    // applicability is resolved nowhere safe, so the numbers stay quoted.
     [
       "Hemoglobin: 13.8 g/dL Male: 13.5-18 Female: 12-16",
-      "Male: 13.5-18 Female: 12-16",
       null,
+      null,
+      "Male: 13.5-18 Female: 12-16",
     ],
     [
       "Hemoglobin: 11.3 g/dL 11.5-15.5child;13-17adult L",
-      "11.5-15.5child;13-17adult",
-      "L",
+      null,
+      null,
+      "11.5-15.5child;13-17adult L",
+    ],
+    // The resolver never picks between duplicate or foreign applicability
+    // bands: duplicate same-sex bands, duplicate adult bands, a lone age
+    // span and a sole opposite-sex band all stay quoted, never judged.
+    [
+      "Serum potassium: 6.1 mmol/L Male:3.5-5.0 Male:4.0-7.0",
+      null,
+      null,
+      "Male:3.5-5.0 Male:4.0-7.0",
+    ],
+    [
+      "Serum potassium: 6.1 mmol/L 11.5-15.5child;13-17adult;14-18adult",
+      null,
+      null,
+      "11.5-15.5child;13-17adult;14-18adult",
+    ],
+    ["Serum potassium: 6.1 mmol/L 13-99 YRS", null, null, "13-99 YRS"],
+    [
+      "Serum potassium: 6.1 mmol/L (reference Female: 3.0-4.5)",
+      null,
+      null,
+      "Female: 3.0-4.5",
     ],
     ["Neutrophils: 67% (Normal Range: 45 - 70 %)", "45 - 70 %", null],
     // An unknown word before the range is qualification prose, never a
