@@ -2343,19 +2343,9 @@ export function createLocalServer({
         // Memory guard: OCR must never share the 512MB budget with the
         // resident embedding model; dense pauses until this upload settles.
         const entry = addUpload(s, bytes, filename, rebuildIndex, {
-          before: pauseDenseForIngest(),
+          before: () => pauseDenseForIngest(),
+          after: () => resumeDenseAfterIngest(s.bundle?.rows ?? null),
         });
-        const up0 = Date.now();
-        const iv = setInterval(() => {
-          const settled = ["ready", "needs_review", "failed"].includes(
-            entry.status,
-          );
-          if (settled || Date.now() - up0 > 120000) {
-            clearInterval(iv);
-            resumeDenseAfterIngest(s.bundle?.rows ?? null);
-          }
-        }, 500);
-        iv.unref?.();
         res.writeHead(202);
         out = { document: publicEntry(entry) };
       } else if (libPost) {
