@@ -12,7 +12,7 @@ export function unboundRequestedOwner(question, bundle) {
   const asked = [
     ...String(question)
       .toUpperCase()
-      .matchAll(/\b[A-Z][A-Z0-9_-]*[-_]\d+\b/g),
+      .matchAll(/(?<![A-Z0-9_-])[A-Z][A-Z0-9_-]*[-_]\d+(?![A-Z0-9_-])/g),
   ].map((m) => m[0]);
   return (
     asked.find(
@@ -33,9 +33,15 @@ export function recordOwnerIds(record) {
     }
   return [...ids];
 }
-export function namedRecordOwners(question, records) {
+export function namedRecordOwners(question, records, ownerIds = null) {
   const text = String(question).toUpperCase();
-  return [...new Set(records.flatMap(recordOwnerIds))].filter((id) => {
+  return [
+    ...new Set(
+      [...new Set(records)].flatMap(
+        (r) => ownerIds?.get(r) ?? recordOwnerIds(r),
+      ),
+    ),
+  ].filter((id) => {
     const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return new RegExp(`(?<![A-Z0-9_-])${escaped}(?![A-Z0-9_-])`).test(text);
   });
