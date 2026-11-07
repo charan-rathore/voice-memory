@@ -1333,3 +1333,45 @@ test("workspace-scoped mint: a dead workspace gets 410 and the allowance back", 
     restore();
   }
 });
+
+test("same-file HTTP retry keeps one workspace upload and isolates another workspace", async () => {
+  const isolated = createLocalServer({ port: 0 });
+  await new Promise((r) => isolated.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${isolated.address().port}`;
+  try {
+    const create = async () =>
+      (
+        await (
+          await fetch(base + "/api/public/workspace", { method: "POST" })
+        ).json()
+      ).id;
+    const ws = await create(),
+      other = await create();
+    const body =
+      "Fictional retry report. The source marker is CEDAR-LANTERN. Operators review each quoted line before use.";
+    const upload = async (id) => {
+      const r = await fetch(base + "/api/public/workspace/" + id + "/upload", {
+        method: "POST",
+        headers: { "content-type": "text/plain", "x-file-name": "retry.txt" },
+        body,
+      });
+      assert.equal(r.status, 202);
+      return (await r.json()).document;
+    };
+    const a = await upload(ws),
+      b = await upload(ws);
+    assert.equal(b.id, a.id, "HTTP retry returns original handle");
+    const c = await upload(other);
+    assert.notEqual(c.id, a.id, "other workspace independent");
+    const status = await (
+      await fetch(base + "/api/public/workspace/" + ws)
+    ).json();
+    assert.equal(
+      status.documents.length,
+      1,
+      "HTTP retry consumes only one document slot",
+    );
+  } finally {
+    await new Promise((r) => isolated.close(r));
+  }
+});

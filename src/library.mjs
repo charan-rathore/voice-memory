@@ -218,6 +218,22 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
   const lib = libraryOf(s);
   const name = safeFilename(filename);
   const live = lib.filter((e) => e.status !== "failed");
+  // A network retry of the same upload must not duplicate its effects:
+  // the same file (identical bytes AND filename) already live in THIS
+  // session returns the original entry instead of a second slot, a second
+  // retained copy and a second ingest. Only this session's own library is
+  // consulted, so no other user, workspace or scope can be returned. A
+  // failed entry never dedupes (its retry starts fresh), a removed entry
+  // is gone from the library (an explicit re-import works), and the same
+  // bytes under a different filename are an intentional new upload, not a
+  // retry.
+  const hash = createHash("sha256").update(bytes).digest("hex");
+  const dup = live.find(
+    (e) =>
+      e.filename === name &&
+      (e.hash === hash || (!e.hash && e.original?.equals(bytes))),
+  );
+  if (dup) return dup;
   if (live.length >= MAX_LIBRARY_DOCS) {
     const err = Error(
       `You can keep up to ${MAX_LIBRARY_DOCS} documents in a session. Remove one to add another.`,
@@ -247,6 +263,7 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
   const entry = {
     id: randomUUID(),
     filename: name,
+    hash,
     title: uniqueTitle(lib, name),
     kind: null,
     bytes: bytes.length,
