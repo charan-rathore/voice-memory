@@ -27,3 +27,11 @@ It loads the real landing HTML/JS/CSS, intercepts all requests without starting 
 engine, and covers both gate transitions, network/HTTP/malformed-status failures
 in both UI states, hidden events, duplicate in-flight events, recovery, and the
 absence of call/session/microphone side effects.
+
+An owned SDK call keeps its existing stop controls visible if the refreshed
+admission gate closes. Ending that call or expiring its setup deadline then
+reconciles the classes again, so new-call controls do not remain enabled.
+The active-call regression uses SDK/session/microphone stubs, verifies a reachable
+Hang up control and one stop invocation, and checks that the preflight track was
+released. It also covers readiness closing while SDK startup is pending and its
+setup deadline expires. This is not proof of actual vendor media termination.

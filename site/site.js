@@ -119,7 +119,8 @@
   })();
   window.VM_BYO = { ttsHeaders: () => byo.ttsHeaders() };
   const listenOn = () => !!state.voiceOut?.enabled || byo.hasTts();
-  const callOn = () => !!state.voice?.ready || byo.hasCall();
+  // A closed admission gate must never hide the stop control for a live call.
+  const callOn = () => !!state.call || !!state.voice?.ready || byo.hasCall();
   const syncVoiceClasses = () => {
     document.documentElement.classList.toggle("voice-on", callOn());
     document.documentElement.classList.toggle("voice-out", listenOn());
@@ -1924,6 +1925,7 @@
         try {
           stale?.stop();
         } catch {}
+        syncVoiceClasses();
         callbar.classList.remove("busy", "live");
         $("#call-label").textContent = "Call Voice Memory";
         callState(
@@ -2224,6 +2226,7 @@
       callState("Call ended. The answers stay on screen with their sources.");
     state.call = null;
     state.callScope = null;
+    syncVoiceClasses();
     setTimeout(() => {
       if (state.ticket === endedTicket) state.ticket = null;
     }, 20000);
