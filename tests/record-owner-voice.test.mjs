@@ -79,6 +79,7 @@ for (const external of [false, true])
       const t = a.bind(bundle);
       for (const [q, expected] of [
         ["What were SYN-392 total charges?", /200\.00/],
+        ["What were SYN-999, sorry, SYN-392 total charges?", /200\.00/],
         ["What were Mira Sen total charges?", /Which patient do you mean/],
       ]) {
         const r = await a.handle(
@@ -96,3 +97,47 @@ for (const external of [false, true])
       a.revoke(t);
     }
   });
+
+test("voice complete printed suffix ID remains answerable beside a numeric namespace", async () => {
+  const docs = [];
+  for (const [id, v] of [
+    ["RX-7", 100],
+    ["RX-8-A", 200],
+  ])
+    docs.push(
+      (
+        await parseBuffer(
+          Buffer.from(
+            `BILLING SUMMARY\nPatient ID: ${id}\nTotal charges: USD ${v}.00`,
+          ),
+          id + ".txt",
+        )
+      ).doc,
+    );
+  const b = importBundle(
+    docs.map((d, i) => ({ title: "billing" + i, text: d.text })),
+  );
+  attachRecords(
+    b,
+    docs.map((doc) => ({ doc })),
+  );
+  const a = createVoiceAdapter();
+  const token = a.bind(b);
+  for (const [q, want] of [
+    ["What were RX-8-A total charges?", /200\.00/],
+    ["What were RX-8 total charges?", /cannot bind/],
+  ]) {
+    const r = await a.handle(
+      new Request("http://localhost/v1/chat/completions", {
+        method: "POST",
+        headers: { authorization: "Bearer " + token },
+        body: JSON.stringify({
+          stream: true,
+          messages: [{ role: "user", content: q }],
+        }),
+      }),
+    );
+    assert.match(await r.text(), want);
+  }
+  a.revoke(token);
+});

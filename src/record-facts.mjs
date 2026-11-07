@@ -472,16 +472,13 @@ export function factAnswer(question, entries) {
     for (const r of en.records ?? [])
       for (const f of r.facts) all.push({ en, r, f });
   // A question naming a patient ID is about that patient's records only.
-  const named = namedRecordOwners(
-    question,
-    all.map((c) => c.r),
-  );
+  const uniqueRecords = [...new Set(all.map((c) => c.r))];
+  const ownerIds = new Map(uniqueRecords.map((r) => [r, recordOwnerIds(r)]));
+  const named = namedRecordOwners(question, uniqueRecords, ownerIds);
   if (named.length)
     // A question naming a patient is answered from that patient's records
     // only: an unidentified record never answers for a known patient.
-    all = all.filter((c) =>
-      recordOwnerIds(c.r).some((id) => named.includes(id)),
-    );
+    all = all.filter((c) => ownerIds.get(c.r).some((id) => named.includes(id)));
   // A printed name shared by different patient IDs: a name-only question is
   // clarified, never silently attributed to one of them.
   if (!named.length) {
