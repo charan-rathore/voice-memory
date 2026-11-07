@@ -1361,6 +1361,28 @@ test("same-file HTTP retry keeps one workspace upload and isolates another works
     const a = await upload(ws),
       b = await upload(ws);
     assert.equal(b.id, a.id, "HTTP retry returns original handle");
+    for (let i = 1; i < 5; i++) {
+      const r = await fetch(base + "/api/public/workspace/" + ws + "/upload", {
+        method: "POST",
+        headers: { "x-file-name": "extra" + i + ".txt" },
+        body: "Fictional separate source " + i,
+      });
+      assert.equal(r.status, 202);
+    }
+    assert.equal(
+      (await upload(ws)).id,
+      a.id,
+      "retry at public workspace capacity reuses handle",
+    );
+    const overflow = await fetch(
+      base + "/api/public/workspace/" + ws + "/upload",
+      {
+        method: "POST",
+        headers: { "x-file-name": "overflow.txt" },
+        body: "Different fictional source",
+      },
+    );
+    assert.equal(overflow.status, 409, "new file still refused at capacity");
     const c = await upload(other);
     assert.notEqual(c.id, a.id, "other workspace independent");
     const status = await (
@@ -1368,8 +1390,8 @@ test("same-file HTTP retry keeps one workspace upload and isolates another works
     ).json();
     assert.equal(
       status.documents.length,
-      1,
-      "HTTP retry consumes only one document slot",
+      5,
+      "HTTP retry at capacity consumes no extra document slot",
     );
   } finally {
     await new Promise((r) => isolated.close(r));
