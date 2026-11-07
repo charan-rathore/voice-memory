@@ -75,6 +75,7 @@ export async function recognize(image, { onProgress = null } = {}) {
       const lines = (p.lines ?? [])
         .map((l) => ({
           text: l.text.replace(/\s+/g, " ").trim(),
+          rawText: l.text,
           bbox: l.bbox,
           confidence: l.confidence,
         }))

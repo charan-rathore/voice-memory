@@ -44,6 +44,47 @@ function renderBlock(b) {
   return b.text;
 }
 
+function sourceLinesOf(b, id, rendered = "", start = null) {
+  if (!b.sourceLines?.length) return undefined;
+  let cursor = 0;
+  return b.sourceLines.map((line, i) => {
+    const rawText = line.rawText ?? line.text ?? "";
+    const normalized = rawText.replace(/\s+/g, " ").trim();
+    const first = normalized ? rendered.indexOf(normalized, cursor) : -1;
+    const unique =
+      first >= 0 &&
+      rendered.indexOf(normalized) === first &&
+      rendered.indexOf(normalized, first + 1) < 0;
+    const end = first + normalized.length;
+    const boundary =
+      first >= 0 &&
+      (first === 0 || /\s/.test(rendered[first - 1])) &&
+      (end === rendered.length || /\s/.test(rendered[end]));
+    const mapped =
+      start != null &&
+      unique &&
+      boundary &&
+      rendered.slice(first, end) === normalized;
+    if (mapped) cursor = first + normalized.length;
+    return {
+      id: `${id}.l${i + 1}`,
+      rawText,
+      page: b.page ?? null,
+      bbox: line.bbox ?? null,
+      confidence: line.confidence ?? b.confidence ?? null,
+      origin: b.method,
+      group: line.group ?? null,
+      alignment: mapped
+        ? rawText === normalized
+          ? "exact"
+          : "verified-whitespace"
+        : "unmapped",
+      canonicalStart: mapped ? start + first : null,
+      canonicalEnd: mapped ? start + first + normalized.length : null,
+    };
+  });
+}
+
 /**
  * Build a canonical document from parser blocks. Furniture (repeated page
  * headers/footers) is kept as elements for transparency but excluded from the
@@ -78,6 +119,7 @@ export function buildDocument({
         start: null,
         end: null,
         section: [...section],
+        ...(b.sourceLines?.length ? { sourceLines: sourceLinesOf(b, id) } : {}),
       });
       continue;
     }
@@ -107,6 +149,8 @@ export function buildDocument({
       end: offset,
       section: section.map((s) => s.text),
     };
+    if (b.sourceLines?.length)
+      el.sourceLines = sourceLinesOf(b, id, rendered, start);
     elements.push(el);
     if (b.type === "table") {
       // Row children: a citation on one row maps to that row's region, and a
@@ -235,6 +279,28 @@ export function buildTextDocument({
   });
 }
 
+/** Optional coverage only. Legacy/uncaptured metadata never grants authority. */
+export function sourceLineCapability(doc) {
+  const elements = doc.elements ?? [];
+  const blocks = elements.filter((e) => e.indexed && !e.parent);
+  const captured = blocks.filter((e) => e.sourceLines?.length);
+  const lines = elements.flatMap((e) => e.sourceLines ?? []);
+  return {
+    schema: "vm.source-lines/1",
+    state: lines.length ? "partial" : "unavailable",
+    authority: false,
+    indexedBlocks: blocks.length,
+    capturedIndexedBlocks: captured.length,
+    extractedLines: lines.length,
+    mappedLines: lines.filter((l) =>
+      ["exact", "verified-whitespace"].includes(l.alignment),
+    ).length,
+    geometryLines: lines.filter(
+      (l) => Array.isArray(l.bbox) && l.bbox.length === 4,
+    ).length,
+  };
+}
+
 function finish({
   text,
   elements,
@@ -252,6 +318,7 @@ function finish({
     .filter((c) => typeof c === "number");
   return {
     schema: SCHEMA,
+    sourceLineMetadata: sourceLineCapability({ elements }),
     kind,
     mime,
     filename,

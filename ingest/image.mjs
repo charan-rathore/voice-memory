@@ -41,6 +41,11 @@ export async function parseImage(buf, kind, { waitForOcr = null } = {}) {
     return {
       type: "paragraph",
       text: p.text.replace(/\n/g, " "),
+      sourceLines: p.lines.map((l) => ({
+        rawText: l.rawText ?? l.text,
+        bbox: [l.bbox.x0, l.bbox.y0, l.bbox.x1, l.bbox.y1],
+        confidence: l.confidence,
+      })),
       page: 1,
       bbox: [p.bbox.x0, p.bbox.y0, p.bbox.x1, p.bbox.y1],
       method: "ocr",
