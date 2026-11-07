@@ -1,3 +1,4 @@
+import { requestedFactSupport } from "./requested-fact";
 import { lookupIdentifier } from "./identifier-support";
 export { identifierRequest, lookupIdentifier } from "./identifier-support";
 export { explicitRecordRequest } from "./requested-support";
@@ -407,6 +408,57 @@ export function answer(
     if (!result.partial) result.partialNotice = null;
     result.mode = "Local source-bound identifier lookup with exact citations.";
     result.latencyMs = Math.round(performance.now() - start);
+    return result;
+  }
+
+  const fact = requestedFactSupport(question, bundle.sources);
+  if (fact) {
+    const result = answerFromRetrieval(
+      question,
+      bundle,
+      found,
+      {
+        actualMode: found.actualMode,
+        embeddingModel:
+          found.actualMode === "keyword" ? null : (dense?.model ?? null),
+      },
+      start,
+    );
+    const evidence = fact.spans.map(({ source, start, end, quote }) => ({
+      sourceId: source.id,
+      title: source.title,
+      hash: source.hash,
+      start,
+      end,
+      quote,
+      firstLine: lineOf(source.text, start),
+      lastLine: lineOf(source.text, end),
+    }));
+    evidence.forEach((e) => validateEvidence(e, bundle));
+    result.reviewEvidence = fact.ambiguous ? evidence : result.evidence;
+    result.evidence = fact.ambiguous ? [] : evidence;
+    result.requestedChecked = true;
+    result.requestedFact = true;
+    result.supported = evidence.length > 0 && !fact.ambiguous;
+    result.refused = !result.supported;
+    result.unresolved = fact.ambiguous;
+    result.evidenceStatus = fact.ambiguous
+      ? "ambiguous"
+      : result.supported
+        ? "positive"
+        : "insufficient";
+    result.partial = false;
+    result.partialNotice = null;
+    result.answer = fact.ambiguous
+      ? "Conflicting source statements; no settled answer is established:\n" +
+        evidence.map((e) => e.quote).join("\n")
+      : result.supported
+        ? "Source statements (not an inferred approval or agreement):\n" +
+          evidence.map((e) => e.quote).join("\n")
+        : "The documents do not establish the requested fact within this bounded source lookup.";
+    result.spoken = result.answer;
+    result.mode =
+      "Local requested-relation support lookup; verbatim statements, at most three; no generated verdict.";
     return result;
   }
 
@@ -1638,6 +1690,7 @@ export function answerFromRetrieval(
     // written answer: record status first, conflicts named, no silent
     // recency-as-authority.
     spoken: null as string | null,
+    requestedFact: false,
     requestedScoped: false,
     requestedChecked: false,
   };

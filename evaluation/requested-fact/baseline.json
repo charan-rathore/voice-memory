@@ -1,0 +1,1631 @@
+[
+  {
+    "question": "What deadline does the client want to keep?",
+    "typed": {
+      "question": "What deadline does the client want to keep?",
+      "lead": {
+        "text": "That is still open: 15 November 2026 versus 22 November 2026 are both on record.",
+        "verdict": "OPEN",
+        "field": "deadline",
+        "citations": [
+          {
+            "documentId": "7d5f4a0a-efeb-4eba-ba27-4c7ed5adfe43",
+            "title": "01_Northstar_Proposal_v1.md",
+            "quote": "The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.",
+            "start": 287,
+            "end": 398,
+            "status": "proposed",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Meridian Advisory, P. Rao. Date: 2026-09-04. Type: proposal.\n1. Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.\n2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.\n3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.\n4. This proposal is an offer, not an agreement; it takes effect only on countersignature."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "bfc37508-cb2c-4aec-8b26-831d82070636",
+            "title": "05_Project_Delivery_Update.md",
+            "quote": "Pilot readiness is targeted for 22 November 2026, provided the client's data access arrives on time.",
+            "start": 110,
+            "end": 210,
+            "status": "internal-target",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Delivery lead, S. Iyer. Date: 2026-10-02. Type: status update.\n1. Pilot readiness is targeted for 22 November 2026, provided the client's data access arrives on time.\n2. The 22 November date is an internal delivery target, not a client-approved deadline.\n3. Data access from Northstar is one week late as of this update."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "bfc37508-cb2c-4aec-8b26-831d82070636",
+            "title": "05_Project_Delivery_Update.md",
+            "quote": "The 22 November date is an internal delivery target, not a client-approved deadline.",
+            "start": 214,
+            "end": 298,
+            "status": "unresolved",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Delivery lead, S. Iyer. Date: 2026-10-02. Type: status update.\n1. Pilot readiness is targeted for 22 November 2026, provided the client's data access arrives on time.\n2. The 22 November date is an internal delivery target, not a client-approved deadline.\n3. Data access from Northstar is one week late as of this update."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "63a373cd-87e8-41c8-8190-ce8e567d0386",
+            "title": "06_Client_Email_Extract.md",
+            "quote": "The client asks to retain the original 15 November deadline for the pilot.",
+            "start": 108,
+            "end": 182,
+            "status": "requested",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: R. Kapoor (Northstar). Date: 2026-10-06. Type: email extract.\n1. The client asks to retain the original 15 November deadline for the pilot.\n2. The client explicitly states that no revised deadline has been approved by Northstar.\n3. The client asks Meridian to confirm the final commercial terms in writing before the next steering meeting."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "a6d81381-e8e6-4ef7-8296-1c93f9c45bb5",
+            "title": "07_Internal_Action_Log.md",
+            "quote": "Open decision: pilot deadline (15 November requested by client vs 22 November internal target); not resolved.",
+            "start": 300,
+            "end": 409,
+            "status": "unresolved",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Meridian PMO. Date: 2026-10-09. Type: action log.\n1. Working scope is two regions (North and South) for the first phase.\n2. Open decision: final payment schedule (40/60 in the revision memo vs 50/50 in steering notes); finance approval outstanding.\n3. Open decision: pilot deadline (15 November requested by client vs 22 November internal target); not resolved.\n4. No signed commercial agreement exists for the revised terms. Production launch authorization is not recorded."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "a6d81381-e8e6-4ef7-8296-1c93f9c45bb5",
+            "title": "07_Internal_Action_Log.md",
+            "quote": "Open decision: pilot deadline (15 November requested by client vs 22 November internal target); not resolved.",
+            "start": 300,
+            "end": 409,
+            "status": "unresolved",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Meridian PMO. Date: 2026-10-09. Type: action log.\n1. Working scope is two regions (North and South) for the first phase.\n2. Open decision: final payment schedule (40/60 in the revision memo vs 50/50 in steering notes); finance approval outstanding.\n3. Open decision: pilot deadline (15 November requested by client vs 22 November internal target); not resolved.\n4. No signed commercial agreement exists for the revised terms. Production launch authorization is not recorded."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          }
+        ],
+        "background": null,
+        "interpretedAs": null,
+        "origin": "engine",
+        "opener": "Here's the honest status.",
+        "action": null
+      },
+      "visual": null,
+      "also": [],
+      "closest": null,
+      "semantic": {
+        "intent": "LOOKUP",
+        "lang": "en",
+        "steps": []
+      },
+      "answer": "Relevant source excerpts\n\nClient Kickoff Notes - Northstar Pilot\nAuthor: A. Fernandes (Meridian). Date: 2026-09-11. Type: meeting notes.\n1. Northstar asked to narrow the pilot from three regions to two regions (North and South) for the first phase.\n2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.\n3. Finance approval for any revised fee or payment schedule remains pending after this meeting.\n4. Both sides agreed to capture open commercial points in the action log rather than settle them verbally.\n[Source 1]\n\nThese are retrieved passages, not a generated recommendation.",
+      "status": null,
+      "evidence": [
+        {
+          "documentId": "ee664fe2-753b-4008-ae25-d9079969a21f",
+          "title": "02_Client_Kickoff_Notes.md",
+          "quote": "# Client Kickoff Notes - Northstar Pilot\nAuthor: A. Fernandes (Meridian). Date: 2026-09-11. Type: meeting notes.\n1. Northstar asked to narrow the pilot from three regions to two regions (North and South) for the first phase.\n2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.\n3. Finance approval for any revised fee or payment schedule remains pending after this meeting.\n4. Both sides agreed to capture open commercial points in the action log rather than settle them verbally.",
+          "start": 0,
+          "end": 537,
+          "status": null,
+          "location": {
+            "pages": [],
+            "boxes": null,
+            "focus": {
+              "elementIds": [
+                "e1",
+                "e2"
+              ],
+              "pages": [],
+              "regions": [],
+              "text": [
+                "Client Kickoff Notes - Northstar Pilot",
+                "Author: A. Fernandes (Meridian). Date: 2026-09-11. Type: meeting notes.\n1. Northstar asked to narrow the pilot from three regions to two regions (North and South) for the first phase.\n2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.\n3. Finance approval for any revised fee or payment schedule remains pending after this meeting.\n4. Both sides agreed to capture open commercial points in the action log rather than settle them verbally."
+              ],
+              "rows": []
+            },
+            "elementIds": [
+              "e1",
+              "e2"
+            ]
+          }
+        }
+      ]
+    },
+    "wire": "data: {\"id\":\"local-contract-89ca3f68875ac197\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"That is still open: 15 November 2026 versus 22 November 2026 are \"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"local-contract-89ca3f68875ac197\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"both on record.\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"local-contract-89ca3f68875ac197\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+    "spokenTurn": {
+      "at": 1794077778484,
+      "intent": "OTHER",
+      "field": "deadline",
+      "verdict": "OPEN",
+      "spoken": "That is still open: 15 November 2026 versus 22 November 2026 are both on record.",
+      "citations": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "docDate": "2026-09-04",
+          "quote": "The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.",
+          "firstLine": 4,
+          "lastLine": 4,
+          "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+          "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+          "start": 287,
+          "end": 398,
+          "status": "proposed"
+        },
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "docDate": "2026-10-02",
+          "quote": "Pilot readiness is targeted for 22 November 2026, provided the client's data access arrives on time.",
+          "firstLine": 3,
+          "lastLine": 3,
+          "hash": "23c5c8b6d8e14c572d735b8374bf3cb72d9df446723d637fb762389a50bc2355",
+          "sourceId": "3509e1ce-18e5-42da-8c65-952eef5e46e2",
+          "start": 110,
+          "end": 210,
+          "status": "internal-target"
+        },
+        {
+          "title": "05_Project_Delivery_Update.md",
+          "docDate": "2026-10-02",
+          "quote": "The 22 November date is an internal delivery target, not a client-approved deadline.",
+          "firstLine": 4,
+          "lastLine": 4,
+          "hash": "23c5c8b6d8e14c572d735b8374bf3cb72d9df446723d637fb762389a50bc2355",
+          "sourceId": "3509e1ce-18e5-42da-8c65-952eef5e46e2",
+          "start": 214,
+          "end": 298,
+          "status": "unresolved"
+        },
+        {
+          "title": "06_Client_Email_Extract.md",
+          "docDate": "2026-10-06",
+          "quote": "The client asks to retain the original 15 November deadline for the pilot.",
+          "firstLine": 3,
+          "lastLine": 3,
+          "hash": "ec75d4f0f270b89a351ed74e7f88fe2c5fdb74d1341938db9d9ae402307f4b94",
+          "sourceId": "60061811-4d2a-489f-b385-8c9e607b23d1",
+          "start": 108,
+          "end": 182,
+          "status": "requested"
+        },
+        {
+          "title": "07_Internal_Action_Log.md",
+          "docDate": "2026-10-09",
+          "quote": "Open decision: pilot deadline (15 November requested by client vs 22 November internal target); not resolved.",
+          "firstLine": 5,
+          "lastLine": 5,
+          "hash": "b5da8417dad49096c1b517363f6ec2ca8dd08bb1c44e601855494225e66fbac9",
+          "sourceId": "dee63204-f580-4ca3-a9dd-1b92d49de677",
+          "start": 300,
+          "end": 409,
+          "status": "unresolved"
+        },
+        {
+          "title": "07_Internal_Action_Log.md",
+          "docDate": "2026-10-09",
+          "quote": "Open decision: pilot deadline (15 November requested by client vs 22 November internal target); not resolved.",
+          "firstLine": 5,
+          "lastLine": 5,
+          "hash": "b5da8417dad49096c1b517363f6ec2ca8dd08bb1c44e601855494225e66fbac9",
+          "sourceId": "dee63204-f580-4ca3-a9dd-1b92d49de677",
+          "start": 300,
+          "end": 409,
+          "status": "unresolved"
+        }
+      ]
+    },
+    "result": {
+      "question": "What deadline does the client want to keep?",
+      "context": {
+        "groups": {
+          "changes": [
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 335,
+              "end": 430,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. Finance approval for any revised fee or payment schedule remains pending after this meeting."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 113,
+              "end": 224,
+              "firstLine": 3,
+              "lastLine": 3,
+              "quote": "1. Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 225,
+              "end": 338,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The revised terms are subject to client finance sign-off; they are a proposal until that sign-off is recorded."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 122,
+              "end": 217,
+              "firstLine": 3,
+              "lastLine": 3,
+              "quote": "1. The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 338,
+              "end": 436,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The committee noted that client finance had not yet signed off on any revised commercial terms."
+            },
+            {
+              "sourceId": "60061811-4d2a-489f-b385-8c9e607b23d1",
+              "title": "06_Client_Email_Extract.md",
+              "hash": "ec75d4f0f270b89a351ed74e7f88fe2c5fdb74d1341938db9d9ae402307f4b94",
+              "start": 183,
+              "end": 271,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The client explicitly states that no revised deadline has been approved by Northstar."
+            },
+            {
+              "sourceId": "dee63204-f580-4ca3-a9dd-1b92d49de677",
+              "title": "07_Internal_Action_Log.md",
+              "hash": "b5da8417dad49096c1b517363f6ec2ca8dd08bb1c44e601855494225e66fbac9",
+              "start": 410,
+              "end": 522,
+              "firstLine": 6,
+              "lastLine": 6,
+              "quote": "4. No signed commercial agreement exists for the revised terms. Production launch authorization is not recorded."
+            }
+          ],
+          "open": [
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 335,
+              "end": 430,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. Finance approval for any revised fee or payment schedule remains pending after this meeting."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 338,
+              "end": 436,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The committee noted that client finance had not yet signed off on any revised commercial terms."
+            }
+          ],
+          "conditions": [
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 335,
+              "end": 430,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. Finance approval for any revised fee or payment schedule remains pending after this meeting."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 113,
+              "end": 224,
+              "firstLine": 3,
+              "lastLine": 3,
+              "quote": "1. Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 225,
+              "end": 338,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The revised terms are subject to client finance sign-off; they are a proposal until that sign-off is recorded."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 339,
+              "end": 464,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The revision does not restate the pilot deadline; the deadline from the original proposal stands unless separately agreed."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 218,
+              "end": 337,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The discussed payment structure was 50% upfront and 50% after acceptance; no vote was taken on the payment schedule."
+            }
+          ],
+          "decisions": [
+            {
+              "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+              "title": "01_Northstar_Proposal_v1.md",
+              "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+              "start": 284,
+              "end": 398,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team."
+            },
+            {
+              "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+              "title": "01_Northstar_Proposal_v1.md",
+              "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+              "start": 399,
+              "end": 494,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance."
+            },
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 225,
+              "end": 334,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved."
+            },
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 431,
+              "end": 537,
+              "firstLine": 6,
+              "lastLine": 6,
+              "quote": "4. Both sides agreed to capture open commercial points in the action log rather than settle them verbally."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 339,
+              "end": 464,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The revision does not restate the pilot deadline; the deadline from the original proposal stands unless separately agreed."
+            },
+            {
+              "sourceId": "3509e1ce-18e5-42da-8c65-952eef5e46e2",
+              "title": "05_Project_Delivery_Update.md",
+              "hash": "23c5c8b6d8e14c572d735b8374bf3cb72d9df446723d637fb762389a50bc2355",
+              "start": 211,
+              "end": 298,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The 22 November date is an internal delivery target, not a client-approved deadline."
+            },
+            {
+              "sourceId": "60061811-4d2a-489f-b385-8c9e607b23d1",
+              "title": "06_Client_Email_Extract.md",
+              "hash": "ec75d4f0f270b89a351ed74e7f88fe2c5fdb74d1341938db9d9ae402307f4b94",
+              "start": 183,
+              "end": 271,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The client explicitly states that no revised deadline has been approved by Northstar."
+            }
+          ]
+        },
+        "reviewNeeded": true,
+        "notice": "Rule-based source review signals, not a resolved timeline. Dates, authority and decision status need review. Contradictions may be missed."
+      },
+      "answer": "Relevant source excerpts\n\nClient Kickoff Notes - Northstar Pilot\nAuthor: A. Fernandes (Meridian). Date: 2026-09-11. Type: meeting notes.\n1. Northstar asked to narrow the pilot from three regions to two regions (North and South) for the first phase.\n2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.\n3. Finance approval for any revised fee or payment schedule remains pending after this meeting.\n4. Both sides agreed to capture open commercial points in the action log rather than settle them verbally.\n[Source 1]\n\nThese are retrieved passages, not a generated recommendation.",
+      "evidence": [
+        {
+          "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+          "title": "02_Client_Kickoff_Notes.md",
+          "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+          "start": 0,
+          "end": 537,
+          "firstLine": 1,
+          "lastLine": 6,
+          "quote": "# Client Kickoff Notes - Northstar Pilot\nAuthor: A. Fernandes (Meridian). Date: 2026-09-11. Type: meeting notes.\n1. Northstar asked to narrow the pilot from three regions to two regions (North and South) for the first phase.\n2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.\n3. Finance approval for any revised fee or payment schedule remains pending after this meeting.\n4. Both sides agreed to capture open commercial points in the action log rather than settle them verbally."
+        }
+      ],
+      "reviewEvidence": [],
+      "supported": true,
+      "unresolved": false,
+      "refused": false,
+      "evidenceStatus": "positive",
+      "actualMode": "keyword",
+      "embeddingModel": null,
+      "corpusId": "voice-6efc30fb-61d1-40bb-8a7c-a5426af0e570",
+      "generation": false,
+      "mode": "Local keyword retrieval + source excerpts. No generated synthesis.",
+      "latencyMs": 2,
+      "partial": true,
+      "partialNotice": "Partial: cited passages are real evidence, but the record contains unresolved, conditional or conflicting statements on related points. Review the open items before treating this as settled.",
+      "queryTransform": null,
+      "retrievalStages": {
+        "keyword": [
+          {
+            "title": "02_Client_Kickoff_Notes.md",
+            "score": 1.6839996886189461,
+            "rank": 1
+          },
+          {
+            "title": "06_Client_Email_Extract.md",
+            "score": 0.7029899724001563,
+            "rank": 2
+          },
+          {
+            "title": "03_Commercial_Revision.md",
+            "score": 0.6113727411611345,
+            "rank": 3
+          },
+          {
+            "title": "05_Project_Delivery_Update.md",
+            "score": 0.5047573296046337,
+            "rank": 4
+          },
+          {
+            "title": "01_Northstar_Proposal_v1.md",
+            "score": 0.40280207686272096,
+            "rank": 5
+          },
+          {
+            "title": "07_Internal_Action_Log.md",
+            "score": 0.40280207686272096,
+            "rank": 6
+          },
+          {
+            "title": "04_Steering_Committee_Notes.md",
+            "score": 0.06728431486937277,
+            "rank": 7
+          }
+        ],
+        "evidenceNote": "Packed chunks have distinctive overlap with the question or a strong dense match.",
+        "candidateCount": 7
+      },
+      "spoken": null,
+      "requestedScoped": false,
+      "requestedChecked": false
+    }
+  },
+  {
+    "question": "How often is progress reported?",
+    "typed": {
+      "question": "How often is progress reported?",
+      "lead": {
+        "text": "The client agreed to weekly progress reporting, per the client kickoff notes from September 11.",
+        "verdict": "CONFIRMED",
+        "field": "reporting",
+        "citations": [
+          {
+            "documentId": "7d5f4a0a-efeb-4eba-ba27-4c7ed5adfe43",
+            "title": "01_Northstar_Proposal_v1.md",
+            "quote": "The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.",
+            "start": 287,
+            "end": 398,
+            "status": "proposed",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Meridian Advisory, P. Rao. Date: 2026-09-04. Type: proposal.\n1. Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.\n2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.\n3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.\n4. This proposal is an offer, not an agreement; it takes effect only on countersignature."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "ee664fe2-753b-4008-ae25-d9079969a21f",
+            "title": "02_Client_Kickoff_Notes.md",
+            "quote": "Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.",
+            "start": 228,
+            "end": 334,
+            "status": "approved",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: A. Fernandes (Meridian). Date: 2026-09-11. Type: meeting notes.\n1. Northstar asked to narrow the pilot from three regions to two regions (North and South) for the first phase.\n2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.\n3. Finance approval for any revised fee or payment schedule remains pending after this meeting.\n4. Both sides agreed to capture open commercial points in the action log rather than settle them verbally."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "ee664fe2-753b-4008-ae25-d9079969a21f",
+            "title": "02_Client_Kickoff_Notes.md",
+            "quote": "Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.",
+            "start": 228,
+            "end": 334,
+            "status": "approved",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: A. Fernandes (Meridian). Date: 2026-09-11. Type: meeting notes.\n1. Northstar asked to narrow the pilot from three regions to two regions (North and South) for the first phase.\n2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.\n3. Finance approval for any revised fee or payment schedule remains pending after this meeting.\n4. Both sides agreed to capture open commercial points in the action log rather than settle them verbally."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          }
+        ],
+        "background": null,
+        "interpretedAs": null,
+        "origin": "engine",
+        "opener": "Here's where it stands.",
+        "action": null
+      },
+      "visual": null,
+      "also": [],
+      "closest": null,
+      "semantic": {
+        "intent": "LOOKUP",
+        "lang": "en",
+        "steps": []
+      },
+      "answer": "Relevant source excerpts\n\nNorthstar Retail - Analytics Pilot Proposal v1\nAuthor: Meridian Advisory, P. Rao. Date: 2026-09-04. Type: proposal.\n1. Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.\n2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.\n3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.\n4. This proposal is an offer, not an agreement; it takes effect only on countersignature.\n[Source 1]\n\nThese are retrieved passages, not a generated recommendation.",
+      "status": null,
+      "evidence": [
+        {
+          "documentId": "7d5f4a0a-efeb-4eba-ba27-4c7ed5adfe43",
+          "title": "01_Northstar_Proposal_v1.md",
+          "quote": "# Northstar Retail - Analytics Pilot Proposal v1\nAuthor: Meridian Advisory, P. Rao. Date: 2026-09-04. Type: proposal.\n1. Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.\n2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.\n3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.\n4. This proposal is an offer, not an agreement; it takes effect only on countersignature.",
+          "start": 0,
+          "end": 584,
+          "status": null,
+          "location": {
+            "pages": [],
+            "boxes": null,
+            "focus": {
+              "elementIds": [
+                "e2"
+              ],
+              "pages": [],
+              "regions": [],
+              "text": [
+                "Author: Meridian Advisory, P. Rao. Date: 2026-09-04. Type: proposal.\n1. Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.\n2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.\n3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.\n4. This proposal is an offer, not an agreement; it takes effect only on countersignature."
+              ],
+              "rows": []
+            },
+            "elementIds": [
+              "e1",
+              "e2"
+            ]
+          }
+        }
+      ]
+    },
+    "wire": "data: {\"id\":\"local-contract-a104f6b380444590\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"The client agreed to weekly progress reporting, per the client \"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"local-contract-a104f6b380444590\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"kickoff notes from September 11.\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"local-contract-a104f6b380444590\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+    "spokenTurn": {
+      "at": 1794077778503,
+      "intent": "OTHER",
+      "field": "reporting",
+      "verdict": "CONFIRMED",
+      "spoken": "The client agreed to weekly progress reporting, per the client kickoff notes from September 11.",
+      "citations": [
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "docDate": "2026-09-04",
+          "quote": "The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.",
+          "firstLine": 4,
+          "lastLine": 4,
+          "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+          "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+          "start": 287,
+          "end": 398,
+          "status": "proposed"
+        },
+        {
+          "title": "02_Client_Kickoff_Notes.md",
+          "docDate": "2026-09-11",
+          "quote": "Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.",
+          "firstLine": 4,
+          "lastLine": 4,
+          "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+          "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+          "start": 228,
+          "end": 334,
+          "status": "approved"
+        },
+        {
+          "title": "02_Client_Kickoff_Notes.md",
+          "docDate": "2026-09-11",
+          "quote": "Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved.",
+          "firstLine": 4,
+          "lastLine": 4,
+          "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+          "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+          "start": 228,
+          "end": 334,
+          "status": "approved"
+        }
+      ]
+    },
+    "result": {
+      "question": "How often is progress reported?",
+      "context": {
+        "groups": {
+          "changes": [
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 335,
+              "end": 430,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. Finance approval for any revised fee or payment schedule remains pending after this meeting."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 113,
+              "end": 224,
+              "firstLine": 3,
+              "lastLine": 3,
+              "quote": "1. Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 225,
+              "end": 338,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The revised terms are subject to client finance sign-off; they are a proposal until that sign-off is recorded."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 122,
+              "end": 217,
+              "firstLine": 3,
+              "lastLine": 3,
+              "quote": "1. The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 338,
+              "end": 436,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The committee noted that client finance had not yet signed off on any revised commercial terms."
+            },
+            {
+              "sourceId": "60061811-4d2a-489f-b385-8c9e607b23d1",
+              "title": "06_Client_Email_Extract.md",
+              "hash": "ec75d4f0f270b89a351ed74e7f88fe2c5fdb74d1341938db9d9ae402307f4b94",
+              "start": 183,
+              "end": 271,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The client explicitly states that no revised deadline has been approved by Northstar."
+            },
+            {
+              "sourceId": "dee63204-f580-4ca3-a9dd-1b92d49de677",
+              "title": "07_Internal_Action_Log.md",
+              "hash": "b5da8417dad49096c1b517363f6ec2ca8dd08bb1c44e601855494225e66fbac9",
+              "start": 410,
+              "end": 522,
+              "firstLine": 6,
+              "lastLine": 6,
+              "quote": "4. No signed commercial agreement exists for the revised terms. Production launch authorization is not recorded."
+            }
+          ],
+          "open": [
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 335,
+              "end": 430,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. Finance approval for any revised fee or payment schedule remains pending after this meeting."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 338,
+              "end": 436,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The committee noted that client finance had not yet signed off on any revised commercial terms."
+            }
+          ],
+          "conditions": [
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 335,
+              "end": 430,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. Finance approval for any revised fee or payment schedule remains pending after this meeting."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 113,
+              "end": 224,
+              "firstLine": 3,
+              "lastLine": 3,
+              "quote": "1. Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 225,
+              "end": 338,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The revised terms are subject to client finance sign-off; they are a proposal until that sign-off is recorded."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 339,
+              "end": 464,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The revision does not restate the pilot deadline; the deadline from the original proposal stands unless separately agreed."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 218,
+              "end": 337,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The discussed payment structure was 50% upfront and 50% after acceptance; no vote was taken on the payment schedule."
+            }
+          ],
+          "decisions": [
+            {
+              "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+              "title": "01_Northstar_Proposal_v1.md",
+              "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+              "start": 284,
+              "end": 398,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team."
+            },
+            {
+              "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+              "title": "01_Northstar_Proposal_v1.md",
+              "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+              "start": 399,
+              "end": 494,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance."
+            },
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 225,
+              "end": 334,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved."
+            },
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 431,
+              "end": 537,
+              "firstLine": 6,
+              "lastLine": 6,
+              "quote": "4. Both sides agreed to capture open commercial points in the action log rather than settle them verbally."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 339,
+              "end": 464,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The revision does not restate the pilot deadline; the deadline from the original proposal stands unless separately agreed."
+            },
+            {
+              "sourceId": "3509e1ce-18e5-42da-8c65-952eef5e46e2",
+              "title": "05_Project_Delivery_Update.md",
+              "hash": "23c5c8b6d8e14c572d735b8374bf3cb72d9df446723d637fb762389a50bc2355",
+              "start": 211,
+              "end": 298,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The 22 November date is an internal delivery target, not a client-approved deadline."
+            },
+            {
+              "sourceId": "60061811-4d2a-489f-b385-8c9e607b23d1",
+              "title": "06_Client_Email_Extract.md",
+              "hash": "ec75d4f0f270b89a351ed74e7f88fe2c5fdb74d1341938db9d9ae402307f4b94",
+              "start": 183,
+              "end": 271,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The client explicitly states that no revised deadline has been approved by Northstar."
+            }
+          ]
+        },
+        "reviewNeeded": true,
+        "notice": "Rule-based source review signals, not a resolved timeline. Dates, authority and decision status need review. Contradictions may be missed."
+      },
+      "answer": "Relevant source excerpts\n\nNorthstar Retail - Analytics Pilot Proposal v1\nAuthor: Meridian Advisory, P. Rao. Date: 2026-09-04. Type: proposal.\n1. Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.\n2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.\n3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.\n4. This proposal is an offer, not an agreement; it takes effect only on countersignature.\n[Source 1]\n\nThese are retrieved passages, not a generated recommendation.",
+      "evidence": [
+        {
+          "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+          "title": "01_Northstar_Proposal_v1.md",
+          "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+          "start": 0,
+          "end": 584,
+          "firstLine": 1,
+          "lastLine": 6,
+          "quote": "# Northstar Retail - Analytics Pilot Proposal v1\nAuthor: Meridian Advisory, P. Rao. Date: 2026-09-04. Type: proposal.\n1. Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.\n2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.\n3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.\n4. This proposal is an offer, not an agreement; it takes effect only on countersignature."
+        }
+      ],
+      "reviewEvidence": [],
+      "supported": true,
+      "unresolved": false,
+      "refused": false,
+      "evidenceStatus": "positive",
+      "actualMode": "keyword",
+      "embeddingModel": null,
+      "corpusId": "voice-6efc30fb-61d1-40bb-8a7c-a5426af0e570",
+      "generation": false,
+      "mode": "Local keyword retrieval + source excerpts. No generated synthesis.",
+      "latencyMs": 1,
+      "partial": true,
+      "partialNotice": "Partial: cited passages are real evidence, but the record contains unresolved, conditional or conflicting statements on related points. Review the open items before treating this as settled.",
+      "queryTransform": null,
+      "retrievalStages": {
+        "keyword": [
+          {
+            "title": "01_Northstar_Proposal_v1.md",
+            "score": 2.6018159480736336,
+            "rank": 1
+          },
+          {
+            "title": "02_Client_Kickoff_Notes.md",
+            "score": 1.0977689808020308,
+            "rank": 2
+          },
+          {
+            "title": "03_Commercial_Revision.md",
+            "score": 0,
+            "rank": 3
+          },
+          {
+            "title": "04_Steering_Committee_Notes.md",
+            "score": 0,
+            "rank": 4
+          },
+          {
+            "title": "05_Project_Delivery_Update.md",
+            "score": 0,
+            "rank": 5
+          },
+          {
+            "title": "06_Client_Email_Extract.md",
+            "score": 0,
+            "rank": 6
+          },
+          {
+            "title": "07_Internal_Action_Log.md",
+            "score": 0,
+            "rank": 7
+          }
+        ],
+        "evidenceNote": "Packed chunks have distinctive overlap with the question or a strong dense match.",
+        "candidateCount": 7
+      },
+      "spoken": null,
+      "requestedScoped": false,
+      "requestedChecked": false
+    }
+  },
+  {
+    "question": "Has the money side been signed off by the client’s accountants?",
+    "typed": {
+      "question": "Has the money side been signed off by the client’s accountants?",
+      "lead": {
+        "text": "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms.",
+        "verdict": "NO-RECORD",
+        "field": "fee",
+        "citations": [
+          {
+            "documentId": "c542b1c2-4787-4a06-a492-c63321bb713a",
+            "title": "03_Commercial_Revision.md",
+            "quote": "Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance.",
+            "start": 116,
+            "end": 224,
+            "status": "proposed",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Meridian Commercial Desk. Date: 2026-09-18. Type: revision memo.\n1. Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance.\n2. The revised terms are subject to client finance sign-off; they are a proposal until that sign-off is recorded.\n3. The revision does not restate the pilot deadline; the deadline from the original proposal stands unless separately agreed."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "36538f6b-1e5a-4dd1-ac9b-cdc0364a4de5",
+            "title": "04_Steering_Committee_Notes.md",
+            "quote": "The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount.",
+            "start": 125,
+            "end": 217,
+            "status": "proposed",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Steering committee secretary. Date: 2026-09-25. Type: meeting notes.\n1. The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount.\n2. The discussed payment structure was 50% upfront and 50% after acceptance; no vote was taken on the payment schedule.\n3. The committee noted that client finance had not yet signed off on any revised commercial terms."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "7d5f4a0a-efeb-4eba-ba27-4c7ed5adfe43",
+            "title": "01_Northstar_Proposal_v1.md",
+            "quote": "Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.",
+            "start": 121,
+            "end": 283,
+            "status": "proposed",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Meridian Advisory, P. Rao. Date: 2026-09-04. Type: proposal.\n1. Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.\n2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.\n3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.\n4. This proposal is an offer, not an agreement; it takes effect only on countersignature."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "7d5f4a0a-efeb-4eba-ba27-4c7ed5adfe43",
+            "title": "01_Northstar_Proposal_v1.md",
+            "quote": "The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.",
+            "start": 402,
+            "end": 494,
+            "status": "proposed",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Meridian Advisory, P. Rao. Date: 2026-09-04. Type: proposal.\n1. Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.\n2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team.\n3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.\n4. This proposal is an offer, not an agreement; it takes effect only on countersignature."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          },
+          {
+            "documentId": "a6d81381-e8e6-4ef7-8296-1c93f9c45bb5",
+            "title": "07_Internal_Action_Log.md",
+            "quote": "No signed commercial agreement exists for the revised terms.",
+            "start": 413,
+            "end": 473,
+            "status": "unresolved",
+            "location": {
+              "pages": [],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e2"
+                ],
+                "pages": [],
+                "regions": [],
+                "text": [
+                  "Author: Meridian PMO. Date: 2026-10-09. Type: action log.\n1. Working scope is two regions (North and South) for the first phase.\n2. Open decision: final payment schedule (40/60 in the revision memo vs 50/50 in steering notes); finance approval outstanding.\n3. Open decision: pilot deadline (15 November requested by client vs 22 November internal target); not resolved.\n4. No signed commercial agreement exists for the revised terms. Production launch authorization is not recorded."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e2"
+              ]
+            }
+          }
+        ],
+        "background": null,
+        "interpretedAs": null,
+        "origin": "engine",
+        "opener": "Here's where it stands.",
+        "action": null
+      },
+      "visual": null,
+      "also": [],
+      "closest": null,
+      "semantic": {
+        "intent": "LOOKUP",
+        "lang": "en",
+        "steps": []
+      },
+      "answer": "Relevant source excerpts\n\nSteering Committee Notes - Northstar Pilot\nAuthor: Steering committee secretary. Date: 2026-09-25. Type: meeting notes.\n1. The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount.\n2. The discussed payment structure was 50% upfront and 50% after acceptance; no vote was taken on the payment schedule.\n3. The committee noted that client finance had not yet signed off on any revised commercial terms.\n[Source 1]\n\nThese are retrieved passages, not a generated recommendation.",
+      "status": null,
+      "evidence": [
+        {
+          "documentId": "36538f6b-1e5a-4dd1-ac9b-cdc0364a4de5",
+          "title": "04_Steering_Committee_Notes.md",
+          "quote": "# Steering Committee Notes - Northstar Pilot\nAuthor: Steering committee secretary. Date: 2026-09-25. Type: meeting notes.\n1. The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount.\n2. The discussed payment structure was 50% upfront and 50% after acceptance; no vote was taken on the payment schedule.\n3. The committee noted that client finance had not yet signed off on any revised commercial terms.",
+          "start": 0,
+          "end": 436,
+          "status": null,
+          "location": {
+            "pages": [],
+            "boxes": null,
+            "focus": {
+              "elementIds": [
+                "e2"
+              ],
+              "pages": [],
+              "regions": [],
+              "text": [
+                "Author: Steering committee secretary. Date: 2026-09-25. Type: meeting notes.\n1. The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount.\n2. The discussed payment structure was 50% upfront and 50% after acceptance; no vote was taken on the payment schedule.\n3. The committee noted that client finance had not yet signed off on any revised commercial terms."
+              ],
+              "rows": []
+            },
+            "elementIds": [
+              "e1",
+              "e2"
+            ]
+          }
+        }
+      ]
+    },
+    "wire": "data: {\"id\":\"local-contract-b236e5dfb7dfd7aa\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"No. Per the internal action log from October 9: no signed \"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"local-contract-b236e5dfb7dfd7aa\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"commercial agreement exists for the revised terms.\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"local-contract-b236e5dfb7dfd7aa\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+    "spokenTurn": {
+      "at": 1794077778527,
+      "intent": "FINALIZED",
+      "field": "fee",
+      "verdict": "NO-RECORD",
+      "spoken": "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms.",
+      "citations": [
+        {
+          "title": "03_Commercial_Revision.md",
+          "docDate": "2026-09-18",
+          "quote": "Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance.",
+          "firstLine": 3,
+          "lastLine": 3,
+          "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+          "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+          "start": 116,
+          "end": 224,
+          "status": "proposed"
+        },
+        {
+          "title": "04_Steering_Committee_Notes.md",
+          "docDate": "2026-09-25",
+          "quote": "The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount.",
+          "firstLine": 3,
+          "lastLine": 3,
+          "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+          "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+          "start": 125,
+          "end": 217,
+          "status": "proposed"
+        },
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "docDate": "2026-09-04",
+          "quote": "Meridian Advisory proposes a customer analytics pilot for Northstar Retail across three retail regions (North, South, West) for a fixed engagement fee of $48,000.",
+          "firstLine": 3,
+          "lastLine": 3,
+          "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+          "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+          "start": 121,
+          "end": 283,
+          "status": "proposed"
+        },
+        {
+          "title": "01_Northstar_Proposal_v1.md",
+          "docDate": "2026-09-04",
+          "quote": "The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance.",
+          "firstLine": 5,
+          "lastLine": 5,
+          "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+          "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+          "start": 402,
+          "end": 494,
+          "status": "proposed"
+        },
+        {
+          "title": "07_Internal_Action_Log.md",
+          "docDate": "2026-10-09",
+          "quote": "No signed commercial agreement exists for the revised terms.",
+          "firstLine": 6,
+          "lastLine": 6,
+          "hash": "b5da8417dad49096c1b517363f6ec2ca8dd08bb1c44e601855494225e66fbac9",
+          "sourceId": "dee63204-f580-4ca3-a9dd-1b92d49de677",
+          "start": 413,
+          "end": 473,
+          "status": "unresolved"
+        }
+      ]
+    },
+    "result": {
+      "question": "Has the money side been signed off by the client’s accountants?",
+      "context": {
+        "groups": {
+          "changes": [
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 335,
+              "end": 430,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. Finance approval for any revised fee or payment schedule remains pending after this meeting."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 113,
+              "end": 224,
+              "firstLine": 3,
+              "lastLine": 3,
+              "quote": "1. Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 225,
+              "end": 338,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The revised terms are subject to client finance sign-off; they are a proposal until that sign-off is recorded."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 122,
+              "end": 217,
+              "firstLine": 3,
+              "lastLine": 3,
+              "quote": "1. The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 338,
+              "end": 436,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The committee noted that client finance had not yet signed off on any revised commercial terms."
+            },
+            {
+              "sourceId": "60061811-4d2a-489f-b385-8c9e607b23d1",
+              "title": "06_Client_Email_Extract.md",
+              "hash": "ec75d4f0f270b89a351ed74e7f88fe2c5fdb74d1341938db9d9ae402307f4b94",
+              "start": 183,
+              "end": 271,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The client explicitly states that no revised deadline has been approved by Northstar."
+            },
+            {
+              "sourceId": "dee63204-f580-4ca3-a9dd-1b92d49de677",
+              "title": "07_Internal_Action_Log.md",
+              "hash": "b5da8417dad49096c1b517363f6ec2ca8dd08bb1c44e601855494225e66fbac9",
+              "start": 410,
+              "end": 522,
+              "firstLine": 6,
+              "lastLine": 6,
+              "quote": "4. No signed commercial agreement exists for the revised terms. Production launch authorization is not recorded."
+            }
+          ],
+          "open": [
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 335,
+              "end": 430,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. Finance approval for any revised fee or payment schedule remains pending after this meeting."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 338,
+              "end": 436,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The committee noted that client finance had not yet signed off on any revised commercial terms."
+            }
+          ],
+          "conditions": [
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 335,
+              "end": 430,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. Finance approval for any revised fee or payment schedule remains pending after this meeting."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 113,
+              "end": 224,
+              "firstLine": 3,
+              "lastLine": 3,
+              "quote": "1. Following the narrower scope, the revised fee is $42,000, with 40% payable upfront and 60% after acceptance."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 225,
+              "end": 338,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The revised terms are subject to client finance sign-off; they are a proposal until that sign-off is recorded."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 339,
+              "end": 464,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The revision does not restate the pilot deadline; the deadline from the original proposal stands unless separately agreed."
+            },
+            {
+              "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+              "title": "04_Steering_Committee_Notes.md",
+              "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+              "start": 218,
+              "end": 337,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The discussed payment structure was 50% upfront and 50% after acceptance; no vote was taken on the payment schedule."
+            }
+          ],
+          "decisions": [
+            {
+              "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+              "title": "01_Northstar_Proposal_v1.md",
+              "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+              "start": 284,
+              "end": 398,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The proposed pilot deadline is 15 November 2026, with weekly progress reporting to the client's analytics team."
+            },
+            {
+              "sourceId": "fb7b550d-b790-441f-84f7-057e73381fe7",
+              "title": "01_Northstar_Proposal_v1.md",
+              "hash": "a0496116c0e32dd96c7868279cddc62af7fe5ad126447a74b37095f2318dee51",
+              "start": 399,
+              "end": 494,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The proposed engagement fee is $48,000, invoiced 50% on signing and 50% on pilot acceptance."
+            },
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 225,
+              "end": 334,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. Weekly reporting is confirmed; the client wants a finance review before any commercial change is approved."
+            },
+            {
+              "sourceId": "0a951ee7-fa0a-42a2-845c-3e789ab43dbf",
+              "title": "02_Client_Kickoff_Notes.md",
+              "hash": "c9dd39b74e6dd056d7d71af051eedc2e9998e144ad31eba82855cd2fbc41a559",
+              "start": 431,
+              "end": 537,
+              "firstLine": 6,
+              "lastLine": 6,
+              "quote": "4. Both sides agreed to capture open commercial points in the action log rather than settle them verbally."
+            },
+            {
+              "sourceId": "31385330-ba62-4255-831e-dd974f452c8f",
+              "title": "03_Commercial_Revision.md",
+              "hash": "5af8d09db61cdc74e6a20d8f373907de5aa2f1792cbb64fe87fd8e6194d7af27",
+              "start": 339,
+              "end": 464,
+              "firstLine": 5,
+              "lastLine": 5,
+              "quote": "3. The revision does not restate the pilot deadline; the deadline from the original proposal stands unless separately agreed."
+            },
+            {
+              "sourceId": "3509e1ce-18e5-42da-8c65-952eef5e46e2",
+              "title": "05_Project_Delivery_Update.md",
+              "hash": "23c5c8b6d8e14c572d735b8374bf3cb72d9df446723d637fb762389a50bc2355",
+              "start": 211,
+              "end": 298,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The 22 November date is an internal delivery target, not a client-approved deadline."
+            },
+            {
+              "sourceId": "60061811-4d2a-489f-b385-8c9e607b23d1",
+              "title": "06_Client_Email_Extract.md",
+              "hash": "ec75d4f0f270b89a351ed74e7f88fe2c5fdb74d1341938db9d9ae402307f4b94",
+              "start": 183,
+              "end": 271,
+              "firstLine": 4,
+              "lastLine": 4,
+              "quote": "2. The client explicitly states that no revised deadline has been approved by Northstar."
+            }
+          ]
+        },
+        "reviewNeeded": true,
+        "notice": "Rule-based source review signals, not a resolved timeline. Dates, authority and decision status need review. Contradictions may be missed."
+      },
+      "answer": "Relevant source excerpts\n\nSteering Committee Notes - Northstar Pilot\nAuthor: Steering committee secretary. Date: 2026-09-25. Type: meeting notes.\n1. The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount.\n2. The discussed payment structure was 50% upfront and 50% after acceptance; no vote was taken on the payment schedule.\n3. The committee noted that client finance had not yet signed off on any revised commercial terms.\n[Source 1]\n\nThese are retrieved passages, not a generated recommendation.",
+      "evidence": [
+        {
+          "sourceId": "b19f1c5e-514b-4637-9482-1f6d3d3e1df3",
+          "title": "04_Steering_Committee_Notes.md",
+          "hash": "a0bbdd7318bac70190caa981dcc15e7f2fb656f88e94d3894518644a462018cf",
+          "start": 0,
+          "end": 436,
+          "firstLine": 1,
+          "lastLine": 5,
+          "quote": "# Steering Committee Notes - Northstar Pilot\nAuthor: Steering committee secretary. Date: 2026-09-25. Type: meeting notes.\n1. The committee reviewed the revised engagement fee of $42,000 and did not dispute the amount.\n2. The discussed payment structure was 50% upfront and 50% after acceptance; no vote was taken on the payment schedule.\n3. The committee noted that client finance had not yet signed off on any revised commercial terms."
+        }
+      ],
+      "reviewEvidence": [],
+      "supported": true,
+      "unresolved": false,
+      "refused": false,
+      "evidenceStatus": "positive",
+      "actualMode": "keyword",
+      "embeddingModel": null,
+      "corpusId": "voice-6efc30fb-61d1-40bb-8a7c-a5426af0e570",
+      "generation": false,
+      "mode": "Local keyword retrieval + source excerpts. No generated synthesis.",
+      "latencyMs": 1,
+      "partial": true,
+      "partialNotice": "Partial: cited passages are real evidence, but the record contains unresolved, conditional or conflicting statements on related points. Review the open items before treating this as settled.",
+      "queryTransform": null,
+      "retrievalStages": {
+        "keyword": [
+          {
+            "title": "04_Steering_Committee_Notes.md",
+            "score": 2.492558521593368,
+            "rank": 1
+          },
+          {
+            "title": "03_Commercial_Revision.md",
+            "score": 1.7585265363955902,
+            "rank": 2
+          },
+          {
+            "title": "02_Client_Kickoff_Notes.md",
+            "score": 1.6839996886189461,
+            "rank": 3
+          },
+          {
+            "title": "07_Internal_Action_Log.md",
+            "score": 1.1258647943916535,
+            "rank": 4
+          },
+          {
+            "title": "06_Client_Email_Extract.md",
+            "score": 0.12881184142514937,
+            "rank": 5
+          },
+          {
+            "title": "05_Project_Delivery_Update.md",
+            "score": 0.09774208101013004,
+            "rank": 6
+          },
+          {
+            "title": "01_Northstar_Proposal_v1.md",
+            "score": 0.0591856970647989,
+            "rank": 7
+          }
+        ],
+        "evidenceNote": "Packed chunks have distinctive overlap with the question or a strong dense match.",
+        "candidateCount": 7
+      },
+      "spoken": null,
+      "requestedScoped": false,
+      "requestedChecked": false
+    }
+  }
+]

@@ -1,0 +1,13 @@
+
+Answer-quality bench (shipping hybrid path + answer layer)
+all         n=30  OK 23  recovered 3  over-refusal 0  retrieval-miss 1  false-positive 3
+literal     n=23  OK 21  recovered 0  over-refusal 0  retrieval-miss 0  false-positive 2
+paraphrase  n= 7  OK 2  recovered 3  over-refusal 0  retrieval-miss 1  false-positive 1
+  FALSE-POSITIVE: What deadline does the client want to keep? (top: 02_Client_Kickoff_Notes.md)
+  FALSE-POSITIVE: How often is progress reported? (top: 01_Northstar_Proposal_v1.md)
+  RETRIEVAL-MISS: How much did the original pitch cost the client? (top: none)
+  FALSE-POSITIVE: Has the money side been signed off by the client's accountants? (top: 04_Steering_Committee_Notes.md)
+  RECOVERED: Which part of the country was dropped from the pilot? (top: none)
+  RECOVERED: When will the analytics pilot be ready according to our team? (top: 01_Northstar_Proposal_v1.md)
+  RECOVERED: What is my thyroid hormone level? (top: none)
+wrote evaluation/results/answer-quality-2026-10-31-f1b1989.json

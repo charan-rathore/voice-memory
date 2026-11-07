@@ -1,0 +1,30 @@
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ public upload + HTTP ask + default HTTP SSE carry requested support, not only topical passages (940.362262ms)
+✔ missing-support control: What deadline does the client want to keep? (1.38579ms)
+✔ changed support is quoted, not a memorized answer: What deadline does the client want to keep? (1.321578ms)
+✔ missing-support control: How often is progress reported? (1.570936ms)
+✔ changed support is quoted, not a memorized answer: How often is progress reported? (1.074365ms)
+✔ missing-support control: Has the money side been signed off by the client’s accountants? (1.012324ms)
+✔ changed support is quoted, not a memorized answer: Has the money side been signed off by the client’s accountants? (1.035506ms)
+✔ a proposed reporting cadence is never promoted to confirmed; changed and conflicting support is retained (3.427347ms)
+✔ conditional, draft, wrong-role and wrong-owner finance support cannot become client signoff (4.347514ms)
+✔ unbound requested modifiers do not disappear; unrelated ordinary positives stay on their routes (4.4521ms)
+✔ support overflow and scan overflow refuse instead of silently losing contrary records (1999.40098ms)
+✔ external retrieval policy never promotes an insufficient pack from a source scan (2.012479ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ public and default SSE controls preserve absence, proposal qualifiers, changed values and conflicting support (221.32971ms)
+✔ opaque identifiers remain whole qualifiers, never prefixes of other records (1.549122ms)
+✔ an oversized contrary assertion refuses instead of disappearing from the evidence pack (1.960734ms)
+✔ conflicting requested support cannot authorize a draft (4.786862ms)
+✔ HTTP and default SSE expose conflicting statements as ambiguous, never an approved current fact (118.614398ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3537.478082
