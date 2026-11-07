@@ -4,7 +4,8 @@ import { IngestError, LIMITS, OCR_FAIL_CONFIDENCE } from "./errors.mjs";
 import { detectFormat } from "./detect.mjs";
 import { buildDocument, buildTextDocument } from "./canonical.mjs";
 
-export const PIPELINE_VERSION = "vm-ingest/runtime-2";
+import { PIPELINE_VERSION } from "./version.mjs";
+export { PIPELINE_VERSION } from "./version.mjs";
 
 const REVIEW_CODES = new Set([
   "ocr_low_confidence",
