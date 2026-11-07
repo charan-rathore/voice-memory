@@ -22,8 +22,8 @@ async function openTest(page, key) {
   await dot.click();
   await page.waitForSelector(".ex-h .st-title", { timeout: 10000 });
   await page.waitForTimeout(400);
-  return (await page.locator(".ex-h .st-title .m-tw").first().innerText())
-    .trim();
+  const title = page.locator(".ex-h .st-title .m-tw").first();
+  return (await title.innerText()).trim();
 }
 
 export async function checkExplainer(browser) {
@@ -51,11 +51,9 @@ export async function checkExplainer(browser) {
         /fix to the paper, not a change in your body/,
       ])
         say(want.test(text), `${name}: ferritin explainer lacks ${want}`);
-      const src = await page
-        .locator(".ex-src a")
-        .first()
-        .getAttribute("href");
-      say(/^https:\/\/medlineplus\.gov\//.test(src ?? ""), `${name}: source`);
+      const link = page.locator(".ex-src a").first();
+      const src = (await link.getAttribute("href")) ?? "";
+      say(src.startsWith("https://medlineplus.gov/"), `${name}: source`);
 
       // units are shown exactly as printed
       await openTest(page, "creatinine");

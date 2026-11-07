@@ -11,8 +11,12 @@ const cite = { title: "a.pdf", quote: "| Ferritin | 50 | ng/mL |" };
 test("a lead is the answer, whatever retrieval said underneath", () => {
   const shown = {
     question: "ferritin?",
-    lead: { text: "Your Ferritin result is 50 ng/mL.", verdict: "LATEST", citations: [cite] },
-    answer: "Several passages are relevant, but this question remains unresolved.",
+    lead: {
+      text: "Your Ferritin result is 50 ng/mL.",
+      verdict: "LATEST",
+      citations: [cite],
+    },
+    answer: "Several passages are relevant, but this remains unresolved.",
     status: "ambiguous",
     evidence: [cite],
   };
@@ -38,8 +42,10 @@ test("clarifying questions and refusals are labelled as such", () => {
     ["HELP", "social"],
     ["OVERVIEW", "answered"],
     ["FLAGGED", "answered"],
-  ])
-    assert.equal(finalAnswer({ lead: { text: "x", verdict } }).kind, kind, verdict);
+  ]) {
+    const lead = { text: "x", verdict };
+    assert.equal(finalAnswer({ lead }).kind, kind, verdict);
+  }
 });
 
 test("no lead: the cited passage, then an honest abstention", () => {
