@@ -84,10 +84,9 @@ export function relieveMemoryPressure(rss = process.memoryUsage().rss) {
 }
 
 function ensureLoading() {
+  if (process.env.VM_DENSE === "off" || state.failed) return null;
+  if (state.pipe) return Promise.resolve(state.pipe);
   if (
-    process.env.VM_DENSE === "off" ||
-    state.failed ||
-    state.pipe ||
     state.retiring ||
     ingestDepth > 0 ||
     lifetime.blocked
