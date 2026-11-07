@@ -430,10 +430,10 @@ export function createLocalServer({
     hardExpiresAtMs: voiceHardExpiresAtMs(),
   }),
   port = Number(process.env.PORT || 4317),
-  // The dense shed-guard (dense.mjs) is the primary memory protection: on a
-  // host with a readable cgroup limit it bounds RSS by shedding dense and
-  // refusing reloads (measured 221 MiB stable across upload cycles at a 512
-  // MiB limit). The RSS watchdog is an opt-in restart backstop only; its
+  // The dense shed-guard (dense.mjs) checks model operation boundaries and
+  // refuses reloads without headroom. It cannot cap native allocation peaks
+  // or unrelated process growth. The RSS watchdog is an opt-in restart
+  // backstop only; its
   // admission control caused false 503s in measured runs, so it is off
   // unless explicitly enabled with VM_RSS_WATCHDOG=on.
   watchdog = createRssWatchdog({
