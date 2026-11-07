@@ -9,8 +9,12 @@
 // personal or medical records. See docs/ARCHITECTURE.md for the durable design.
 import { randomUUID, createHash } from "node:crypto";
 import { ingestFile, locate, LIMITS } from "../ingest/index.mjs";
-import { buildTextDocument } from "../ingest/canonical.mjs";
+import {
+  buildTextDocument,
+  sourceLineCapability,
+} from "../ingest/canonical.mjs";
 import { safeFilename } from "../ingest/detect.mjs";
+import { PIPELINE_VERSION, parseCacheKey } from "../ingest/version.mjs";
 
 export const MAX_LIBRARY_DOCS = 10;
 export const MAX_SESSION_BYTES = 40 * 1024 * 1024;
@@ -87,7 +91,6 @@ function parseCacheTrim() {
     parseCacheStats.evictions++;
   }
 }
-const PIPELINE = "vm-ingest/runtime-2";
 // Measured peak RSS while OCR'ing a scan: ~276 MB (worker + tesseract).
 // Two files are read at once; OCR itself takes turns across them (one at a
 // time, ingest/index.mjs), so the peak stays that of one OCR while a second
@@ -183,6 +186,7 @@ export function documentView(e) {
   return {
     id: e.id,
     schema,
+    sourceLineMetadata: sourceLineCapability(e.doc),
     filename,
     kind,
     mime,
@@ -370,14 +374,8 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
     await slot(String(s.sid ?? "").startsWith("case:") ? 0 : 1);
     try {
       if (!lib.includes(entry)) return; // removed while queued
-      const cacheKey =
-        // The declared type is part of validation ("named .pdf but it's a
-        // PNG" must still be refused), so the extension is in the key.
-        PIPELINE +
-        ":" +
-        (/\.([a-z0-9]{1,8})$/i.exec(name)?.[1].toLowerCase() ?? "") +
-        ":" +
-        createHash("sha256").update(bytes).digest("hex");
+      // Declared extension stays in the key, preserving format validation.
+      const cacheKey = parseCacheKey(bytes, name);
       let r;
       let cacheable = false;
       const hit = parseCache.get(cacheKey);
@@ -546,7 +544,7 @@ export function replaceWithText(s, documents) {
       bytes,
       parser: { name: "vm-text/1", ocr: null },
     });
-    doc.parser.pipeline = "vm-ingest/runtime-2";
+    doc.parser.pipeline = PIPELINE_VERSION;
     lib.push({
       id: randomUUID(),
       filename,
