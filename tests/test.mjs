@@ -160,3 +160,99 @@ test("competing pilot sources remain reviewable unresolved and cannot produce a 
   assert.match(result.answer, /unresolved/);
   assert.throws(() => draft(result, bundle), /supporting.*evidence/);
 });
+
+test("a retried upload of the same file is idempotent: one entry, one ingest", async () => {
+  const L = await import("../src/library.mjs");
+  const s = {};
+  const bytes = Buffer.from("Ferritin 50 ng/mL, amended 15 October.\n");
+  const first = L.addUpload(s, bytes, "lab.txt", () => {});
+  const again = L.addUpload(s, bytes, "lab.txt", () => {});
+  assert.equal(again.id, first.id, "a network retry created a second entry");
+  assert.equal(
+    L.libraryOf(s).filter((e) => e.status !== "failed").length,
+    1,
+    "a retried upload consumed a second library slot",
+  );
+  // A failed upload may be retried into a new entry; a different file must.
+  const other = L.addUpload(
+    s,
+    Buffer.from("Discharge summary.\n"),
+    "notes.txt",
+    () => {},
+  );
+  assert.notEqual(other.id, first.id);
+  // Same bytes under a different filename are an intentional new upload.
+  const renamed = L.addUpload(s, bytes, "lab-copy.txt", () => {});
+  assert.notEqual(renamed.id, first.id);
+  // Same bytes in ANOTHER session are independent: no cross-session or
+  // cross-scope entry is ever returned.
+  const s2 = {};
+  const second = L.addUpload(s2, bytes, "lab.txt", () => {});
+  assert.notEqual(second.id, first.id);
+  assert.equal(L.libraryOf(s2).filter((e) => e.status !== "failed").length, 1);
+  // A retry while the original is still ingesting returns the in-flight
+  // entry; a retry after failure starts fresh.
+  first.status = "processing";
+  assert.equal(L.addUpload(s, bytes, "lab.txt", () => {}).id, first.id);
+  first.status = "failed";
+  const fresh = L.addUpload(s, bytes, "lab.txt", () => {});
+  assert.notEqual(fresh.id, first.id);
+});
+
+test("upload retry at capacity reuses entry; removal permits re-import", async () => {
+  const L = await import("../src/library.mjs");
+  const s = {};
+  let release;
+  const gate = new Promise((r) => (release = r));
+  let builds = 0;
+  try {
+    const bytes = Buffer.from("Fictional retry receipt with one source line.");
+    const first = L.addUpload(s, bytes, "retry.txt", () => builds++, {
+      before: gate,
+    });
+    for (let i = 1; i < L.MAX_LIBRARY_DOCS; i++)
+      L.addUpload(
+        s,
+        Buffer.from("Fictional content " + i),
+        "note" + i + ".txt",
+        () => {},
+        { before: gate },
+      );
+    assert.equal(
+      L.addUpload(s, Buffer.from(bytes), "retry.txt", () => builds++, {
+        before: gate,
+      }),
+      first,
+    );
+    assert.equal(L.libraryOf(s).length, L.MAX_LIBRARY_DOCS);
+    assert.throws(
+      () =>
+        L.addUpload(s, Buffer.from("Different"), "other.txt", () => {}, {
+          before: gate,
+        }),
+      /up to/,
+    );
+    L.removeEntry(s, first.id);
+    const next = L.addUpload(s, bytes, "retry.txt", () => builds++, {
+      before: gate,
+    });
+    assert.notEqual(next.id, first.id);
+    for (const e of [...L.libraryOf(s)]) if (e !== next) L.removeEntry(s, e.id);
+    release();
+    for (
+      let i = 0;
+      i < 1000 && !["ready", "needs_review", "failed"].includes(next.status);
+      i++
+    )
+      await new Promise((r) => setTimeout(r, 10));
+    assert.equal(next.status, "ready");
+    assert.equal(
+      builds,
+      1,
+      "only re-import indexes; removed queued original and retry do not",
+    );
+  } finally {
+    release();
+    for (const e of [...L.libraryOf(s)]) L.removeEntry(s, e.id);
+  }
+});

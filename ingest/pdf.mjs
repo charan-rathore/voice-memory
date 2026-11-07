@@ -4,11 +4,11 @@
 // table detection by aligned cell runs, heading detection by relative font
 // size, and repeated page furniture detection. It is NOT a learned layout
 // model; ingest/fixtures/gold.json measures where it holds and where it fails.
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import * as pdfjs from "pdfjs-dist/build/pdf.mjs";
 import { IngestError, LIMITS, OCR_REVIEW_CONFIDENCE } from "./errors.mjs";
 import { recognize, encodePng, OCR_ENGINE } from "./ocr.mjs";
 
-export const PDF_PARSER = `pdf.js@${pdfjs.version} + vm-layout/1`;
+export const PDF_PARSER = `pdf.js@${pdfjs.version} standard + vm-layout/1`;
 
 const median = (xs) => {
   if (!xs.length) return 0;
@@ -155,7 +155,11 @@ async function extractImages(page, OPS) {
       try {
         const obj = await new Promise((resolve, reject) => {
           const t = setTimeout(() => reject(Error("image timeout")), 10000);
-          page.objs.get(args[0], (o) => {
+          // pdf.js promotes image objects reused across pages to commonObjs.
+          const objects = args[0].startsWith("g_")
+            ? page.commonObjs
+            : page.objs;
+          objects.get(args[0], (o) => {
             clearTimeout(t);
             resolve(o);
           });
@@ -437,6 +441,21 @@ export async function parsePdf(
           blocks.push({
             type: "paragraph",
             text: p.text.replace(/\n/g, " "),
+            sourceLines: p.lines.map((l) => {
+              const [a, b] = toUser(l.bbox.x0, l.bbox.y1);
+              const [c, d] = toUser(l.bbox.x1, l.bbox.y0);
+              return {
+                rawText: l.rawText ?? l.text,
+                confidence: l.confidence,
+                bbox: viewBox(
+                  vp,
+                  Math.min(a, c),
+                  Math.min(b, d),
+                  Math.max(a, c),
+                  Math.max(b, d),
+                ),
+              };
+            }),
             page: n,
             bbox: viewBox(
               vp,
@@ -548,6 +567,9 @@ function assemble(pageLines, pages, ocrBlocks) {
           blocks.push({
             type: "paragraph",
             text: r.line.text,
+            sourceLines: [
+              { rawText: r.line.text, bbox: r.line.bbox, group: r.line.group },
+            ],
             page: r.line.page,
             bbox: r.line.bbox,
             method: "pdf-text",
@@ -571,6 +593,7 @@ function assemble(pageLines, pages, ocrBlocks) {
         blocks.push({
           type: "overlay",
           text: l.text,
+          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
           page: l.page,
           bbox: l.bbox,
           method: "pdf-text",
@@ -588,6 +611,7 @@ function assemble(pageLines, pages, ocrBlocks) {
         blocks.push({
           type: "furniture",
           text: l.text,
+          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
           page: l.page,
           bbox: l.bbox,
           method: "pdf-text",
@@ -629,6 +653,7 @@ function assemble(pageLines, pages, ocrBlocks) {
           type: "heading",
           level: levelOf(l.size),
           text: l.text,
+          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
           page: l.page,
           bbox: l.bbox,
           method: "pdf-text",
@@ -638,6 +663,7 @@ function assemble(pageLines, pages, ocrBlocks) {
         para = {
           type: "paragraph",
           text: l.text,
+          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
           page: l.page,
           bbox: [...l.bbox],
           size: l.size,
@@ -645,6 +671,11 @@ function assemble(pageLines, pages, ocrBlocks) {
         };
       } else {
         const joinHyphen = /[a-z]-$/.test(para.text) && /^[a-z]/.test(l.text);
+        para.sourceLines.push({
+          rawText: l.text,
+          bbox: l.bbox,
+          group: l.group,
+        });
         para.text = joinHyphen
           ? para.text.slice(0, -1) + l.text
           : para.text + " " + l.text;
@@ -751,6 +782,11 @@ function finalizeTable(table) {
   return {
     type: "table",
     rows,
+    sourceLines: table.rows.map(({ line }) => ({
+      rawText: line.text,
+      bbox: line.bbox,
+      group: line.group,
+    })),
     page: first.page,
     bbox: [
       Math.min(...rows.map((r) => r.bbox[0])),

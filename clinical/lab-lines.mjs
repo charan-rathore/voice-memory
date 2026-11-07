@@ -186,6 +186,10 @@ export function parseReference(text, sex = null, age = null) {
   const q = QUAL_REF.exec(s);
   if (q)
     return { expected: q[1].toLowerCase().replace(/[- ]+/g, " "), text: s };
+  // A lone age span ("13-99 YRS") is an applicable-age band, not a lab
+  // reference interval.
+  if (/^\d+\s*-\s*\d+\s*(?:yrs?|years?|y|mos?|months?)\.?$/.test(s))
+    return null;
   // Decision thresholds with several categories ("Low: <40, High: >60",
   // "Borderline: 150-199 High: 200-499") are not one reference interval.
   if (
@@ -208,34 +212,67 @@ export function parseReference(text, sex = null, age = null) {
       (sex === "male" && /^(male|m|men)$/.test(who)) ||
       (sex === "female" && /^(female|f|women)$/.test(who));
     const pick = segs.filter((g) => fits(g.who));
-    const all = segs
-      .map((g) => interval(g.body.replace(AGE_SPAN, "")))
-      .filter(Boolean);
-    const same =
-      all.length &&
-      all.every((r) => r.lowN === all[0].lowN && r.highN === all[0].highN);
-    const r = pick.length
-      ? interval(pick[0].body.replace(AGE_SPAN, ""))
-      : same
-        ? all[0]
+    const rs = (list) =>
+      list.map((g) => interval(g.body.replace(AGE_SPAN, ""))).filter(Boolean);
+    const same = (list) =>
+      list.length > 0 &&
+      list.every((r) => r.lowN === list[0].lowN && r.highN === list[0].highN);
+    if (pick.length) {
+      // Duplicate bands for the same sex must agree; conflicting ones
+      // abstain rather than adopting the first.
+      const prs = rs(pick);
+      return prs.length === pick.length && same(prs)
+        ? { ...prs[0], text: s }
         : null;
-    return r ? { ...r, text: s } : null;
+    }
+    // No band fits this patient. A genuinely multi-label print whose bands
+    // all agree ("Male:35-104 Female: 35-104") carries one value for
+    // everyone; a sole opposite-sex band is not this patient's range.
+    if (labels.length > 1) {
+      const all = rs(segs);
+      if (all.length === segs.length && same(all))
+        return { ...all[0], text: s };
+    }
+    return null;
   }
   // Age-labelled alternatives ("Adult:0-1  Premature:..."): adult/unlabelled only.
   const parts = s
     .split(/\s{2,}|;|\|/)
     .flatMap((p) => p.split(/(?<=\d)\s+(?=[A-Za-z][A-Za-z ]*\s*:)/));
-  const adult = parts.find((p) => /^adults?\s*[:-]/i.test(p.trim()));
-  if (adult) {
-    const r = interval(
-      adult.replace(/^adults?\s*[:-]/i, "").replace(AGE_SPAN, ""),
-    );
-    return r ? { ...r, text: s } : null;
+  const adult = parts.filter((p) => /^adults?\s*[:-]/i.test(p.trim()));
+  if (adult.length) {
+    // Duplicate adult bands must agree; conflicting ones abstain.
+    const rs = adult
+      .map((p) =>
+        interval(
+          p
+            .trim()
+            .replace(/^adults?\s*[:-]/i, "")
+            .replace(AGE_SPAN, ""),
+        ),
+      )
+      .filter(Boolean);
+    const same =
+      rs.length > 0 &&
+      rs.every((r) => r.lowN === rs[0].lowN && r.highN === rs[0].highN);
+    return rs.length === adult.length && same ? { ...rs[0], text: s } : null;
   }
   const plain = parts
     .map((p) => p.trim())
     .filter((p) => p && !CHILD_LABEL.test(p));
   if (!plain.length) return null;
+  // Distinct unlabelled bands abstain: nobody may pick between them.
+  // Identical duplicates coalesce to the one value they all print.
+  if (plain.length > 1) {
+    const prs = plain
+      .map((p) => interval(p.replace(AGE_SPAN, "")))
+      .filter(Boolean);
+    if (
+      prs.length !== plain.length ||
+      !prs.every((r) => r.lowN === prs[0].lowN && r.highN === prs[0].highN)
+    )
+      return null;
+  }
   const body = plain[0]
     .replace(AGE_SPAN, "")
     .replace(/^[A-Za-z ]{1,20}:\s*/, "")
@@ -252,10 +289,14 @@ const splitCells = (line) =>
     .split("|")
     .map((c) => c.trim());
 
-const RANGE_SHAPE = new RegExp(
-  `(${NUM})\\s*(?:-|–|to)\\s*(${NUM})|^[<>≤≥]\\s*(${NUM})|up\\s*to\\s*(${NUM})|\\+/-|^(negative|non[- ]?reactive|not detected|absent|nil)\\b`,
-  "i",
-);
+// Collapse numeric runs before scanning for reference shape. Every input
+// character is visited a bounded number of times; never retry NUM at every
+// digit offset in an arbitrarily long suffix. This permits preservation,
+// not comparison: the original string remains the quoted evidence.
+const hasRangeShape = (text) =>
+  /0\s*(?:-|–|—|to)\s*0|[<>≤≥]\s*0|\bup\s*to\s*0|\+\/-|\b(?:negative|non[- ]?reactive|not detected|absent|nil)\b/i.test(
+    text.replace(/[\d.,]+/g, "0"),
+  );
 
 // A range starts like one: optional labels ("Low", "Male:", "13-99 YRS,",
 // "Adults:"), then a number, a bound or a qualitative word. Prose that merely
@@ -263,11 +304,50 @@ const RANGE_SHAPE = new RegExp(
 const RANGE_START =
   /^(?:(?:low|high|borderline)\s+)?(?:[A-Za-z][A-Za-z/ ]{0,14}\s*[:=-]\s*)?(?:\d+\s*-\s*\d+\s*(?:yrs?|years?)\s*,?\s*)?(?:[A-Za-z/]{1,6}\s*[:=]\s*)?(?:[<>≤≥]|up\s*to|upto|\d|\.\d|negative|non[- ]?reactive|not\s+detected|absent|nil)/i;
 
+// RANGE_START anchored at both ends: true only when the whole string is a
+// range, nothing else. A trailing flag is split off only when the head left
+// behind matches this - a head like "3.5-5.0 - not" (from "- not flagged
+// HIGH") is not a range, so no split happens and no flag is asserted.
+// A judged range is nothing but the range itself, with an optional severity
+// qualifier ("Low 13.0-17.0"). Applicability labels (sex, age and adult
+// bands), unknown prose before the range ("obsolete:3.5-5.0") and
+// multi-band strings are qualification nobody may safely apply: the string
+// is kept as printed provenance and never judged.
+const RANGE_FULL = new RegExp(
+  `^(?:(?:low|high|borderline)\\s+)?(?:(?:${NUM})\\s*(?:-|–|—|to)\\s*(?:${NUM})|[<>≤≥]\\s*(?:${NUM})|up\\s*to\\s*(?:${NUM})|upto\\s*(?:${NUM})|(?:${NUM})\\s*\\+/-\\s*(?:${NUM})|negative|non[- ]?reactive|not detected|absent|nil|normal)$`,
+  "i",
+);
+
+// An age unit never counts as a measurement unit: "13-99 YRS" is an age
+// band, not a range carrying a unit.
+const AGE_UNIT = /^(yrs?|years?|y|mos?|months?)$/i;
+// The whole string is one judged range: a clean range (RANGE_FULL), or one
+// with a single trailing measurement unit ("45 - 70 %"). Prose tails,
+// applicability labels, sex bands and age bands never qualify.
+const judgedWhole = (str) => {
+  if (RANGE_FULL.test(str)) return true;
+  const toks = str.split(/\s+/).filter(Boolean);
+  for (let k = Math.min(2, toks.length - 1); k >= 1; k--) {
+    const u = toks.slice(-k).join(" ");
+    if (
+      !AGE_UNIT.test(u) &&
+      looksUnit(u) &&
+      RANGE_FULL.test(toks.slice(0, -k).join(" "))
+    )
+      return true;
+  }
+  return false;
+};
+
+const RANGE_LABEL =
+  /^(normal\s*range|normal|reference\s*range|reference|ref\.?\s*range|bio\.?\s*ref\.?\s*(?:interval|range)?|range)\s*[:=-]?\s*/i;
+
 /** Split the text after the result into flag, unit and range, by shape. */
 function tail(rest) {
   let flag = null,
     unit = null,
-    range = null;
+    range = null,
+    rangeRaw = null;
   let s = rest.trim();
   const f =
     /^(H|L|HH|LL|High|Low|Borderline|Abnormal|Critical|\*+|↑|↓)(?=\s|$)/.exec(
@@ -283,7 +363,7 @@ function tail(rest) {
     // try the longest unit prefix (handles "mg / dL", "U/ L")
     for (let k = Math.min(3, toks.length); k >= 1; k--) {
       const cand = toks.slice(0, k).join(" ");
-      if (looksUnit(cand)) {
+      if (!AGE_UNIT.test(cand) && looksUnit(cand)) {
         unit = cand;
         s = toks.slice(k).join(" ");
         break;
@@ -292,28 +372,60 @@ function tail(rest) {
     if (!unit)
       for (let k = Math.min(3, toks.length); k >= 1; k--) {
         const cand = toks.slice(-k).join(" ");
-        if (looksUnit(cand) && toks.length > k) {
+        if (!AGE_UNIT.test(cand) && looksUnit(cand) && toks.length > k) {
           unit = cand;
           s = toks.slice(0, -k).join(" ");
           break;
         }
       }
   }
+  s = s.trim();
+  // Printed reports often wrap the reference in parentheses: "(reference
+  // 3.5-5.0)", "(13-17) H". Unwrap a leading parenthesised segment only
+  // when its inside is range-shaped; "(Calculated)" and note parens stay.
+  {
+    const pm = /^\(([^()]*)\)\s*(.*)$/.exec(s);
+    if (pm) {
+      const inner = pm[1].replace(RANGE_LABEL, "").trim();
+      if (hasRangeShape(inner) || QUAL_REF.test(inner))
+        s = inner + (pm[2] ? " " + pm[2].trim() : "");
+    }
+  }
   s = s
-    .trim()
     .replace(/^\((.*)\)$/, "$1")
-    .replace(
-      /^(normal\s*range|normal|reference\s*range|reference|ref\.?\s*range|bio\.?\s*ref\.?\s*(?:interval|range)?|range)\s*[:=-]?\s*/i,
-      "",
-    )
+    .replace(RANGE_LABEL, "")
     .trim();
-  if (s && s.length <= 80) {
+  // A flag after the range belongs to the value, not the range text:
+  // "3.5-5.0 H", "3.5-5.0 flagged High", "0.40-4.00 - L". Only split it off
+  // a range-shaped head so prose or qualifiers are never eaten.
+  if (!flag && s) {
+    const tf =
+      /\s*(?:-|\u2013|\u2014)?\s*(?:flag(?:ged)?\s+)?(HH|LL|Higher|High|Lower|Low|Borderline|Abnormal|Critical|H|L|\*+|\u2191|\u2193)\.?\s*$/i.exec(
+        s,
+      );
+    if (tf) {
+      const head = s.slice(0, tf.index).trim();
+      // Strict full-suffix grammar: the head must be nothing but a range.
+      // Prose between the range and the flag word ("- not flagged HIGH",
+      // "- previously H", "tentatively H") keeps the whole suffix glued to
+      // the range text verbatim and asserts no flag - a negation or a
+      // history word is not a current flag.
+      if (!head || judgedWhole(head)) {
+        flag = tf[1];
+        s = head;
+      }
+    }
+  }
+  if (s) {
     const f2 = /^(Low|High|Borderline)\s+/i.exec(s);
     if (f2 && !flag) flag = f2[1];
-    if (RANGE_START.test(s) && (RANGE_SHAPE.test(s) || QUAL_REF.test(s)))
-      range = s;
+    // Comparison stays length-bounded and full-string only. Preservation
+    // is separate: a printed interval behind unsupported prose or a long
+    // qualification must not disappear merely because it cannot be judged.
+    if (s.length <= 80 && judgedWhole(s)) range = s;
+    else if (hasRangeShape(s) || QUAL_REF.test(s)) rangeRaw = s;
   }
-  return { flag, unit: normUnit(unit), range };
+  return { flag, unit: normUnit(unit), range, rangeRaw };
 }
 
 /**
@@ -377,10 +489,12 @@ export function readLabLine(line) {
     /[a-z]/i.test(test.replace(/\b(ratio|index|score)\b/gi, ""));
   // A number with neither a unit nor a range is too weak to call a result
   // ("Age 23", "Bill 189455"); a qualitative result needs no unit.
-  if (v.qual == null && !t.unit && !t.range && !dimensionless) return null;
+  if (v.qual == null && !t.unit && !t.range && !t.rangeRaw && !dimensionless)
+    return null;
   if (
     v.qual == null &&
     t.range == null &&
+    !t.rangeRaw &&
     !dimensionless &&
     !/[a-z]/i.test(t.unit ?? "")
   )
@@ -394,6 +508,7 @@ export function readLabLine(line) {
     notation: v.notation,
     unit: t.unit,
     range: t.range,
+    rangeRaw: t.rangeRaw,
     flag: t.flag,
   };
 }
@@ -492,7 +607,15 @@ export function readLabText(text) {
             .filter((c) => /(male|female)/i.test(c))
             .join(" ")
         : trimmed;
-      if (extra) prev.range = [prev.range, extra].filter(Boolean).join(" ");
+      if (extra) {
+        // A separate applicability band never replaces the first reference.
+        // Preserve the complete printed note and refuse all comparison.
+        prev.rangeRaw = [prev.rangeRaw || prev.range, extra]
+          .filter(Boolean)
+          .join(" ");
+        prev.range = null;
+        prev.end = start + line.length;
+      }
       continue;
     }
     const h = HEADING_RE.exec(trimmed.replace(/^#+\s*/, ""));

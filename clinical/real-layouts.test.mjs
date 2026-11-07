@@ -113,6 +113,40 @@ test("reference ranges: the patient's sex, adults only, Indian grouping, open bo
   );
   const pm = parseReference("13-99 YRS,M/F:=32.5 +/- 2.5", "male");
   assert.deepEqual([pm.lowN, pm.highN], [30, 35]);
+  // The resolver never picks between conflicting or foreign bands.
+  assert.equal(
+    parseReference("Male:3.5-5.0 Male:4.0-7.0", "male"),
+    null,
+    "duplicate same-sex bands that disagree abstain",
+  );
+  assert.equal(
+    parseReference("Female:3.0-4.5", "male"),
+    null,
+    "a sole opposite-sex band is not this patient's range",
+  );
+  assert.equal(
+    parseReference("13-99 YRS", "male"),
+    null,
+    "a lone age span is an age band, not a reference interval",
+  );
+  assert.equal(
+    parseReference("11.5-15.5child;13-17adult;14-18adult", "male"),
+    null,
+    "duplicate adult bands that disagree abstain",
+  );
+  assert.equal(
+    parseReference("3.5-5.0;4.0-7.0", null),
+    null,
+    "distinct unlabelled bands abstain",
+  );
+  assert.deepEqual(
+    [parseReference("Male:35-104 Male: 35-104", "male")].map((r) => [
+      r.lowN,
+      r.highN,
+    ])[0],
+    [35, 104],
+    "identical duplicates coalesce",
+  );
 });
 test("reference ranges: child report, band labels glued to numbers (no spaces)", () => {
   // RED 2026-11-03: the printed corpus format "11.5-15.5child;13-17adult"
@@ -241,7 +275,10 @@ test("a real-layout report answers the questions people actually ask", () => {
   );
   assert.match(sum.spoken, /I can't diagnose/);
   assert.doesNotMatch(sum.spoken, ALARM);
-  assert.ok(sum.used.length >= 4, "flagged results are cited");
+  // Three flagged results are judged and cited (dengue NS1, platelets,
+  // bilirubin); the neutrophils band "13-99 YRS,M/F:40-75" is applicability-
+  // labelled provenance, quoted but never judged.
+  assert.ok(sum.used.length >= 3, "flagged results are cited");
 
   const plt = clinicalAnswer("my platlets are low?", R);
   assert.match(plt.spoken, /platelet count result is 121000 \/Cmm/);
@@ -257,10 +294,11 @@ test("a real-layout report answers the questions people actually ask", () => {
     /^For your liver tests: direct bilirubin 0\.42 mg\/dL, above the 0 to 0\.3 range/,
   );
   const sgpt = clinicalAnswer("what's my SGPT", R);
-  assert.match(
-    sgpt.spoken,
-    /ALT \(SGPT\) result is 30 U\/L, from 11\/06\/2026\. That's within this lab's range of 21 to 72/,
-  );
+  // "Male:21-72" is a sex-labelled band: quoted as printed, never judged.
+  assert.match(sgpt.spoken, /ALT \(SGPT\) result is 30 U\/L/);
+  assert.match(sgpt.spoken, /21-72/);
+  assert.match(sgpt.spoken, /can't judge|haven't compared|haven't judged/i);
+  assert.doesNotMatch(sgpt.spoken, /within this lab's range/i);
   const tsh = clinicalAnswer("What is my TSH?", R);
   assert.equal(tsh.verdict, "NOT_IN_REPORT");
   assert.match(tsh.spoken, /^I don't see a TSH result in these reports\./);
@@ -372,7 +410,12 @@ test("a row an overlaid stamp crosses answers with provenance, never certainty",
   assert.equal(ratio.suspectObscured, true, "stamp-crossed row flagged");
   assert.equal(creat.suspectObscured, undefined, "clear row untouched");
   const R = [
-    { ...rep, title: "stamped.pdf", sourceId: "s1", haystack: " creatinine bun ratio " },
+    {
+      ...rep,
+      title: "stamped.pdf",
+      sourceId: "s1",
+      haystack: " creatinine bun ratio ",
+    },
   ];
   const ans = clinicalAnswer("What is the BUN creatinine ratio?", R);
   assert.match(ans.spoken, /embedded text reads 14/);
@@ -427,7 +470,12 @@ test("no distance math against a limit a stamp may be covering", () => {
   ];
   const rep = extractReport({ text: "", elements });
   const R = [
-    { ...rep, title: "stamped.pdf", sourceId: "s1", haystack: " ldl cholesterol " },
+    {
+      ...rep,
+      title: "stamped.pdf",
+      sourceId: "s1",
+      haystack: " ldl cholesterol ",
+    },
   ];
   const ans = clinicalAnswer("How far above the LDL limit is it?", R);
   assert.doesNotMatch(ans.spoken, /above the lab's upper limit/);
@@ -496,7 +544,10 @@ test("a stamped copy answers with embedded-text provenance and a caveat", () => 
       haystack: " cholesterol ",
     },
   ]);
-  assert.match(hg.spoken, /embedded text mein Cholesterol, Total ka result 250.70 mg\/dL likha hai/);
+  assert.match(
+    hg.spoken,
+    /embedded text mein Cholesterol, Total ka result 250.70 mg\/dL likha hai/,
+  );
   assert.match(hg.spoken, /overlaid stamp/);
 });
 

@@ -92,6 +92,7 @@ import { openerFor } from "./companion.mjs";
 import { createRssWatchdog } from "./rss-watchdog.mjs";
 import {
   addUpload,
+  findUploadRetry,
   replaceWithText,
   indexable,
   findEntry,
@@ -1378,6 +1379,8 @@ export function createLocalServer({
         e.status = 404;
         throw e;
       }
+      const retry = findUploadRetry(ws, bytes, filename);
+      if (retry) return publicEntry(retry);
       if (
         libraryOf(ws).filter((e) => e.status !== "failed").length >= WS_FILES
       ) {

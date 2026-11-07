@@ -710,7 +710,10 @@
       refreshWorkspace();
     }
     if (state.case !== id) invalidateKeyScope();
-    if (state.case !== id) state.askSeq++; // an answer still arriving is stale
+    if (state.case !== id) {
+      state.askSeq++; // an answer still arriving is stale
+      $(".ask-go").disabled = false;
+    }
     state.case = id;
     syncCallScope();
     $$(".case-tab").forEach((b) =>
@@ -988,6 +991,7 @@
     } catch (e) {
       if (stale()) return;
       if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
+      if (stale()) return;
       const saved =
         window.VM_SNAPSHOT_ANSWERS?.answers?.[`${caseId}|${question}`];
       if (saved) {
@@ -1874,6 +1878,8 @@
     );
 
   let callPending = null;
+  let callAttempt = null;
+  const CALL_SETUP_MS = 90000;
   function startCall() {
     if (state.call) return stopCall();
     if (callPending) return callPending;
@@ -1881,18 +1887,48 @@
     state.ticket = null;
     state.callScope = null;
     callbar.classList.add("busy");
-    const pending = connectCall().finally(() => {
-      if (callPending !== pending) return;
-      callPending = null;
-      if (!state.call) {
-        callbar.classList.remove("busy");
+    const attempt = { active: true, call: null, timer: null };
+    callAttempt = attempt;
+    const deadline = new Promise((resolve) => {
+      attempt.timer = setTimeout(() => {
+        if (callAttempt !== attempt || !attempt.active) return;
+        attempt.active = false;
+        callAttempt = null;
+        const stale = attempt.call;
+        if (stale && state.call === stale) {
+          state.call = null;
+          state.callScope = null;
+          state.ticket = null;
+        }
+        try {
+          stale?.stop();
+        } catch {}
+        callbar.classList.remove("busy", "live");
         $("#call-label").textContent = "Call Voice Memory";
-      }
+        callState(
+          "Call setup timed out. Check microphone permission and your connection, then try again.",
+        );
+        resolve();
+      }, CALL_SETUP_MS);
     });
+    const pending = Promise.race([connectCall(attempt), deadline]).finally(
+      () => {
+        if (callPending !== pending) return;
+        callPending = null;
+        if (!state.call) {
+          clearTimeout(attempt.timer);
+          attempt.active = false;
+          if (callAttempt === attempt) callAttempt = null;
+          callbar.classList.remove("busy");
+          $("#call-label").textContent = "Call Voice Memory";
+        }
+      },
+    );
     callPending = pending;
     return pending;
   }
-  async function connectCall() {
+  async function connectCall(attempt) {
+    const current = () => attempt.active && callAttempt === attempt;
     // Server gate first: when minting is closed, never ask for the
     // microphone - say so and stop. The buttons are hidden in this state;
     // this guard is the programmatic backstop.
@@ -1907,6 +1943,7 @@
     });
     if (state.call) return stopCall();
     await loadBolna().catch(() => {});
+    if (!current()) return;
     if (!window.BolnaWebCall) {
       callState(
         "The call library didn't load. Refresh the page and try again.",
@@ -1927,7 +1964,9 @@
       callState("Checking your upload…");
       try {
         await api(`/workspace/${checkedWorkspace}`);
+        if (!current()) return;
       } catch (e) {
+        if (!current()) return;
         if (state.ws !== checkedWorkspace) {
           callState(
             "Your documents changed while the call was being checked. Start the call again from your current workspace.",
@@ -1980,32 +2019,44 @@
     // Ask for the microphone first: a Bolna session is single-use and expires
     // in about two minutes, so it is minted only once the mic is granted.
     callState("Allow the microphone to start the call…");
+    // Each connect re-picks the device: never show a mic label from a
+    // previous call when this one falls back to default audio.
+    state.mic = null;
     let audio;
     try {
       const pre = await navigator.mediaDevices.getUserMedia({ audio: true });
       pre.getTracks().forEach((tr) => tr.stop());
+      if (!current()) return;
       // Virtual loopback devices (BlackHole, Teams, Soundflower…) are often the
       // system default on creators' Macs and send silence. Prefer a real mic.
-      const mics = (await navigator.mediaDevices.enumerateDevices()).filter(
-        (d) => d.kind === "audioinput",
-      );
-      const virtual =
-        /blackhole|virtual|loopback|soundflower|teams|zoom|obs|aggregate|vb-audio|cable/i;
-      const real = mics.filter((d) => !virtual.test(d.label));
-      const pick =
-        real.find((d) => d.deviceId === "default") ??
-        real.find((d) => /built-in|internal|microphone|mic/i.test(d.label)) ??
-        real[0];
-      if (pick) {
-        audio = {
-          deviceId: { exact: pick.deviceId },
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        };
-        state.mic = pick.label.replace(/^Default - /, "");
+      // Enumeration only picks the device: the mic is already granted, so a
+      // listing failure must fall back to default audio, not report a block.
+      try {
+        const mics = (await navigator.mediaDevices.enumerateDevices()).filter(
+          (d) => d.kind === "audioinput",
+        );
+        if (!current()) return;
+        const virtual =
+          /blackhole|virtual|loopback|soundflower|teams|zoom|obs|aggregate|vb-audio|cable/i;
+        const real = mics.filter((d) => !virtual.test(d.label));
+        const pick =
+          real.find((d) => d.deviceId === "default") ??
+          real.find((d) => /built-in|internal|microphone|mic/i.test(d.label)) ??
+          real[0];
+        if (pick) {
+          audio = {
+            deviceId: { exact: pick.deviceId },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          };
+          state.mic = pick.label.replace(/^Default - /, "");
+        }
+      } catch {
+        /* device listing unavailable: proceed with SDK default audio */
       }
     } catch {
+      if (!current()) return;
       callbar.classList.remove("busy");
       $("#call-label").textContent = "Call Voice Memory";
       callState(
@@ -2013,24 +2064,30 @@
       );
       return;
     }
+    if (!current()) return;
     // Never put a caller through to a sleeping engine: wait for it first.
     if (!state.live) {
       callState("Waking the voice engine (free hosting, up to a minute)…");
       for (let i = 0; i < 24; i++) {
         try {
           const s = await api("/status", {}, 8000);
+          if (!current()) return;
           if (s.cases?.health && s.cases?.deal) break;
         } catch {
           /* still waking */
         }
+        if (!current()) return;
         await sleep(backoff(Math.min(i, 4), { base: 1500, cap: 6000 }));
+        if (!current()) return;
       }
     }
+    if (!current()) return;
     callState("Getting a call line…");
     const call = new window.BolnaWebCall({
       ...(audio ? { audio } : {}),
       getSession: async () => {
-        if (state.call !== call) throw new Error("This call was cancelled.");
+        if (!current() || state.call !== call)
+          throw new Error("This call was cancelled.");
         // The open case or workspace: voice answers from what is on screen.
         const user_data = {
           page: "landing",
@@ -2055,11 +2112,13 @@
         const body = await r.json().catch(() => ({}));
         if (!r.ok)
           throw new Error(body.error || "Couldn't start a call right now.");
-        if (state.call !== call) throw new Error("This call was cancelled.");
+        if (!current() || state.call !== call)
+          throw new Error("This call was cancelled.");
         state.ticket = body.vm_ticket;
         return body;
       },
     });
+    attempt.call = call;
     state.call = call;
     call.on("state-change", (s) => {
       if (state.call !== call) return;
@@ -2070,7 +2129,8 @@
       if (state.call === call) callState("Microphone on · connecting…");
     });
     call.on("call-start", () => {
-      if (state.call !== call) return;
+      if (!current() || state.call !== call) return;
+      clearTimeout(attempt.timer);
       emit("vm:call", "start");
       callbar.classList.remove("busy");
       callbar.classList.add("live");
@@ -2106,13 +2166,23 @@
     call.on("call-end", ({ reason }) => endUi(reason, call));
     try {
       await call.start();
+      if (!current() || state.call !== call) {
+        try {
+          call.stop();
+        } catch {}
+      }
     } catch {
-      endUi("failed", call);
+      if (current()) endUi("failed", call);
     }
   }
 
   function endUi(reason, call = state.call) {
     if (state.call !== call) return;
+    if (callAttempt?.call === call) {
+      callAttempt.active = false;
+      clearTimeout(callAttempt.timer);
+      callAttempt = null;
+    }
     const endedTicket = state.ticket;
     callPending = null;
     emit("vm:call", "end");

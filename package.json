@@ -12,7 +12,7 @@
     "format:check": "prettier --check \"src/*.{mjs,ts}\" \"tests/*.mjs\" \"tests/vendor/*\" \"scripts/*.mjs\" \"*.{mjs,json}\" \"mcp/*.mjs\" public/* memory/* evaluation/vault/*",
     "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:vault && npm run test:browser && npm run test:graph && npm run test:upload-ui && npm run test:controls-ui && npm run test:cold-connect-ui && npm run test:document-ui && npm run test:call-ui",
     "test:evaluation": "node --test evaluation/*.test.mjs",
-    "test:ingest": "node --test --test-concurrency=1 ingest/*.test.mjs",
+    "test:ingest": "node --test --test-concurrency=1 ingest/*.test.mjs tests/ocr-admission.test.mjs tests/format-isolation.test.mjs tests/pdf-runtime-isolation.test.mjs",
     "bench:ingest": "node ingest/bench.mjs",
     "fixtures:build": "node ingest/fixtures/build.mjs && python3 ingest/fixtures/degrade.py",
     "test:clinical": "VM_RSS_WATCHDOG=off node --test --test-concurrency=1 clinical/*.test.mjs",
@@ -34,8 +34,8 @@
     "test:upload-ui": "node tests/upload-ui-check.mjs",
     "test:controls-ui": "node tests/controls-ui-check.mjs && node tests/byo-controls-ui-check.mjs",
     "test:cold-connect-ui": "node tests/cold-connect-ui-check.mjs",
-    "test:document-ui": "node tests/generic-doc-ui-check.mjs && node tests/source-viewer-isolation-ui-check.mjs && node tests/workspace-recovery-ui-check.mjs && node tests/late-workspace-answer-ui-check.mjs",
-    "test:call-ui": "node tests/call-workspace-race-ui-check.mjs && node tests/call-single-flight-ui-check.mjs && node tests/call-lifecycle-ui-check.mjs && node tests/call-scope-response-ui-check.mjs",
+    "test:document-ui": "node tests/generic-doc-ui-check.mjs && node tests/source-viewer-isolation-ui-check.mjs && node tests/workspace-recovery-ui-check.mjs && node tests/late-workspace-answer-ui-check.mjs && node tests/case-switch-ask-ui-check.mjs",
+    "test:call-ui": "node tests/call-workspace-race-ui-check.mjs && node tests/call-single-flight-ui-check.mjs && node tests/call-lifecycle-ui-check.mjs && node tests/call-scope-response-ui-check.mjs && node tests/call-device-enumeration-ui-check.mjs && node tests/call-setup-timeout-ui-check.mjs",
     "test:identifiers": "node --test tests/identifier-support.test.mjs tests/identifier-api.test.mjs"
   },
   "dependencies": {

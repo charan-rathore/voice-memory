@@ -5,7 +5,7 @@ import { IngestError, LIMITS, OCR_REVIEW_CONFIDENCE } from "./errors.mjs";
 import { imageDimensions } from "./detect.mjs";
 import { recognize, OCR_ENGINE } from "./ocr.mjs";
 
-export async function parseImage(buf, kind) {
+export async function parseImage(buf, kind, { waitForOcr = null } = {}) {
   const dims = imageDimensions(buf, kind);
   if (!dims || !dims.width || !dims.height)
     throw new IngestError(
@@ -19,6 +19,7 @@ export async function parseImage(buf, kind) {
       `This image is ${dims.width}×${dims.height} pixels. The limit is ${Math.round(LIMITS.maxImagePixels / 1e6)} megapixels.`,
       { stage: "parsing" },
     );
+  if (waitForOcr) await waitForOcr();
   let res;
   try {
     res = await recognize(buf);
@@ -40,6 +41,11 @@ export async function parseImage(buf, kind) {
     return {
       type: "paragraph",
       text: p.text.replace(/\n/g, " "),
+      sourceLines: p.lines.map((l) => ({
+        rawText: l.rawText ?? l.text,
+        bbox: [l.bbox.x0, l.bbox.y0, l.bbox.x1, l.bbox.y1],
+        confidence: l.confidence,
+      })),
       page: 1,
       bbox: [p.bbox.x0, p.bbox.y0, p.bbox.x1, p.bbox.y1],
       method: "ocr",

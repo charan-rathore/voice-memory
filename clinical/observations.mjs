@@ -309,6 +309,7 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
       unit: normUnit(r.unit),
       unitRaw: r.unit,
       range: r.range,
+      rangeRaw: r.rangeRaw ?? null,
       flag: r.flag,
       flagConflict: flagConflict(r, r.range, r.flag),
       qual: r.qual,
@@ -568,16 +569,111 @@ export function packetSegments(doc) {
  * read from the record's own text.
  */
 export function extractSegment(doc, seg) {
-  const inside = new Set(seg.pages);
-  const text =
+  if (
+    !Number.isInteger(seg.start) ||
+    !Number.isInteger(seg.end) ||
+    seg.start < 0 ||
+    seg.end > doc.text.length ||
+    seg.start >= seg.end
+  )
+    throw new RangeError("Invalid record segment span");
+  const inside = new Set(seg.pages ?? []);
+  // A record boundary inside an extracted line does not prove that the
+  // surviving label/value/unit fragment is a complete observation. Keep
+  // whole lines within the supplied span, never synthesize a shorter row.
+  const lineStart =
+    seg.start === 0 || doc.text[seg.start - 1] === "\n"
+      ? seg.start
+      : doc.text.indexOf("\n", seg.start);
+  const safeStart = lineStart < 0 ? seg.end : Math.min(lineStart, seg.end);
+  const safeEnd =
+    seg.end === doc.text.length || doc.text[seg.end] === "\n"
+      ? seg.end
+      : Math.max(seg.start, doc.text.lastIndexOf("\n", seg.end - 1));
+  const contained = (e) =>
+    Number.isInteger(e.start) &&
+    Number.isInteger(e.end) &&
+    e.start >= seg.start &&
+    e.end <= seg.end &&
+    e.start < e.end;
+  const elements = doc.elements.filter(
+    (e) => e.type !== "table" && e.type !== "table-header" && contained(e),
+  );
+  // A paragraph can contain several complete source lines. Keep location
+  // metadata for those lines without copying any out-of-span text. Its
+  // original bbox is only the containing region, not a new precise crop.
+  for (const e of doc.elements) {
+    if (
+      e.type !== "paragraph" ||
+      contained(e) ||
+      !Number.isInteger(e.start) ||
+      !Number.isInteger(e.end)
+    )
+      continue;
+    const start = Math.max(e.start, safeStart);
+    const end = Math.min(e.end, safeEnd);
+    if (start < end)
+      elements.push({ ...e, start, end, text: doc.text.slice(start, end) });
+  }
+  // Overlays deliberately have no indexed span. Keep their conservative
+  // page-local obstruction signal; dropping them would certify stamped
+  // values that the full-document reader treats as suspected-covered.
+  const retainedPages = new Set(
+    elements.map((e) => e.page).filter((p) => p != null),
+  );
+  elements.push(
+    ...doc.elements.filter(
+      (e) =>
+        e.type === "overlay" && (e.page == null || retainedPages.has(e.page)),
+    ),
+  );
+  // A table may straddle a supplied boundary. Only complete rows belong to
+  // this segment. Its header describes column roles, not record identity;
+  // retain that structural context even when the header precedes the span.
+  // Never keep the original parent's rows payload: it can contain other
+  // records' values. Observation source offsets remain the original row's.
+  for (const table of doc.elements.filter((e) => e.type === "table")) {
+    const rows = elements.filter(
+      (e) => e.type === "table-row" && e.parent === table.id,
+    );
+    if (!rows.length) continue;
+    const header = doc.elements.find(
+      (e) => e.type === "table-header" && e.parent === table.id,
+    );
+    if (!header) continue;
+    elements.push(
+      {
+        ...table,
+        start: Math.max(seg.start, table.start),
+        end: Math.min(seg.end, table.end),
+        rows: undefined,
+      },
+      header,
+    );
+  }
+  let text =
     " ".repeat(seg.start) +
     doc.text.slice(seg.start, seg.end) +
-    " ".repeat(Math.max(0, doc.text.length - seg.end));
+    " ".repeat(doc.text.length - seg.end);
+  // A cut row must not re-enter through the text-line fallback with its
+  // surviving fragment. Mask it without shifting any canonical offsets.
+  for (const row of doc.elements.filter((e) => e.type === "table-row")) {
+    if (contained(row) || !(row.start < seg.end && row.end > seg.start))
+      continue;
+    const a = Math.max(seg.start, row.start);
+    const b = Math.min(seg.end, row.end);
+    text = text.slice(0, a) + " ".repeat(b - a) + text.slice(b);
+  }
+  const mask = (a, b) => {
+    if (a < b) text = text.slice(0, a) + " ".repeat(b - a) + text.slice(b);
+  };
+  mask(seg.start, safeStart);
+  mask(Math.max(seg.start, safeEnd), seg.end);
   const part = {
     ...doc,
     text,
-    elements: doc.elements.filter((e) => inside.has(e.page)),
+    elements,
     pages: (doc.pages ?? []).filter((p) => inside.has(p.number)),
   };
-  return extractReport(part, { metaText: doc.text.slice(seg.start, seg.end) });
+  return extractReport(part, { metaText: text.slice(seg.start, seg.end) });
 }
