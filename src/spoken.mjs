@@ -1,3 +1,4 @@
+import { unboundOwnerTurn } from "./requested-owner.mjs";
 import { terms, extractiveSpoken } from "./spoken-extract.mjs";
 // spoken.mjs - deterministic spoken renderer for the voice path.
 // The engine (answer/extractClaims/resolveClaims) stays the authority on
@@ -1321,6 +1322,8 @@ function evidenceLookup(question, bundle, requireDigit = false) {
 
 export function spokenTurn(rawQuestion, bundle, prevField = null) {
   if (!bundle?.sources?.length) return null;
+  const ownerBlocked = unboundOwnerTurn(rawQuestion, bundle);
+  if (ownerBlocked) return ownerBlocked;
   // Speech notation -> document notation (numbers, ordinals, fillers).
   const question = normalizeSpoken(rawQuestion);
   if (identifierRequest(question)) {

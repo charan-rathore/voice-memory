@@ -64,3 +64,29 @@ test("recogniser spellings: bare digits and dropped -ed", () => {
   assert.equal(normalizeSpoken("room 4512 is booked"), "room 4512 is booked");
   assert.equal(normalizeSpoken("is the fee 9500"), "is the fee $9,500");
 });
+
+test("identifier digits are literal: normalization must not add leading zeroes", () => {
+  for (const id of [
+    "SYN-392",
+    "SYN-0392",
+    "SYN-0003",
+    "SYN-00017",
+    "QZ_7",
+    "QZ_0007",
+    "AB-00000017",
+  ])
+    assert.equal(
+      normalizeSpoken(`What is ${id} total?`),
+      `What is ${id} total?`,
+    );
+  assert.equal(normalizeSpoken("syn 392"), "SYN-392");
+});
+
+test("many literal identifiers survive one question", () => {
+  const ids = Array.from(
+    { length: 40 },
+    (_, i) => `RX_${String(i).padStart(6, "0")}`,
+  );
+  const q = "Compare " + ids.join(" and ");
+  assert.equal(normalizeSpoken(q), q);
+});

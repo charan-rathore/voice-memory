@@ -270,6 +270,7 @@
     OPEN: ["v-warn", "Still open"],
     "NO-RECORD": ["v-no", "Not on record"],
     UNKNOWN: ["v-no", "Not in these documents"],
+    UNBOUND_OWNER: ["v-ask", "Record identity unresolved"],
     EXPLAINED: ["v-ok", "Explained"],
     NO_REASON: ["v-warn", "No reason recorded"],
     DEFINED: ["v-ask", "General meaning"],

@@ -267,3 +267,282 @@ test("records about different patients never supersede each other", async () => 
     assert.ok(!a || !b || a === b, `${e.from} (${a}) replaces ${e.to} (${b})`);
   }
 });
+
+test("records graph: an unidentified record never supersedes a known patient's record", () => {
+  const src = { id: "h", title: "harborline.pdf", text: "placeholder" };
+  const mk = (index, patient, authority, value) => ({
+    index,
+    pages: [index],
+    patient,
+    start: 0,
+    end: 0,
+    title: "Billing",
+    status: authority === "authoritative" ? "FINAL POSTED" : "ESTIMATE ONLY",
+    authority,
+    facts: [
+      {
+        id: `${index}.1`,
+        record: index,
+        concept: "total charges",
+        line: null,
+        label: "Total charges",
+        value,
+        start: 0,
+        end: 1,
+      },
+    ],
+  });
+  const graphOf = (records) =>
+    recordGraph({ sources: [src], records: [{ source: src, records }] });
+  const supOf = (g) => g.edges.filter((e) => e.kind === "supersedes");
+  // An unidentified FINAL record must not replace a known patient's ESTIMATE.
+  const anonOverKnown = graphOf([
+    mk(1, "HLG-P1047", "provisional", "USD 100.00"),
+    mk(2, null, "authoritative", "USD 150.00"),
+  ]);
+  assert.equal(
+    supOf(anonOverKnown).length,
+    0,
+    "unidentified record replaced a known patient's record",
+  );
+  // Same patient, preliminary vs amended: the chain still works.
+  const samePatient = graphOf([
+    mk(3, "HLG-P1047", "provisional", "USD 100.00"),
+    mk(4, "HLG-P1047", "authoritative", "USD 150.00"),
+  ]);
+  assert.equal(
+    supOf(samePatient).length,
+    1,
+    "same-patient correction no longer supersedes",
+  );
+  // Both unidentified: existing competition behavior is unchanged.
+  const bothAnon = graphOf([
+    mk(5, null, "provisional", "USD 100.00"),
+    mk(6, null, "authoritative", "USD 150.00"),
+  ]);
+  assert.equal(supOf(bothAnon).length, 1);
+});
+
+test("fact answers: an unidentified record does not supersede a known patient's record", () => {
+  const src = {
+    id: "h",
+    text: "Total charges USD 100.00 estimated. Total charges USD 150.00 final.",
+  };
+  const mk = (index, patient, authority, value) => ({
+    index,
+    pages: [index],
+    patient,
+    start: 0,
+    end: 0,
+    title: "Billing",
+    status: authority === "authoritative" ? "FINAL POSTED" : "ESTIMATE ONLY",
+    authority,
+    facts: [
+      {
+        id: `${index}.1`,
+        record: index,
+        concept: "total charges",
+        line: null,
+        label: "Total charges",
+        value,
+        start: 0,
+        end: 1,
+      },
+    ],
+  });
+  const a = factAnswer("What were the total charges?", [
+    {
+      source: src,
+      records: [
+        mk(1, "HLG-P1047", "provisional", "USD 100.00"),
+        mk(2, null, "authoritative", "USD 150.00"),
+      ],
+    },
+  ]);
+  assert.ok(a);
+  assert.match(a.spoken, /150/);
+  assert.equal(
+    a.superseded.length,
+    0,
+    "a known patient's record was called superseded by an unidentified record",
+  );
+});
+
+test("a fact's citation page comes from its own span, not the record's first page", () => {
+  const t1 =
+    "Billing Summary\n\n| Item | Amount |\n| Consultation | USD 100.00 |\n";
+  const t2 =
+    "Billing Summary\n\n| Item | Amount |\n| Total charges | USD 150.00 |\n";
+  const text = t1 + t2;
+  const doc = {
+    text,
+    pages: [{ number: 1 }, { number: 2 }],
+    elements: [
+      {
+        id: "h1",
+        type: "heading",
+        text: "Billing Summary",
+        page: 1,
+        start: 0,
+        end: 15,
+        indexed: true,
+      },
+      {
+        id: "t1",
+        type: "table",
+        page: 1,
+        start: 17,
+        end: t1.length - 1,
+        indexed: true,
+      },
+      {
+        id: "h2",
+        type: "heading",
+        text: "Billing Summary",
+        page: 2,
+        start: t1.length,
+        end: t1.length + 15,
+        indexed: true,
+      },
+      {
+        id: "t2",
+        type: "table",
+        page: 2,
+        start: t1.length + 17,
+        end: text.length - 1,
+        indexed: true,
+      },
+    ],
+  };
+  const recs = recordsOf(doc);
+  assert.equal(recs.length, 1);
+  assert.deepEqual(recs[0].pages, [1, 2]);
+  const f150 = recs[0].facts.find((f) => /150/.test(f.value));
+  assert.ok(f150, "page-2 fact missing");
+  assert.deepEqual(f150.pages, [2], "fact pages not resolved from its span");
+  const src = { id: "s", title: "bill.pdf", text };
+  const g = recordGraph({
+    sources: [src],
+    records: [{ source: src, records: recs }],
+  });
+  const n = g.nodes.find((n) => n.kind === "value" && /150/.test(n.label));
+  assert.ok(n, "graph node for page-2 fact missing");
+  assert.equal(n.evidence.page, 2, "citation page is the record's first page");
+});
+
+test("a question naming a patient is never answered from an unidentified record", () => {
+  const src = {
+    id: "h",
+    text: "Ferritin HLG-P1047 5 ng/mL preliminary. Ferritin 50 ng/mL amended. Ferritin 8 ng/mL.",
+  };
+  const mk = (index, patient, authority, value) => ({
+    index,
+    pages: [index],
+    patient,
+    start: 0,
+    end: 0,
+    title: "Lab",
+    status: authority === "authoritative" ? "AMENDED" : "PRELIMINARY",
+    authority,
+    facts: [
+      {
+        id: `${index}.1`,
+        record: index,
+        concept: "ferritin",
+        line: null,
+        label: "Ferritin",
+        value,
+        start: 0,
+        end: 1,
+      },
+    ],
+  });
+  const a = factAnswer("What was HLG-P1047 ferritin?", [
+    {
+      source: src,
+      records: [
+        mk(1, "HLG-P1047", "provisional", "5 ng/mL"),
+        mk(2, null, "authoritative", "50 ng/mL"),
+        mk(3, "HLG-P1048", "authoritative", "8 ng/mL"),
+      ],
+    },
+  ]);
+  assert.ok(a, "named patient's own record should answer");
+  assert.equal(a.record.patient, "HLG-P1047");
+  assert.match(a.spoken, /5 ng\/mL/);
+  // When the named patient has no record of the fact, fail closed instead
+  // of borrowing an unidentified record.
+  const b = factAnswer("What was HLG-P1048 TSH?", [
+    {
+      source: src,
+      records: [mk(4, null, "authoritative", "1.4 mIU/L")],
+    },
+  ]);
+  assert.equal(b, null, "unidentified record answered for a named patient");
+});
+
+test("a name-only question over two same-name patients clarifies, never picks", () => {
+  const text1 =
+    "PATIENT NAME | PATIENT ID\nMaya Sharma | HLG-P1047\n\n| Test | Value |\n| Ferritin | 5 ng/mL |";
+  const text2 =
+    "PATIENT NAME | PATIENT ID\nMaya Sharma | HLG-P1048\n\n| Test | Value |\n| Ferritin | 8 ng/mL";
+  const mk = (index, patient, value, start, end) => ({
+    index,
+    pages: [index],
+    patient,
+    start,
+    end,
+    title: "Lab Results",
+    status: "FINAL",
+    authority: "authoritative",
+    facts: [
+      {
+        id: `${index}.1`,
+        record: index,
+        concept: "ferritin",
+        line: null,
+        label: "Ferritin",
+        value,
+        start,
+        end: Math.min(start + 8, end),
+      },
+    ],
+  });
+  const src = { id: "h", text: text1 + "\n\n" + text2 };
+  const records = [
+    mk(1, "HLG-P1047", "5 ng/mL", 0, text1.length),
+    mk(2, "HLG-P1048", "8 ng/mL", text1.length + 2, src.text.length),
+  ];
+  const a = factAnswer("What was Maya Sharma ferritin?", [
+    { source: src, records },
+  ]);
+  assert.ok(a, "an ambiguity must still answer with a clarification");
+  assert.equal(a.clarify, true);
+  assert.equal(a.lead, null, "no value may be picked for an ambiguous name");
+  assert.match(a.spoken, /HLG-P1047/);
+  assert.match(a.spoken, /HLG-P1048/);
+  for (const q of [
+    "what was maya sharma ferritin?",
+    "WHAT WAS MAYA SHARMA FERRITIN?",
+  ]) {
+    const lower = factAnswer(q, [{ source: src, records }]);
+    assert.equal(
+      lower?.clarify,
+      true,
+      "name identity must not depend on capitalization",
+    );
+    assert.equal(lower.lead, null);
+  }
+  // One patient with that name: answered normally.
+  const b = factAnswer("What was Maya Sharma ferritin?", [
+    { source: src, records: [records[0]] },
+  ]);
+  assert.ok(b && !b.clarify);
+  assert.match(b.spoken, /5 ng\/mL/);
+  // A question naming the ID is specific: no clarification needed.
+  const c = factAnswer("What was HLG-P1048 ferritin?", [
+    { source: src, records },
+  ]);
+  assert.ok(c && !c.clarify);
+  assert.match(c.spoken, /8 ng\/mL/);
+});

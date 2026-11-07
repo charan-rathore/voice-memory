@@ -119,6 +119,31 @@ const group = (n) => n.toLocaleString("en-US");
  * the tens: 95 * 100.
  */
 export function normalizeSpoken(raw) {
+  const original = String(raw ?? "");
+  const protectedIds = [];
+  let marker = "zzliteralidentifierzz";
+  while (original.includes(marker)) marker += "z";
+  const encoded = original.replace(
+    /\b[A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)+\b/g,
+    (token) => {
+      if (!/\d/.test(token)) return token;
+      let n = protectedIds.length,
+        suffix = "";
+      do {
+        suffix = String.fromCharCode(97 + (n % 26)) + suffix;
+        n = Math.floor(n / 26) - 1;
+      } while (n >= 0);
+      const key = marker + suffix + marker;
+      protectedIds.push({ key, token });
+      return key;
+    },
+  );
+  let result = normalizeSpokenText(encoded);
+  for (const { key, token } of protectedIds)
+    result = result.replace(key, token);
+  return result;
+}
+function normalizeSpokenText(raw) {
   let s = String(raw ?? "");
   // Fillers and hesitation tokens that carry no meaning.
   s = s.replace(
@@ -127,10 +152,7 @@ export function normalizeSpoken(raw) {
   );
   s = s.replace(/^\s*(?:so|okay|ok|right|and|but|well|hey)\b[,\s]+/i, "");
   // Patient IDs as typed or heard: "syn 0003", "SYN0003" -> "SYN-0003".
-  s = s.replace(
-    /\bsyn\s*[- ]?\s*(\d{3,4})\b/gi,
-    (m, d) => `SYN-${d.padStart(4, "0")}`,
-  );
+  s = s.replace(/\bsyn\s*[- ]?\s*(\d{3,4})\b/gi, (m, d) => `SYN-${d}`);
   // "go live" / "going live" / "golive" -> the documents' "go-live".
   s = s.replace(/\bgo(?:ing)?[\s-]?live\b/gi, (m) =>
     /going/i.test(m) ? "going live (go-live)" : "go-live",
