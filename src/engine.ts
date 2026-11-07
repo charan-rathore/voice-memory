@@ -1,3 +1,5 @@
+import { lookupIdentifier } from "./identifier-support";
+export { identifierRequest, lookupIdentifier } from "./identifier-support";
 import { contextReview } from "./context";
 import {
   expandQuery,
@@ -341,6 +343,64 @@ export function answer(
   // only attempted when the untouched question grounds nothing.
   const fields = questionFields(question);
   let found = retrieve(question);
+  const identifier = lookupIdentifier(question, bundle.sources);
+  if (identifier) {
+    // Identifier values use exact declarative/record bindings, not relevance
+    // scores or another field's nearby number. Keep canonical source spans.
+    const result = answerFromRetrieval(
+      question,
+      bundle,
+      found,
+      {
+        actualMode: found.actualMode,
+        embeddingModel:
+          found.actualMode === "keyword" ? null : (dense?.model ?? null),
+      },
+      start,
+    );
+    const bound = identifier.facts.map((fact) => {
+      const source = bundle.sources.find((s) => s.id === fact.source.id);
+      if (!source)
+        throw Error("Identifier source does not match its original document.");
+      return {
+        sourceId: source.id,
+        title: source.title,
+        hash: source.hash,
+        start: fact.start,
+        end: fact.end,
+        firstLine: lineOf(source.text, fact.start),
+        lastLine: lineOf(source.text, fact.end),
+        quote: source.text.slice(fact.start, fact.end),
+      };
+    });
+    bound.forEach((e) => validateEvidence(e, bundle));
+    result.reviewEvidence = identifier.supported
+      ? []
+      : bound.length
+        ? bound
+        : result.evidence;
+    result.evidence = identifier.supported ? bound : [];
+    result.supported = identifier.supported;
+    result.refused = !identifier.supported;
+    result.unresolved = identifier.ambiguous;
+    result.evidenceStatus = identifier.supported
+      ? "positive"
+      : identifier.ambiguous
+        ? "ambiguous"
+        : "insufficient";
+    result.answer = identifier.supported
+      ? [...new Set(identifier.facts.map((f) => f.spoken))].join("\n")
+      : identifier.ambiguous
+        ? "The requested identifier is unresolved in these documents. Review the source records."
+        : "I couldn't bind the requested identifier to this subject in these documents.";
+    result.spoken = result.answer;
+    result.partial = identifier.supported && result.context.reviewNeeded;
+    if (!result.partial) result.partialNotice = null;
+    result.mode = "Local source-bound identifier lookup with exact citations.";
+    result.latencyMs = Math.round(performance.now() - start);
+    return result;
+  }
+
   let expansionUsed: ReturnType<typeof expandQuery> | null = null;
   if (found.evidence !== "positive") {
     const expansion = expandQuery(question);
