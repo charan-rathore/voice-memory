@@ -214,10 +214,25 @@ function uniqueTitle(lib, name) {
  * Accept an upload. Returns the entry immediately; parsing continues in the
  * background and calls `rebuild(s)` when the index must change.
  */
+export function findUploadRetry(s, bytes, filename) {
+  const name = safeFilename(filename);
+  const hash = createHash("sha256").update(bytes).digest("hex");
+  return (
+    libraryOf(s).find(
+      (e) =>
+        e.status !== "failed" &&
+        e.filename === name &&
+        (e.hash === hash || (!e.hash && e.original?.equals(bytes))),
+    ) ?? null
+  );
+}
+
 export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
   const lib = libraryOf(s);
   const name = safeFilename(filename);
   const live = lib.filter((e) => e.status !== "failed");
+  const dup = findUploadRetry(s, bytes, name);
+  if (dup) return dup;
   if (live.length >= MAX_LIBRARY_DOCS) {
     const err = Error(
       `You can keep up to ${MAX_LIBRARY_DOCS} documents in a session. Remove one to add another.`,
@@ -247,6 +262,7 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
   const entry = {
     id: randomUUID(),
     filename: name,
+    hash: createHash("sha256").update(bytes).digest("hex"),
     title: uniqueTitle(lib, name),
     kind: null,
     bytes: bytes.length,

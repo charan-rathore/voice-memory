@@ -1333,3 +1333,67 @@ test("workspace-scoped mint: a dead workspace gets 410 and the allowance back", 
     restore();
   }
 });
+
+test("same-file HTTP retry keeps one workspace upload and isolates another workspace", async () => {
+  const isolated = createLocalServer({ port: 0 });
+  await new Promise((r) => isolated.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${isolated.address().port}`;
+  try {
+    const create = async () =>
+      (
+        await (
+          await fetch(base + "/api/public/workspace", { method: "POST" })
+        ).json()
+      ).id;
+    const ws = await create(),
+      other = await create();
+    const body =
+      "Fictional retry report. The source marker is CEDAR-LANTERN. Operators review each quoted line before use.";
+    const upload = async (id) => {
+      const r = await fetch(base + "/api/public/workspace/" + id + "/upload", {
+        method: "POST",
+        headers: { "content-type": "text/plain", "x-file-name": "retry.txt" },
+        body,
+      });
+      assert.equal(r.status, 202);
+      return (await r.json()).document;
+    };
+    const a = await upload(ws),
+      b = await upload(ws);
+    assert.equal(b.id, a.id, "HTTP retry returns original handle");
+    for (let i = 1; i < 5; i++) {
+      const r = await fetch(base + "/api/public/workspace/" + ws + "/upload", {
+        method: "POST",
+        headers: { "x-file-name": "extra" + i + ".txt" },
+        body: "Fictional separate source " + i,
+      });
+      assert.equal(r.status, 202);
+    }
+    assert.equal(
+      (await upload(ws)).id,
+      a.id,
+      "retry at public workspace capacity reuses handle",
+    );
+    const overflow = await fetch(
+      base + "/api/public/workspace/" + ws + "/upload",
+      {
+        method: "POST",
+        headers: { "x-file-name": "overflow.txt" },
+        body: "Different fictional source",
+      },
+    );
+    assert.equal(overflow.status, 409, "new file still refused at capacity");
+    const c = await upload(other);
+    assert.notEqual(c.id, a.id, "other workspace independent");
+    const status = await (
+      await fetch(base + "/api/public/workspace/" + ws)
+    ).json();
+    assert.equal(
+      status.documents.length,
+      5,
+      "HTTP retry at capacity consumes no extra document slot",
+    );
+  } finally {
+    await new Promise((r) => isolated.close(r));
+  }
+});
