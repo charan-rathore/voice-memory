@@ -231,7 +231,13 @@ export function findUploadRetry(s, bytes, filename) {
   );
 }
 
-export function addUpload(s, bytes, filename, rebuild, { before = null, after = null } = {}) {
+export function addUpload(
+  s,
+  bytes,
+  filename,
+  rebuild,
+  { before = null, after = null } = {},
+) {
   const lib = libraryOf(s);
   const name = safeFilename(filename);
   const live = lib.filter((e) => e.status !== "failed");
@@ -386,10 +392,13 @@ export function addUpload(s, bytes, filename, rebuild, { before = null, after = 
             Promise.resolve().then(() => before()),
             new Promise((_, reject) => {
               timer = setTimeout(
-                () => reject(Object.assign(
-                  Error("Preparing the document reader timed out."),
-                  { code: "prepare_timeout" },
-                )),
+                () =>
+                  reject(
+                    Object.assign(
+                      Error("Preparing the document reader timed out."),
+                      { code: "prepare_timeout" },
+                    ),
+                  ),
                 15000,
               );
             }),
@@ -533,7 +542,11 @@ export function addUpload(s, bytes, filename, rebuild, { before = null, after = 
             message: e?.message || "The document could not be indexed.",
           };
           set("failed");
-          try { rebuild(s); } catch { /* preserve the preceding bundle */ }
+          try {
+            rebuild(s);
+          } catch {
+            /* preserve the preceding bundle */
+          }
         }
         return;
       }
@@ -550,25 +563,34 @@ export function addUpload(s, bytes, filename, rebuild, { before = null, after = 
         };
         entry.doc = null;
         set("failed");
-        try { rebuild(s); } catch { /* preserve the preceding bundle */ }
+        try {
+          rebuild(s);
+        } catch {
+          /* preserve the preceding bundle */
+        }
       }
     } catch (e) {
       const wasIndexed = entry.status === "partial";
       entry.error = {
-        code: preparing && entry.status === "preparing"
-          ? (e?.code || "prepare_failed")
-          : "parse_failed",
-        stage: preparing && entry.status === "preparing"
-          ? "preparing"
-          : "parsing",
-        message: preparing && entry.status === "preparing"
-          ? "The document reader could not prepare safely. Try again."
-          : "This file could not be read.",
+        code:
+          preparing && entry.status === "preparing"
+            ? e?.code || "prepare_failed"
+            : "parse_failed",
+        stage:
+          preparing && entry.status === "preparing" ? "preparing" : "parsing",
+        message:
+          preparing && entry.status === "preparing"
+            ? "The document reader could not prepare safely. Try again."
+            : "This file could not be read.",
       };
       entry.doc = null;
       set("failed");
       if (wasIndexed)
-        try { rebuild(s); } catch { /* preserve the preceding bundle */ }
+        try {
+          rebuild(s);
+        } catch {
+          /* preserve the preceding bundle */
+        }
     } finally {
       // Balanced for rejected admission, failed preparation, OCR timeouts and
       // successful parses; never resume the dense model at a fixed timer.
