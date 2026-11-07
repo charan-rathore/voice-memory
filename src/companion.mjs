@@ -75,6 +75,7 @@ const KIND = {
   NOT_IN_REPORT: "absent",
   NOT_IN_DOCUMENTS: "absent",
   UNKNOWN: "absent",
+  UNBOUND_OWNER: "refuse",
   NO_REASON: "absent",
   EXPLAINED: "explain",
   TERM: "explain",

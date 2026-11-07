@@ -382,6 +382,7 @@ const LEAD_VERDICT = {
   LATEST: ["positive", "supported", "From the latest report"],
   SINGLE: ["positive", "supported", "Only one result on record"],
   NOT_COMPARABLE: ["unresolved", "conflict", "Not comparable as printed"],
+  UNBOUND_OWNER: ["unresolved", "conflict", "Record identity unresolved"],
   AMBIGUOUS_PATIENT: ["unresolved", "conflict", "More than one patient"],
 };
 const VERDICT = {

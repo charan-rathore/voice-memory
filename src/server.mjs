@@ -1,3 +1,4 @@
+import { unboundRequestedOwner } from "./requested-owner.mjs";
 import http from "node:http";
 import path from "node:path";
 import { createCallCounters } from "./public-call-counters.mjs";
@@ -854,6 +855,25 @@ export function createLocalServer({
             evidence: [],
           },
         };
+      const unbound = unboundRequestedOwner(original, bundle);
+      if (unbound)
+        return {
+          raw: null,
+          shown: {
+            lead: {
+              text: "I cannot bind the requested identifier to a record in these documents. I will not substitute another record's facts.",
+              verdict: "UNBOUND_OWNER",
+              field: null,
+              citations: [],
+            },
+            evidence: [],
+            semantic: {
+              intent: "UNBOUND_OWNER",
+              lang,
+              steps: ["requested_owner_unbound"],
+            },
+          },
+        };
       const { raw, shown } = await deterministicAnswer(s, question, ctx);
       // A missing identifier binding cannot be rescued with a different field
       // or a provider-generated interpretation of nearby numbers.
@@ -987,10 +1007,11 @@ export function createLocalServer({
           fa &&
           openLead &&
           !(
-            fa.record.authority === "authoritative" &&
+            fa.record?.authority === "authoritative" &&
             (fa.superseded?.length ||
               !String(shown.lead.text).includes(
-                String(fa.lead.value).match(/\d[\d,.]*/)?.[0] ?? "\u0000",
+                String(fa.lead?.value ?? "").match(/\d[\d,.]*/)?.[0] ??
+                  "\u0000",
               ))
           )
         )
@@ -999,15 +1020,17 @@ export function createLocalServer({
           sectioned = true;
           shown.lead = {
             text: fa.spoken,
-            verdict: "QUOTED",
+            verdict: fa.clarify ? "AMBIGUOUS_PATIENT" : "QUOTED",
             field: null,
             citations: fa.citations,
-            record: {
-              title: fa.record.title,
-              pages: fa.record.pages,
-              status: fa.record.status,
-              authority: fa.record.authority,
-            },
+            record: fa.record
+              ? {
+                  title: fa.record.title,
+                  pages: fa.record.pages,
+                  status: fa.record.status,
+                  authority: fa.record.authority,
+                }
+              : null,
           };
         }
       }

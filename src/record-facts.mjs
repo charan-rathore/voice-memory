@@ -1,3 +1,8 @@
+import {
+  recordOwnerIds,
+  recordPatientIds,
+  namedRecordOwners,
+} from "./requested-owner.mjs";
 // Records and facts: what each record in a document states, with its
 // authority, as source-anchored label -> value pairs.
 //
@@ -16,6 +21,7 @@
 // Used by the fact answers (factAnswer), the evidence graph and the reading
 // view's digest, so all three show the same grounded structure.
 import { packetSegments, reportMeta } from "../clinical/observations.mjs";
+import { locate } from "../ingest/canonical.mjs";
 import { stemToken } from "./rag-tokens.mjs";
 
 const PROVISIONAL =
@@ -335,6 +341,7 @@ export function recordsOf(doc) {
         record: seg.index,
         concept,
         line: money && !concept ? lineKey(f.label) : null,
+        pages: locate(doc, f.start, f.end).pages,
         ...f,
       };
     });
@@ -463,12 +470,70 @@ export function factAnswer(question, entries) {
     for (const r of en.records ?? [])
       for (const f of r.facts) all.push({ en, r, f });
   // A question naming a patient ID is about that patient's records only.
-  const upper = question.toUpperCase();
-  const named = [
-    ...new Set(all.map((c) => c.r.patient).filter(Boolean)),
-  ].filter((id) => upper.includes(id));
+  const named = namedRecordOwners(
+    question,
+    all.map((c) => c.r),
+  );
   if (named.length)
-    all = all.filter((c) => !c.r.patient || named.includes(c.r.patient));
+    // A question naming a patient is answered from that patient's records
+    // only: an unidentified record never answers for a known patient.
+    all = all.filter((c) =>
+      recordOwnerIds(c.r).some((id) => named.includes(id)),
+    );
+  // A printed name shared by different patient IDs: a name-only question is
+  // clarified, never silently attributed to one of them.
+  if (!named.length) {
+    const nameIds = new Map(); // printed name (lower) -> {ids, display}
+    const firstFact = new Map(); // patient id -> {en, f} for citations
+    for (const en of entries)
+      for (const r of en.records ?? []) {
+        const patientIds = recordPatientIds(r);
+        if (!patientIds.length) continue;
+        let nm = null;
+        try {
+          nm = reportMeta(
+            (en.source?.text ?? en.doc?.text ?? "").slice(r.start, r.end),
+          ).patient?.name?.trim();
+        } catch {
+          nm = null;
+        }
+        if (nm) {
+          const key = nm.toLowerCase();
+          const slot = nameIds.get(key) ?? { ids: new Set(), display: nm };
+          for (const id of patientIds) slot.ids.add(id);
+          nameIds.set(key, slot);
+        }
+        for (const id of patientIds)
+          if (!firstFact.has(id) && r.facts?.length)
+            firstFact.set(id, { en, f: r.facts[0] });
+      }
+    for (const [nm, { ids, display }] of nameIds) {
+      if (ids.size < 2) continue;
+      const escaped = nm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (!new RegExp(`\\b${escaped}\\b`, "i").test(question)) continue;
+      const list = [...ids];
+      return {
+        spoken: `The records name ${display} under different patient IDs (${list.join(", ")}). Which patient do you mean?`,
+        clarify: true,
+        lead: null,
+        record: null,
+        superseded: [],
+        sourceId: null,
+        cites: list.flatMap((id) => {
+          const c = firstFact.get(id);
+          return c
+            ? [
+                {
+                  sourceId: c.en.source?.id ?? null,
+                  start: c.f.start,
+                  end: c.f.end,
+                },
+              ]
+            : [];
+        }),
+      };
+    }
+  }
   // A question about something these documents never mention ("what is
   // the warranty period?") is not answered from a fact that merely shares
   // a word ("chairs"): every distinctive question word must occur somewhere
@@ -646,8 +711,12 @@ export function factAnswer(question, entries) {
         (c) =>
           c.f !== lead.f &&
           c.f !== anchor?.f &&
-          // records about different patients never replace each other
-          !(c.r.patient && lead.r.patient && c.r.patient !== lead.r.patient) &&
+          // records about different patients never replace each other, and
+          // an unidentified record never replaces a known patient's
+          !(
+            c.r.patient !== lead.r.patient &&
+            (c.r.patient || lead.r.patient)
+          ) &&
           ((concept && c.f.concept === concept) ||
             allStems(c.f.label).sort().join(" ") === leadField) &&
           valueKind(c.f.value) === kind &&
