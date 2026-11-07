@@ -39,3 +39,10 @@ must refuse. Voice dispatch uses the same normalized query that retrieval uses.
 Ordinary numbered prose such as "unit 27" does not become a normalized record
 alias without a printed root namespace. Existing small-count ingest coverage
 failed on the earlier candidate and passes after this correction.
+
+The exported spokenTurn identifier branch also renders requestedChecked answers
+through the same exact-fragment extractive renderer. Unsupported results remain
+UNKNOWN with no citations. A regression uses the actual mixed-domain adapter
+with a synthetic lab PDF: before this correction the tracking subquestion was
+omitted while the lab answer remained; afterward both retain their exact source
+citations. This checks returned text, not TTS or captured audio.

@@ -1,4 +1,4 @@
-import { terms } from "./spoken-extract.mjs";
+import { terms, extractiveSpoken } from "./spoken-extract.mjs";
 // spoken.mjs - deterministic spoken renderer for the voice path.
 // The engine (answer/extractClaims/resolveClaims) stays the authority on
 // facts; this module only routes intent, resolves the subject, reads the
@@ -1325,6 +1325,20 @@ export function spokenTurn(rawQuestion, bundle, prevField = null) {
   const question = normalizeSpoken(rawQuestion);
   if (identifierRequest(question)) {
     const result = answer(question, bundle);
+    if (result.requestedChecked) {
+      const scoped = extractiveSpoken(question, result, bundle);
+      return scoped
+        ? { ...scoped, field: null, intent: "IDENTIFIER" }
+        : {
+            spoken:
+              result.spoken ||
+              "The documents do not establish the requested fact.",
+            verdict: "UNKNOWN",
+            field: null,
+            intent: "IDENTIFIER",
+            citations: [],
+          };
+    }
     return {
       spoken: result.spoken,
       verdict: result.refused ? "UNKNOWN" : "QUOTED",
