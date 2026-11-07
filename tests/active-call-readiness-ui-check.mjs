@@ -140,7 +140,11 @@ try {
       assert.match(await page.locator("#call-label").innerText(), /Hang up/);
     await page
       .locator(".callbar")
-      .screenshot({ path: "/downloads/vm-active-hangup-preserved.png" });
+      .screenshot({
+        path: pending
+          ? "/downloads/vm-active-pending-preserved.png"
+          : "/downloads/vm-active-hangup-preserved.png",
+      });
     if (pending) await page.evaluate(() => window.__expire());
     else await page.locator("#call-btn").click();
     await page.waitForFunction(() => window.__stops === 1);
