@@ -64,9 +64,26 @@ test("a bound like <0.05 is never subtracted from", () => {
     { lowN: 0.4, highN: 4, low: "0.40" },
     "below",
   );
+  // The direction is certain (anything under 0.05 is lower than 0.30), the
+  // size is not: no difference or percentage is computed.
+  assert.equal(i.notCompared, null);
+  assert.equal(i.change.direction, "higher");
+  assert.equal(i.change.bounded, true);
+  assert.equal(i.change.abs, null);
+  assert.equal(i.change.pct, null);
+  assert.equal(i.change.from, "<0.05");
+  assert.deepEqual(i.distance, { side: "below", by: 0.1, bound: "0.40" });
+});
+
+test("a bound whose direction is uncertain is not compared at all", () => {
+  // "<0.05" then 0.03: the earlier value could be above or below 0.03.
+  const s = series(
+    ["2026-09-03", obs("<0.05", "mIU/L")],
+    ["2026-10-12", obs("0.03", "mIU/L")],
+  );
+  const i = insightOf(s, s[1].current, { lowN: 0.4, highN: 4 }, "below");
   assert.equal(i.change, null);
   assert.equal(i.notCompared, "bound");
-  assert.deepEqual(i.distance, { side: "below", by: 0.1, bound: "0.40" });
 });
 
 test("one reading: nothing to compare, nothing claimed", () => {

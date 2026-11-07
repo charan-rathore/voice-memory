@@ -66,7 +66,23 @@ export function insightOf(series, o, r, pos) {
             : null,
         direction: c.direction,
       };
-    } else out.notCompared = !c.comparable ? c.reason : "bound"; // "<0.05" is a bound, not a value
+    } else if (
+      c.comparable &&
+      (c.direction === "higher" || c.direction === "lower")
+    )
+      // "<0.05" then 0.30: the direction is certain (the same one the spoken
+      // answer gives), the size of the change is not, so no number is shown.
+      out.change = {
+        from: prev.raw,
+        to: o.raw,
+        fromDate: series[series.length - 2].date,
+        toDate: series[series.length - 1].date,
+        abs: null,
+        pct: null,
+        direction: c.direction,
+        bounded: true,
+      };
+    else out.notCompared = !c.comparable ? c.reason : "bound"; // "<0.05" vs 0.03: direction unknown
   }
   if (r && Number.isFinite(o.value) && !o.comparator) {
     const d = places(o.raw);
