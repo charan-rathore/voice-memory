@@ -27,7 +27,7 @@ test("dense fails closed when no memory limit is readable", async () => {
     assert.equal(d.embedQueryReady("fee"), null); // no load kick
     assert.match(
       d.denseStatus().memory.guard ?? "",
-      /no memory limit readable/,
+      /no valid memory ceiling readable/,
     );
   }
   process.env.VM_MEMORY_LIMIT_MB = "1024";
@@ -100,4 +100,16 @@ test("nested upload pauses and repeated release never corrupt model leases", () 
   const another = lifetime.acquire();
   another();
   assert.equal(lifetime.active, 0);
+});
+
+test("non-finite configured memory ceiling cannot admit an unbounded dense load", async () => {
+  const previous = process.env.VM_MEMORY_LIMIT_MB;
+  try {
+    process.env.VM_MEMORY_LIMIT_MB = "Infinity";
+    const d = await import("../src/dense.mjs?invalid-limit=" + Date.now());
+    assert.equal(d.memoryHeadroomOk(100 * 1048576), false);
+  } finally {
+    if (previous === undefined) delete process.env.VM_MEMORY_LIMIT_MB;
+    else process.env.VM_MEMORY_LIMIT_MB = previous;
+  }
 });

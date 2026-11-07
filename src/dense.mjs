@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { denseMemoryBudget } from "./dense-memory-budget.mjs";
 import { createModelLifetime } from "./model-lifetime.mjs";
 /**
  * Dense retrieval stage (Phase 3 hybrid) - local embeddings, no paid API.
@@ -30,26 +30,14 @@ let ingestDepth = 0;
 // v1) or VM_MEMORY_LIMIT_MB. The model is loaded only with enough headroom,
 // and dropped (back to keyword retrieval) when the process nears the limit.
 // Measured on Render free (512 MB): ~60 MB without the model, peaks of
-// ~500 MB with it, so a load with less than MODEL_MB of headroom is refused.
+// ~500 MB with it. This is admission/retirement at operation boundaries,
+// not a guarantee against allocation peaks or unrelated process growth.
 const MODEL_MB = Number(process.env.VM_DENSE_MODEL_MB || 360);
 const PRESSURE = 0.9;
 export function memoryLimitBytes() {
-  if (process.env.VM_MEMORY_LIMIT_MB)
-    return Number(process.env.VM_MEMORY_LIMIT_MB) * 1048576;
-  for (const f of [
-    "/sys/fs/cgroup/memory.max",
-    "/sys/fs/cgroup/memory/memory.limit_in_bytes",
-  ]) {
-    try {
-      const v = readFileSync(f, "utf8").trim();
-      const n = Number(v);
-      if (v !== "max" && Number.isFinite(n) && n > 0 && n < 2 ** 50) return n;
-    } catch {
-      /* not this cgroup version */
-    }
-  }
-  return null;
+  return denseMemoryBudget().limitBytes;
 }
+
 const guard = { refused: null, dropped: 0 };
 export function memoryHeadroomOk(rss = process.memoryUsage().rss) {
   const limit = memoryLimitBytes();
@@ -92,7 +80,7 @@ function ensureLoading() {
     const limit = memoryLimitBytes();
     guard.refused =
       limit === null
-        ? `not loaded: no memory limit readable; set VM_MEMORY_LIMIT_MB explicitly to enable dense (model needs ~${MODEL_MB} MB)`
+        ? `not loaded: no valid memory ceiling readable; check VM_MEMORY_LIMIT_MB or host cgroup to enable dense (model needs ~${MODEL_MB} MB)`
         : `not loaded: ${Math.round(process.memoryUsage().rss / 1048576)} MB used of ${Math.round(limit / 1048576)} MB, model needs ~${MODEL_MB} MB`;
     return null;
   }
@@ -116,6 +104,12 @@ function ensureLoading() {
           return null;
         }
         state.pipe = pipe;
+        // A background load can itself cross the pressure threshold. Do not
+        // wait for a later user query before retiring that resident model.
+        if (relieveMemoryPressure()) {
+          await state.retiring;
+          return null;
+        }
         return pipe;
       } catch (e) {
         if (generation === modelGeneration && ingestDepth === 0)
@@ -157,7 +151,10 @@ export function embedQueryReady(q) {
       if (ingestDepth === 0) state.failed = String((e && e.message) || e);
       return null;
     })
-    .finally(release);
+    .finally(() => {
+      release();
+      relieveMemoryPressure();
+    });
 }
 
 /**
@@ -202,9 +199,10 @@ export function warmDense(rows) {
       if (!pipe) return false;
       try {
         for (const r of rows) {
+          relieveMemoryPressure();
+          if (state.pipe !== pipe || ingestDepth > 0) return false;
           if (r.chunk.embedding && r.chunk.embedding_model === MODEL_ID)
             continue;
-          if (state.pipe !== pipe || ingestDepth > 0) return false;
           const release = lifetime.acquire();
           if (!release) return false;
           try {
@@ -216,7 +214,9 @@ export function warmDense(rows) {
             r.chunk.embedding_model = MODEL_ID;
           } finally {
             release();
+            relieveMemoryPressure();
           }
+          if (state.pipe !== pipe) return false;
         }
         return true;
       } catch (e) {
@@ -304,21 +304,29 @@ export function resumeDenseAfterIngest(rows) {
 }
 
 export const DENSE_MODEL_ID = MODEL_ID;
-export const denseStatus = () => ({
-  model: MODEL_ID,
-  ready: !!state.pipe,
-  loading: !!state.loading && !state.pipe && !state.failed,
-  disabled: process.env.VM_DENSE === "off",
-  failed: state.failed,
-  memory: {
-    rssMb: Math.round(process.memoryUsage().rss / 1048576),
-    limitMb: memoryLimitBytes()
-      ? Math.round(memoryLimitBytes() / 1048576)
-      : null,
-    guard: guard.refused,
-    dropped: guard.dropped,
-  },
-});
+export const denseStatus = () => {
+  const budget = denseMemoryBudget();
+  return {
+    model: MODEL_ID,
+    ready: !!state.pipe,
+    loading: !!state.loading && !state.pipe && !state.failed,
+    disabled: process.env.VM_DENSE === "off",
+    failed: state.failed,
+    memory: {
+      rssMb: Math.round(process.memoryUsage().rss / 1048576),
+      limitMb: budget.limitBytes
+        ? Math.round(budget.limitBytes / 1048576)
+        : null,
+      limitSource: budget.source,
+      hostLimitBytes: budget.hostBytes,
+      hostLimitSource: budget.hostSource,
+      configuredLimitBytes: budget.configuredBytes,
+      measurement: "process RSS; rounded MiB, not cgroup usage",
+      guard: guard.refused,
+      dropped: guard.dropped,
+    },
+  };
+};
 
 /**
  * Embeddings for arbitrary texts, only when the model is ALREADY resident
@@ -332,6 +340,7 @@ export async function embedTextsReady(texts) {
   try {
     const out = [];
     for (const t of texts) {
+      relieveMemoryPressure();
       if (ingestDepth > 0 || state.pipe !== pipe) return null;
       const release = lifetime.acquire();
       if (!release) return null;
@@ -340,7 +349,9 @@ export async function embedTextsReady(texts) {
         out.push(Float32Array.from(v.data));
       } finally {
         release();
+        relieveMemoryPressure();
       }
+      if (state.pipe !== pipe) return null;
     }
     return out;
   } catch (e) {
