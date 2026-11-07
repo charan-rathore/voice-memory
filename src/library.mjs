@@ -389,7 +389,9 @@ export function addUpload(
         let timer;
         try {
           await Promise.race([
-            Promise.resolve().then(() => before()),
+            Promise.resolve().then(() =>
+              typeof before === "function" ? before() : before,
+            ),
             new Promise((_, reject) => {
               timer = setTimeout(
                 () =>
