@@ -70,10 +70,30 @@ export async function ingestFile(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      if (holdsOcr) giveOcr();
-      holdsOcr = false;
       wantsOcr = false;
-      resolve(v);
+      // Do not reopen OCR or parse admission while the old worker is
+      // still retiring. Its nested OCR engine has already shut down before
+      // a successful final result is posted (worker.mjs).
+      worker.terminate().then(
+        () => {
+          try {
+            onEvent({ k: "parser-worker-stopped" });
+          } catch {}
+          if (holdsOcr) giveOcr();
+          holdsOcr = false;
+          resolve(v);
+        },
+        () => {
+          // Unknown teardown means the OCR permit cannot safely be reused.
+          resolve({
+            ok: false,
+            code: "parse_failed",
+            stage: "parsing",
+            message:
+              "The document parser could not be stopped safely. Try again later.",
+          });
+        },
+      );
     };
     const worker = new Worker(new URL("./worker.mjs", import.meta.url), {
       workerData: { bytes: new Uint8Array(buf), filename: name },
@@ -108,7 +128,6 @@ export async function ingestFile(
     };
     const fail = (v) => done(partial ? salvage(v.why) : v.result);
     const timer = setTimeout(() => {
-      worker.terminate();
       fail({
         why: `reading it took longer than ${Math.round(timeoutMs / 1000)} seconds`,
         result: {
@@ -160,7 +179,6 @@ export async function ingestFile(
       done(
         m.ok ? { ok: true, doc: m.doc, status: m.status, review: m.review } : m,
       );
-      worker.terminate();
     });
     worker.once("error", (e) => {
       const oom =

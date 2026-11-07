@@ -4,11 +4,11 @@
 // table detection by aligned cell runs, heading detection by relative font
 // size, and repeated page furniture detection. It is NOT a learned layout
 // model; ingest/fixtures/gold.json measures where it holds and where it fails.
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import * as pdfjs from "pdfjs-dist/build/pdf.mjs";
 import { IngestError, LIMITS, OCR_REVIEW_CONFIDENCE } from "./errors.mjs";
 import { recognize, encodePng, OCR_ENGINE } from "./ocr.mjs";
 
-export const PDF_PARSER = `pdf.js@${pdfjs.version} + vm-layout/1`;
+export const PDF_PARSER = `pdf.js@${pdfjs.version} standard + vm-layout/1`;
 
 const median = (xs) => {
   if (!xs.length) return 0;
@@ -156,7 +156,9 @@ async function extractImages(page, OPS) {
         const obj = await new Promise((resolve, reject) => {
           const t = setTimeout(() => reject(Error("image timeout")), 10000);
           // pdf.js promotes image objects reused across pages to commonObjs.
-          const objects = args[0].startsWith("g_") ? page.commonObjs : page.objs;
+          const objects = args[0].startsWith("g_")
+            ? page.commonObjs
+            : page.objs;
           objects.get(args[0], (o) => {
             clearTimeout(t);
             resolve(o);

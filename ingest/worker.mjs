@@ -16,6 +16,7 @@ let ocrGo = null;
 parentPort.on("message", (m) => {
   if (m?.type === "ocr-go") ocrGo?.();
 });
+let result;
 try {
   const out = await parseBuffer(Buffer.from(bytes), filename, {
     onEvent: (event) => parentPort.postMessage({ type: "event", event }),
@@ -26,15 +27,17 @@ try {
         parentPort.postMessage({ type: "ocr-wait" });
       }),
   });
-  parentPort.postMessage({ ok: true, ...out });
+  result = { ok: true, ...out };
 } catch (e) {
-  parentPort.postMessage({
+  result = {
     ok: false,
     code: e?.code ?? "parse_failed",
     stage: e?.stage ?? "parsing",
     message: e?.code ? e.message : "This file could not be read.",
-  });
+  };
 } finally {
   await shutdownOcr();
+  parentPort.postMessage({ type: "event", event: { k: "ocr-engine-stopped" } });
+  parentPort.postMessage(result);
   parentPort.close();
 }

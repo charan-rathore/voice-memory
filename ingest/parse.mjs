@@ -3,11 +3,8 @@
 import { IngestError, LIMITS, OCR_FAIL_CONFIDENCE } from "./errors.mjs";
 import { detectFormat } from "./detect.mjs";
 import { buildDocument, buildTextDocument } from "./canonical.mjs";
-import { parsePdf } from "./pdf.mjs";
-import { parseDocx } from "./docx.mjs";
-import { parseImage } from "./image.mjs";
 
-export const PIPELINE_VERSION = "vm-ingest/1";
+export const PIPELINE_VERSION = "vm-ingest/runtime-2";
 
 const REVIEW_CODES = new Set([
   "ocr_low_confidence",
@@ -52,14 +49,18 @@ export async function parseBuffer(
       });
     const parsed =
       kind === "pdf"
-        ? await parsePdf(buf, {
+        ? await (
+            await import("./pdf.mjs")
+          ).parsePdf(buf, {
             onEvent,
             onPartial: partial || null,
             waitForOcr,
           })
         : kind === "docx"
-          ? parseDocx(buf)
-          : await parseImage(buf, kind);
+          ? (await import("./docx.mjs")).parseDocx(buf)
+          : await (
+              await import("./image.mjs")
+            ).parseImage(buf, kind, { waitForOcr });
     doc = buildDocument({ ...parsed, kind, mime, filename, bytes: buf });
   }
   doc.parser.pipeline = PIPELINE_VERSION;
