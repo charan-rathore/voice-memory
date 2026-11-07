@@ -86,11 +86,8 @@ export function relieveMemoryPressure(rss = process.memoryUsage().rss) {
 function ensureLoading() {
   if (process.env.VM_DENSE === "off" || state.failed) return null;
   if (state.pipe) return Promise.resolve(state.pipe);
-  if (
-    state.retiring ||
-    ingestDepth > 0 ||
-    lifetime.blocked
-  ) return state.loading;
+  if (state.retiring || ingestDepth > 0 || lifetime.blocked)
+    return state.loading;
   if (!state.loading && !memoryHeadroomOk()) {
     const limit = memoryLimitBytes();
     guard.refused =
@@ -127,9 +124,11 @@ function ensureLoading() {
       }
     })();
     state.loading = loading;
-    loading.finally(() => {
-      if (state.loading === loading) state.loading = null;
-    }).catch(() => {});
+    loading
+      .finally(() => {
+        if (state.loading === loading) state.loading = null;
+      })
+      .catch(() => {});
   }
   return state.loading;
 }
@@ -155,8 +154,7 @@ export function embedQueryReady(q) {
     .then(() => pipe(q, { pooling: "mean", normalize: true }))
     .then((out) => Array.from(out.data))
     .catch((e) => {
-      if (ingestDepth === 0)
-        state.failed = String((e && e.message) || e);
+      if (ingestDepth === 0) state.failed = String((e && e.message) || e);
       return null;
     })
     .finally(release);
@@ -222,8 +220,7 @@ export function warmDense(rows) {
         }
         return true;
       } catch (e) {
-        if (ingestDepth === 0)
-          state.failed = String((e && e.message) || e);
+        if (ingestDepth === 0) state.failed = String((e && e.message) || e);
         return false;
       }
     })
@@ -302,8 +299,7 @@ export function resumeDenseAfterIngest(rows) {
   // Even if a failed preparation timed out, do not warm a new model before
   // the previous pipeline has definitely stopped.
   const retirement = state.retiring;
-  if (retirement)
-    retirement.then(() => warmDense(rows)).catch(() => {});
+  if (retirement) retirement.then(() => warmDense(rows)).catch(() => {});
   else warmDense(rows);
 }
 
@@ -348,8 +344,7 @@ export async function embedTextsReady(texts) {
     }
     return out;
   } catch (e) {
-    if (ingestDepth === 0)
-      state.failed = String((e && e.message) || e);
+    if (ingestDepth === 0) state.failed = String((e && e.message) || e);
     return null;
   }
 }
