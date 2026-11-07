@@ -12,7 +12,7 @@
     "format:check": "prettier --check \"src/*.{mjs,ts}\" \"tests/*.mjs\" \"tests/vendor/*\" \"scripts/*.mjs\" \"*.{mjs,json}\" \"mcp/*.mjs\" public/* memory/* evaluation/vault/*",
     "verify": "npm run format:check && npm run typecheck && npm run build && npm test && npm run test:boundaries && npm run test:evaluation && npm run test:ingest && npm run test:clinical && npm run bench:ingest && npm run bench:retrieval && npm run test:vault && npm run test:browser && npm run test:graph && npm run test:upload-ui && npm run test:controls-ui && npm run test:cold-connect-ui && npm run test:document-ui && npm run test:call-ui",
     "test:evaluation": "node --test evaluation/*.test.mjs",
-    "test:ingest": "node --test --test-concurrency=1 ingest/*.test.mjs",
+    "test:ingest": "node --test --test-concurrency=1 ingest/*.test.mjs tests/ocr-admission.test.mjs tests/format-isolation.test.mjs tests/pdf-runtime-isolation.test.mjs",
     "bench:ingest": "node ingest/bench.mjs",
     "fixtures:build": "node ingest/fixtures/build.mjs && python3 ingest/fixtures/degrade.py",
     "test:clinical": "VM_RSS_WATCHDOG=off node --test --test-concurrency=1 clinical/*.test.mjs",

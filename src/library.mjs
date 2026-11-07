@@ -87,7 +87,7 @@ function parseCacheTrim() {
     parseCacheStats.evictions++;
   }
 }
-const PIPELINE = "vm-ingest/1";
+const PIPELINE = "vm-ingest/runtime-2";
 // Measured peak RSS while OCR'ing a scan: ~276 MB (worker + tesseract).
 // Two files are read at once; OCR itself takes turns across them (one at a
 // time, ingest/index.mjs), so the peak stays that of one OCR while a second
@@ -546,7 +546,7 @@ export function replaceWithText(s, documents) {
       bytes,
       parser: { name: "vm-text/1", ocr: null },
     });
-    doc.parser.pipeline = "vm-ingest/1";
+    doc.parser.pipeline = "vm-ingest/runtime-2";
     lib.push({
       id: randomUUID(),
       filename,
