@@ -93,6 +93,11 @@ test("actual public upload/ask lead obeys engine scope, including refusals and n
       if (yes) assert.ok(shown.includes(yes), JSON.stringify({ q, r }));
       else assert.notEqual(r.lead?.verdict, "QUOTED", JSON.stringify({ q, r }));
       for (const e of r.lead?.citations ?? []) {
+        assert.ok(
+          e.documentId,
+          "public lead citation must open the uploaded document",
+        );
+        assert.ok(e.location, "public lead citation retains source location");
         assert.equal(text.slice(e.start, e.end), e.quote);
         assert.ok(!e.quote.includes(no));
       }

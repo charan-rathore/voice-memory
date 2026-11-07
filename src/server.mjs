@@ -948,7 +948,14 @@ export function createLocalServer({
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
       shown.lead = leadFor(question, raw, bundle, ctx || null);
-      if (identifierRequest(question)) return { raw, shown };
+      if (identifierRequest(question)) {
+        if (shown.lead)
+          shown.lead.citations = decorateResult(
+            { evidence: shown.lead.citations, question },
+            s,
+          ).evidence;
+        return { raw, shown };
+      }
 
       if (repairedLab && shown.lead) shown.lead.interpretedAs = question;
       // Reworded beyond keyword reach: one verbatim sentence with its
