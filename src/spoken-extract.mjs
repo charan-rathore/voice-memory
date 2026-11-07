@@ -135,6 +135,21 @@ export function extractiveSpoken(
   scoringQuestion = null,
 ) {
   if (!isQuestion(question)) return null;
+  if (result?.requestedFact) {
+    return {
+      spoken: result.spoken,
+      verdict: result.unresolved
+        ? "AMBIGUOUS"
+        : result.supported
+          ? "QUOTED"
+          : "UNKNOWN",
+      citations: result.unresolved
+        ? result.reviewEvidence
+        : result.supported
+          ? result.evidence
+          : [],
+    };
+  }
   if (
     !result?.supported ||
     result.refused ||

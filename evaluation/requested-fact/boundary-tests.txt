@@ -1,0 +1,267 @@
+
+> test:boundaries
+> node --test --test-force-exit tests/server.test.mjs tests/voice-adapter.test.mjs tests/synthesis.test.mjs tests/provider.test.mjs tests/retrieval-bridge.test.mjs tests/fictional-sample.test.mjs tests/cache.test.mjs tests/motion.test.mjs tests/persistence.test.mjs tests/public-api.test.mjs tests/public-narrate.test.mjs tests/voice-companion.test.mjs tests/mcp.test.mjs tests/byo-voice.test.mjs tests/byo-scope-context.test.mjs tests/record-facts.test.mjs tests/upload-progress.test.mjs tests/document-graph.test.mjs tests/workspace-lifecycle.test.mjs tests/workspace-cache.test.mjs tests/identifier-api.test.mjs tests/requested-owner.test.mjs tests/record-owner-api.test.mjs tests/record-owner-voice.test.mjs
+
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ private standalone LLM keys use uploaded-document social context (864.362483ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ standalone workspace key cannot replay invented assistant history (196.752817ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ standalone health key cannot replay invented assistant history (166.84501ms)
+✔ server-owned key scope ignores caller scope claims and does not replay a previous workspace (302.975071ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ a custom-LLM key answers its case in OpenAI format, with the engine's verdict (799.470868ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ bad, missing or unknown-scope keys are refused (182.852785ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ a BYO call mints on the visitor's own Bolna account and keeps no key (171.329241ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ a key can be revoked by whoever holds it, and stops working at once (169.43384ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ keys issued across all visitors have an hourly ceiling (165.171513ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ idle expiry rejects workspace reads before refreshing its lifetime (211.266047ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ expired workspace revokes its BYO key without creating another workspace (303.453467ms)
+✔ BYO default off refuses keys, calls and visitor TTS before vendor access (169.023635ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ normalization: case, spacing and trailing punctuation only (0.843658ms)
+✔ LRU eviction, TTL expiry and hit/miss accounting (0.570276ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ concurrent identical misses share one computation (30.94199ms)
+✔ a failed computation is not cached (0.501492ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ server: cached answer equals the computed one; upload/import invalidates; sessions never share (205.780739ms)
+✔ server: concurrent identical questions coalesce; /healthz is public and data-free (148.731521ms)
+✔ arbitrary uploaded prose has connected, exactly grounded passages (42.257259ms)
+✔ source and unchanged passage identities survive added documents, never cross workspaces (14.06239ms)
+✔ span intersection handles repeated headings and a passage spanning sections (0.266396ms)
+✔ duplicate paragraphs remain distinct; no-heading notes work; rendering budget is explicit (8.564997ms)
+✔ new generations replace stale passages and sequence edges after source edits/removal (8.553302ms)
+✔ untrusted document IDs cannot collapse sources; scoped stable IDs must be unique (7.702812ms)
+✔ fenced examples never create section nodes and actual heading offsets survive (2.017591ms)
+✔ large source headings cannot multiply unbounded labels across graph passages (4.314989ms)
+✔ section coverage reports real omissions rather than an exactly full budget (0.988232ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ a negative about the launch is never cited as the answer to who owns the review (113.077827ms)
+✔ 'Was the budget approved?' is answered from the budget sentence, not refused (11.412743ms)
+✔ the explicit launch negative still answers the launch question (12.194974ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ public typed and streaming voice paths preserve identifier bindings and refusals (1120.038424ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ MCP: handshake, tool list, and a cited answer from the engine (691.761318ms)
+✔ MCP: a closest line is labelled as a pointer, never as the answer (0.627426ms)
+✔ MCP: protocol version is negotiated, not echoed (0.170604ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ MCP: upload_document only reads documents a person meant to share (6.300426ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ MCP: an upload needs allowed folders and the person's yes (416.864339ms)
+✔ MCP over Streamable HTTP: the engine serves the same tools at /api/public/mcp (246.446843ms)
+✔ MCP text imports require a person, and remote imports are unavailable (1.03864ms)
+✔ expDecay is frame-rate independent (naive per-frame lerp is not) (0.717216ms)
+✔ half-life means half the remaining distance (3.724702ms)
+✔ critically damped spring never overshoots; underdamped overshoots a little; both settle (1.557506ms)
+✔ spring trajectory is the same at 30 and 144 fps (fixed substeps) (0.191426ms)
+✔ spring stays stable on a long frame (tab switch) (0.124583ms)
+✔ smootherstep is C2: zero slope and curvature at both ends; smoothstep is only C1 (0.222438ms)
+✔ cubic Bézier hits its endpoints and is symmetric (0.643254ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ workspace survives a restart, encrypted at rest; reset deletes it (1130.402787ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ a wrong key restores nothing (and never crashes the server) (483.388424ms)
+✔ VM_DATA_DIR without a 256-bit key refuses to start (3.814182ms)
+✔ explicit config only, no automatic paid fallback (2.559492ms)
+✔ input limit rejects before network (0.658596ms)
+✔ exact model and output bound transmitted without fallback (27.375748ms)
+✔ 429 never retries or silently downgrades (0.552899ms)
+✔ truncated or invalid output cannot pass as insight (1.20701ms)
+✔ oversized or malformed envelopes reject before synthesis parsing (1.767794ms)
+✔ invalid budgets fail before network rather than normalize (1.951096ms)
+✔ source-bearing requests forbid redirects (0.945739ms)
+✔ stream byte bound cancels before consuming unbounded body (0.957867ms)
+✔ deadline aborts stalled fetch and stalled response without caller signal (40.139619ms)
+✔ pre-aborted direct provider exits cleanly without unhandled rejection or network (44.680287ms)
+✔ credential-free audit records exact wire body before network and returned usage (0.717945ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ cases load with no cookie, key or session (536.292237ms)
+✔ speech-misrecognised analyte: 'ferrite in' routes to ferritin, not a generic overview (44.726575ms)
+✔ unmatched analyte in a test-shaped question clarifies, never a generic overview (9.279369ms)
+✔ a known test these reports lack still says not-in-report (4.014401ms)
+✔ an unnamed overview asks whose reports, never a silent patient pick (7.465957ms)
+✔ a generic 'my blood levels' phrasing also asks whose (7.508234ms)
+✔ an overview naming the patient still answers for that patient (12.469106ms)
+✔ ferritin: the amended 50 is used and the preliminary 5 is cited (8.166278ms)
+✔ creatinine in different units is refused, not compared (6.135075ms)
+✔ patients are never mixed (6.051221ms)
+✔ Northstar: $42,000 is proposed, not approved; the split is open (39.711386ms)
+✔ documents and originals are readable; ids are case-scoped (4.707823ms)
+✔ graphs: amendment and unit edges for labs, supersession for the deal (41.035751ms)
+✔ bad input gets a plain error; nothing mutates (4.998446ms)
+✔ voice minting fails closed without Bolna configuration (1.400564ms)
+✔ VM_PUBLIC_VOICE is deny-by-default: unset, off and unknown values deny and hide voice (1075.874221ms)
+✔ VM_PUBLIC_VOICE=on mints through the factory (mock mint, no network) (30.805262ms)
+✔ anonymous POSTs to owner voice routes are denied on the public host (8.657609ms)
+✔ visitors upload their own documents and ask them anything (215.714119ms)
+✔ an upload held for review is still answerable in a visitor workspace (231.72407ms)
+✔ a mixed PDF is answerable before its scanned page is read, and says so as it goes (966.816221ms)
+✔ several files upload in parallel; each gets a digest, the graph stays grounded (413.4877ms)
+✔ bring-your-own answers complete wrapped sentences and keep one supporting passage (134.137622ms)
+✔ visitor allowance: 3 per visitor per day, per-visitor isolation (20.098544ms)
+✔ global day allowance holds across visitors (9.732268ms)
+✔ lifetime count caps total mints (10.410716ms)
+✔ counter store failure fails closed (no mint, 503) (6.551165ms)
+✔ per-call max duration: ticket dies and vendor stop is attempted (156.209559ms)
+✔ a failed mint hands the allowance back (5.713329ms)
+✔ counter module: day rollover resets allowances, visitor lifetime persists, owner counted SEPARATELY (1.860263ms)
+✔ owner mints are counted but never capped by the visitor abuse budget (0.87524ms)
+✔ adversarial: 10 concurrent mints, one visitor, allowance 3 - exactly 3 pass (20.291473ms)
+✔ adversarial: refund is exactly-once per reservation, never releases another call's capacity (2.604634ms)
+✔ adversarial: crash recovery - a fresh instance on the same file keeps the counts (0.832507ms)
+✔ adversarial: deleted store file reinitializes (documented reset, no durability pretense) (2.914466ms)
+✔ adversarial: corrupt store file fails closed with 503 (3.438939ms)
+reservation settle failed; stop attempted but NOT confirmed terminal; cutoff timer retained; reservation stays charged: store write failed
+public call stop failed: vendor stop failed
+✔ lifecycle: settle failure after a live session - no ended claim, cleanup retained until cutoff retries (124.453652ms)
+reservation settle failed; vendor confirms the call is gone; retained: store write failed
+✔ lifecycle: settle failure with vendor-CONFIRMED stop tears down cleanly (126.791946ms)
+✔ gap: two concurrent session requests cannot both mint (async counter race) (63.597935ms)
+✔ bolna mint classification: 429/4xx definitive pre-session, 5xx ambiguous (0.310755ms)
+vendor mint outcome ambiguous; reservation retained for reconcile: The operation timed out
+✔ lifecycle: ambiguous vendor timeout stays charged (no auto-refund) (3.388986ms)
+✔ file backend: parseable but invalid counter shape fails closed (0.802349ms)
+✔ demo trial scope: server transcription is refused for every caller, zero provider calls (31.51537ms)
+✔ workspace-scoped mint: a dead workspace gets 410 and the allowance back (8.474531ms)
+✔ same-file HTTP retry keeps one workspace upload and isolates another workspace (229.133162ms)
+✔ 503 and no provider call when the adapter is not configured (24.859277ms)
+✔ unknown case 404s, bad index 400s, no provider call for either (9.364579ms)
+✔ speaks canonical server narration only - client text is never spoken (5.007832ms)
+✔ identical sentences are synthesized once and served from cache (7.703482ms)
+✔ per-visitor daily cap counts syntheses, not cached replays (5.19808ms)
+✔ global daily cap holds regardless of visitor (3.316393ms)
+✔ concurrency cap rejects parallel syntheses beyond the limit (52.514385ms)
+✔ provider 402 surfaces as an explicit credits-exhausted 503 (3.614451ms)
+✔ adapter maps languages, posts the documented shape, decodes audios[0] (0.38735ms)
+✔ default personas are pinned to the current v4 catalog enums (0.63795ms)
+✔ adapter is null without a key (route fails closed upstream) (0.090388ms)
+✔ server sentence split matches the client regex in site/visual.js (1.072727ms)
+✔ visual payload carries the sentence list for the client (4.164254ms)
+Warning: Please use the `legacy` build in Node.js environments.
+✔ the tokenizer port matches the vendored TypeScript token for token (140.313297ms)
+✔ record status: provisional words win, body text never sets a status (10.110273ms)
+✔ a file without patient headers still splits into its records (1.295809ms)
+✔ answers come from the most authoritative record; provisional values are named as superseded (12.150603ms)
+✔ the same amount printed differently is not a superseded value (1.521923ms)
+✔ a question about something the documents never mention is not answered (1.144508ms)
+✔ records graph: grounded, no self-loops, identity kept apart (6.292021ms)
+✔ records about different patients never supersede each other (8.974084ms)
+✔ records graph: an unidentified record never supersedes a known patient's record (0.499869ms)
+✔ fact answers: an unidentified record does not supersede a known patient's record (0.401521ms)
+✔ a fact's citation page comes from its own span, not the record's first page (0.577944ms)
+✔ a question naming a patient is never answered from an unidentified record (0.393603ms)
+✔ a name-only question over two same-name patients clarifies, never picks (1.070148ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ record ownership clarification and refusal survive normalized cache replay (377.65379ms)
+✔ known exact opaque owners remain separate across separators and zero lengths (804.803514ms)
+✔ unknown record owner cannot be rescued in voice (default retrieval) (122.029342ms)
+✔ unknown record owner cannot be rescued in voice (external retrieval) (6.537671ms)
+✔ voice complete printed suffix ID remains answerable beside a numeric namespace (12.94803ms)
+✔ an unbound identifier in a printed namespace vetoes substitution (1.27176ms)
+✔ known IDs and unrelated numeric tokens do not trigger this narrow veto (0.233957ms)
+✔ unsupported namespaces are not silently claimed as resolved (1.022034ms)
+✔ complete opaque ID tokens do not become shorter unknown owners (0.215332ms)
+✔ owner matching scans each distinct record's facts only once (0.855903ms)
+✔ scoped retrieval roundtrip preserves original normalized UTF16 evidence without generation (33.464566ms)
+✔ foreign documents altered text and repeated quotes produce no evidence sidecar (18.851153ms)
+✔ wrong corpus forged mode or model fails closed before evidence (9.230176ms)
+✔ unknown evidence enum fails closed and nonpositive gates never become supported from spans (6.742091ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ same origin, CSRF and session required (53.761464ms)
+✔ end-to-end local HTTP flow and isolated session (79.671265ms)
+✔ source text cannot become HTML (13.237015ms)
+✔ split UTF-8 HTTP buffers preserve original rupee and emoji source bytes (68.348757ms)
+✔ local session voice bridge preserves evidence and resets on replacement without exposing bearer (38.02464ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ voice evidence feed is a read-only GET on the actual browser contract (24.773047ms)
+✔ HTTP disconnect propagates abort and suppresses delayed retrieval state (10.303164ms)
+✔ demo corpus route serves the 7 Northstar documents to a session (7.259405ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ readiness tracks corpus, voice binding and lifecycle (7.923027ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ memory watchdog: expensive routes get 503 + Retry-After when admission is refused (2.242248ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ memory watchdog: in-flight requests are counted around the handler (2.349107ms)
+✔ readiness reports watchdog memory state (3.560879ms)
+✔ lead citation for a repeated quote is marked broad, never pinpoint (15.433425ms)
+✔ no provider means no model request (29.729486ms)
+✔ injected fixture tests contract only, not actual model quality (4.931173ms)
+✔ unsupported claim and wrong source quote rejected (1.587055ms)
+✔ inference missing uncertainty rejected (1.357233ms)
+✔ fact without evidence rejected (1.244808ms)
+✔ cancellation prevents provider execution (1.365464ms)
+✔ provider source packet includes exact UTF16 offsets alongside line numbers (5.318205ms)
+✔ schema validation does not imply a free-form draft is supported (2.482414ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ status log events and timings share one clock reading (1317.063097ms)
+✔ a cached re-reading re-stamps OCR page facts (no undefined confidence) (19.606009ms)
+✔ rejected dense preparation marks upload failed and balances cleanup (10.918141ms)
+✔ SSE streams OpenAI deltas and DONE, separately retains source proof (87.07471ms)
+✔ caller-supplied scope cannot access another bundle (12.865436ms)
+✔ missing, expired and revoked capabilities denied (4.07254ms)
+✔ draft command never sends and needs prior supported turn (9.872802ms)
+✔ request limits and invalid final roles rejected (2.429ms)
+✔ malformed top-level and message-list shapes return400 rather than throwing (3.060104ms)
+✔ capability expiration or revocation during pending body is rechecked (4.067328ms)
+✔ async retrieval cannot publish revoked or superseded source state (11.995426ms)
+✔ body stream byte bound and internal deadline cancel before unbounded read (26.005899ms)
+✔ injected retrieval cannot launder mismatched original source evidence (9.641436ms)
+✔ spoken output carries claim safeguards, not a generic wrapper (131.324348ms)
+✔ GET /v1/models lists the served model behind the voice capability (30.051005ms)
+✔ an expired grant never blocks rebinding the same capability (2.420916ms)
+✔ Bolna content parts and a trailing empty assistant still reach the engine (17.774364ms)
+voice turn failed: Error
+✔ a non-streaming side request does not supersede the spoken turn (7.20445ms)
+✔ workspace still being read: pending scope says so, never the demo records (1.303234ms)
+✔ workspace whose uploads all failed says re-upload, never 'expired' (2.026317ms)
+✔ an engine fault becomes a spoken fallback, never an internal leak (10.534723ms)
+✔ resolver rechecks admitted bearer and bundle identity independently of replay policy (24.972324ms)
+✔ word timings come from character alignment, one per token (1.644996ms)
+✔ estimated timings cover the clip in order (0.749213ms)
+✔ ElevenLabs TTS: key only in the header, timestamps endpoint, words mapped (3.108891ms)
+✔ ElevenLabs TTS: 402 is credits, 5xx is provider error (1.263275ms)
+✔ voice-out chain hands over on credits/outage, not on a bad request (0.55092ms)
+✔ Sarvam STT: codemix for Hinglish, auto-detect when unknown, key in header (1.699641ms)
+✔ ElevenLabs Scribe: the case vocabulary goes as keyterms (0.650238ms)
+✔ voice-in chain: provider failure falls through to the next, then Gemini (1.026198ms)
+✔ openers carry no facts: no digits, test names or status claims (0.484189ms)
+✔ opener follows the verdict and language; declines open in their own words (1.107749ms)
+✔ sentence split keeps decimals and units inside a sentence (0.29744ms)
+✔ /speak fails closed without a voice, and status says so (46.202457ms)
+✔ /speak speaks the server's own opener + answer, never client text (22.813791ms)
+✔ /speak on a visitor's own documents needs explicit consent (9.10609ms)
+✔ /speak daily cap counts real syntheses only (9.133675ms)
+✔ /transcribe uses the provider chain, repairs only what the case holds (12.992807ms)
+✔ a date-anchored VALUE lead gets an opener, corrected if it says so (0.289435ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ workspace answer cache invalidates when uploads change a stable workspace scope (638.531003ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✔ workspace capacity evicts least recently used, preserving a recently accessed upload session (123.591646ms)
+ℹ tests 207
+ℹ suites 0
+ℹ pass 207
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7402.062281

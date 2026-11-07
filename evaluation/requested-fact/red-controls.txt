@@ -1,0 +1,263 @@
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✖ public upload + HTTP ask + default HTTP SSE carry requested support, not only topical passages (1025.217052ms)
+✔ missing-support control: What deadline does the client want to keep? (2.284189ms)
+✔ changed support is quoted, not a memorized answer: What deadline does the client want to keep? (1.61328ms)
+✖ missing-support control: How often is progress reported? (1.75313ms)
+✔ changed support is quoted, not a memorized answer: How often is progress reported? (1.235888ms)
+✔ missing-support control: Has the money side been signed off by the client’s accountants? (1.437837ms)
+✔ changed support is quoted, not a memorized answer: Has the money side been signed off by the client’s accountants? (2.373219ms)
+✖ a proposed reporting cadence is never promoted to confirmed; changed and conflicting support is retained (1.263296ms)
+✖ conditional, draft, wrong-role and wrong-owner finance support cannot become client signoff (3.582054ms)
+✖ unbound requested modifiers do not disappear; unrelated ordinary positives stay on their routes (1.660061ms)
+✖ support overflow and scan overflow refuse instead of silently losing contrary records (1.311953ms)
+✔ external retrieval policy never promotes an insufficient pack from a source scan (0.946145ms)
+public voice counters fail closed: No durable call-counter store configured (set VM_UPSTASH_REDIS_REST_URL and VM_UPSTASH_REDIS_REST_TOKEN). Refusing to use the non-durable file backend without the explicit VM_COUNTERS_ALLOW_FILE=on local dev/test opt-in.
+✖ public and default SSE controls preserve absence, proposal qualifiers, changed values and conflicting support (131.445869ms)
+✖ opaque identifiers remain whole qualifiers, never prefixes of other records (1.34051ms)
+✖ an oversized contrary assertion refuses instead of disappearing from the evidence pack (1.768892ms)
+✖ conflicting requested support cannot authorize a draft (1.203136ms)
+✖ HTTP and default SSE expose conflicting statements as ambiguous, never an approved current fact (136.806815ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 6
+ℹ fail 11
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1573.7533
+
+✖ failing tests:
+
+test at tests/requested-fact.test.mjs:14:1
+✖ public upload + HTTP ask + default HTTP SSE carry requested support, not only topical passages (1025.217052ms)
+  AssertionError [ERR_ASSERTION]: What deadline does the client want to keep?: That is still open: 15 November 2026 versus 22 November 2026 are both on record.
+      at file:///home/coder/project/tests/requested-fact.test.mjs:22:14
+      at Array.forEach (<anonymous>)
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:16:8)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests/requested-fact.test.mjs:76:3
+✖ missing-support control: How often is progress reported? (1.75313ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:78:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/requested-fact.test.mjs:94:1
+✖ a proposed reporting cadence is never promoted to confirmed; changed and conflicting support is retained (1.263296ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:100:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /proposed, not agreed/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/requested-fact.test.mjs:113:1
+✖ conditional, draft, wrong-role and wrong-owner finance support cannot become client signoff (3.582054ms)
+  AssertionError [ERR_ASSERTION]: The client approved delivery. Supplier finance has signed off on its own terms.
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:123:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/requested-fact.test.mjs:126:1
+✖ unbound requested modifiers do not disappear; unrelated ordinary positives stay on their routes (1.660061ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:134:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/requested-fact.test.mjs:141:1
+✖ support overflow and scan overflow refuse instead of silently losing contrary records (1.311953ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:148:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/requested-fact.test.mjs:185:1
+✖ public and default SSE controls preserve absence, proposal qualifiers, changed values and conflicting support (131.445869ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'PROPOSED'
+  - 'QUOTED'
+  
+      at file:///home/coder/project/tests/requested-fact.test.mjs:205:12
+      at Array.forEach (<anonymous>)
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:193:11)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'PROPOSED',
+    expected: 'QUOTED',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/requested-fact.test.mjs:221:1
+✖ opaque identifiers remain whole qualifiers, never prefixes of other records (1.34051ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:225:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/requested-fact.test.mjs:234:1
+✖ an oversized contrary assertion refuses instead of disappearing from the evidence pack (1.768892ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:240:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/requested-fact.test.mjs:243:1
+✖ conflicting requested support cannot authorize a draft (1.203136ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:256:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/requested-fact.test.mjs:262:1
+✖ HTTP and default SSE expose conflicting statements as ambiguous, never an approved current fact (136.806815ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'OPEN'
+  - 'AMBIGUOUS'
+  
+      at TestContext.<anonymous> (file:///home/coder/project/tests/requested-fact.test.mjs:272:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'OPEN',
+    expected: 'AMBIGUOUS',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
