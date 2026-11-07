@@ -72,7 +72,10 @@ try {
     .first()
     .waitFor({ timeout: 45000 });
   await page.locator("#files-btn").click();
-  await page.locator("#viewer-body .file-card").first().click();
+  // One indexed document now opens its reader directly; multiple documents
+  // still expose the file grid. Keep the source/error assertions below.
+  if (await page.locator("#viewer-body .file-card").count())
+    await page.locator("#viewer-body .file-card").first().click();
   await page
     .locator("#viewer-body .vw-text")
     .filter({ hasText: "ORION-CEDAR" })
@@ -106,8 +109,12 @@ try {
       throw error;
     });
   await page.locator("#files-btn").click();
-  assert.equal(await page.locator("#viewer-body .file-card").count(), 1);
-  await page.locator("#viewer-body .file-card").first().click();
+  await page.locator("#viewer-body .rd-doc").waitFor();
+  assert.equal(await page.locator("#viewer-body .rd-doc").count(), 1);
+  // One indexed document now opens its reader directly; multiple documents
+  // still expose the file grid. Keep the source/error assertions below.
+  if (await page.locator("#viewer-body .file-card").count())
+    await page.locator("#viewer-body .file-card").first().click();
   await page
     .locator("#viewer-body .vw-text")
     .filter({ hasText: "SELENE-BIRCH" })
@@ -125,7 +132,10 @@ try {
     }),
   );
   await page.locator("#files-btn").click();
-  await page.locator("#viewer-body .file-card").first().click();
+  // One indexed document now opens its reader directly; multiple documents
+  // still expose the file grid. Keep the source/error assertions below.
+  if (await page.locator("#viewer-body .file-card").count())
+    await page.locator("#viewer-body .file-card").first().click();
   await page.locator("#viewer-body .viewer-note").waitFor();
   const unavailable = await page.locator("#viewer-body").innerText();
   assert.doesNotMatch(unavailable, /ORION-CEDAR|SELENE-BIRCH/);

@@ -122,10 +122,15 @@ try {
   const checked = new Promise((r) => (observed = r));
   let checks = 0;
   await page.route("**/api/public/workspace/" + ws, async (route) => {
+    const response = await route.fetch();
+    const snapshot = await response.json();
+    assert.ok(
+      snapshot.ready && snapshot.documents.some((d) => d.answerable === true),
+    );
     checks++;
     observed();
     await gate;
-    await route.fulfill({ json: { ready: true, documents: [] } });
+    await route.fulfill({ response, json: snapshot });
   });
   await page.locator("#call-btn").click();
   await checked;

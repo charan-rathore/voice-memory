@@ -218,6 +218,22 @@ const labField = (c) => {
 };
 function leadFor(question, result, bundle, prevField) {
   try {
+    if (result?.requestedChecked) {
+      const t = extractiveSpoken(
+        question,
+        result,
+        bundle,
+        bundle.locateEvidence,
+      );
+      return t
+        ? {
+            text: t.spoken,
+            verdict: t.verdict,
+            field: null,
+            citations: t.citations,
+          }
+        : null;
+    }
     // Lab results across reports first (synthetic-data research prototype):
     // typed observations, comparability checks, no clinical judgement.
     if (bundle.clinical?.length) {
@@ -847,22 +863,31 @@ export function createLocalServer({
       // background, composed summaries, model interpretation, verified
       // model claims) and the final "does this answer the question" audit.
       const validate = (ev) => validateEvidence(ev, bundle);
-      const sem = await semanticRescue({
-        question: original,
-        bundle,
-        lead: shown.lead,
-        raw,
-        ctx,
-        validate,
-        gemini,
-        consent,
-        ip: opts.ip,
-        rerun: async (q) =>
-          (await deterministicAnswer(s, q, ctx)).shown.lead ?? null,
-      }).catch(() => ({
-        lead: shown.lead,
-        trace: { steps: ["semantic_error"] },
-      }));
+      const sem = raw?.requestedChecked
+        ? {
+            lead: shown.lead,
+            trace: {
+              intent: "LOOKUP",
+              lang,
+              steps: ["requested_scope_preserved"],
+            },
+          }
+        : await semanticRescue({
+            question: original,
+            bundle,
+            lead: shown.lead,
+            raw,
+            ctx,
+            validate,
+            gemini,
+            consent,
+            ip: opts.ip,
+            rerun: async (q) =>
+              (await deterministicAnswer(s, q, ctx)).shown.lead ?? null,
+          }).catch(() => ({
+            lead: shown.lead,
+            trace: { steps: ["semantic_error"] },
+          }));
       if (sem.lead !== shown.lead && sem.lead?.citations?.length)
         sem.lead.citations = decorateResult(
           { evidence: sem.lead.citations, question: original },
@@ -923,14 +948,21 @@ export function createLocalServer({
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
       shown.lead = leadFor(question, raw, bundle, ctx || null);
-      if (identifierRequest(question)) return { raw, shown };
+      if (identifierRequest(question)) {
+        if (shown.lead)
+          shown.lead.citations = decorateResult(
+            { evidence: shown.lead.citations, question },
+            s,
+          ).evidence;
+        return { raw, shown };
+      }
 
       if (repairedLab && shown.lead) shown.lead.interpretedAs = question;
       // Reworded beyond keyword reach: one verbatim sentence with its
       // citation, only when the calibrated paraphrase gate is unambiguous.
       // A section-shaped question ("what does this report suggest?", "why
       // was the scan done?") is answered with that headed section, verbatim.
-      let sectioned = false;
+      let sectioned = raw.requestedChecked === true;
       // A fact stated in a record's table, from the most authoritative
       // record that states it (signed / final / posted over estimate /
       // draft / preliminary), with superseded provisional values named.
@@ -941,10 +973,11 @@ export function createLocalServer({
       // negotiations; an authoritative record settles them the same way.
       const openLead = ["OPEN", "PROPOSED"].includes(shown.lead?.verdict);
       if (
-        weakLead(shown.lead) ||
-        shown.lead?.verdict === "QUOTED" ||
-        recordIntent(question) ||
-        openLead
+        !sectioned &&
+        (weakLead(shown.lead) ||
+          shown.lead?.verdict === "QUOTED" ||
+          recordIntent(question) ||
+          openLead)
       ) {
         let fa = bundleFactAnswer(question, bundle, citeSpan);
         // An open lead gives way to a fact only when an authoritative record
