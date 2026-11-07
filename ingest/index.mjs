@@ -21,18 +21,28 @@ export { locate } from "./canonical.mjs";
 // One OCR at a time across all parses (tesseract peaks near 280 MB on a
 // 512 MB host); text reading runs in parallel around it.
 let ocrBusy = false;
+let ocrUnavailable = null;
 const ocrQueue = [];
 function takeOcr() {
+  if (ocrUnavailable) return Promise.reject(ocrUnavailable);
   if (!ocrBusy) {
     ocrBusy = true;
     return Promise.resolve();
   }
-  return new Promise((r) => ocrQueue.push(r));
+  return new Promise((resolve, reject) => ocrQueue.push({ resolve, reject }));
 }
 function giveOcr() {
+  if (ocrUnavailable) return;
   const next = ocrQueue.shift();
-  if (next) next();
+  if (next) next.resolve();
   else ocrBusy = false;
+}
+function quarantineOcr() {
+  if (ocrUnavailable) return;
+  // A native parser worker whose termination cannot be confirmed may still
+  // own its OCR memory. Do not hand that permit to another 512 MB job.
+  ocrUnavailable = Error("The OCR reader could not stop safely. Text-only files are still supported; try scans after the server restarts.");
+  while (ocrQueue.length) ocrQueue.shift().reject(ocrUnavailable);
 }
 export { LIMITS } from "./errors.mjs";
 
@@ -44,6 +54,7 @@ export async function ingestFile(
     onEvent = () => {},
     onPartial = () => {},
     timeoutMs = LIMITS.parseTimeoutMs,
+    terminationTimeoutMs = 5000,
   } = {},
 ) {
   const name = safeFilename(filename);
@@ -71,29 +82,41 @@ export async function ingestFile(
       settled = true;
       clearTimeout(timer);
       wantsOcr = false;
-      // Do not reopen OCR or parse admission while the old worker is
-      // still retiring. Its nested OCR engine has already shut down before
-      // a successful final result is posted (worker.mjs).
-      worker.terminate().then(
-        () => {
-          try {
-            onEvent({ k: "parser-worker-stopped" });
-          } catch {}
-          if (holdsOcr) giveOcr();
-          holdsOcr = false;
-          resolve(v);
-        },
-        () => {
-          // Unknown teardown means the OCR permit cannot safely be reused.
-          resolve({
-            ok: false,
-            code: "parse_failed",
-            stage: "parsing",
-            message:
-              "The document parser could not be stopped safely. Try again later.",
-          });
-        },
-      );
+      // terminate() may never settle when native OCR teardown hangs. The
+      // outer parse timeout is ineffective once it enters this await. Give
+      // the caller a bounded failure; quarantine OCR instead of handing a
+      // potentially still-live native worker's memory to another scan.
+      let stopped = false;
+      const unsafe = () => {
+        if (stopped) return;
+        stopped = true;
+        clearTimeout(stopTimer);
+        quarantineOcr();
+        resolve({
+          ok: false,
+          code: "worker_shutdown_failed",
+          stage: "parsing",
+          message:
+            "The document reader could not stop safely. Its text may still be available from an earlier partial read.",
+        });
+      };
+      const stopTimer = setTimeout(unsafe, terminationTimeoutMs);
+      try {
+        worker.terminate().then(
+          () => {
+            if (stopped) return;
+            stopped = true;
+            clearTimeout(stopTimer);
+            try { onEvent({ k: "parser-worker-stopped" }); } catch {}
+            if (holdsOcr) giveOcr();
+            holdsOcr = false;
+            resolve(v);
+          },
+          unsafe,
+        );
+      } catch {
+        unsafe();
+      }
     };
     const worker = new Worker(new URL("./worker.mjs", import.meta.url), {
       workerData: { bytes: new Uint8Array(buf), filename: name },
@@ -142,21 +165,32 @@ export async function ingestFile(
       if (settled) return;
       if (m?.type === "ocr-wait") {
         wantsOcr = true;
-        takeOcr().then(() => {
-          // Finished (or stopped) while waiting: hand the turn on.
-          if (settled || !wantsOcr) return giveOcr();
-          holdsOcr = true;
-          try {
-            worker.postMessage({ type: "ocr-go" });
-          } catch {
-            done({
+        takeOcr().then(
+          () => {
+            // Finished (or stopped) while waiting: hand the turn on.
+            if (settled || !wantsOcr) return giveOcr();
+            holdsOcr = true;
+            try {
+              worker.postMessage({ type: "ocr-go" });
+            } catch {
+              done({
+                ok: false,
+                code: "parse_failed",
+                stage: "parsing",
+                message: "This file could not be read.",
+              });
+            }
+          },
+          () => fail({
+            why: "the OCR reader is unavailable",
+            result: {
               ok: false,
-              code: "parse_failed",
+              code: "ocr_unavailable",
               stage: "parsing",
-              message: "This file could not be read.",
-            });
-          }
-        });
+              message: "Scanned pages cannot be read safely right now. Try again after the server restarts.",
+            },
+          }),
+        );
         return;
       }
       if (m?.type === "event") {
@@ -199,14 +233,16 @@ export async function ingestFile(
       });
     });
     worker.once("exit", (code) => {
-      if (code !== 0)
+      // A worker can exit normally without ever posting a final result.
+      // That must be terminal, not a 90-second "Reading text" limbo.
+      if (!settled)
         fail({
-          why: "could not be decoded",
+          why: "ended before completing",
           result: {
             ok: false,
             code: "parse_failed",
             stage: "parsing",
-            message: "This file could not be read.",
+            message: "The document reader ended before producing a result.",
           },
         });
     });
