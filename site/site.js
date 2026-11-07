@@ -1061,10 +1061,13 @@
     // quote can span the whole document; the retrieved passage in r.answer
     // names the actual lines the answer rests on, so show that instead.
     const retrieved = /Relevant source excerpts\n\n([\s\S]*?)\n\[Source 1\]/
-      .exec(r.answer ?? "")?.[1]
+      .exec(r.retrieval?.text ?? r.answer ?? "")?.[1]
       ?.trim();
+    // The one answer (src/answer-contract.mjs); the fallback below only
+    // serves saved answers from before `final` existed.
     const text =
       lead?.text ??
+      r.final?.text ??
       (ev.length
         ? `From the document: “${prettyQuote(retrieved || ev[0].quote).slice(0, 280)}”${ev.length > 1 ? ` (and ${ev.length - 1} more cited passage${ev.length > 2 ? "s" : ""})` : ""}`
         : "I don't see a supported answer to that in these documents.");

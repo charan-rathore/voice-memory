@@ -169,8 +169,8 @@ async function api(path, opts = {}, ctx = {}) {
 export function shapeAnswer(a) {
   const lead = a.lead ?? null;
   return {
-    verdict: lead?.verdict ?? "UNKNOWN",
-    answer: lead?.text ?? a.answer ?? null,
+    verdict: a.final?.verdict ?? lead?.verdict ?? "UNKNOWN",
+    answer: a.final?.text ?? lead?.text ?? a.answer ?? null,
     citations: (lead?.citations?.length ? lead.citations : (a.evidence ?? []))
       .slice(0, 4)
       .map((c) => ({ document: c.title, quote: c.quote, status: c.status })),

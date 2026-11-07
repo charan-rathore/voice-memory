@@ -617,16 +617,22 @@ test("bring-your-own answers complete wrapped sentences and keep one supporting 
     "What is the menu deadline and what fee applies if it changes after that?",
   );
   assert.equal(a.status, 200);
-  // The excerpt must complete the wrapped sentence: the deadline AND the fee,
-  // not a cut-off "...incur a".
-  assert.match(a.body.answer, /27 March 2027/);
-  assert.match(a.body.answer, /Rs 18,000/);
-  assert.doesNotMatch(a.body.answer, /incur a\n\[Source/);
+  // The retrieved excerpt must complete the wrapped sentence: the deadline
+  // AND the fee, not a cut-off "...incur a".
+  const excerpt = a.body.retrieval.text;
+  assert.match(excerpt, /27 March 2027/);
+  assert.match(excerpt, /Rs 18,000/);
+  assert.doesNotMatch(excerpt, /incur a\n\[Source/);
   // The clipped duplicate line must not appear beside the completed passage.
-  const occurrences = a.body.answer.split("27 March 2027").length - 1;
+  const occurrences = excerpt.split("27 March 2027").length - 1;
   assert.ok(occurrences <= 2, `deadline repeated ${occurrences} times`);
   // Continuation must not swallow the following unrelated block.
-  assert.doesNotMatch(a.body.answer.split("[Source 1]")[0], /Allergens/);
+  assert.doesNotMatch(excerpt.split("[Source 1]")[0], /Allergens/);
+  // The one shown answer quotes that excerpt, not the whole document.
+  assert.match(a.body.final.text, /27 March 2027/);
+  assert.match(a.body.final.text, /Rs 18,000/);
+  assert.doesNotMatch(a.body.final.text, /Allergens/);
+  assert.equal(a.body.answer, a.body.final.text);
 });
 
 // ---- Public-call counters: visitor allowance, ceilings, cutoff, fail-closed
