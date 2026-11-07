@@ -55,6 +55,7 @@ export async function ingestFile(
     onPartial = () => {},
     timeoutMs = LIMITS.parseTimeoutMs,
     terminationTimeoutMs = 5000,
+    workerFactory = (url, options) => new Worker(url, options),
   } = {},
 ) {
   const name = safeFilename(filename);
@@ -118,7 +119,7 @@ export async function ingestFile(
         unsafe();
       }
     };
-    const worker = new Worker(new URL("./worker.mjs", import.meta.url), {
+    const worker = workerFactory(new URL("./worker.mjs", import.meta.url), {
       workerData: { bytes: new Uint8Array(buf), filename: name },
       resourceLimits: { maxOldGenerationSizeMb: LIMITS.workerHeapMb },
       stdout: true,
