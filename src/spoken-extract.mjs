@@ -142,6 +142,23 @@ export function extractiveSpoken(
     !result.evidence?.length
   )
     return null;
+  // The engine's requested-field fallback now supplies exact field fragments
+  // from the requested textual record, rather than a whole mixed-record chunk.
+  // Speak those same fragments; lexical rescoring could select only a label or
+  // reintroduce a neighboring record. No generated paraphrase or inferred value.
+  if (result.requestedScoped) {
+    const text = result.evidence.map((ev) => ev.quote.trim()).join("; ");
+    if (!text || text.split(/\s+/).length > 40) return null;
+    return {
+      spoken:
+        text.replace(/[.;:,]?$/, ".") +
+        " That's from " +
+        shortTitle(result.evidence[0].title) +
+        ".",
+      verdict: "QUOTED",
+      citations: result.evidence,
+    };
+  }
   // When the engine grounded its evidence through a disclosed query
   // expansion/rephrase (result.queryTransform), passage scoring uses that
   // same disclosed vocabulary; every question-shape gate below (decision

@@ -1,4 +1,4 @@
-import { identifierRequest } from "../dist/engine.mjs";
+import { identifierRequest, explicitRecordRequest } from "../dist/engine.mjs";
 /** OpenAI-compatible streaming contract for a future Bolna custom LLM.
  * Disabled unless explicitly instantiated by a caller. No public listener,
  * credential creation, account configuration or real calls in this module.
@@ -9,6 +9,7 @@ import { randomBytes } from "node:crypto";
 import {
   answer,
   answerFromRetrieval,
+  constrainRequestedEvidence,
   draft,
   validateEvidence,
 } from "../dist/engine.mjs";
@@ -815,7 +816,10 @@ export function createVoiceAdapter({
               citations: [],
             },
           };
-        } else if (identifierRequest(transcript)) {
+        } else if (
+          identifierRequest(transcript) &&
+          !explicitRecordRequest(asked, bundle.sources)
+        ) {
           grant.last = answer(transcript, bundle);
           spoken = grant.last.spoken;
           turn = {
@@ -882,6 +886,8 @@ export function createVoiceAdapter({
                 model: DENSE_MODEL_ID,
                 available: denseAvailableFor(bundle),
               });
+          if (retrieval)
+            result = constrainRequestedEvidence(asked, bundle, result);
           if (
             !result ||
             typeof result.refused !== "boolean" ||
@@ -921,7 +927,7 @@ export function createVoiceAdapter({
           // Lab results across reports (bundle.clinical, set by the server for
           // uploaded lab tables) answer first; absent for Northstar.
           const clinical =
-            bundle.clinical?.length && !deal
+            !result.requestedChecked && bundle.clinical?.length && !deal
               ? (clinicalAnswer(asked, bundle.clinical) ??
                 candidates
                   .map((q) => clinicalOverview(q, bundle.clinical))
@@ -951,20 +957,27 @@ export function createVoiceAdapter({
                   })),
               }
             : null;
-          rendered ??= spokenTurn(
-            asked,
-            bundle,
-            // Context from this request's own history only: a fixed bearer is
-            // shared by every caller, so grant-level state would leak between
-            // concurrent calls.
-            historyField(bundle, data.messages.slice(0, -1)) ??
-              (credentials.has(token) ? null : (grant.lastField ?? null)),
-          );
+          rendered ??= result.requestedChecked
+            ? null
+            : spokenTurn(
+                asked,
+                bundle,
+                // Context from this request's own history only: a fixed bearer is
+                // shared by every caller, so grant-level state would leak between
+                // concurrent calls.
+                historyField(bundle, data.messages.slice(0, -1)) ??
+                  (credentials.has(token) ? null : (grant.lastField ?? null)),
+              );
           // Outside the claim graph's fields: speak one verbatim sentence or
           // table row from the engine's already-validated evidence, or keep
           // the abstention. Deliberate abstentions (unknown entity/amount)
           // carry no "no_field" reason and are never overridden.
-          if (!clinical && (!rendered || rendered.reason === "no_field")) {
+          if (
+            !clinical &&
+            (result.requestedChecked ||
+              !rendered ||
+              rendered.reason === "no_field")
+          ) {
             const quoted = extractiveSpoken(
               asked,
               result,
@@ -1024,11 +1037,18 @@ export function createVoiceAdapter({
         if (!social && secondQ) {
           let second = null;
           try {
-            second =
-              (bundle.clinical?.length && !deal
-                ? clinicalAnswer(secondQ, bundle.clinical)
-                : null) ??
-              spokenTurn(secondQ, bundle, turn?.spokenTurn?.field ?? null);
+            const secondResult = answer(secondQ, bundle);
+            second = secondResult.requestedChecked
+              ? extractiveSpoken(
+                  secondQ,
+                  secondResult,
+                  bundle,
+                  bundle.locateEvidence,
+                )
+              : ((bundle.clinical?.length && !deal
+                  ? clinicalAnswer(secondQ, bundle.clinical)
+                  : null) ??
+                spokenTurn(secondQ, bundle, turn?.spokenTurn?.field ?? null));
           } catch {
             second = null;
           }
@@ -1050,7 +1070,13 @@ export function createVoiceAdapter({
         // calibrated paraphrase gate is unambiguous (paraphrase.mjs).
         // A record question ("was iron prescribed?") is answered from the
         // records' facts even when a lab answer was found.
-        if (!social && !mixedTurn && !refusal(spoken) && recordIntent(asked)) {
+        if (
+          !turn?.result?.requestedChecked &&
+          !social &&
+          !mixedTurn &&
+          !refusal(spoken) &&
+          recordIntent(asked)
+        ) {
           const fa = (() => {
             try {
               return bundleFactAnswer(asked, bundle, citeSpan);
@@ -1074,6 +1100,7 @@ export function createVoiceAdapter({
         if (
           !social &&
           !mixedTurn &&
+          !turn?.result?.requestedChecked &&
           refusal(spoken) &&
           !isFragment(transcript)
         ) {

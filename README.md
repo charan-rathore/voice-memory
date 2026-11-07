@@ -295,3 +295,23 @@ explicit `VM_BYO_VOICE=on` enables its key, session and visitor-provider Listen
 routes and shows its controls. Existing server-funded public calling is separate.
 Real visitor-account call integration has not been verified; this gate does not
 approve provider terms or spending.
+
+### Requested-field fallback scope
+
+For recognized tracking, receiver, weight and count questions, fallback evidence
+is the exact supported field clause, not the enclosing mixed-record chunk.
+Explicit Order, Parcel, Shipment and Record labels bound the narrow textual
+record path. Disjoint clauses retain separate offsets and source hashes; the
+original source remains unchanged. The extractive spoken consumer quotes those
+same clauses, including explicitly recorded absence. Missing fields refuse and
+keep the closest passages for review.
+
+This does not derive arbitrary physical record ownership, resolve issuer or
+namespace ambiguity, or qualify every paraphrase, multi-field question, layout,
+PDF/OCR source or long answer for speech. A passing literal-field regression is
+not a general ingestion, relation-extraction or production-resource clearance.
+
+Negated/excluded requested relations and mixed same-kind counts in one clause
+are not inferred: they refuse for review. Explicit carrier-reference and tracking
+labels are kept distinct rather than assumed interchangeable. This stricter
+subtype rule can refuse documents that print only a different identifier label.

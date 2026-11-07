@@ -1,5 +1,12 @@
 import { lookupIdentifier } from "./identifier-support";
 export { identifierRequest, lookupIdentifier } from "./identifier-support";
+export { explicitRecordRequest } from "./requested-support";
+import {
+  missingRequestedSupport,
+  requestedSupportSpans,
+  explicitRequestedRoots,
+  explicitRecordRequest,
+} from "./requested-support";
 import { contextReview } from "./context";
 import {
   expandQuery,
@@ -343,7 +350,9 @@ export function answer(
   // only attempted when the untouched question grounds nothing.
   const fields = questionFields(question);
   let found = retrieve(question);
-  const identifier = lookupIdentifier(question, bundle.sources);
+  const identifier = explicitRecordRequest(question, bundle.sources)
+    ? null
+    : lookupIdentifier(question, bundle.sources);
   if (identifier) {
     // Identifier values use exact declarative/record bindings, not relevance
     // scores or another field's nearby number. Keep canonical source spans.
@@ -1414,6 +1423,7 @@ export function answer(
       result.spoken = result.answer;
     }
   }
+  if (!claimsVerdict) constrainRequestedEvidence(question, bundle, result);
   result.queryTransform = expansionUsed
     ? {
         original: expansionUsed.original,
@@ -1450,6 +1460,77 @@ export function answer(
   }
   return result;
 }
+// Shared post-retrieval policy: validate/narrow existing evidence only. This
+// never promotes an insufficient external retrieval result to an answer.
+export function constrainRequestedEvidence(
+  question: string,
+  bundle: ReturnType<typeof importBundle>,
+  result: ReturnType<typeof answerFromRetrieval>,
+) {
+  result.requestedChecked = requestedSupportSpans(question, "") !== null;
+  if (!result.requestedChecked) return result;
+  const roots = bundle.sources.flatMap((source) =>
+    explicitRequestedRoots(source.text),
+  );
+  if (
+    result.supported &&
+    missingRequestedSupport(
+      question,
+      result.evidence.map((e) => e.quote),
+      roots,
+    )
+  ) {
+    result.reviewEvidence =
+      result.evidence as unknown as typeof result.reviewEvidence;
+    result.evidence = [];
+    result.refused = true;
+    result.supported = false;
+    result.unresolved = false;
+    result.evidenceStatus = "insufficient";
+    result.partial = false;
+    result.partialNotice = null;
+    result.answer =
+      "The documents do not establish an answer to this question: the closest passages do not contain the asked fact. They are on screen for review.";
+    result.spoken = result.answer;
+  }
+  // A requested-record support check must constrain the actual evidence that
+  // downstream text and voice consumers receive, not merely its boolean status.
+  if (result.supported && result.evidence.length) {
+    const ranges = result.evidence.map((ev) => ({
+      ev,
+      spans: requestedSupportSpans(question, ev.quote, roots),
+    }));
+    if (ranges.some((r) => r.spans !== null)) {
+      const narrowed = ranges.flatMap(({ ev, spans }) =>
+        (spans ?? []).map((span) => {
+          const source = bundle.sources.find((s) => s.id === ev.sourceId)!;
+          const start = ev.start + span.start,
+            end = ev.start + span.end;
+          const exact = {
+            ...ev,
+            start,
+            end,
+            quote: source.text.slice(start, end),
+            firstLine: lineOf(source.text, start),
+            lastLine: lineOf(source.text, end),
+          };
+          validateEvidence(exact, bundle);
+          return exact;
+        }),
+      );
+      if (narrowed.length) {
+        result.evidence = narrowed;
+        result.requestedScoped = true;
+        result.answer =
+          "Relevant source excerpts\n\n" +
+          narrowed.map((e) => e.quote + "\n[" + e.title + "]").join("\n\n") +
+          "\n\nThese are retrieved passages, not a generated recommendation.";
+      }
+    }
+  }
+  return result;
+}
+
 export function answerFromRetrieval(
   question: string,
   bundle: ReturnType<typeof importBundle>,
@@ -1557,6 +1638,8 @@ export function answerFromRetrieval(
     // written answer: record status first, conflicts named, no silent
     // recency-as-authority.
     spoken: null as string | null,
+    requestedScoped: false,
+    requestedChecked: false,
   };
 }
 export function draft(
