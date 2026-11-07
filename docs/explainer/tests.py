@@ -258,8 +258,8 @@ class Explainer(Scene):
             label = Text(f"Lab's printed range {rng.get('low', fmt(rng['lowN']))}–"
                          f"{rng.get('high', fmt(rng['highN']))} {unit}",
                          font_size=20 if small else 24, color=GREEN, font=SERIF)
-            label.next_to(band, UP, buff=0.12)
-        log = Text("log scale", font_size=16, color=INK2, font=SANS).move_to([sc.x1, sc.y - 0.75, 0]) if sc.log else VGroup()
+            label.move_to([(x0 + x1) / 2, sc.y - (0.9 if small else 1.1), 0])
+        log = Text("log scale", font_size=16, color=INK2, font=SANS).move_to([sc.x1, sc.y + 0.95, 0]) if sc.log else VGroup()
         return line, ticks, band, label, log
 
     def beat_scale(self):
@@ -281,10 +281,10 @@ class Explainer(Scene):
             self.play(GrowFromEdge(band, LEFT), FadeIn(label, shift=DOWN * 0.1), run_time=0.8)
         self.add(log)
         st = self.state()
-        m = marker(st).move_to([sc.x0, sc.y + 0.55, 0])
+        m = marker(st).move_to([sc.x0, sc.y + 1.05, 0])
         vtxt = Text(L["raw"], font_size=30, color=INK, font=SERIF)
         self.play(FadeIn(m))
-        self.play(m.animate.move_to([sc.x(L["value"]), sc.y + 0.55, 0]),
+        self.play(m.animate.move_to([sc.x(L["value"]), sc.y + 1.05, 0]),
                   rate_func=rate_functions.ease_in_out_cubic, run_time=1.2)
         vtxt.next_to(m, UP, buff=0.12)
         word, col = WORD[st]
@@ -343,7 +343,7 @@ class Explainer(Scene):
             self.play(Create(line), FadeIn(ticks), FadeIn(band), FadeIn(label), run_time=0.7)
             dots = VGroup()
             for h in (a, b):
-                d = Dot([sc.x(h["value"]), sc.y + 0.45, 0], radius=0.11,
+                d = Dot([sc.x(h["value"]), sc.y + 0.95, 0], radius=0.11,
                         color=INK if h is b else INK2)
                 lab = VGroup(Text(h["raw"], font_size=24, color=INK, font=SERIF),
                              Text(day(h["date"]), font_size=18, color=INK2, font=SANS)).arrange(DOWN, buff=0.06)
