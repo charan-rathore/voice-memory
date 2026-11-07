@@ -1,3 +1,4 @@
+import { unboundOwnerTurn } from "./requested-owner.mjs";
 import { identifierRequest, explicitRecordRequest } from "../dist/engine.mjs";
 /** OpenAI-compatible streaming contract for a future Bolna custom LLM.
  * Disabled unless explicitly instantiated by a caller. No public listener,
@@ -777,7 +778,17 @@ export function createVoiceAdapter({
           return new Response(null, { status: 499 });
         }
         let spoken, turn;
-        if (mixedTurn) {
+        const ownerBlocked = unboundOwnerTurn(transcript, bundle);
+        if (ownerBlocked) {
+          spoken = ownerBlocked.spoken;
+          grant.last = {
+            refused: true,
+            evidence: [],
+            requestedChecked: true,
+            spoken,
+          };
+          turn = { result: grant.last, spokenTurn: ownerBlocked };
+        } else if (mixedTurn) {
           spoken = mixedTurn.spoken;
           turn = {
             spokenTurn: {
@@ -1034,7 +1045,7 @@ export function createVoiceAdapter({
           );
         // The second half of a compound question, from the same deterministic
         // renderers (clinical first, then the claim graph).
-        if (!social && secondQ) {
+        if (!ownerBlocked && !social && secondQ) {
           let second = null;
           try {
             const secondResult = answer(secondQ, bundle);
@@ -1090,7 +1101,7 @@ export function createVoiceAdapter({
               ...turn,
               spokenTurn: {
                 intent: "LOOKUP",
-                verdict: "QUOTED",
+                verdict: fa.clarify ? "AMBIGUOUS_PATIENT" : "QUOTED",
                 spoken,
                 citations: fa.citations,
               },

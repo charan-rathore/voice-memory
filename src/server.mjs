@@ -1,4 +1,4 @@
-import { unboundRequestedOwner } from "./requested-owner.mjs";
+import { unboundOwnerTurn } from "./requested-owner.mjs";
 import http from "node:http";
 import path from "node:path";
 import { createCallCounters } from "./public-call-counters.mjs";
@@ -855,13 +855,13 @@ export function createLocalServer({
             evidence: [],
           },
         };
-      const unbound = unboundRequestedOwner(original, bundle);
+      const unbound = unboundOwnerTurn(original, bundle);
       if (unbound)
         return {
           raw: null,
           shown: {
             lead: {
-              text: "I cannot bind the requested identifier to a record in these documents. I will not substitute another record's facts.",
+              text: unbound.spoken,
               verdict: "UNBOUND_OWNER",
               field: null,
               citations: [],

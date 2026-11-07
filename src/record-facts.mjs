@@ -1,5 +1,6 @@
 import {
   recordOwnerIds,
+  unboundRequestedOwner,
   recordPatientIds,
   namedRecordOwners,
 } from "./requested-owner.mjs";
@@ -457,6 +458,7 @@ const MONTH =
  *   entries: [{ source, doc, records }] for each indexed document
  */
 export function factAnswer(question, entries) {
+  if (unboundRequestedOwner(question, { records: entries })) return null;
   const qs = new Set(stems(question));
   const qConcepts = conceptsOf(question);
   let primary = conceptOf(question);

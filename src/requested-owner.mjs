@@ -56,3 +56,16 @@ export function recordPatientIds(record) {
     }
   return [...ids];
 }
+
+// Shared consumer veto. This is a refusal, never evidence or an identity inference.
+export function unboundOwnerTurn(question, bundle) {
+  if (!unboundRequestedOwner(question, bundle)) return null;
+  return {
+    intent: "UNBOUND_OWNER",
+    verdict: "UNBOUND_OWNER",
+    field: null,
+    spoken:
+      "I cannot bind the requested identifier to a record in these documents. I will not substitute another record's facts.",
+    citations: [],
+  };
+}
