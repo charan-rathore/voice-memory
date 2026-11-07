@@ -1365,10 +1365,34 @@ test("same-file HTTP retry keeps one workspace upload and isolates another works
       const r = await fetch(base + "/api/public/workspace/" + ws + "/upload", {
         method: "POST",
         headers: { "x-file-name": "extra" + i + ".txt" },
-        body: "Fictional separate source " + i,
+        body:
+          "Fictional separate source " +
+          i +
+          ". This complete synthetic document has enough text to remain a live capacity fixture.",
       });
       assert.equal(r.status, 202);
     }
+    // Capacity is defined over live entries, not failed parses. Settle the
+    // five files first so a quick parser cannot free a slot under the test.
+    let settled;
+    for (let i = 0; i < 200; i++) {
+      settled = await (
+        await fetch(base + "/api/public/workspace/" + ws)
+      ).json();
+      if (
+        settled.documents.length === 5 &&
+        settled.documents.every((d) =>
+          ["ready", "needs_review", "failed"].includes(d.status),
+        )
+      )
+        break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    assert.equal(settled.documents.length, 5);
+    assert.ok(
+      settled.documents.every((d) => d.status === "ready"),
+      "all five capacity fixtures must actually parse before retry/overflow",
+    );
     assert.equal(
       (await upload(ws)).id,
       a.id,
