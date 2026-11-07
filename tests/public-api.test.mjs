@@ -465,6 +465,8 @@ test("an upload held for review is still answerable in a visitor workspace", asy
     "text-and-blank.pdf",
   );
   assert.equal(st.documents[0].status, "needs_review");
+  assert.equal(st.documents[0].answerable, true);
+  assert.ok(st.bundleGeneration > 0);
   assert.ok(st.ready, "the workspace has an index");
   const a = await ask(ws.id, "What does this document say?");
   assert.equal(a.status, 200, JSON.stringify(a.body).slice(0, 200));

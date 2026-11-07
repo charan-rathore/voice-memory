@@ -1335,22 +1335,28 @@ export function createLocalServer({
     const docsNow = indexable(ws);
     if (!docsNow.length) {
       ws.bundle = null;
+      ws.sourceToEntry = new Map();
+      ws.bundleGeneration = (ws.bundleGeneration ?? 0) + 1;
       return;
     }
     const bundle = importBundle(
       docsNow.map((e) => ({ id: e.id, title: e.title, text: e.doc.text })),
       { scope: ws.sid },
     );
-    ws.sourceToEntry = new Map(
+    const sourceToEntry = new Map(
       bundle.sources.map((src, i) => [src.id, docsNow[i]]),
     );
     for (let i = 0; i < bundle.sources.length; i++)
       bundle.sources[i].provisional = docsNow[i].status === "partial";
-    bundle.locateEvidence = locatorFor(ws.sourceToEntry);
+    bundle.locateEvidence = locatorFor(sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsNow, extractReport);
     attachRecords(bundle, docsNow);
     attachDigests(bundle, docsNow, denseStatus());
-    ws.bundle = bundle; // the library keeps every entry, indexed or not
+    // Commit source identity and answer index together. A failed digest,
+    // records or clinical step must not attach a new map to an old bundle.
+    ws.sourceToEntry = sourceToEntry;
+    ws.bundle = bundle;
+    ws.bundleGeneration = (ws.bundleGeneration ?? 0) + 1;
     warmDense(bundle.rows);
     warmUnits(bundle);
   };
@@ -1391,29 +1397,23 @@ export function createLocalServer({
       // The upload is acknowledged at once; freeing the embedding model's
       // memory finishes before parsing starts, not before the reply.
       const entry = addUpload(ws, bytes, filename, (x) => rebuildWorkspace(x), {
-        before: pauseDenseForIngest(),
+        // Do not pause a model for a rejected or deduplicated upload. The
+        // accepted task owns exactly one pause until its actual completion.
+        before: () => pauseDenseForIngest(),
+        after: () => resumeDenseAfterIngest(ws.bundle?.rows ?? null),
       });
-      const t0 = Date.now();
-      const iv = setInterval(() => {
-        if (
-          ["ready", "needs_review", "failed"].includes(entry.status) ||
-          Date.now() - t0 > 120000
-        ) {
-          clearInterval(iv);
-          if (entry.status === "needs_review") rebuildWorkspace(ws);
-          resumeDenseAfterIngest(ws.bundle?.rows ?? null);
-        }
-      }, 400);
-      iv.unref?.();
       return publicEntry(entry);
     },
     status(id) {
       const ws = this.get(id);
       if (!ws) return null;
+      const committed = new Set(ws.sourceToEntry?.values() ?? []);
       return {
-        ready: !!ws.bundle,
+        ready: !!ws.bundle && committed.size > 0,
+        bundleGeneration: ws.bundleGeneration ?? 0,
         documents: libraryOf(ws).map((e) => ({
           ...publicEntry(e),
+          answerable: !!ws.bundle && committed.has(e),
           title: e.title,
           pages: e.doc?.pages?.length ?? null,
         })),
@@ -2350,19 +2350,9 @@ export function createLocalServer({
         // Memory guard: OCR must never share the 512MB budget with the
         // resident embedding model; dense pauses until this upload settles.
         const entry = addUpload(s, bytes, filename, rebuildIndex, {
-          before: pauseDenseForIngest(),
+          before: () => pauseDenseForIngest(),
+          after: () => resumeDenseAfterIngest(s.bundle?.rows ?? null),
         });
-        const up0 = Date.now();
-        const iv = setInterval(() => {
-          const settled = ["ready", "needs_review", "failed"].includes(
-            entry.status,
-          );
-          if (settled || Date.now() - up0 > 120000) {
-            clearInterval(iv);
-            resumeDenseAfterIngest(s.bundle?.rows ?? null);
-          }
-        }, 500);
-        iv.unref?.();
         res.writeHead(202);
         out = { document: publicEntry(entry) };
       } else if (libPost) {

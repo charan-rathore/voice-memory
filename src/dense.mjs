@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createModelLifetime } from "./model-lifetime.mjs";
 /**
  * Dense retrieval stage (Phase 3 hybrid) - local embeddings, no paid API.
  *
@@ -17,7 +18,9 @@ import { readFileSync } from "node:fs";
  * VM_DENSE=off disables the stage entirely (no download, no memory).
  */
 const MODEL_ID = process.env.VM_DENSE_MODEL || "Xenova/bge-small-en-v1.5";
-const state = { pipe: null, loading: null, failed: null };
+const state = { pipe: null, loading: null, retiring: null, failed: null };
+const lifetime = createModelLifetime();
+let modelGeneration = 0;
 // OCR/ingest spikes ~250MB on top of the server; the resident model adds
 // ~250-340MB. On a 512MB budget they must never coexist: uploads pause the
 // dense stage (dispose the model, no reload kicks) until processing settles.
@@ -65,14 +68,25 @@ export function relieveMemoryPressure(rss = process.memoryUsage().rss) {
   const pipe = state.pipe;
   state.pipe = null;
   state.loading = null;
+  modelGeneration++;
   guard.dropped++;
   guard.refused = `dropped at ${Math.round(rss / 1048576)} of ${Math.round(limit / 1048576)} MB`;
-  pipe.dispose?.().catch?.(() => {});
+  // A memory-pressure request cannot invalidate a session an earlier
+  // inference still owns. The next load waits until retirement completes.
+  const retiring = lifetime.drained().then(() => pipe.dispose?.());
+  state.retiring = retiring;
+  retiring
+    .catch(() => {})
+    .finally(() => {
+      if (state.retiring === retiring) state.retiring = null;
+    });
   return true;
 }
 
 function ensureLoading() {
-  if (process.env.VM_DENSE === "off" || state.failed || state.pipe)
+  if (process.env.VM_DENSE === "off" || state.failed) return null;
+  if (state.pipe) return Promise.resolve(state.pipe);
+  if (state.retiring || ingestDepth > 0 || lifetime.blocked)
     return state.loading;
   if (!state.loading && !memoryHeadroomOk()) {
     const limit = memoryLimitBytes();
@@ -83,19 +97,38 @@ function ensureLoading() {
     return null;
   }
   if (!state.loading) {
-    state.loading = (async () => {
+    const generation = modelGeneration;
+    const loading = (async () => {
       try {
         const { pipeline, env } = await import("@huggingface/transformers");
         env.cacheDir = process.env.VM_DENSE_CACHE || ".cache/models";
-        state.pipe = await pipeline("feature-extraction", MODEL_ID, {
+        const pipe = await pipeline("feature-extraction", MODEL_ID, {
           quantized: true,
         });
-        return state.pipe;
+        // A parser may have started while the model was loading. Never
+        // resurrect a stale pipeline after the ingestion pause.
+        if (
+          generation !== modelGeneration ||
+          ingestDepth > 0 ||
+          lifetime.blocked
+        ) {
+          await pipe.dispose?.();
+          return null;
+        }
+        state.pipe = pipe;
+        return pipe;
       } catch (e) {
-        state.failed = String((e && e.message) || e);
+        if (generation === modelGeneration && ingestDepth === 0)
+          state.failed = String((e && e.message) || e);
         return null;
       }
     })();
+    state.loading = loading;
+    loading
+      .finally(() => {
+        if (state.loading === loading) state.loading = null;
+      })
+      .catch(() => {});
   }
   return state.loading;
 }
@@ -107,17 +140,24 @@ function ensureLoading() {
  */
 export function embedQueryReady(q) {
   relieveMemoryPressure();
-  if (!state.pipe) {
+  const pipe = state.pipe;
+  if (!pipe) {
     if (ingestDepth === 0) ensureLoading();
     return null;
   }
-  return state
-    .pipe(q, { pooling: "mean", normalize: true })
+  const release = lifetime.acquire();
+  if (!release || state.pipe !== pipe) {
+    release?.();
+    return null;
+  }
+  return Promise.resolve()
+    .then(() => pipe(q, { pooling: "mean", normalize: true }))
     .then((out) => Array.from(out.data))
     .catch((e) => {
-      state.failed = String((e && e.message) || e);
+      if (ingestDepth === 0) state.failed = String((e && e.message) || e);
       return null;
-    });
+    })
+    .finally(release);
 }
 
 /**
@@ -164,16 +204,23 @@ export function warmDense(rows) {
         for (const r of rows) {
           if (r.chunk.embedding && r.chunk.embedding_model === MODEL_ID)
             continue;
-          const out = await pipe(passageText(r), {
-            pooling: "mean",
-            normalize: true,
-          });
-          r.chunk.embedding = JSON.stringify(Array.from(out.data));
-          r.chunk.embedding_model = MODEL_ID;
+          if (state.pipe !== pipe || ingestDepth > 0) return false;
+          const release = lifetime.acquire();
+          if (!release) return false;
+          try {
+            const out = await pipe(passageText(r), {
+              pooling: "mean",
+              normalize: true,
+            });
+            r.chunk.embedding = JSON.stringify(Array.from(out.data));
+            r.chunk.embedding_model = MODEL_ID;
+          } finally {
+            release();
+          }
         }
         return true;
       } catch (e) {
-        state.failed = String((e && e.message) || e);
+        if (ingestDepth === 0) state.failed = String((e && e.message) || e);
         return false;
       }
     })
@@ -218,15 +265,42 @@ export function denseAvailableFor(bundle) {
  */
 export function pauseDenseForIngest() {
   ingestDepth++;
+  lifetime.pause();
+  // A second parallel upload uses the same retirement barrier; it must
+  // not dispose the same model a second time.
+  if (ingestDepth > 1) return state.retiring ?? Promise.resolve();
+  modelGeneration++;
   const pipe = state.pipe;
+  const loading = state.loading;
   state.pipe = null;
   state.loading = null;
-  return pipe ? pipe.dispose().catch(() => {}) : Promise.resolve();
+  const previous = state.retiring ?? Promise.resolve();
+  const retiring = previous
+    .catch(() => {})
+    .then(async () => {
+      if (loading) await loading;
+      await lifetime.drained();
+      await pipe?.dispose?.();
+    });
+  state.retiring = retiring;
+  retiring
+    .catch(() => {})
+    .finally(() => {
+      if (state.retiring === retiring) state.retiring = null;
+    });
+  return retiring;
 }
 
 export function resumeDenseAfterIngest(rows) {
-  ingestDepth = Math.max(0, ingestDepth - 1);
-  if (ingestDepth === 0 && rows) warmDense(rows);
+  if (ingestDepth === 0) return;
+  ingestDepth--;
+  lifetime.resume();
+  if (ingestDepth !== 0 || !rows) return;
+  // Even if a failed preparation timed out, do not warm a new model before
+  // the previous pipeline has definitely stopped.
+  const retirement = state.retiring;
+  if (retirement) retirement.then(() => warmDense(rows)).catch(() => {});
+  else warmDense(rows);
 }
 
 export const DENSE_MODEL_ID = MODEL_ID;
@@ -253,16 +327,24 @@ export const denseStatus = () => ({
  */
 export async function embedTextsReady(texts) {
   relieveMemoryPressure();
-  if (!state.pipe || !texts.length) return null;
+  const pipe = state.pipe;
+  if (!pipe || !texts.length) return null;
   try {
     const out = [];
     for (const t of texts) {
-      const v = await state.pipe(t, { pooling: "mean", normalize: true });
-      out.push(Float32Array.from(v.data));
+      if (ingestDepth > 0 || state.pipe !== pipe) return null;
+      const release = lifetime.acquire();
+      if (!release) return null;
+      try {
+        const v = await pipe(t, { pooling: "mean", normalize: true });
+        out.push(Float32Array.from(v.data));
+      } finally {
+        release();
+      }
     }
     return out;
   } catch (e) {
-    state.failed = String((e && e.message) || e);
+    if (ingestDepth === 0) state.failed = String((e && e.message) || e);
     return null;
   }
 }

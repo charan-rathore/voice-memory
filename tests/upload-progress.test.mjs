@@ -1,3 +1,4 @@
+import { addUpload } from "../src/library.mjs";
 // Upload progress record regressions (the "Watch it read" view's data):
 //  - every status log event carries the SAME timestamp as its entry in
 //    `timings` (two Date.now() calls can straddle a millisecond; the
@@ -105,4 +106,38 @@ test("a cached re-reading re-stamps OCR page facts (no undefined confidence)", a
   );
   assert.equal(p2.confidence, scanned.confidence);
   assert.equal(typeof p2.uncertain, "number");
+});
+
+test("rejected dense preparation marks upload failed and balances cleanup", async () => {
+  const session = { sid: "ws:lifecycle-test" };
+  let starts = 0;
+  let cleanups = 0;
+  const entry = addUpload(
+    session,
+    Buffer.from(
+      "This is a fictional document sufficiently long to pass admission and test preparation failures.",
+    ),
+    "lifecycle.txt",
+    () => {
+      throw Error("must not build an index after rejected preparation");
+    },
+    {
+      before: async () => {
+        starts++;
+        throw Error("model teardown failed");
+      },
+      after: async () => {
+        cleanups++;
+      },
+    },
+  );
+  for (let n = 0; n < 80 && entry.status !== "failed"; n++)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(entry.status, "failed");
+  assert.equal(entry.error.stage, "preparing");
+  assert.equal(starts, 1);
+  // The failed entry is terminal before the finally callback finishes.
+  for (let n = 0; n < 80 && cleanups !== 1; n++)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(cleanups, 1);
 });

@@ -231,7 +231,13 @@ export function findUploadRetry(s, bytes, filename) {
   );
 }
 
-export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
+export function addUpload(
+  s,
+  bytes,
+  filename,
+  rebuild,
+  { before = null, after = null } = {},
+) {
   const lib = libraryOf(s);
   const name = safeFilename(filename);
   const live = lib.filter((e) => e.status !== "failed");
@@ -368,12 +374,42 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
         null,
     });
   (async () => {
-    // Work that must finish before parsing (freeing the embedding model's
-    // memory) runs here, after the upload has already been acknowledged.
-    if (before) await Promise.resolve(before).catch(() => {});
-    await slot(String(s.sid ?? "").startsWith("case:") ? 0 : 1);
+    let hasSlot = false;
+    let preparing = false;
     try {
+      // Admission may be queued, but a worker slot is always returned even if
+      // memory preparation rejects. Previously these awaits sat outside the
+      // try/finally, leaving an upload stuck at "Queued" indefinitely.
+      await slot(String(s.sid ?? "").startsWith("case:") ? 0 : 1);
+      hasSlot = true;
       if (!lib.includes(entry)) return; // removed while queued
+      if (before) {
+        preparing = true;
+        set("preparing");
+        let timer;
+        try {
+          await Promise.race([
+            Promise.resolve().then(() =>
+              typeof before === "function" ? before() : before,
+            ),
+            new Promise((_, reject) => {
+              timer = setTimeout(
+                () =>
+                  reject(
+                    Object.assign(
+                      Error("Preparing the document reader timed out."),
+                      { code: "prepare_timeout" },
+                    ),
+                  ),
+                15000,
+              );
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      if (!lib.includes(entry)) return; // removed during preparation
       // Declared extension stays in the key, preserving format validation.
       const cacheKey = parseCacheKey(bytes, name);
       let r;
@@ -419,6 +455,13 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
             // within the same memory budget as a final document.
             if (!lib.includes(entry) || p.status !== "ready") return;
             if (globalBytes() + deepBytes(p.doc) > MAX_GLOBAL_BYTES) return;
+            const previous = {
+              doc: entry.doc,
+              status: entry.status,
+              kind: entry.kind,
+              review: entry.review,
+              included: entry.included,
+            };
             adopt(p.doc, p.review);
             set("partial");
             try {
@@ -426,7 +469,14 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
               entry.progress.answerableAt = Date.now() - t0;
               indexed();
             } catch {
-              /* the final result rebuilds again */
+              // A failed partial index was never published. Do not advertise
+              // answerability before the next (final) rebuild succeeds.
+              entry.doc = previous.doc;
+              entry.status = previous.status;
+              entry.kind = previous.kind;
+              entry.review = previous.review;
+              entry.included = previous.included;
+              entry.progress.answerableAt = null;
             }
           },
         });
@@ -477,15 +527,28 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
       const wasIndexed = entry.status === "partial";
       adopt(r.doc, r.review);
       if (r.status === "needs_review") {
-        set("needs_review");
-        // Rebuild now so the index holds exactly what review policy allows
-        // of the final document (it replaces any early text-only version;
-        // a visitor workspace includes reviewed uploads straight away).
+        // Review-required text may be searchable, but it must never be shown
+        // as indexed until the final bundle is actually committed.
+        set("indexing");
+        entry.included = true;
         try {
           rebuild(s);
           indexed();
-        } catch {
-          if (wasIndexed) entry.doc = null;
+          set("needs_review");
+        } catch (e) {
+          entry.doc = null;
+          entry.included = false;
+          entry.error = {
+            code: "index_failed",
+            stage: "indexing",
+            message: e?.message || "The document could not be indexed.",
+          };
+          set("failed");
+          try {
+            rebuild(s);
+          } catch {
+            /* preserve the preceding bundle */
+          }
         }
         return;
       }
@@ -500,15 +563,27 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
           stage: "indexing",
           message: e?.message || "The document could not be indexed.",
         };
+        entry.doc = null;
         set("failed");
-        rebuild(s);
+        try {
+          rebuild(s);
+        } catch {
+          /* preserve the preceding bundle */
+        }
       }
-    } catch {
+    } catch (e) {
       const wasIndexed = entry.status === "partial";
       entry.error = {
-        code: "parse_failed",
-        stage: "parsing",
-        message: "This file could not be read.",
+        code:
+          preparing && entry.status === "preparing"
+            ? e?.code || "prepare_failed"
+            : "parse_failed",
+        stage:
+          preparing && entry.status === "preparing" ? "preparing" : "parsing",
+        message:
+          preparing && entry.status === "preparing"
+            ? "The document reader could not prepare safely. Try again."
+            : "This file could not be read.",
       };
       entry.doc = null;
       set("failed");
@@ -516,10 +591,18 @@ export function addUpload(s, bytes, filename, rebuild, { before = null } = {}) {
         try {
           rebuild(s);
         } catch {
-          /* already failed */
+          /* preserve the preceding bundle */
         }
     } finally {
-      freeSlot();
+      // Balanced for rejected admission, failed preparation, OCR timeouts and
+      // successful parses; never resume the dense model at a fixed timer.
+      try {
+        if (preparing && after) await after();
+      } catch {
+        // Cleanup failure cannot hold a parser slot forever.
+      } finally {
+        if (hasSlot) freeSlot();
+      }
     }
   })();
   return entry;

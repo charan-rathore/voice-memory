@@ -519,9 +519,7 @@
       state.cases.own = {
         ...OWN,
         ready: st.ready,
-        documents: st.documents.filter(
-          (d) => d.status === "ready" || d.included,
-        ),
+        documents: st.documents.filter((d) => d.answerable === true),
       };
     } catch (e) {
       if (state.ws !== workspaceId) return "stale";
@@ -619,20 +617,23 @@
   const STAGE = {
     sending: "Sending",
     uploaded: "Queued",
+    preparing: "Freeing memory for your document",
     validating: "Checking",
     parsing: "Reading",
     ocr: "Reading text (OCR)",
     partial: "Ask now · reading scan",
     indexing: "Indexing",
     ready: "Ready",
-    needs_review: "Ready · low OCR confidence",
+    needs_review: "Readable text · scanned page needs checking",
     failed: "Couldn't read",
     expired: "Cleared",
   };
   function renderUploads() {
     $("#upl-list").innerHTML = state.wsDocs
       .map((d) => {
-        const done = d.status === "ready" || d.status === "needs_review";
+        const done =
+          (d.status === "ready" || d.status === "needs_review") &&
+          d.answerable === true;
         const cls = done
           ? "ok"
           : d.status === "failed" || d.status === "expired"
@@ -646,7 +647,9 @@
           d.status !== "failed" &&
           d.status !== "expired"
             ? "Reconnecting"
-            : (STAGE[d.status] ?? d.status);
+            : !done && ["ready", "needs_review"].includes(d.status)
+              ? "Finishing search index"
+              : (STAGE[d.status] ?? d.status);
         const extra =
           d.status === "failed" || d.status === "expired"
             ? ` — ${esc(d.error?.message ?? "")}`
@@ -1963,8 +1966,17 @@
       // demo records behind the caller's back.
       callState("Checking your upload…");
       try {
-        await api(`/workspace/${checkedWorkspace}`);
+        const checked = await api(`/workspace/${checkedWorkspace}`);
         if (!current()) return;
+        if (
+          !checked.ready ||
+          !checked.documents?.some((d) => d.answerable === true)
+        ) {
+          callState(
+            "Your upload is still being made searchable. You can call once at least one page has been indexed.",
+          );
+          return;
+        }
       } catch (e) {
         if (!current()) return;
         if (state.ws !== checkedWorkspace) {
@@ -2466,13 +2478,19 @@
       });
     if (t.matches("[data-jump]")) return jumpTo(Number(t.dataset.jump));
     if (t.matches("[data-files]")) {
-      emit("vm:source", { title: null, cited: false });
-      showEmptyViewer();
-      if (matchMedia("(max-width: 1060px)").matches)
-        $("#viewer").scrollIntoView({
-          behavior: reduced ? "auto" : "smooth",
-          block: "start",
-        });
+      // "View the document" must open the reader, not just redraw a list
+      // behind the sticky chart. Choose the first indexed upload for one
+      // document; for multiple documents, show the selectable file grid.
+      const docs = state.cases[state.case]?.documents ?? [];
+      if (docs.length === 1) openDoc(docs[0].title);
+      else {
+        emit("vm:source", { title: null, cited: false });
+        showEmptyViewer();
+      }
+      $("#viewer").scrollIntoView({
+        behavior: reduced ? "auto" : "smooth",
+        block: "nearest",
+      });
       return;
     }
     if (t.matches("[data-listen]")) {
