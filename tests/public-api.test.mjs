@@ -63,17 +63,25 @@ test("a known test these reports lack still says not-in-report", async () => {
   assert.equal(body.lead.verdict, "NOT_IN_REPORT");
 });
 
-test("an unnamed overview asks whose reports, never a silent patient pick", async () => {
+// Never a silent patient pick: an unnamed overview over two people answers
+// for each of them separately, each under their own label, and a
+// first-person question ends by asking which one is the caller.
+test("an unnamed overview keeps each person apart, never a silent patient pick", async () => {
   const { status, body } = await ask("health", "how am i doing");
   assert.equal(status, 200);
-  assert.equal(body.lead.verdict, "AMBIGUOUS_PATIENT");
-  assert.match(body.lead.text, /more than one person/);
+  assert.equal(body.lead.verdict, "OVERVIEW");
+  assert.match(body.lead.text, /for 2 people, so I keep their results apart/);
+  assert.match(body.lead.text, /For SYN-0001,/);
+  assert.match(body.lead.text, /SYN-0003/);
+  assert.match(body.lead.text, /which of these is you/);
 });
 
-test("a generic 'my blood levels' phrasing also asks whose", async () => {
+test("a generic 'my blood levels' phrasing also keeps each person apart", async () => {
   const { status, body } = await ask("health", "what are my blood levels");
   assert.equal(status, 200);
-  assert.equal(body.lead.verdict, "AMBIGUOUS_PATIENT");
+  assert.notEqual(body.lead.verdict, "LATEST");
+  assert.match(body.lead.text, /for 2 people/);
+  assert.match(body.lead.text, /which of these is you/);
 });
 
 test("an overview naming the patient still answers for that patient", async () => {
