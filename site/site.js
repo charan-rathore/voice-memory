@@ -161,6 +161,24 @@
     }
   }
 
+  // Once connected, re-check the gate only when the visitor returns. The
+  // initial connect loop owns cold-start retries; this never starts a call.
+  let voiceStatusPending = false;
+  document.addEventListener("visibilitychange", async () => {
+    if (document.hidden || !state.live || voiceStatusPending) return;
+    voiceStatusPending = true;
+    try {
+      const s = await api("/status", { cache: "no-store" }, 8000);
+      if (typeof s?.voice?.ready !== "boolean") return;
+      state.voice = s.voice;
+      syncVoiceClasses();
+    } catch {
+      // A failed probe is not a gate change: keep the last known UI state.
+    } finally {
+      voiceStatusPending = false;
+    }
+  });
+
   // Capped exponential backoff with full jitter (AWS Architecture Blog,
   // "Exponential Backoff And Jitter"): wait a random time in [0, min(cap,
   // base * 2^attempt)], so many visitors arriving during one cold boot spread
