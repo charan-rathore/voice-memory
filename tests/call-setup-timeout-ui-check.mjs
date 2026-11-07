@@ -180,6 +180,12 @@ try {
       await page.locator("#call-label").textContent(),
       "Call Voice Memory",
     );
+    if (mode === "pending-mic") {
+      await page.locator("#call-state").scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: join(shots, "call-timeout-recovered.png"),
+      });
+    }
     await page.locator("#call-btn").click();
     await page.locator("#call-label").filter({ hasText: "Hang up" }).waitFor();
     const before = mints;
@@ -198,10 +204,12 @@ try {
       "late result cannot alter replacement call",
     );
     assert.deepEqual(errors, []);
-    if (mode === "pending-mic")
+    if (mode === "pending-mic") {
+      await page.locator("#call-state").scrollIntoViewIfNeeded();
       await page.screenshot({
         path: join(shots, "call-timeout-retry-live.png"),
       });
+    }
     await page.locator("#call-btn").click();
     console.log(
       "PASS " + mode + " expires, retries, and ignores late settlement",

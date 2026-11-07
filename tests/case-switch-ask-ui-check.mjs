@@ -124,6 +124,87 @@ try {
     );
     await page.close();
   }
+  // A request can become stale while the fallback script itself is loading.
+  // Keep the replacement ask pending to catch an old error unlocking its button.
+  {
+    const page = await browser.newPage();
+    if (process.env.VM_BASELINE_SITE) {
+      const baseline = await readFile(process.env.VM_BASELINE_SITE, "utf8");
+      await page.route("**/site.js", (r) =>
+        r.fulfill({ contentType: "text/javascript", body: baseline }),
+      );
+    }
+    let releaseSnapshot, snapshotSeen, releaseNew, newSeen;
+    const snapshotGate = new Promise((r) => (releaseSnapshot = r));
+    const snapshotStarted = new Promise((r) => (snapshotSeen = r));
+    const newGate = new Promise((r) => (releaseNew = r));
+    const newStarted = new Promise((r) => (newSeen = r));
+    await page.route("**/snapshot-answers.js", async (r) => {
+      snapshotSeen();
+      await snapshotGate;
+      await r.fulfill({
+        contentType: "text/javascript",
+        body: "window.VM_SNAPSHOT_ANSWERS={answers:{}};",
+      });
+    });
+    let asks = 0;
+    await page.route("**/api/public/answer?*", async (r) => {
+      if (++asks === 1)
+        return r.fulfill({
+          status: 503,
+          json: { error: "OLD-SNAPSHOT-ERROR" },
+        });
+      newSeen();
+      await newGate;
+      return r.fulfill({
+        json: {
+          lead: {
+            text: "NEW-SNAPSHOT-ANSWER",
+            verdict: "LATEST",
+            citations: [],
+          },
+        },
+      });
+    });
+    await page.goto(origin, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() =>
+      document.querySelector("#engine-note")?.textContent?.includes("Live"),
+    );
+    await page.locator("#q").fill("Unique old question without saved answer?");
+    await page.locator(".ask-go").click();
+    await snapshotStarted;
+    await page.locator('.case-tab[data-case="deal"]').click();
+    await page.locator("#q").fill("Unique new question?");
+    await page.locator(".ask-go").click();
+    await newStarted;
+    releaseSnapshot();
+    await page.waitForFunction(() => !!window.VM_SNAPSHOT_ANSWERS);
+    await page.evaluate(
+      () =>
+        new Promise((r) =>
+          requestAnimationFrame(() => requestAnimationFrame(r)),
+        ),
+    );
+    assert.equal(
+      await page.locator(".ask-go").isEnabled(),
+      false,
+      "old fallback cannot unlock newer pending ask",
+    );
+    assert.doesNotMatch(
+      await page.locator("#answer").innerText(),
+      /OLD-SNAPSHOT/,
+    );
+    releaseNew();
+    await page
+      .locator("#answer")
+      .filter({ hasText: "NEW-SNAPSHOT-ANSWER" })
+      .waitFor();
+    assert.equal(await page.locator(".ask-go").isEnabled(), true);
+    console.log(
+      "PASS delayed snapshot fallback cannot overwrite or unlock replacement ask",
+    );
+    await page.close();
+  }
 } finally {
   await browser.close();
   dev.kill();
