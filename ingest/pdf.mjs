@@ -441,6 +441,21 @@ export async function parsePdf(
           blocks.push({
             type: "paragraph",
             text: p.text.replace(/\n/g, " "),
+            sourceLines: p.lines.map((l) => {
+              const [a, b] = toUser(l.bbox.x0, l.bbox.y1);
+              const [c, d] = toUser(l.bbox.x1, l.bbox.y0);
+              return {
+                rawText: l.rawText ?? l.text,
+                confidence: l.confidence,
+                bbox: viewBox(
+                  vp,
+                  Math.min(a, c),
+                  Math.min(b, d),
+                  Math.max(a, c),
+                  Math.max(b, d),
+                ),
+              };
+            }),
             page: n,
             bbox: viewBox(
               vp,
@@ -552,6 +567,9 @@ function assemble(pageLines, pages, ocrBlocks) {
           blocks.push({
             type: "paragraph",
             text: r.line.text,
+            sourceLines: [
+              { rawText: r.line.text, bbox: r.line.bbox, group: r.line.group },
+            ],
             page: r.line.page,
             bbox: r.line.bbox,
             method: "pdf-text",
@@ -575,6 +593,7 @@ function assemble(pageLines, pages, ocrBlocks) {
         blocks.push({
           type: "overlay",
           text: l.text,
+          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
           page: l.page,
           bbox: l.bbox,
           method: "pdf-text",
@@ -592,6 +611,7 @@ function assemble(pageLines, pages, ocrBlocks) {
         blocks.push({
           type: "furniture",
           text: l.text,
+          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
           page: l.page,
           bbox: l.bbox,
           method: "pdf-text",
@@ -633,6 +653,7 @@ function assemble(pageLines, pages, ocrBlocks) {
           type: "heading",
           level: levelOf(l.size),
           text: l.text,
+          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
           page: l.page,
           bbox: l.bbox,
           method: "pdf-text",
@@ -642,6 +663,7 @@ function assemble(pageLines, pages, ocrBlocks) {
         para = {
           type: "paragraph",
           text: l.text,
+          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
           page: l.page,
           bbox: [...l.bbox],
           size: l.size,
@@ -649,6 +671,11 @@ function assemble(pageLines, pages, ocrBlocks) {
         };
       } else {
         const joinHyphen = /[a-z]-$/.test(para.text) && /^[a-z]/.test(l.text);
+        para.sourceLines.push({
+          rawText: l.text,
+          bbox: l.bbox,
+          group: l.group,
+        });
         para.text = joinHyphen
           ? para.text.slice(0, -1) + l.text
           : para.text + " " + l.text;
@@ -755,6 +782,11 @@ function finalizeTable(table) {
   return {
     type: "table",
     rows,
+    sourceLines: table.rows.map(({ line }) => ({
+      rawText: line.text,
+      bbox: line.bbox,
+      group: line.group,
+    })),
     page: first.page,
     bbox: [
       Math.min(...rows.map((r) => r.bbox[0])),
