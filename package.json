@@ -34,8 +34,8 @@
     "test:upload-ui": "node tests/upload-ui-check.mjs",
     "test:controls-ui": "node tests/controls-ui-check.mjs && node tests/byo-controls-ui-check.mjs",
     "test:cold-connect-ui": "node tests/cold-connect-ui-check.mjs",
-    "test:document-ui": "node tests/generic-doc-ui-check.mjs && node tests/source-viewer-isolation-ui-check.mjs && node tests/workspace-recovery-ui-check.mjs && node tests/late-workspace-answer-ui-check.mjs",
-    "test:call-ui": "node tests/call-workspace-race-ui-check.mjs && node tests/call-single-flight-ui-check.mjs && node tests/call-lifecycle-ui-check.mjs && node tests/call-scope-response-ui-check.mjs && node tests/call-device-enumeration-ui-check.mjs"
+    "test:document-ui": "node tests/generic-doc-ui-check.mjs && node tests/source-viewer-isolation-ui-check.mjs && node tests/workspace-recovery-ui-check.mjs && node tests/late-workspace-answer-ui-check.mjs && node tests/case-switch-ask-ui-check.mjs",
+    "test:call-ui": "node tests/call-workspace-race-ui-check.mjs && node tests/call-single-flight-ui-check.mjs && node tests/call-lifecycle-ui-check.mjs && node tests/call-scope-response-ui-check.mjs && node tests/call-device-enumeration-ui-check.mjs && node tests/call-setup-timeout-ui-check.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "5.2.8",
