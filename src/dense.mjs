@@ -3,9 +3,10 @@ import { createModelLifetime } from "./model-lifetime.mjs";
 /**
  * Dense retrieval stage (Phase 3 hybrid) - local embeddings, no paid API.
  *
- * Model: Xenova/bge-small-en-v1.5 (MIT), int8-quantized ONNX via
- * @huggingface/transformers v3. Measured: ~341MB RSS resident after load,
- * ~6ms per query embedding. First boot downloads ~33MB into VM_DENSE_CACHE.
+ * Model: Xenova/bge-small-en-v1.5 (MIT), ONNX via Transformers v3.
+ * The installed runtime defaults this legacy quantized:true option to fp32.
+ * This containment patch does not change model precision or retrieval quality.
+ * Native load/inference can exceed steady-state RSS after a promise resolves.
  *
  * Fail-closed, never blocks the request path:
  * - The model loads in the BACKGROUND (warmDense / first use). While it is
@@ -44,10 +45,10 @@ let ingestDepth = 0;
 // Measured on Render free (512 MB): ~60 MB without the model, peaks of
 // ~500 MB with it. This is admission/retirement at operation boundaries,
 // not a guarantee against allocation peaks or unrelated process growth.
-// Clean native fp32 probe: observed incremental RSS reached ~422 MiB.
-// Reserve 448 MiB (observed increment plus 26 MiB margin), not the older
-// steady-state 360 MiB estimate. This remains an estimate, not a peak bound.
-const MODEL_MB = Number(process.env.VM_DENSE_MODEL_MB || 448);
+// Preserve the existing 360 MiB admission estimate. Native probes exceeded
+// this estimate: it is NOT a preventive hard-limit safety guarantee. Raising
+// the default would change retrieval availability and needs separate approval.
+const MODEL_MB = Number(process.env.VM_DENSE_MODEL_MB || 360);
 const PRESSURE = 0.9;
 export function memoryLimitBytes() {
   return denseMemoryBudget().limitBytes;

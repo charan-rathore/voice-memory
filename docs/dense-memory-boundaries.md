@@ -12,8 +12,9 @@ retires the optional model; it never reloads, restarts, polls a website, changes
 admission for source documents, or spends credits. Retirement/upload pause stops
 that sampler. The sampling interval is not a hard peak-memory bound.
 
-The effective dense ceiling is the smaller of a valid configured policy ceiling
-and a readable cgroup limit. Configured Infinity/NaN/nonpositive values fail
+The observed dense policy ceiling is the smaller of a valid configured policy ceiling
+and a readable cgroup limit file. A fixed-root cgroup file does not establish
+the effective ancestor/nested process limit or whole-cgroup usage. Configured Infinity/NaN/nonpositive values fail
 closed. Health reports configured and host values separately; process RSS is
 rounded MiB, not cgroup memory.current. A configured ceiling is not host
 memory enforcement.
@@ -30,9 +31,11 @@ Separate native/resource evidence must state its actual enforcement and workload
 
 The unchanged installed Transformers path defaults to fp32 despite the legacy
 quantized:true option. This repair does not change model precision. A native
-probe observed ~422 MiB incremental RSS after load/embedding; the default model
-admission estimate is raised from 360 to 448 MiB (26 MiB above that observation).
-On a 512 MiB policy budget this declines a cold load above 64 MiB baseline RSS.
-That intentionally reduces optional dense availability; keyword retrieval and
-exact source/citation safeguards remain. An estimate plus sampled retirement is
-not proof of zero OOM under arbitrary documents or native allocator behavior.
+probe observed ~422 MiB incremental RSS after load/embedding, exceeding the
+unchanged 360 MiB admission estimate. This patch preserves that default, model
+precision and source/citation safeguards. On a retained 150 MiB baseline, native
+fp32 probes exceeded a 512 MiB policy ceiling before sampled retirement. Thus
+this patch is reactive containment, NOT preventive 512 MiB/OOM clearance. Raising
+the default reserve or changing precision has measured retrieval/answer costs and
+is a separate decision, not included here. An estimate plus sampled retirement
+cannot prove zero OOM under arbitrary documents or native allocator behavior.
