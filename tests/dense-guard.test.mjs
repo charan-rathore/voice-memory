@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createModelLifetime } from "../src/model-lifetime.mjs";
 
 test("dense model refuses to load without headroom and reports why", async () => {
   process.env.VM_MEMORY_LIMIT_MB = "256"; // less than the model needs
@@ -60,4 +61,43 @@ test("denseCacheSuffix tracks resident model and embedding coverage", async () =
   // Empty and missing bundles are keyword.
   assert.equal(d.denseCacheSuffix({ rows: [] }, true), ":k");
   assert.equal(d.denseCacheSuffix(null, true), ":k");
+});
+
+test("a pause prevents new model work until active inference drains", async () => {
+  const lifetime = createModelLifetime();
+  const release = lifetime.acquire();
+  assert.equal(typeof release, "function");
+  lifetime.pause();
+  assert.equal(lifetime.acquire(), null);
+  let drained = false;
+  const pending = lifetime.drained().then(() => {
+    drained = true;
+  });
+  await Promise.resolve();
+  assert.equal(drained, false);
+  release();
+  await pending;
+  assert.equal(drained, true);
+  lifetime.resume();
+  const next = lifetime.acquire();
+  assert.equal(typeof next, "function");
+  next();
+});
+
+test("nested upload pauses and repeated release never corrupt model leases", () => {
+  const lifetime = createModelLifetime();
+  const release = lifetime.acquire();
+  lifetime.pause();
+  lifetime.pause();
+  release();
+  release();
+  assert.equal(lifetime.active, 0);
+  lifetime.resume();
+  assert.equal(lifetime.blocked, true);
+  assert.equal(lifetime.acquire(), null);
+  lifetime.resume();
+  assert.equal(lifetime.blocked, false);
+  const another = lifetime.acquire();
+  another();
+  assert.equal(lifetime.active, 0);
 });
