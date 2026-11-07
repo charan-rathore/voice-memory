@@ -83,6 +83,17 @@ if (scenario === "load-pressure") {
   await new Promise((r) => setImmediate(r));
   assert.equal(probe.disposals, 1);
   assert.equal(d.denseStatus().ready, false);
+} else if (scenario === "idle-pressure") {
+  await d.warmDense([]);
+  rss = 480 * MiB;
+  await new Promise((r) => setTimeout(r, 1200));
+  assert.equal(
+    d.denseStatus().ready,
+    false,
+    "resident model must retire after late idle native growth without a query",
+  );
+  assert.equal(probe.disposals, 1);
+  assert.equal(probe.calls, 0);
 } else if (scenario === "normal") {
   const rows = [row(), row()];
   assert.equal(await d.warmDense(rows), true);

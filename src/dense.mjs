@@ -21,6 +21,18 @@ const MODEL_ID = process.env.VM_DENSE_MODEL || "Xenova/bge-small-en-v1.5";
 const state = { pipe: null, loading: null, retiring: null, failed: null };
 const lifetime = createModelLifetime();
 let modelGeneration = 0;
+let pressureTimer = null;
+function stopPressureWatch() {
+  if (pressureTimer) clearInterval(pressureTimer);
+  pressureTimer = null;
+}
+function watchResidentPressure() {
+  if (pressureTimer) return;
+  // Native allocator growth may arrive after an inference promise resolves.
+  // Sample only while resident; this never loads a model or restarts a server.
+  pressureTimer = setInterval(() => relieveMemoryPressure(), 1000);
+  pressureTimer.unref?.();
+}
 // OCR/ingest spikes ~250MB on top of the server; the resident model adds
 // ~250-340MB. On a 512MB budget they must never coexist: uploads pause the
 // dense stage (dispose the model, no reload kicks) until processing settles.
@@ -32,7 +44,10 @@ let ingestDepth = 0;
 // Measured on Render free (512 MB): ~60 MB without the model, peaks of
 // ~500 MB with it. This is admission/retirement at operation boundaries,
 // not a guarantee against allocation peaks or unrelated process growth.
-const MODEL_MB = Number(process.env.VM_DENSE_MODEL_MB || 360);
+// Clean native fp32 probe: observed incremental RSS reached ~422 MiB.
+// Reserve 448 MiB (observed increment plus 26 MiB margin), not the older
+// steady-state 360 MiB estimate. This remains an estimate, not a peak bound.
+const MODEL_MB = Number(process.env.VM_DENSE_MODEL_MB || 448);
 const PRESSURE = 0.9;
 export function memoryLimitBytes() {
   return denseMemoryBudget().limitBytes;
@@ -55,6 +70,7 @@ export function relieveMemoryPressure(rss = process.memoryUsage().rss) {
   if (!limit || !state.pipe || rss < limit * PRESSURE) return false;
   const pipe = state.pipe;
   state.pipe = null;
+  stopPressureWatch();
   state.loading = null;
   modelGeneration++;
   guard.dropped++;
@@ -110,6 +126,7 @@ function ensureLoading() {
           await state.retiring;
           return null;
         }
+        watchResidentPressure();
         return pipe;
       } catch (e) {
         if (generation === modelGeneration && ingestDepth === 0)
@@ -273,6 +290,7 @@ export function pauseDenseForIngest() {
   const pipe = state.pipe;
   const loading = state.loading;
   state.pipe = null;
+  stopPressureWatch();
   state.loading = null;
   const previous = state.retiring ?? Promise.resolve();
   const retiring = previous

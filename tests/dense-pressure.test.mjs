@@ -10,6 +10,7 @@ for (const scenario of [
   "text-pressure",
   "drain-before-dispose",
   "normal",
+  "idle-pressure",
 ])
   test("dense pressure boundary: " + scenario, async () => {
     const { stdout } = await exec(
