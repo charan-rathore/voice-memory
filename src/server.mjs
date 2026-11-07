@@ -855,7 +855,7 @@ export function createLocalServer({
             evidence: [],
           },
         };
-      const unbound = unboundOwnerTurn(original, bundle);
+      const unbound = unboundOwnerTurn(selfRepair(original), bundle);
       if (unbound)
         return {
           raw: null,

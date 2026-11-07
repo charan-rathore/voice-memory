@@ -68,6 +68,11 @@ test("record ownership clarification and refusal survive normalized cache replay
     assert.equal(a.lead.verdict, "UNBOUND_OWNER");
     assert.equal(a.lead.citations.length, 0);
     assert.doesNotMatch(a.lead.text, /USD|100|200/);
+    const corrected = await ask(
+      "What were SYN-999, sorry, SYN-392 total charges?",
+    );
+    assert.match(corrected.lead.text, /200/);
+    assert.doesNotMatch(corrected.lead.text, /100/);
     const known = await ask("What were SYN-392 total charges?");
     assert.match(known.lead.text, /200/);
     assert.doesNotMatch(known.lead.text, /100/);
@@ -85,6 +90,7 @@ test("known exact opaque owners remain separate across separators and zero lengt
       ["QZ_7", "QZ_0007"],
       ["QZ-7", "QZ-0007"],
       ["SYN-17", "SYN-00017"],
+      ["RX-7", "RX-8-A"],
     ]) {
       const ws = await (
         await fetch(base + "/workspace", { method: "POST" })
