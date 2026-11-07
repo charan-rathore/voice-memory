@@ -76,7 +76,10 @@ try {
     }),
   );
   await page.locator("#files-btn").click();
-  await page.locator("#viewer-body .file-card").first().click();
+  // One indexed document now opens its reader directly; multiple documents
+  // still expose the file grid. Keep the source/error assertions below.
+  if (await page.locator("#viewer-body .file-card").count())
+    await page.locator("#viewer-body .file-card").first().click();
   await page.waitForFunction(
     () =>
       !!document.querySelector(
