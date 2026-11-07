@@ -5,7 +5,8 @@ import { createModelLifetime } from "./model-lifetime.mjs";
  *
  * Model: Xenova/bge-small-en-v1.5 (MIT), ONNX via Transformers v3.
  * The installed runtime defaults this legacy quantized:true option to fp32.
- * This containment patch does not change model precision or retrieval quality.
+ * Model precision is unchanged. Pressure retirement can change retrieval
+ * availability, answer coverage and latency by falling back to keywords.
  * Native load/inference can exceed steady-state RSS after a promise resolves.
  *
  * Fail-closed, never blocks the request path:
