@@ -1,4 +1,5 @@
 import { finalAnswer } from "./answer-contract.mjs";
+import { clinicalListPlan, exactTestLabel } from "./clinical-requirements.mjs";
 import {
   resolveExplicitEvents,
   eventQuestionPlan,
@@ -1248,6 +1249,111 @@ export function createLocalServer({
             },
           },
         };
+      const clinicalRequirements = clinicalListPlan(
+        requestOriginal,
+        bundle,
+        immutableRequest.sourceGeneration,
+        opts.patient,
+      );
+      if (clinicalRequirements && (bundle.clinical ?? []).length) {
+        const own = (bundle.clinical ?? []).filter(
+          (r) => subjectOf(r) === opts.patient,
+        );
+        const outcomes = clinicalRequirements.requirements.map((r) => {
+          const matches = own
+            .flatMap((report) => report.observations ?? [])
+            .filter((o) => exactTestLabel(o.test) === r.slots.object);
+          // No alias can replace a requested exact test label in this grammar.
+          if (!matches.length)
+            return {
+              requirementId: r.id,
+              status: "not_established",
+              text: `${r.text}: I could not establish the requested result for ${opts.patient}.`,
+              citations: [],
+            };
+          const answer = clinicalAnswer(
+            `What is ${opts.patient}'s ${r.text} result?`,
+            own,
+            opts.patient,
+            identities,
+          );
+          const used = answer?.used ?? [];
+          const citations = used
+            .map((o) => observationEvidence(o, bundle))
+            .filter(Boolean);
+          const supported =
+            used.length > 0 &&
+            citations.length === used.length &&
+            used.every(
+              (o) =>
+                exactTestLabel(o.test) === r.slots.object &&
+                subjectOf(o.report) === opts.patient,
+            ) &&
+            citations.every((c) =>
+              evidenceWithinOwner(bundle, opts.patient, c),
+            );
+          return {
+            requirementId: r.id,
+            status: supported ? "answered" : "not_established",
+            text: supported
+              ? `${r.text}: ${thirdPerson(answer.spoken)}`
+              : `${r.text}: I could not establish a source-checked result for ${opts.patient}.`,
+            citations: supported ? citations : [],
+          };
+        });
+        const count = outcomes.filter((o) => o.status === "answered").length;
+        return {
+          raw: null,
+          shown: {
+            lead: {
+              text: outcomes.map((o) => o.text).join(" "),
+              verdict:
+                count === outcomes.length
+                  ? "CLINICAL_REQUIREMENTS"
+                  : count
+                    ? "PARTIAL_DOCUMENT"
+                    : "UNKNOWN",
+              field: null,
+              citations: decorateResult(
+                {
+                  question: requestOriginal,
+                  evidence: outcomes.flatMap((o) => o.citations),
+                },
+                s,
+              ).evidence,
+              origin: "explicit-clinical-requirements",
+              limitations: clinicalRequirements.limitations,
+            },
+            sourceQuestionPlan: clinicalRequirements,
+            evidence: [],
+            visual: null,
+            requirementCoverage: {
+              questionPlanKey: clinicalRequirements.key,
+              complete: count === outcomes.length,
+              status:
+                count === outcomes.length
+                  ? "covered"
+                  : count
+                    ? "partial"
+                    : "unresolved",
+              semanticAdmissionVerified: false,
+              outcomes: outcomes.map(({ requirementId, status }) => ({
+                requirementId,
+                status,
+                operation: "existing-clinical-source-lookup",
+              })),
+            },
+            semantic: {
+              intent: "EXPLICIT_CLINICAL_REQUIREMENTS",
+              lang,
+              steps: [
+                "caller_owned_test_requirements",
+                "separately_scoped_clinical_lookups_not_independent_certificates",
+              ],
+            },
+          },
+        };
+      }
       const exactFields = await resolveExactFields({
         question: requestOriginal,
         bundle,
@@ -2541,7 +2647,13 @@ export function createLocalServer({
       if (
         exactSchemaOnly &&
         !exactFieldPlan(originalQuestion, bundle, 0) &&
-        !eventQuestionPlan(originalQuestion, bundle, 0)
+        !eventQuestionPlan(originalQuestion, bundle, 0) &&
+        !clinicalListPlan(
+          originalQuestion,
+          bundle,
+          0,
+          patientDecision(originalQuestion, identityReportsFor(bundle)).patient,
+        )
       )
         return null;
       // Voice has no trusted per-turn document-provider consent yet. A typed

@@ -1424,6 +1424,7 @@ export function publicAnswer(shown) {
     question: shown.question,
     questionPlan: shown.questionPlan ?? null,
     admission: shown.admission ?? null,
+    requirementCoverage: shown.requirementCoverage ?? null,
     transforms: shown.transforms ?? null,
     lead: shown.lead
       ? {

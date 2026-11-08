@@ -296,6 +296,7 @@
     UNKNOWN: ["v-ask", "Answer not established"],
     SCHEMA_FIELDS: ["v-ok", "Recorded fields"],
     RECORDED_EVENT: ["v-ok", "Recorded source assertion"],
+    CLINICAL_REQUIREMENTS: ["v-ok", "Requested test results"],
     PARTIAL_FIELDS: ["v-warn", "Partial answer"],
     PARTIAL_DOCUMENT: ["v-warn", "Partial answer"],
     SOURCE_OUTLINE: ["v-warn", "Source headings, not a summary"],
