@@ -210,7 +210,10 @@ test("out-of-order scope updates end on what the page shows (A -> B -> A)", asyn
 
 test("an answer that finishes after a tab switch is not spoken for the old case", async () => {
   // retrieval is held until the page has switched tabs
-  let release;
+  let release, entered;
+  const started = new Promise((r) => {
+    entered = r;
+  });
   const gate = new Promise((r) => (release = r));
   const voice = createVoiceAdapter({
     ttlMs: 600000,
@@ -219,6 +222,7 @@ test("an answer that finishes after a tab switch is not spoken for the old case"
       actualMode: "keyword",
       embeddingModel: null,
       retrieve: async (_q, b) => {
+        entered();
         await gate;
         return {
           actualMode: "keyword",
@@ -230,6 +234,16 @@ test("an answer that finishes after a tab switch is not spoken for the old case"
       },
     },
   });
+  // The enabled common path intentionally skips separate retrieval. Hold
+  // the actual common resolver too, so this remains an in-flight source
+  // switch test in either mode rather than racing a completed answer.
+  const setAnswerResolver = voice.setAnswerResolver;
+  voice.setAnswerResolver = (resolver) =>
+    setAnswerResolver(async (input) => {
+      entered();
+      await gate;
+      return resolver(input);
+    });
   const api = await boot({ voice });
   try {
     const m = await api.mint({ vm_ws: "health" }, "10.1.0.2");
@@ -238,7 +252,21 @@ test("an answer that finishes after a tab switch is not spoken for the old case"
     const inflight = api.say(ws, [
       { role: "user", content: "Has creatinine gone up since September?" },
     ]);
-    await new Promise((r) => setTimeout(r, 50));
+    let deadline;
+    try {
+      await Promise.race([
+        started,
+        new Promise((_, reject) => {
+          deadline = setTimeout(
+            () => reject(Error("answer boundary not reached")),
+            3000,
+          );
+          deadline.unref();
+        }),
+      ]);
+    } finally {
+      clearTimeout(deadline);
+    }
     assert.equal((await api.scope(t, "deal", 1)).body.case, "deal");
     release();
     const said = await inflight;
@@ -249,6 +277,7 @@ test("an answer that finishes after a tab switch is not spoken for the old case"
     assert.equal(last.lead.text, said);
     assert.equal((last.lead?.citations ?? []).length, 0);
   } finally {
+    release();
     await api.close();
   }
 });

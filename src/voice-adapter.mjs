@@ -815,13 +815,12 @@ export function createVoiceAdapter({
                 citations: [],
               }
             : null);
-        // Direct nonclinical factual questions reach the common resolver
+        // Direct factual questions reach the common resolver
         // before voice-specific retrieval/renderers choose any fact. Speech
         // repair/history remain above; specialist orchestration stays below.
         let earlyUnified = null;
         if (
           resolveAnswer &&
-          !bundle.clinical?.length &&
           !mixedTurn &&
           !secondQ &&
           !social &&

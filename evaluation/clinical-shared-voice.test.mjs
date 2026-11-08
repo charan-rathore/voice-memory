@@ -123,8 +123,18 @@ test("a clinical hit does not bypass the common resolver and its request retains
     [{ doc: doc.doc }],
     extractReport,
   );
-  let captured;
-  const adapter = createVoiceAdapter();
+  let captured,
+    separateReads = 0;
+  const adapter = createVoiceAdapter({
+    retrieval: {
+      actualMode: "keyword",
+      embeddingModel: null,
+      retrieve: async () => {
+        separateReads++;
+        throw Error("separate clinical retrieval must not run");
+      },
+    },
+  });
   adapter.setAnswerResolver(async (input) => {
     captured = input;
     return {
@@ -149,6 +159,11 @@ test("a clinical hit does not bypass the common resolver and its request retains
   );
   assert.match(await response.text(), /Shared boundary exercised/);
   assert.equal(captured.bundle, bundle);
+  assert.equal(
+    separateReads,
+    0,
+    "direct clinical factual result precedes separate voice retrieval",
+  );
   assert.equal(
     captured.originalQuestion,
     original,
