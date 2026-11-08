@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-08T12:53:55.505Z",
+  "answerable": 776,
+  "ready": 1582,
+  "pass": 2,
+  "asked": 2,
+  "out": [
+    {
+      "n": 7,
+      "ask": "What is Maya's HbA1c?",
+      "ok": true,
+      "ms": 57,
+      "kind": "abstained",
+      "text": "Maya Sharma (HLG-P1047)'s records don't include a HbA1c result. Page 4 shows HbA1c 6.9 %, but that belongs to a different person with the same name, Maya Sharma (HLG-P1048, born 04 Dec 1968), so I haven't used it."
+    },
+    {
+      "n": 21,
+      "ask": "What should I ask her doctor?",
+      "ok": true,
+      "ms": 37,
+      "kind": "answered",
+      "text": "Questions you could bring to their doctor about Maya Sharma's report, each from a line in these reports: 1) Ferritin was corrected from 5 to 50 in an amended report: which value should we go by? 2) TSH 6.8 mIU/L (above the 0.4 to 4.5 range): what does that mean for me? 3) Creatinine (serum) 99 µmol/L (above the 45 to 90 range): what does that mean for me? 4) Hemoglobin 11.1 g/dL (below the 12.0 to 16.0 range): what does that mean for me? 5) Creatinine (serum) was printed in different units in two reports: has it actually changed? These are questions to ask, not a diagnosis. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+    }
+  ]
+}
