@@ -676,7 +676,7 @@ const saveEnv = () => {
   };
 };
 
-async function voiceFactory({ env = {}, mintVoice, workspaces } = {}) {
+async function voiceFactory({ env = {}, mintVoice, workspaces, now } = {}) {
   const { createPublicApi } = await import("../src/public-api.mjs");
   const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
   process.env.BOLNA_API_KEY = "test-dummy";
@@ -699,6 +699,7 @@ async function voiceFactory({ env = {}, mintVoice, workspaces } = {}) {
     voiceTurns: () => [],
     voiceState: () => ({ configured: true, ready: true }),
     ...(workspaces ? { workspaces } : {}),
+    ...(now ? { now } : {}),
   });
   const srv = createServer((req, res) => api(req, res));
   await new Promise((r) => srv.listen(0, "127.0.0.1", r));
@@ -806,13 +807,18 @@ test("counter store failure fails closed (no mint, 503)", async () => {
 
 test("per-call max duration: ticket dies and vendor stop is attempted", async () => {
   const restore = saveEnv();
-  const f = await voiceFactory({ env: { VM_PUBLIC_CALL_MAX_MS: "60" } });
+  let clock = Date.now();
+  const f = await voiceFactory({
+    env: { VM_PUBLIC_CALL_MAX_MS: "60" },
+    now: () => clock,
+  });
   try {
     const mint = await f.mint("10.0.3.1");
     assert.equal(mint.status, 200);
     const { vm_ticket } = await mint.json();
     const ok = await fetch(f.b + `/api/public/voice/turns?ticket=${vm_ticket}`);
     assert.equal(ok.status, 200);
+    clock += 61;
     await new Promise((r) => setTimeout(r, 150));
     const gone = await fetch(
       f.b + `/api/public/voice/turns?ticket=${vm_ticket}`,
