@@ -100,6 +100,32 @@ test("actual HTTP and fake voice preserve every requested clinical test without 
     assert.equal(partial.requirementCoverage.semanticAdmissionVerified, false);
     assert.equal(partial.questionPlan.originalQuestion, partialQ);
     assert.equal(await voice(partialQ), partial.final.text);
+    const mixedQ =
+      "What is SYN-0001's ferritin result and who approved treatment?";
+    const mixed = await ask(mixedQ);
+    assert.equal(mixed.final.kind, "partial");
+    assert.match(mixed.final.text, /50 ng\/mL/);
+    assert.match(
+      mixed.final.text,
+      /who approved treatment\? I have not established this remaining requirement/,
+    );
+    assert.equal(mixed.questionPlan.coverageEstablished, false);
+    assert.equal(
+      mixed.questionPlan.unresolvedRemainder,
+      "who approved treatment?",
+    );
+    assert.deepEqual(
+      mixed.requirementCoverage.outcomes.map((o) => o.status),
+      ["answered", "not_established"],
+    );
+    assert.equal(mixed.requirementCoverage.semanticAdmissionVerified, false);
+    assert.equal(await voice(mixedQ), mixed.final.text);
+    const tail = "who approved treatment and when was it signed?";
+    const lossless = await ask(
+      "What is SYN-0001's ferritin result and " + tail,
+    );
+    assert.equal(lossless.questionPlan.unresolvedRemainder, tail);
+    assert.ok(lossless.final.text.includes(tail));
     const q = "What are SYN-0001's ferritin and TSH results?",
       complete = await ask(q);
     assert.match(complete.final.text, /50 ng\/mL/);

@@ -76,6 +76,19 @@ try {
   await answer.screenshot({
     path: "/downloads/voice-memory-clinical-requirements-complete-mobile.png",
   });
+  await ask("What is SYN-0001's ferritin result and who approved treatment?");
+  assert.equal(
+    await answer.locator(".verdict-chip").innerText(),
+    "Partial answer",
+  );
+  assert.match(await answer.innerText(), /50 ng\/mL/);
+  assert.match(
+    await answer.innerText(),
+    /who approved treatment\? I have not established/,
+  );
+  await answer.screenshot({
+    path: "/downloads/voice-memory-clinical-unresolved-tail-mobile.png",
+  });
   console.log(
     "PASS explicit single-ID multi-test coverage; positive Ferritin/TSH, missing Sodium partial;320px screenshots. No providers.",
   );

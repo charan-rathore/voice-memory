@@ -1260,6 +1260,13 @@ export function createLocalServer({
           (r) => subjectOf(r) === opts.patient,
         );
         const outcomes = clinicalRequirements.requirements.map((r) => {
+          if (r.semanticState === "opaque-unresolved-tail")
+            return {
+              requirementId: r.id,
+              status: "not_established",
+              text: `${r.text} I have not established this remaining requirement.`,
+              citations: [],
+            };
           const matches = own
             .flatMap((report) => report.observations ?? [])
             .filter((o) => exactTestLabel(o.test) === r.slots.object);
