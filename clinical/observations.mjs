@@ -28,7 +28,7 @@ import {
   isMaskedIdentity,
 } from "./lab-lines.mjs";
 import { locate } from "../ingest/canonical.mjs";
-import { canonOf } from "./explain.mjs";
+import { canonOf, ocrFixName } from "./explain.mjs";
 
 export const MONTHS = {
   january: 1,
@@ -231,9 +231,27 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
         }
     });
     if (col.test === undefined || col.result === undefined) continue; // not a results table
-    for (const row of doc.elements.filter(
+    const rowsOf = doc.elements.filter(
       (e) => e.parent === t.id && e.type === "table-row",
-    )) {
+    );
+    // A header OCR garbled ("Reference rang@lag") still leaves columns whose
+    // cells say what they are. Only for columns the header did not name,
+    // and only when most of the column agrees.
+    const taken = new Set(Object.values(col));
+    const RANGE_CELL =
+      /^(?:[<>≤≥]\s*\d[\d.,]*|\d[\d.,]*\s*[-–]\s*\d[\d.,]*)$/;
+    for (let i = 0; i < header.cells.length; i++) {
+      if (taken.has(i)) continue;
+      const cells = rowsOf
+        .map((r) => (r.cells[i] ?? "").trim())
+        .filter(Boolean);
+      if (cells.length < 2) continue;
+      const share = (re) => cells.filter((c) => re.test(c)).length / cells.length;
+      if (col.range === undefined && share(RANGE_CELL) >= 0.6) col.range = i;
+      else if (col.flag === undefined && share(/^(H|L|HH|LL|\*)$/) >= 0.6)
+        col.flag = i;
+    }
+    for (const row of rowsOf) {
       const cell = (k) =>
         col[k] === undefined ? null : (row.cells[col[k]] ?? "").trim() || null;
       const test = cell("test");
@@ -330,6 +348,7 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
       },
     });
   }
+  markUnreadable(observations);
   // A row an overlay-scale stamp crosses is suspected-covered: whatever
   // sits under the stamp (value, unit or range) comes from the embedded
   // text layer alone and cannot be confirmed from the page. Conservative
@@ -677,3 +696,55 @@ export function extractSegment(doc, seg) {
   };
   return extractReport(part, { metaText: text.slice(seg.start, seg.end) });
 }
+
+// Units laboratories print. A scanned row whose unit is not one of these
+// ("miv/t", "ng/mb") was misread somewhere along the row.
+const LAB_UNIT =
+  /^(?:%|fl|pg|[mµunp]?g\/(?:d?l|ml|l)|[mµunp]?mol\/l|m?eq\/l|[mµ]?i?u\/(?:m?l|l)|[mµu]iu\/(?:m?l|l)|iu\/(?:m?l|l)|u\/l|10[\^*]\d+\/[µu]?l|10[\^*]\d+\/mm3|lakhs?\/(?:cumm|µl|ul)|cells\/(?:µl|ul|cumm)|\/cumm|\/hpf|mm\/h(?:r|our)?|mm(?:hg)?|s(?:ec(?:onds?)?)?|ratio|index|ml\/min(?:\/1\.73\s*m2)?|kg\/m2|g\/24\s*h(?:rs?)?|mg\/24\s*h(?:rs?)?|ng\/ml\/h(?:r)?|copies\/ml|titre|titer|mosm\/kg)$/i;
+const OCR_ROW = (o) =>
+  o.source?.method === "ocr" ||
+  (o.source?.method === "lab-lines" && o.source?.confidence != null);
+
+/**
+ * Scanned values the reader cannot vouch for. Word confidence is not enough:
+ * a blurred "6.8" reads as "68" with 94% confidence. Two checks:
+ *  - decimal: no decimal point, at least 8x outside the printed range, and
+ *    one inserted decimal point lands it inside the range (68 -> 6.8);
+ *  - unit: the unit is not one a laboratory prints.
+ * Marked rows are never stated or judged (explain.mjs, position()).
+ */
+export function markUnreadable(observations) {
+  for (const o of observations) {
+    if (OCR_ROW(o)) {
+      // "HbAlc" -> "HbA1c": the printed name as the lab meant it; the raw
+      // OCR reading is kept for provenance.
+      const fixed = ocrFixName(o.test);
+      if (fixed !== o.test) {
+        o.testRaw = o.test;
+        o.test = fixed;
+      }
+    }
+    if (!OCR_ROW(o) || o.qual || o.value == null) continue;
+    const page = o.source?.page ?? null;
+    const confidence = o.source?.confidence ?? null;
+    const r = o.ref ?? null;
+    const lo = r?.lowN ?? null;
+    const hi = r?.highN ?? null;
+    const digits = String(o.raw ?? "").replace(/^[<>≤≥]/, "");
+    if (lo != null && hi != null && hi > 0 && /^\d{2,}$/.test(digits)) {
+      const far = o.value > hi * 8 || (lo > 0 && o.value < lo / 8);
+      if (far)
+        for (let k = 1; k < digits.length; k++) {
+          const v = Number(digits.slice(0, k) + "." + digits.slice(k));
+          if (v >= lo / 2 && v <= hi * 2) {
+            o.unreadable = { reason: "decimal", page, confidence, maybe: String(v) };
+            break;
+          }
+        }
+    }
+    if (!o.unreadable && o.unit && !LAB_UNIT.test(String(o.unit).replace(/\s+/g, "")))
+      o.unreadable = { reason: "unit", page, confidence, maybe: null };
+  }
+  return observations;
+}
+

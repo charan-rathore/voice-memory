@@ -1011,6 +1011,8 @@ const DOCTOR_SAY = {
     flagged: (item) => `${item}: what does that mean for me?`,
     corrected: (x) =>
       `${x.test} was corrected${x.from ? ` from ${x.from} to ${x.to}` : ""} in an amended report: which value should we go by?`,
+    unclear: (t, p) =>
+      `${t}${p ? ` on page ${p}` : ""} was too unclear to read on the scan: what is the exact value?`,
     units: (t) =>
       `${t} was printed in different units in two reports: has it actually changed?`,
     noRange: (n) =>
@@ -1025,6 +1027,8 @@ const DOCTOR_SAY = {
     flagged: (item) => `${item}: मेरे लिए इसका क्या मतलब है?`,
     corrected: (x) =>
       `${x.test} को संशोधित रिपोर्ट में ${x.from ? `${x.from} से ${x.to} ` : ""}सुधारा गया: हमें कौन-सा मान मानना चाहिए?`,
+    unclear: (t, p) =>
+      `${t}${p ? ` (पेज ${p})` : ""} स्कैन पर साफ़ नहीं पढ़ा गया: इसका सही मान क्या है?`,
     units: (t) => `${t} दो रिपोर्ट्स में अलग यूनिट में छपा: क्या सच में बदला है?`,
     noRange: (n) =>
       `${n} नतीजों की सीमा नहीं छपी: क्या इनमें से किसी को देखना चाहिए?`,
@@ -1038,6 +1042,8 @@ const DOCTOR_SAY = {
     flagged: (item) => `${item}: mere liye iska kya matlab hai?`,
     corrected: (x) =>
       `${x.test} ko amended report mein ${x.from ? `${x.from} se ${x.to} ` : ""}sudhara gaya: kaunsa value maanna chahiye?`,
+    unclear: (t, p) =>
+      `${t}${p ? ` (page ${p})` : ""} scan par saaf nahi padha gaya: iska sahi value kya hai?`,
     units: (t) =>
       `${t} do reports mein alag unit mein chhapa: kya sach mein badla hai?`,
     noRange: (n) =>
@@ -1080,6 +1086,9 @@ export function doctorQuestions(question, reports, { tail = true } = {}) {
         ),
       ),
     ...ch.notComparable.map((x) => D.units(x.test)),
+    ...obs
+      .filter((o) => o.unreadable)
+      .map((o) => D.unclear(o.test, o.unreadable.page)),
     ...(unjudged ? [D.noRange(unjudged)] : []),
   ].slice(0, 5);
   const lab = pid.startsWith("doc:") ? null : subjectLabel(pid, own);
@@ -1478,11 +1487,23 @@ export function reportSummary(question, reports) {
     if (judged.length > flagged.length)
       spoken += S.rest(judged.length - flagged.length);
   }
-  const unjudged = obs.length - judged.length - adultOnly;
+  // Scanned values too unclear to read are named, with their page, and
+  // never counted as "no printed range".
+  const unclear = obs.filter((o) => o.unreadable);
+  const unjudged = obs.length - judged.length - adultOnly - unclear.length;
   const qualified = obs.filter(
-    (o) => o.rangeRaw && position(o) === "unknown" && !o.ref?.adultOnly,
+    (o) =>
+      o.rangeRaw &&
+      !o.unreadable &&
+      position(o) === "unknown" &&
+      !o.ref?.adultOnly,
   ).length;
   if (child && adultOnly) spoken += S.child(child.meta.patient.age, adultOnly);
+  if (unclear.length)
+    spoken += (UNCLEAR_SAY[lang] ?? UNCLEAR_SAY.en)(
+      unclear.map((o) => o.test),
+      [...new Set(unclear.map((o) => o.unreadable.page).filter(Boolean))],
+    );
   if (unjudged - qualified > 0) spoken += S.noRange(unjudged - qualified);
   if (qualified > 0) spoken += S.qualified(qualified);
   if (critical) spoken += S.critical(critical);
@@ -1497,6 +1518,15 @@ export function reportSummary(question, reports) {
     used: (flagged.length ? flagged : obs).slice(0, 8),
   };
 }
+
+const UNCLEAR_SAY = {
+  en: (tests, pages) =>
+    ` ${tests.join(" and ")} ${tests.length === 1 ? "is" : "are"} printed${pages.length ? ` on page ${pages.join(" and ")}` : ""} but the scan is too unclear to read safely, so check ${tests.length === 1 ? "it" : "them"} against the original.`,
+  hi: (tests, pages) =>
+    ` ${tests.join(" और ")}${pages.length ? ` पेज ${pages.join(" और ")} पर` : ""} छपे हैं पर स्कैन इतना साफ़ नहीं कि भरोसे से पढ़ा जा सके, इसलिए मूल रिपोर्ट से जाँच लें।`,
+  hinglish: (tests, pages) =>
+    ` ${tests.join(" aur ")}${pages.length ? ` page ${pages.join(" aur ")} par` : ""} chhape hain par scan itna saaf nahi ki bharose se padha ja sake, isliye original se check kar lijiye.`,
+};
 
 /** A body system or report section the question names ("liver", "dengue profile"). */
 function findGroup(question, reports) {
