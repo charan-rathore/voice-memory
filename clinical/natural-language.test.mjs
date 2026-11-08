@@ -182,3 +182,18 @@ test("ordinary help questions still get the help reply", () => {
   for (const q of ["what can I ask?", "how can you help", "what should I ask"])
     assert.equal(socialTurn(q, { lang: "en" })?.intent, "HELP", q);
 });
+
+// Asking about someone else's report must not put the caller in the
+// questions: third-person references with no first-person possessive get
+// "for them", not "for me".
+test("doctor questions for someone else's report speak about them, not me", async () => {
+  const a = clinicalAnswer(
+    "What should I ask the doctor about her report?",
+    await one(),
+  );
+  assert.equal(a?.intent, "ASK_DOCTOR");
+  assert.match(a.spoken, /for them\?/);
+  assert.doesNotMatch(a.spoken, /for me\?/);
+  const b = clinicalAnswer("What should I ask my doctor?", await one());
+  assert.match(b.spoken, /for me\?/);
+});

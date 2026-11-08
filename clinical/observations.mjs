@@ -484,10 +484,95 @@ const STATUS_RANK = {
  * cannot both be true given the collection dates (more than one year apart
  * after allowing for the time between collections).
  */
+/**
+ * Every date a printed DOB string could mean, as ISO keys. ISO
+ * (2026-01-12) and alphabetic-month (12 Jan 1980) forms are unambiguous:
+ * one interpretation. A numeric date with a 4-digit year is certain when
+ * one number must be the day (15/03/1965), genuinely ambiguous when both
+ * could be (03/07/1965: 3 July or 7 March) - then both interpretations are
+ * returned, never a guess. Anything else (2-digit years, no 4-digit year)
+ * is unparseable: []. Month names parse via the month table, never
+ * Date.parse - its local-midnight result shifts the day under toISOString.
+ */
+export function dobInterpretations(raw) {
+  if (!raw) return [];
+  const s = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return [s];
+  const yf = /^(\d{4})[/.](\d{1,2})[/.](\d{1,2})$/.exec(s);
+  if (yf) {
+    const [, y, m, d] = yf;
+    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31)
+      return [`${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`];
+    return [];
+  }
+  const num = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(s);
+  if (num) {
+    const [, a, b, y] = num;
+    if (+a > 31 || +b > 31 || +b === 0 && +a === 0) return [];
+    const dm =
+      +a >= 1 && +a <= 31 && +b >= 1 && +b <= 12
+        ? `${y}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`
+        : null;
+    const md =
+      +b >= 1 && +b <= 31 && +a >= 1 && +a <= 12
+        ? `${y}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`
+        : null;
+    return [...new Set([dm, md].filter(Boolean))];
+  }
+  if (/^[\d\/.-]+$/.test(s)) return []; // e.g. 2-digit year: century unknown
+  const m = new RegExp(`^${DATE}$`).exec(s);
+  if (m) {
+    const k = isoDate(m[1], m[2], m[3]);
+    return k ? [k] : [];
+  }
+  const y = /^(\d{4})[ -]([A-Za-z]{3,9})\.?[ -](\d{1,2})$/.exec(s);
+  if (y) {
+    const k = isoDate(y[3], y[2], y[1]);
+    return k ? [k] : [];
+  }
+  return [];
+}
+
+/**
+ * A confident date-of-birth key, or null when the printed form has more
+ * than one reading (or none). Equivalent dates in different unambiguous
+ * formats produce the same key, so a format change alone never splits one
+ * person into two.
+ */
+export function dobKey(raw) {
+  const ks = dobInterpretations(raw);
+  return ks.length === 1 ? ks[0] : null;
+}
+
+/**
+ * Do two printed DOB strings describe the same date? "same" only when every
+ * reading of each agrees; "conflict" when no reading of one can match any
+ * reading of the other (one of them certain, so they genuinely disagree);
+ * "undecidable" when the readings overlap without certainly matching (a
+ * genuinely ambiguous format against anything else); "unknown" when either
+ * side never parsed. Undecidable is not a match: two reports that cannot be
+ * shown to share a birth date are not silently combined.
+ */
+export function dobRelation(rawA, rawB) {
+  if (!rawA || !rawB) return "unknown";
+  if (String(rawA).trim() === String(rawB).trim()) return "same";
+  const ia = dobInterpretations(rawA);
+  const ib = dobInterpretations(rawB);
+  if (!ia.length || !ib.length) return "unknown";
+  const overlap = ia.some((x) => ib.includes(x));
+  if (!overlap) return "conflict";
+  return ia.length === 1 && ib.length === 1 ? "same" : "undecidable";
+}
+
 export function identityConflict(a, b) {
   const pa = a.meta?.patient ?? {};
   const pb = b.meta?.patient ?? {};
   if (pa.sex && pb.sex && pa.sex !== pb.sex) return true;
+  // One patient ID with two printed birth dates that disagree - certainly
+  // or undecidably - is an identity conflict, the same as two sexes: never
+  // a trend across them. The printed strings stay on meta.dob for review.
+  const rel = dobRelation(a.meta?.dob, b.meta?.dob);
+  if (rel === "conflict" || rel === "undecidable") return true;
   if (pa.age != null && pb.age != null) {
     const da = Date.parse(a.meta?.collected ?? "");
     const db = Date.parse(b.meta?.collected ?? "");
@@ -513,6 +598,15 @@ export function markIdentityConflicts(reports) {
     p.idConflict = reports.some(
       (x) => x !== r && x.meta?.patient?.id === p.id && identityConflict(r, x),
     );
+    // Why, when a printed birth date drove it: "dob" when the dates
+    // certainly disagree, "dob-undecidable" when they cannot be shown to
+    // match. The printed strings themselves stay on meta.dob for review.
+    const rel = reports
+      .filter((x) => x !== r && x.meta?.patient?.id === p.id)
+      .map((x) => dobRelation(r.meta?.dob, x.meta?.dob))
+      .find((r2) => r2 === "conflict" || r2 === "undecidable");
+    p.idConflictKind =
+      rel === "conflict" ? "dob" : rel === "undecidable" ? "dob-undecidable" : undefined;
   }
   return reports;
 }

@@ -695,6 +695,41 @@ const focusTerms = (s) =>
   );
 
 /**
+ * A retrieval chunk can cross a record boundary, so its quote can lead with
+ * a stranger's record before the line the question matches. Trim that
+ * prefix: cut at the last record/section heading before the first salient
+ * question token, keeping the quote on the record the match belongs to.
+ * Returns the (possibly unchanged) quote and how many characters were cut,
+ * so callers can shift the start offset. Salient content near the start is
+ * never touched, and with no heading to anchor a cut the quote is left
+ * whole - a wrong trim would misattribute the excerpt, a kept prefix only
+ * shows extra context.
+ */
+const RECORD_HEAD =
+  /^\s*(?:patient\s+(?:name|id)\s*:|name\s*:|dob\s*:|date of birth\s*:|collected\s*:|report status\s*:|#{1,6}\s).*$/gim;
+export function trimEvidenceQuote(quote, question) {
+  if (!quote) return { quote, dropped: 0 };
+  const q = focusTerms(question ?? "");
+  if (!q.size) return { quote, dropped: 0 };
+  const lower = quote.toLowerCase();
+  let first = -1;
+  for (const t of q) {
+    const at = lower.indexOf(t);
+    if (at >= 0 && (first < 0 || at < first)) first = at;
+  }
+  if (first < 300) return { quote, dropped: 0 };
+  RECORD_HEAD.lastIndex = 0;
+  let cut = -1;
+  for (;;) {
+    const m = RECORD_HEAD.exec(quote);
+    if (!m || m.index >= first) break;
+    cut = m.index;
+  }
+  if (cut <= 0) return { quote, dropped: 0 };
+  return { quote: quote.slice(cut), dropped: cut };
+}
+
+/**
  * Within a cited span, the element(s) that actually match the question: a
  * chunk can cover a whole page, but the viewer should land on the line.
  */

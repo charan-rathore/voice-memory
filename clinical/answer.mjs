@@ -1216,11 +1216,23 @@ export function eachSubject(question, reports, fn) {
 // in these reports. Questions, never advice or a diagnosis.
 const DOCTOR_RE =
   /\b(?:ask|tell|discuss|mention|bring up|raise|questions? for)\b[^?.]{0,30}\b(?:doctor|dr|physician|clinician|gp)\b|\bdoctor se\b[^?.]{0,25}\b(?:kya|kaun|puch|pooch|baat)\w*|(?:डॉक्टर|डाक्टर) से[^?।]{0,25}(?:क्या|कौन|पूछ|बात)/i;
+// Asking for someone else ("her reports", "my father's results"): the
+// suggested questions speak about the patient, not the caller. Possessive
+// first-person words keep the caller's own framing; FIRST_PERSON_RE itself
+// matches a bare "I"/"me", which a third-person question can carry, so only
+// possessives count here.
+const FIRST_POSSESSIVE_RE = /\b(my|mine|mera|meri|mere)\b|मेरा|मेरी|मेरे/i;
+const THIRD_PERSON_RE =
+  /\b(her|his|their|them|him|she|he|they|mother|father|mom|dad|mum|wife|husband|daughter|son|parent|parents|grandmother|grandfather|grandma|grandpa|sister|brother|uncle|aunt|aunty|mummy|papa|amma|appa|didi|bhai)\b|उनके|उनकी|उसके|उसकी|माँ|पिता|पत्नी|पति|बेटी|बेटा|भाई|बहन/i;
+const thirdPersonAsk = (q) =>
+  THIRD_PERSON_RE.test(q) && !FIRST_POSSESSIVE_RE.test(q);
+
 const DOCTOR_SAY = {
   en: {
     head: (who) =>
       `Questions you could bring to your doctor${who ? ` about ${who}'s report` : ""}, each from a line in these reports: `,
-    flagged: (item) => `${item}: what does that mean for me?`,
+    flagged: (item, third) =>
+      `${item}: what does that mean for ${third ? "them" : "me"}?`,
     corrected: (x) =>
       `${x.test} was corrected${x.from ? ` from ${x.from} to ${x.to}` : ""} in an amended report: which value should we go by?`,
     unclear: (t, p) =>
@@ -1229,14 +1241,15 @@ const DOCTOR_SAY = {
       `${t} was printed in different units in two reports: has it actually changed?`,
     noRange: (n) =>
       `${n} result${n === 1 ? " has" : "s have"} no printed range: should any of them be looked at?`,
-    none: (who) =>
-      `${who ? `For ${who}, n` : "N"}othing here is outside the lab's printed ranges and nothing was corrected, so a good question is what these results mean for you, given your history.`,
+    none: (who, third) =>
+      `${who ? `For ${who}, n` : "N"}othing here is outside the lab's printed ranges and nothing was corrected, so a good question is what these results mean for ${third ? "them, given their" : "you, given your"} history.`,
     tail: " These are questions to ask, not a diagnosis.",
   },
   hi: {
     head: (who) =>
       `${who ? `${who} की रिपोर्ट के बारे में ` : ""}डॉक्टर से पूछने लायक सवाल, हर एक इन रिपोर्ट्स की किसी लाइन से: `,
-    flagged: (item) => `${item}: मेरे लिए इसका क्या मतलब है?`,
+    flagged: (item, third) =>
+      `${item}: ${third ? "उनके" : "मेरे"} लिए इसका क्या मतलब है?`,
     corrected: (x) =>
       `${x.test} को संशोधित रिपोर्ट में ${x.from ? `${x.from} से ${x.to} ` : ""}सुधारा गया: हमें कौन-सा मान मानना चाहिए?`,
     unclear: (t, p) =>
@@ -1245,14 +1258,15 @@ const DOCTOR_SAY = {
       `${t} दो रिपोर्ट्स में अलग यूनिट में छपा: क्या सच में बदला है?`,
     noRange: (n) =>
       `${n} नतीजों की सीमा नहीं छपी: क्या इनमें से किसी को देखना चाहिए?`,
-    none: (who) =>
-      `${who ? `${who} के लिए: ` : ""}यहाँ कुछ भी लैब की छपी सीमा से बाहर नहीं है और कुछ सुधारा नहीं गया, इसलिए एक अच्छा सवाल है कि आपके इतिहास को देखते हुए इन नतीजों का आपके लिए क्या मतलब है।`,
+    none: (who, third) =>
+      `${who ? `${who} के लिए: ` : ""}यहाँ कुछ भी लैब की छपी सीमा से बाहर नहीं है और कुछ सुधारा नहीं गया, इसलिए एक अच्छा सवाल है कि ${third ? "उनके इतिहास को देखते हुए इन नतीजों का उनके" : "आपके इतिहास को देखते हुए इन नतीजों का आपके"} लिए क्या मतलब है।`,
     tail: " ये पूछने के सवाल हैं, निदान नहीं।",
   },
   hinglish: {
     head: (who) =>
       `${who ? `${who} ki report ke baare mein ` : ""}doctor se poochne layak sawaal, har ek in reports ki kisi line se: `,
-    flagged: (item) => `${item}: mere liye iska kya matlab hai?`,
+    flagged: (item, third) =>
+      `${item}: ${third ? "unke" : "mere"} liye iska kya matlab hai?`,
     corrected: (x) =>
       `${x.test} ko amended report mein ${x.from ? `${x.from} se ${x.to} ` : ""}sudhara gaya: kaunsa value maanna chahiye?`,
     unclear: (t, p) =>
@@ -1261,8 +1275,8 @@ const DOCTOR_SAY = {
       `${t} do reports mein alag unit mein chhapa: kya sach mein badla hai?`,
     noRange: (n) =>
       `${n} results ki range nahi chhapi: kya inmein se kisi ko dekhna chahiye?`,
-    none: (who) =>
-      `${who ? `${who} ke liye: ` : ""}Yahan kuch bhi lab ki range se bahar nahi hai aur kuch sudhara nahi gaya, isliye accha sawaal hai ki aapki history dekhte hue in results ka aapke liye kya matlab hai.`,
+    none: (who, third) =>
+      `${who ? `${who} ke liye: ` : ""}Yahan kuch bhi lab ki range se bahar nahi hai aur kuch sudhara nahi gaya, isliye accha sawaal hai ki ${third ? "unki history dekhte hue in results ka unke" : "aapki history dekhte hue in results ka aapke"} liye kya matlab hai.`,
     tail: " Yeh poochne ke sawaal hain, diagnosis nahi.",
   },
 };
@@ -1294,12 +1308,16 @@ export function doctorQuestions(question, reports, { tail = true } = {}) {
     (o) => position(o) === "unknown" && !o.ref?.adultOnly,
   ).length;
   const ch = changesFor(pid, own);
+  const third = thirdPersonAsk(question);
   const qs = [
     ...ch.corrected.map((x) => D.corrected(x)),
     ...flagged
       .slice(0, 3)
       .map((o) =>
-        D.flagged(o.qual ? S.qual(o) : S.item(o, S[position(o)], rangeOf(o))),
+        D.flagged(
+          o.qual ? S.qual(o) : S.item(o, S[position(o)], rangeOf(o)),
+          third,
+        ),
       ),
     ...ch.notComparable.map((x) => D.units(x.test)),
     ...obs
@@ -1311,7 +1329,7 @@ export function doctorQuestions(question, reports, { tail = true } = {}) {
   const end = tail ? D.tail : "";
   const spoken = qs.length
     ? D.head(lab) + qs.map((q, i) => `${i + 1}) ${q}`).join(" ") + end
-    : D.none(lab) + end;
+    : D.none(lab, third) + end;
   return {
     spoken: spoken.replace(/\s+/g, " ").trim(),
     verdict: "OVERVIEW",

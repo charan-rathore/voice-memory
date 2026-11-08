@@ -26,7 +26,7 @@ import {
 import { createHash, randomBytes } from "node:crypto";
 import path from "node:path";
 import { createCallCounters } from "./public-call-counters.mjs";
-import { documentView } from "./library.mjs";
+import { documentView, trimEvidenceQuote } from "./library.mjs";
 import { buildGraph } from "../memory/graph.mjs";
 import { documentGraph } from "../memory/document-graph.mjs";
 import { recordGraph } from "./record-graph.mjs";
@@ -1452,7 +1452,17 @@ export function publicAnswer(shown) {
       text: shown.answer ?? shown.text ?? null,
       status: shown.status ?? null,
     },
-    evidence: (shown.evidence ?? []).slice(0, 4).map(cite),
+    // Retrieval diagnostics, never the answer (see `retrieval`). A chunk
+    // can lead with an unrelated record: trim to the record the question
+    // matches, offsets shifted to stay exact against the source.
+    evidence: (shown.evidence ?? []).slice(0, 4).map((c) => {
+      const t = trimEvidenceQuote(c.quote ?? "", shown.question ?? "");
+      return cite({
+        ...c,
+        quote: t.quote,
+        start: c.start == null ? null : c.start + t.dropped,
+      });
+    }),
   };
 }
 

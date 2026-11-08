@@ -62,3 +62,63 @@ test("hospital case file: every question and trick question answered from the re
     else process.env.VM_PUBLIC_ASK_PER_MIN = prev;
   }
 });
+
+// The HbA1c abstention names the other person's value, but its diagnostic
+// evidence must excerpt the record that value belongs to - before the
+// display trim, the quote led with 355 characters of an unrelated record,
+// reading as if the stranger's HbA1c were part of the answer's basis.
+test("hospital case file: evidence excerpts start at the record they quote", async () => {
+  const prev = process.env.VM_PUBLIC_ASK_PER_MIN;
+  process.env.VM_PUBLIC_ASK_PER_MIN = "100000";
+  const srv = createLocalServer({ port: 0 });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${srv.address().port}/api/public`;
+  try {
+    const ws = await (
+      await fetch(base + "/workspace", { method: "POST" })
+    ).json();
+    await fetch(`${base}/workspace/${ws.id}/upload`, {
+      method: "POST",
+      headers: {
+        "x-file-name": "harborline-adversarial.pdf",
+        "content-type": "application/octet-stream",
+      },
+      body: PDF,
+    });
+    for (let i = 0; i < 600; i++) {
+      const st = await (await fetch(`${base}/workspace/${ws.id}`)).json();
+      if (
+        st.documents.every((d) => ["ready", "needs_review"].includes(d.status))
+      )
+        break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const a = await (
+      await fetch(base + "/ask", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          case: ws.id,
+          question: "What is Maya's HbA1c?",
+        }),
+      })
+    ).json();
+    for (const ev of a.evidence ?? []) {
+      const head = (ev.quote ?? "").slice(0, 300).toLowerCase();
+      assert.ok(
+        head.includes("maya") || head.includes("hba1c"),
+        `evidence leads with unrelated text: ${(ev.quote ?? "").slice(0, 120)}`,
+      );
+      // offsets stay exact against the source: the quote is the slice
+      assert.equal(
+        ev.end - ev.start,
+        ev.quote.length,
+        "evidence offsets no longer match the quote after trimming",
+      );
+    }
+  } finally {
+    await new Promise((r) => srv.close(r));
+    if (prev === undefined) delete process.env.VM_PUBLIC_ASK_PER_MIN;
+    else process.env.VM_PUBLIC_ASK_PER_MIN = prev;
+  }
+});

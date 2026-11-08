@@ -114,18 +114,28 @@ try {
     );
   }
   console.log(`\n${pass}/${asked} passed`);
-  mkdirSync(new URL("evaluation/results/", root), { recursive: true });
-  writeFileSync(
-    new URL(
-      `evaluation/results/case-probe-${process.env.VM_PROBE_QS ? "holdout" : "main"}.json`,
-      root,
-    ),
-    JSON.stringify(
-      { at: new Date().toISOString(), answerable, ready, pass, asked, out },
-      null,
-      2,
-    ) + "\n",
-  );
+  // Integrity: a partial run never wears the full-suite artifact name (a
+  // 2/2 "pass" once overwrote the 35-question record), and any run that
+  // asked fewer questions than expected fails instead of filing a "pass".
+  const expected = only ? only.size : QS.length;
+  const suite = process.env.VM_PROBE_QS ? "holdout" : "main";
+  if (asked !== expected) {
+    console.error(`probe incomplete: asked ${asked} of ${expected}`);
+    process.exitCode = 1;
+  } else {
+    mkdirSync(new URL("evaluation/results/", root), { recursive: true });
+    writeFileSync(
+      new URL(
+        `evaluation/results/case-probe-${suite}${only ? "-partial" : ""}.json`,
+        root,
+      ),
+      JSON.stringify(
+        { at: new Date().toISOString(), answerable, ready, pass, asked, out },
+        null,
+        2,
+      ) + "\n",
+    );
+  }
 } finally {
   server?.kill();
 }
