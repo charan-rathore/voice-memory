@@ -210,6 +210,9 @@ for (const packet of [false, true])
             question,
             patient,
             semantic,
+            documentConsent: semantic
+              ? { generation: state.bundleGeneration, model: null, provider: "Google Gemini" }
+              : undefined,
           }),
         }).then((r) => r.json());
       const ambiguous = await ask("When was AL-101 discharged?");

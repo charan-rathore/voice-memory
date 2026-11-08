@@ -180,7 +180,9 @@ test("public name-only selection excludes unidentified facts and retains concurr
       const r = await fetch(base + "/ask", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ case: ws.id, question, ...extra }),
+        body: JSON.stringify({ case: ws.id, question, ...extra,
+          documentConsent: extra.semantic ? { generation: st.bundleGeneration, provider: "Google Gemini", model: null } : undefined,
+        }),
       });
       assert.equal(r.status, 200);
       return r.json();

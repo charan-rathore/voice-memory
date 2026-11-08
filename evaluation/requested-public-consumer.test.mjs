@@ -49,6 +49,7 @@ test("actual public upload/ask lead obeys engine scope, including refusals and n
     {},
     {
       get: (_target, key) =>
+        key === "model" ? null : key === "status" ? () => ({ provider: "openrouter" }) :
         key === "enabled" || key === "searchEnabled"
           ? () => true
           : (..._args) => {
@@ -75,8 +76,9 @@ test("actual public upload/ask lead obeys engine scope, including refusals and n
         body: text,
       });
       assert.equal(uploaded.status, 202);
+      let status;
       for (let i = 0; i < 100; i++) {
-        const status = await (await fetch(base + `/workspace/${ws.id}`)).json();
+        status = await (await fetch(base + `/workspace/${ws.id}`)).json();
         if (status.documents[0]?.status === "ready") break;
         if (i === 99) throw Error("upload timeout");
         await new Promise((r) => setTimeout(r, 30));
@@ -84,7 +86,9 @@ test("actual public upload/ask lead obeys engine scope, including refusals and n
       const response = await fetch(base + "/ask", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ case: ws.id, question: q, semantic: true }),
+        body: JSON.stringify({ case: ws.id, question: q, semantic: true,
+          documentConsent: { generation: status.bundleGeneration, provider: "OpenRouter", model: null },
+        }),
       });
       assert.equal(response.status, 200);
       const r = await response.json();

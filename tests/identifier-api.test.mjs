@@ -81,12 +81,14 @@ test("public typed and streaming voice paths preserve identifier bindings and re
         body: text,
       });
       assert.equal(upload.status, 202);
-      let ready = false;
+      let ready = false,
+        generation;
       for (let i = 0; i < 100; i++) {
         const data = await fetch(`${base}/workspace/${id}`).then((r) =>
           r.json(),
         );
         if (data.documents[0]?.status === "ready") {
+          generation = data.bundleGeneration;
           ready = true;
           break;
         }
@@ -96,7 +98,16 @@ test("public typed and streaming voice paths preserve identifier bindings and re
       const response = await fetch(base + "/ask", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ case: id, question: q, semantic: true }),
+        body: JSON.stringify({
+          case: id,
+          question: q,
+          semantic: true,
+          documentConsent: {
+            generation,
+            provider: "Google Gemini",
+            model: null,
+          },
+        }),
       });
       assert.equal(response.status, 200);
       const typed = await response.json();

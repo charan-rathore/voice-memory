@@ -492,6 +492,19 @@ export function createPublicApi({
           // service and never attempts a server round trip).
           semantic: {
             enabled: !!gemini?.enabled(),
+            documentReader: {
+              enabled:
+                process.env.VM_DOCUMENT_REASONING === "on" &&
+                process.env.VM_SEMANTIC_AUDIENCE !== "demo" &&
+                !!gemini?.enabled() &&
+                typeof gemini?.documentRead === "function" &&
+                typeof gemini?.documentAudit === "function",
+              provider:
+                gemini?.status?.().provider === "openrouter"
+                  ? "OpenRouter"
+                  : "Google Gemini",
+            },
+
             search: !!gemini?.searchEnabled?.(),
             transcribe:
               !!(voiceIn?.enabled() ?? gemini?.enabled()) &&
@@ -677,6 +690,23 @@ export function createPublicApi({
           )
             ? data.patient.trim()
             : null;
+        if (
+          isWs(data.case) &&
+          data.semantic === true &&
+          process.env.VM_DOCUMENT_REASONING === "on" &&
+          (data.documentConsent?.generation !== s.bundleGeneration ||
+            data.documentConsent?.provider !==
+              (gemini?.status?.().provider === "openrouter"
+                ? "OpenRouter"
+                : "Google Gemini") ||
+            data.documentConsent?.model !== (gemini?.model ?? null))
+        ) {
+          send(res, 409, {
+            error:
+              "The document set or cloud reader changed. Refresh the documents and confirm cloud reading again.",
+          });
+          return true;
+        }
         const shown = await resolve(s, q, ctx, {
           // A visitor's own passages reach the model only on their say-so.
           consent: data.semantic === true,

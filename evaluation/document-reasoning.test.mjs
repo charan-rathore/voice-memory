@@ -250,7 +250,14 @@ test("actual public upload API requires consent and audits a strong lexical answ
       const r = await fetch(base + "/ask", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ case: ws.id, question, semantic }),
+        body: JSON.stringify({
+          case: ws.id,
+          question,
+          semantic,
+          documentConsent: semantic
+            ? { generation: state.bundleGeneration, model: null, provider: "Google Gemini" }
+            : undefined,
+        }),
       });
       assert.equal(r.status, 200);
       return r.json();

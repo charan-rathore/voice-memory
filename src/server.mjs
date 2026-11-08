@@ -1281,7 +1281,10 @@ export function createLocalServer({
           evidenceWithinOwner(bundle, opts.patient, c),
         );
       const validate = (ev) => !!restore(ev);
+      // A source-bound requested-field decision (including refusal) is
+      // already complete. Whole-document reading cannot replace its scope.
       const documentEnabled =
+        !raw?.requestedChecked &&
         process.env.VM_DOCUMENT_REASONING === "on" &&
         consent &&
         gemini.enabled();

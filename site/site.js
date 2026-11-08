@@ -24,6 +24,9 @@
     context: { health: "", deal: "", own: "" },
     ws: null, // visitor workspace id
     wsDocs: [],
+    aiConsent: false,
+    aiConsentScope: null,
+    bundleGeneration: null,
     thread: [],
     current: null,
     docText: {},
@@ -35,6 +38,19 @@
     lang: /^hi\b/i.test(navigator.language || "") ? "hi" : "en",
     visuals: {},
   };
+
+  let readerConsent, readerLoading;
+  const resetReaderConsent = () => readerConsent?.reset();
+  function syncReaderConsent() {
+    if (readerConsent) return readerConsent.sync();
+    if (!state.semantic?.documentReader?.enabled || readerLoading) return;
+    readerLoading = import("./document-consent.mjs")
+      .then(({ createReaderConsent }) => {
+        readerConsent = createReaderConsent(state, $);
+        readerConsent.sync();
+      })
+      .catch(() => { readerLoading = null; });
+  }
 
   function invalidateKeyScope() {
     state.keyScopeSeq++;
@@ -172,6 +188,8 @@
       const s = await api("/status", { cache: "no-store" }, 8000);
       if (typeof s?.voice?.ready !== "boolean") return;
       state.voice = s.voice;
+      state.semantic = s.semantic ?? null;
+      syncReaderConsent();
       syncVoiceClasses();
     } catch {
       // A failed probe is not a gate change: keep the last known UI state.
@@ -211,6 +229,8 @@
       let floor = 0;
       try {
         const s = await api("/status", {}, 8000);
+        state.semantic = s.semantic ?? null;
+        syncReaderConsent();
         if (s.cases.health && s.cases.deal) {
           const { cases } = await api("/cases");
           // Demo readiness may arrive after an independent visitor upload.
@@ -224,6 +244,7 @@
           if ($("#byo")) $("#byo").hidden = !byoEnabled;
           state.voice = s.voice;
           state.semantic = s.semantic ?? null;
+          syncReaderConsent();
           state.voiceOut = s.voiceOut ?? null;
           syncVoiceClasses();
           note(
@@ -325,6 +346,9 @@
     state.ws = sessionStorage.getItem("vm_ws");
   } catch {}
   function discardOwnContext() {
+    resetReaderConsent();
+    state.bundleGeneration = null;
+    syncReaderConsent();
     state.context.own = "";
     state.thread = state.thread.filter((t) => t.caseId !== "own");
     renderThread();
@@ -419,6 +443,7 @@
   async function uploadFiles(list) {
     const files = [...list];
     if (!files.length) return;
+    resetReaderConsent();
     if (state.case !== "own") setCase("own");
     // Every file shows up the moment it is dropped, with what is really
     // happening to it: connecting to the engine, then bytes sent, then the
@@ -442,6 +467,7 @@
     for (const f of files) if (f.size <= 4 * 1048576) state.drops.push(dropped);
     state.wsDocs = [...state.wsDocs, ...local];
     renderUploads();
+    syncReaderConsent();
     readingView();
     // Uploads must not wait for the demo cases to finish loading: visitor
     // workspaces are independent of them, so on a cold boot we retry the
@@ -501,6 +527,7 @@
     try {
       const st = await api(`/workspace/${workspaceId}`);
       if (state.ws !== workspaceId) return "stale";
+      state.bundleGeneration = st.bundleGeneration ?? null;
       const failed = state.wsDocs.filter(
         (d) =>
           d.status === "failed" &&
@@ -576,6 +603,7 @@
       }
     }
     if (outcome !== "transient") state.wsFail = 0;
+    syncReaderConsent();
     renderUploads();
     if (state.case === "own") {
       renderRail();
@@ -739,6 +767,7 @@
       $(".ask-go").disabled = false;
     }
     state.case = id;
+    syncReaderConsent();
     syncCallScope();
     $$(".case-tab").forEach((b) =>
       b.setAttribute("aria-selected", String(b.dataset.case === id)),
@@ -995,7 +1024,9 @@
         question,
         context: context || undefined,
         patient: patient || undefined,
-        semantic: caseId === "own" ? !!state.aiConsent : undefined,
+        ...(caseId === "own"
+          ? readerConsent?.request() ?? { semantic: false }
+          : {}),
       }),
     });
   }
@@ -1032,6 +1063,14 @@
       result = await askEngine(caseId, question, ctx, person);
     } catch (e) {
       if (stale()) return;
+      if (caseId === "own" && e.status === 409) {
+        resetReaderConsent();
+        refreshWorkspace();
+        syncReaderConsent();
+        $("#answer").innerHTML = `<p class="a-err">${esc(e.message)}</p>`;
+        btn.disabled = false;
+        return;
+      }
       if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
       if (stale()) return;
       const saved =
@@ -1070,6 +1109,10 @@
       emit("vm:answer", { verdict: r.lead?.verdict ?? null, via, source }),
     );
     const lead = r.lead;
+    const cloudAnswer =
+      (r.semantic?.steps ?? []).includes(
+        "whole_context_read_and_independent_audit",
+      ) || /^document-/.test(lead?.origin ?? "");
     const [cls, label] = lead
       ? verdictOf(lead.verdict)
       : (r.evidence ?? []).length
@@ -1123,7 +1166,7 @@
       <div class="a-visual" id="a-visual"></div>
       <div class="a-tools">
         ${
-          lead?.text && listenOn() && source !== "saved"
+          lead?.text && listenOn() && source !== "saved" && !cloudAnswer
             ? `<button class="tool listen" type="button" data-listen aria-pressed="false"><i class="eq" aria-hidden="true"><b></b><b></b><b></b></i><span>Listen</span></button>`
             : ""
         }
@@ -1132,7 +1175,11 @@
             ? "Saved run of the same engine · live engine waking"
             : via === "call"
               ? "Spoken by Bolna from this exact sentence"
-              : "Computed live · same sentence a call would speak"
+              : cloudAnswer
+                ? "Cloud answer · inspect the sources. Voice is not enabled for this answer."
+                : caseId === "own"
+                  ? "Computed from these documents · inspect the cited sources"
+                  : "Computed live · same sentence a call would speak"
         }</span>
       </div>
       <div class="cites">${cites

@@ -66,7 +66,8 @@
           case: apiCase(caseId),
           question: r.question,
           context: state.context[caseId] || undefined,
-          semantic: caseId === "own" ? !!state.aiConsent : undefined,
+          // Typed cloud-reading permission is not a voice-inference grant.
+          semantic: caseId === "own" ? false : undefined,
           consent: caseId === "own" ? !!state.voiceConsent : undefined,
           index,
         }),
