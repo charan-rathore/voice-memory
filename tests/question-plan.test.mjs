@@ -115,3 +115,43 @@ test("same number and literal quote cannot self-certify payer or action entailme
     result.rejected.every((r) => r.reason === "relation_entailment_unverified"),
   );
 });
+
+test("current-request quote compatibility rejects historical-only wording without inferring a replacement", async () => {
+  const { historicalOnlyForCurrentRequest: blocked } = await import(
+    "../src/source-version.mjs"
+  );
+  assert.equal(
+    blocked(
+      "What is the current invoice amount?",
+      "The original invoice amount was $900.",
+    ),
+    true,
+  );
+  assert.equal(
+    blocked("What is the latest balance?", "The previous balance was $300."),
+    true,
+  );
+  assert.equal(
+    blocked(
+      "What was the original invoice amount?",
+      "The original invoice amount was $900.",
+    ),
+    false,
+  );
+  assert.equal(
+    blocked("What is the invoice amount?", "Invoice total due: 18,500 INR."),
+    false,
+  );
+  assert.equal(
+    blocked(
+      "What is the current invoice amount?",
+      "The original amount was $900; the current amount is $750.",
+    ),
+    false,
+  );
+  // A false result is not a certificate and says nothing about truth/coverage.
+  assert.equal(
+    blocked("Who paid the invoice?", "The invoice remains unpaid."),
+    false,
+  );
+});

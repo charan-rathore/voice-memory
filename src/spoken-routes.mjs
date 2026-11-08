@@ -1,3 +1,4 @@
+import { historicalOnlyForCurrentRequest } from "./source-version.mjs";
 import { mainClause } from "./spoken-extract.mjs";
 // Spoken routes that sit beside the claim graph. Each one answers a question
 // shape the field renderer could not ("what's still open?", "what did the
@@ -315,6 +316,7 @@ export function subjectSentence(
   let best = null;
   for (const src of bundle.sources) {
     for (const s of sentencesOf(src)) {
+      if (historicalOnlyForCurrentRequest(question, s.text)) continue;
       // Only the main clause asserts: words inside a conditional clause
       // ("...IF approved, the applicant will have to...") state no decision.
       const low = mainClause(s.text).toLowerCase();
