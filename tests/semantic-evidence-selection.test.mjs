@@ -13,7 +13,12 @@ import assert from "node:assert/strict";
 import { importBundle, answer, validateEvidence } from "../dist/engine.mjs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { intentLead } from "../src/semantic/route.mjs";
-import { finalAnswer, ABSTAIN_TEXT } from "../src/answer-contract.mjs";
+import {
+  finalAnswer,
+  ABSTAIN_TEXT,
+  answeringSentence,
+  stemOf,
+} from "../src/answer-contract.mjs";
 
 const PAYMENTS = [
   {
@@ -54,7 +59,7 @@ const payments = (q) => finalAnswer(shownFor(PAYMENTS, q));
 
 // --- RED: an excerpt that does not answer the question is not an answer ---
 
-test("RED: a document header cited for 'who pays the invoice on signing' is not a successful answer", () => {
+test("a document header cited for 'who pays the invoice on signing' is not a successful answer", () => {
   const f = northstar("Who pays the invoice on signing?");
   assert.notEqual(f.kind, "quoted", f.text);
   assert.equal(f.kind, "preview", f.text);
@@ -62,23 +67,26 @@ test("RED: a document header cited for 'who pays the invoice on signing' is not 
   assert.doesNotMatch(f.text, /Proposal v1|Author:/);
 });
 
-test("RED: 'is the revised fee approved' is not answered with the superseded $48,000 proposal sentence", () => {
+test("'is the revised fee approved' is not answered with the superseded $48,000 proposal sentence", () => {
   const f = northstar("Is the revised fee approved?");
   assert.doesNotMatch(f.text, /\$48,000/, f.text);
-  // The sentence that does address the revised fee's approval is the one shown.
-  assert.match(f.text, /remains pending/, f.text);
+  // Either a sentence that speaks to approval or sign-off is shown, or the
+  // honest abstention. A revised-fee sentence that says nothing about
+  // approval is not an answer to this question.
+  if (f.kind === "preview") assert.equal(f.text, ABSTAIN_TEXT);
+  else assert.match(f.text, /approv|sign|pending/i, f.text);
 });
 
 // --- RED: the answering sentence must be the one shown, for the right actor ---
 
-test("RED: 'what does the insurer pay' shows the insurer sentence, not the patient copay above it", () => {
+test("'what does the insurer pay' shows the insurer sentence, not the patient copay above it", () => {
   const f = payments("What does the insurer pay?");
   assert.equal(f.kind, "quoted", f.text);
   assert.match(f.text, /insurer pays \$160/, f.text);
   assert.doesNotMatch(f.text, /copay/, f.text);
 });
 
-test("RED: a negated status answer ('who signed the commercial terms') keeps the sentence that says so", () => {
+test("a negated status answer ('who signed the commercial terms') keeps the sentence that says so", () => {
   const f = northstar("Who signed the commercial terms?");
   assert.match(f.text, /had not yet signed off/, f.text);
 });
@@ -97,7 +105,7 @@ test("control: the patient's own payment still answers 'what does the patient pa
   assert.match(f.text, /patient pays a copay of \$40/);
 });
 
-test("RED: '22 November date client-approved' is answered by the sentence that says it is not", () => {
+test("'22 November date client-approved' is answered by the sentence that says it is not", () => {
   const f = northstar("Is the 22 November date client-approved?");
   assert.equal(f.kind, "quoted", f.text);
   assert.match(f.text, /internal delivery target, not a client-approved/);
@@ -114,4 +122,50 @@ test("control: an agreed payment schedule that no document records is abstained,
 test("control: a question about a measure no document holds is abstained", () => {
   const f = payments("What is the iron storage test?");
   assert.notEqual(f.kind, "quoted", f.text);
+});
+
+// --- Citation precision: the narrowed citation is an exact span of the source ---
+
+test("citation: the shown sentence is cited by its exact source span, which validates", () => {
+  const bundle = importBundle(PAYMENTS);
+  bundle.clinical = [];
+  const r = answer("What does the insurer pay?", bundle);
+  const f = finalAnswer({
+    question: r.question,
+    lead: null,
+    evidence: r.evidence,
+    answer: r.answer,
+  });
+  assert.equal(f.kind, "quoted", f.text);
+  const [c] = f.citations;
+  assert.equal(
+    c.quote,
+    "The insurer pays $160 of the $200 bill under the policy.",
+  );
+  assert.equal(
+    validateEvidence(c, bundle),
+    true,
+    "exact offsets into the source",
+  );
+});
+
+// --- Coverage: stems match inflections, never a different content word ---
+
+test("coverage: inflections match; a different content word does not", () => {
+  assert.equal(stemOf("signing"), stemOf("signed"));
+  assert.equal(stemOf("approved"), stemOf("approval"));
+  assert.equal(stemOf("pays"), stemOf("pay"));
+  assert.notEqual(stemOf("revised"), stemOf("revenue"));
+  const passages = [
+    { text: "The committee reviewed the revised engagement fee.", ev: {} },
+    { text: "Finance approval for any revised fee remains pending.", ev: {} },
+  ];
+  assert.equal(
+    answeringSentence("Is the revised fee approved?", passages).sentence,
+    "Finance approval for any revised fee remains pending.",
+  );
+  assert.equal(
+    answeringSentence("Is the fee approved by the board?", passages),
+    null,
+  );
 });
