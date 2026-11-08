@@ -19,6 +19,10 @@
 // Rate limits are per client address and global; voice minting has its own
 // tighter caps because each call spends the operator's Bolna credits.
 import { finalAnswer } from "./answer-contract.mjs";
+import {
+  dictionaryOf,
+  vocabularyOf as recordVocabulary,
+} from "./transcript-fix.mjs";
 import { createHash, randomBytes } from "node:crypto";
 import path from "node:path";
 import { createCallCounters } from "./public-call-counters.mjs";
@@ -548,6 +552,29 @@ export function createPublicApi({
             true
           );
         send(res, 200, workspaces.create());
+        return true;
+      }
+      // The documents' own vocabulary (test names, aliases, patient ids), one
+      // term per line: paste into a dictation app's custom dictionary
+      // (OpenWhispr feeds it to its speech model as hints) so these words
+      // are transcribed right. Same list the voice path repairs against.
+      const dict =
+        req.method === "GET" &&
+        (/^\/workspace\/(w_[0-9a-f]{32})\/dictionary$/.exec(path) ??
+          (path === "/dictionary" ? [null, null] : null));
+      if (dict) {
+        const bundle = dict[1]
+          ? workspaces?.get(dict[1])?.bundle
+          : caseOf(url.searchParams.get("case"))?.bundle;
+        if (!bundle)
+          return (send(res, 404, { error: "Nothing indexed here yet." }), true);
+        const body =
+          dictionaryOf(recordVocabulary(bundle.clinical ?? [])) + "\n";
+        res.writeHead(200, {
+          "content-type": "text/plain; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        res.end(body);
         return true;
       }
       const wsm = /^\/workspace\/(w_[0-9a-f]{32})(\/upload)?$/.exec(path);
