@@ -1442,7 +1442,7 @@ export function publicAnswer(shown) {
       verdict: final.verdict,
       kind: final.kind,
       from: final.from,
-      citations: final.citations.slice(0, 4).map(cite),
+      citations: final.citations.map(cite),
     },
     answer: final.text,
     status: final.kind,

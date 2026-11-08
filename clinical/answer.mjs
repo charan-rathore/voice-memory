@@ -279,6 +279,23 @@ function anchorEntry(series, anchor) {
   return inMonth[inMonth.length - 1] ?? null;
 }
 
+function authorityConflictAnswer(used, lang = "en") {
+  const spoken = {
+    en: "These reports give conflicting values with equal report authority. I cannot identify a correction or choose a result from upload order. Please check the original reports with the lab.",
+    hi: "इन रिपोर्ट्स में समान दर्जे के अलग नतीजे हैं। अपलोड के क्रम से मैं सुधार या सही नतीजा नहीं चुन सकती। कृपया लैब से मूल रिपोर्ट की जाँच करें।",
+    hinglish:
+      "In reports mein barabar authority ke alag results hain. Upload order se correction ya sahi result nahi chun sakti. Lab se original reports check kijiye.",
+  }[lang];
+  return {
+    spoken,
+    verdict: "NOT_COMPARABLE",
+    field: null,
+    intent: "LOOKUP",
+    lang,
+    used,
+  };
+}
+
 export function clinicalTurn(question, reports) {
   if (!reports?.length) return null;
   const hit = findTest(question, reports);
@@ -345,6 +362,8 @@ export function clinicalTurn(question, reports) {
     };
   const series = seriesFor(withTest, hit.key, patients[0]);
   if (!series.length) return null;
+  const uncertain = series.flatMap((entry) => entry.conflicts ?? []);
+  if (uncertain.length) return authorityConflictAnswer(uncertain, lang);
   const latest = series[series.length - 1];
   const amended = latest.superseded.length
     ? { from: latest.superseded[0].raw, to: latest.current.raw }
@@ -770,9 +789,7 @@ export function clinicalOverview(question, reports) {
         eachSubject(question, reports, (q, own) => {
           const id = subjectOf(own[0]);
           const named = `${q} for ${id}`;
-          return (
-            clinicalOverview(named, own) ?? oneReportNote(id, own, lang)
-          );
+          return clinicalOverview(named, own) ?? oneReportNote(id, own, lang);
         }) ?? {
           spoken: SAY[lang].which(ids.map((id) => subjectLabel(id, reports))),
           verdict: "AMBIGUOUS_PATIENT",
@@ -879,7 +896,9 @@ const OVERVIEW_SAY = {
     corrected: (c) =>
       `${listOf(
         c.map((x) =>
-          x.from ? `${x.test} was corrected from ${x.from} to ${x.to}` : `${x.test} was corrected`,
+          x.from
+            ? `${x.test} was corrected from ${x.from} to ${x.to}`
+            : `${x.test} was corrected`,
         ),
         "and",
       )}. That is a fix to the report, not a change in the body, and I use the corrected value`,
@@ -897,7 +916,9 @@ const OVERVIEW_SAY = {
     corrected: (c) =>
       `${listOf(
         c.map((x) =>
-          x.from ? `${x.test} को ${x.from} से ${x.to} में सुधारा गया` : `${x.test} को सुधारा गया`,
+          x.from
+            ? `${x.test} को ${x.from} से ${x.to} में सुधारा गया`
+            : `${x.test} को सुधारा गया`,
         ),
         "और",
       )}। यह रिपोर्ट का सुधार है, शरीर में बदलाव नहीं, और मैं सुधरा हुआ मान लेती हूँ`,
@@ -911,12 +932,13 @@ const OVERVIEW_SAY = {
       `${who} की यहाँ सिर्फ़ एक रिपोर्ट है, इसलिए अभी तुलना करने को कुछ नहीं है।`,
   },
   hinglish: {
-    head: (who) =>
-      `${who} ke liye, latest report ki pichhli report se tulna: `,
+    head: (who) => `${who} ke liye, latest report ki pichhli report se tulna: `,
     corrected: (c) =>
       `${listOf(
         c.map((x) =>
-          x.from ? `${x.test} ko ${x.from} se ${x.to} mein sudhara gaya` : `${x.test} ko sudhara gaya`,
+          x.from
+            ? `${x.test} ko ${x.from} se ${x.to} mein sudhara gaya`
+            : `${x.test} ko sudhara gaya`,
         ),
         "aur",
       )}. Yeh report ka sudhaar hai, body mein badlav nahi, aur main sudhara hua value leti hoon`,
@@ -961,7 +983,8 @@ const EACH_SAY = {
   hinglish: {
     head: (n) =>
       `Yeh reports ${n} logon ki hain, isliye main unke results alag rakhti hoon. `,
-    which: " Bataiye inmein se aap kaun hain, phir main usi report par rahungi.",
+    which:
+      " Bataiye inmein se aap kaun hain, phir main usi report par rahungi.",
   },
 };
 
@@ -996,7 +1019,7 @@ export function eachSubject(question, reports, fn) {
     intent: parts[0].intent ?? "SUMMARY",
     lang,
     subjects: parts.map((p) => p.id),
-    used: parts.flatMap((p) => p.used ?? []).slice(0, 12),
+    used: parts.flatMap((p) => p.used ?? []),
   };
 }
 
@@ -1029,7 +1052,8 @@ const DOCTOR_SAY = {
       `${x.test} को संशोधित रिपोर्ट में ${x.from ? `${x.from} से ${x.to} ` : ""}सुधारा गया: हमें कौन-सा मान मानना चाहिए?`,
     unclear: (t, p) =>
       `${t}${p ? ` (पेज ${p})` : ""} स्कैन पर साफ़ नहीं पढ़ा गया: इसका सही मान क्या है?`,
-    units: (t) => `${t} दो रिपोर्ट्स में अलग यूनिट में छपा: क्या सच में बदला है?`,
+    units: (t) =>
+      `${t} दो रिपोर्ट्स में अलग यूनिट में छपा: क्या सच में बदला है?`,
     noRange: (n) =>
       `${n} नतीजों की सीमा नहीं छपी: क्या इनमें से किसी को देखना चाहिए?`,
     none: (who) =>
@@ -1070,6 +1094,11 @@ export function doctorQuestions(question, reports, { tail = true } = {}) {
   const pid = ids[0];
   const own = reports.filter((r) => subjectOf(r) === pid);
   const obs = latestFor(own, pid);
+  if (obs.some((o) => o.authorityConflict))
+    return authorityConflictAnswer(
+      obs.flatMap((o) => o.conflicts ?? []),
+      lang,
+    );
   if (!obs.length) return null;
   const flagged = obs.filter((o) => SEVERITY[position(o)] != null);
   const unjudged = obs.filter(
@@ -1081,9 +1110,7 @@ export function doctorQuestions(question, reports, { tail = true } = {}) {
     ...flagged
       .slice(0, 3)
       .map((o) =>
-        D.flagged(
-          o.qual ? S.qual(o) : S.item(o, S[position(o)], rangeOf(o)),
-        ),
+        D.flagged(o.qual ? S.qual(o) : S.item(o, S[position(o)], rangeOf(o))),
       ),
     ...ch.notComparable.map((x) => D.units(x.test)),
     ...obs
@@ -1137,6 +1164,7 @@ function latestFor(reports, pid, keys = null) {
           ...last.current,
           date: last.date,
           superseded: last.superseded,
+          conflicts: last.conflicts ?? [],
         });
     }
   return out;
@@ -1414,10 +1442,16 @@ export function groupAnswer(question, reports, keys, label = null) {
   const who = oneSubject(question, withAny, lang);
   if (who.ask) return who.ask;
   const obs = latestFor(withAny, who.pid, keys);
+  if (obs.some((o) => o.authorityConflict))
+    return authorityConflictAnswer(
+      obs.flatMap((o) => o.conflicts ?? []),
+      lang,
+    );
   if (!obs.length) return null;
   const items = obs.map((o) => {
     const pos = position(o);
     const r = rangeOf(o);
+    if (o.unreadable) return explainOne(o, o.date, lang);
     if (o.qual) return S.gQual(o);
     if (pos === "unknown" || !r) return o.rangeRaw ? S.gRaw(o) : S.gNoRange(o);
     if (pos === "within") return S.gWithin(o, r);
@@ -1456,6 +1490,11 @@ export function reportSummary(question, reports) {
   if (who.ask) return eachSubject(question, reports, reportSummary) ?? who.ask;
   const own = reports.filter((r) => subjectOf(r) === who.pid);
   const obs = latestFor(own, who.pid);
+  if (obs.some((o) => o.authorityConflict))
+    return authorityConflictAnswer(
+      obs.flatMap((o) => o.conflicts ?? []),
+      lang,
+    );
   if (!obs.length) return null;
   const judged = obs.filter((o) => position(o) !== "unknown");
   const flagged = judged
@@ -1477,7 +1516,14 @@ export function reportSummary(question, reports) {
     S.who(label) +
     S.count(judged.length) +
     (lang === "en" ? "; " : lang === "hi" ? "; " : "; ");
-  if (!flagged.length) spoken += S.allIn(judged.length);
+  if (!judged.length)
+    spoken += {
+      en: "I cannot judge any result against a verified printed range. ",
+      hi: "मैं किसी नतीजे को सत्यापित छपी सीमा से नहीं तौल सकती। ",
+      hinglish:
+        "Kisi result ko verified printed range se compare nahi kar sakti. ",
+    }[lang];
+  else if (!flagged.length) spoken += S.allIn(judged.length);
   else {
     spoken +=
       S.out(flagged.length) +

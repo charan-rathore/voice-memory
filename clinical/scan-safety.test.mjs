@@ -76,7 +76,8 @@ test("the digital page and the clean scan read exactly as printed", async () => 
 test("a blurred value is read right or called unclear, never misstated", async () => {
   const { rep } = await report();
   const tsh = find(rep, "tsh");
-  if (tsh.raw === "6.8") assert.equal(tsh.unreadable, undefined);
+  if (tsh.raw === "6.8")
+    assert.ok(!tsh.unreadable || tsh.unreadable.reason === "confidence");
   else {
     assert.ok(tsh.unreadable, `TSH read as ${tsh.raw} must be marked unclear`);
     assert.equal(position(tsh), "unknown", "never judged against the range");
@@ -110,7 +111,7 @@ const ocr = (o) => ({
   ...o,
 });
 
-test("decimal check: 68 against 0.40-4.00 is unclear; 6.8 and 31 are not", () => {
+test("a reference range never supplies an alternate decimal to a high-confidence reading", () => {
   const [a, b, c, d] = markUnreadable([
     ocr({
       test: "TSH",
@@ -145,12 +146,11 @@ test("decimal check: 68 against 0.40-4.00 is unclear; 6.8 and 31 are not", () =>
       source: { method: "pdf-text", page: 1, confidence: null },
     },
   ]);
-  assert.deepEqual(a.unreadable, {
-    reason: "decimal",
-    page: 3,
-    confidence: 90,
-    maybe: "6.8",
-  });
+  assert.equal(
+    a.unreadable,
+    undefined,
+    "range plausibility is not source-reading evidence",
+  );
   assert.equal(b.unreadable, undefined);
   assert.equal(
     c.unreadable,

@@ -535,7 +535,7 @@ const T = {
     obscured: (o, date) =>
       `The report's embedded text reads ${o.raw} for ${nameOf(o)}, from ${date}. An overlaid stamp or watermark crosses that row, so the value may not be what is visibly printed; I can't confirm it from the page, and I won't judge it against the printed range.`,
     unreadable: (o) =>
-      `Page ${o.unreadable.page ?? "?"} prints ${o.test}, but the scan is too unclear to read it safely: it looks like “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}”${o.unreadable.maybe ? `, which may really be ${o.unreadable.maybe} given the printed range of ${o.range}` : o.unreadable.reason === "unit" ? ", and that unit isn't one a lab uses" : ""}. Please check the original before relying on it.`,
+      `Page ${o.unreadable.page ?? "?"} prints ${o.test}, but the scan is too unclear to read it safely: it looks like “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}”${o.unreadable.reason === "unit" ? ", and I could not verify the unit" : ""}. Please check the original before relying on it.`,
     stampNote: `One caveat: this copy carries an overlaid stamp, so some printed cells may not be readable on the page itself; it's worth confirming against the original report.`,
     scanNote: (page, c) =>
       `I read this from a scanned page${page ? ` (page ${page})` : ""} with ${c}% OCR confidence, so please check the number against the original.`,
@@ -548,7 +548,7 @@ const T = {
     obscured: (o, date) =>
       `रिपोर्ट के एम्बेडेड टेक्स्ट में ${date} की ${nameOf(o)} जांच का नतीजा ${o.raw} लिखा है। उस पंक्ति पर स्टैम्प या वॉटरमार्क आ रहा है, इसलिए मैं पेज पर छपे नतीजे की पुष्टि नहीं कर सकती, और इसे रेंज से भी नहीं तौलूँगी।`,
     unreadable: (o) =>
-      `पेज ${o.unreadable.page ?? "?"} पर ${o.test} छपा है, पर स्कैन इतना साफ़ नहीं कि इसे भरोसे से पढ़ा जा सके: यह “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}” जैसा दिखता है${o.unreadable.maybe ? `, जो छपी सीमा ${o.range} को देखते हुए असल में ${o.unreadable.maybe} हो सकता है` : ""}। इस पर भरोसा करने से पहले मूल रिपोर्ट देख लें।`,
+      `पेज ${o.unreadable.page ?? "?"} पर ${o.test} छपा है, पर स्कैन इतना साफ़ नहीं कि इसे भरोसे से पढ़ा जा सके: यह “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}” जैसा दिखता है${""}। इस पर भरोसा करने से पहले मूल रिपोर्ट देख लें।`,
     stampNote: `एक बात: इस कॉपी पर स्टैम्प लगी है, इसलिए कुछ छपे हुए सेल पेज पर पढ़े नहीं जा सकते; मूल रिपोर्ट से जाँच लेना ठीक रहेगा।`,
     scanNote: (page, c) =>
       `यह मान मैंने स्कैन किए गए पेज${page ? ` (पेज ${page})` : ""} से ${c}% OCR भरोसे के साथ पढ़ा है, इसलिए मूल रिपोर्ट से संख्या जाँच लें।`,
@@ -605,7 +605,7 @@ const T = {
     obscured: (o, date) =>
       `Report ke embedded text mein ${date} ka ${nameOf(o)} result ${o.raw} likha hai. Us row par stamp ya watermark aa raha hai, isliye main page par chhape result ki confirm nahi kar sakti, aur ise range se bhi nahi tolungi.`,
     unreadable: (o) =>
-      `Page ${o.unreadable.page ?? "?"} par ${o.test} chhapa hai, par scan itna saaf nahi ki ise bharose se padha ja sake: yeh “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}” jaisa dikhta hai${o.unreadable.maybe ? `, jo printed range ${o.range} dekhte hue asal mein ${o.unreadable.maybe} ho sakta hai` : ""}. Is par bharosa karne se pehle original dekh lijiye.`,
+      `Page ${o.unreadable.page ?? "?"} par ${o.test} chhapa hai, par scan itna saaf nahi ki ise bharose se padha ja sake: yeh “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}” jaisa dikhta hai${""}. Is par bharosa karne se pehle original dekh lijiye.`,
     stampNote: `Ek baat: is copy par overlaid stamp hai, isliye kuch printed cells page par padhe nahi ja sakte; original report se confirm kar lena.`,
     scanNote: (page, c) =>
       `Yeh value maine scanned page${page ? ` (page ${page})` : ""} se ${c}% OCR confidence ke saath padhi hai, isliye original se number check kar lijiye.`,
@@ -724,6 +724,8 @@ export function explainOne(o, date, lang) {
 export function explainChange(prev, curr, da, db, direction, lang, amended) {
   // A comparison against a stamp-covered row is unqualified data: fall
   // back to the provenance-qualified reading of the newer row.
+  if (prev.unreadable || curr.unreadable)
+    return T[lang ?? "en"].unreadable(curr.unreadable ? curr : prev);
   if (prev.suspectObscured || curr.suspectObscured)
     return T[lang ?? "en"].obscured(
       curr.suspectObscured ? curr : prev,

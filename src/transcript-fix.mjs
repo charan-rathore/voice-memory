@@ -145,12 +145,14 @@ export function repairRecordTerms(text, vocab) {
   const src = String(text ?? "");
   if (!src.trim() || !vocab || (!vocab.terms.length && !vocab.ids.length))
     return { text: src, fixes: [] };
-  const tokens = [...src.matchAll(/[A-Za-zÀ-ɏ]+|\d+/g)].map((m) => ({
-    t: m[0],
-    lo: m[0].toLowerCase(),
-    at: m.index,
-    end: m.index + m[0].length,
-  }));
+  const tokens = [...src.matchAll(/[A-Za-zÀ-ɏ][A-Za-zÀ-ɏ0-9]*|\d+/g)].map(
+    (m) => ({
+      t: m[0],
+      lo: m[0].toLowerCase(),
+      at: m.index,
+      end: m.index + m[0].length,
+    }),
+  );
   const fixes = [];
   const edits = [];
   // A token as a spelled character: a letter word, a single letter, a digit.
@@ -197,15 +199,11 @@ export function repairRecordTerms(text, vocab) {
         joined += c;
       }
       if (!ok || !/\d/.test(joined)) continue;
-      // Digits must match exactly (a wrong digit is someone else's report);
-      // the letters may differ by one ("sin" for "syn").
-      const digits = joined.replace(/\D/g, "");
-      const letters = joined.replace(/\d/g, "");
-      const id = vocab.ids.find(
-        (x) =>
-          x.key.replace(/\D/g, "") === digits &&
-          distance(letters, x.key.replace(/\d/g, "")) <= 1,
-      );
+      // An owner is an opaque identifier, not a fuzzy vocabulary term.
+      // Decode spelling only when the complete letters and digits match.
+      // Never turn an unknown or another exact owner into a nearby owner.
+      const matches = vocab.ids.filter((x) => x.key === joined);
+      const id = matches.length === 1 ? matches[0] : null;
       if (id) {
         if (src.slice(win[0].at, win.at(-1).end) !== id.text) {
           edits.push({ at: win[0].at, end: win.at(-1).end, to: id.text });

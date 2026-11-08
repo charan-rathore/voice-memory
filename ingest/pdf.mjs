@@ -629,7 +629,13 @@ function assemble(pageLines, pages, ocrBlocks) {
     const seen = new Map();
     for (const l of statLines) {
       const inMargin = l.y < l.pageHeight * 0.08 || l.y > l.pageHeight * 0.92;
-      if (!inMargin) continue;
+      if (
+        !inMargin ||
+        /\b(patient|subject|collected|reported|report status|accession|mrn|uhid)\b/i.test(
+          l.text,
+        )
+      )
+        continue;
       const k = furnitureKey(l.text);
       seen.set(k, (seen.get(k) ?? new Set()).add(l.page));
     }

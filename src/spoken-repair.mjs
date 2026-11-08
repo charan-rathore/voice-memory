@@ -257,7 +257,25 @@ export function isFragment(text) {
  */
 export function voiceQuestions(messages, { reports, ids, aliasesFor, text }) {
   const vocab = labVocabulary(reports, aliasesFor);
-  const fix = (s) => repairTestNames(repairPatientIds(s, ids), vocab);
+  const fix = (s) => {
+    // Literal identifiers are opaque, including unknown ones. Legacy spoken
+    // aliases must never rewrite their prefixes, separators or zero lengths.
+    const literals = [];
+    let marker = "zzprotectedownerzz";
+    while (s.includes(marker)) marker += "z";
+    const encoded = s.replace(
+      /\b[A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)+\b/g,
+      (token) => {
+        if (!/\d/.test(token)) return token;
+        const tag = marker + String.fromCharCode(97 + literals.length) + marker;
+        literals.push({ tag, token });
+        return tag;
+      },
+    );
+    let out = repairTestNames(repairPatientIds(encoded, ids), vocab);
+    for (const { tag, token } of literals) out = out.replace(tag, token);
+    return out;
+  };
   const users = [];
   for (let i = messages.length - 1; i >= 0 && users.length < 4; i--) {
     const m = messages[i];
