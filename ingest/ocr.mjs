@@ -47,6 +47,9 @@ export async function shutdownOcr() {
   await w?.terminate().catch(() => {});
 }
 
+/** Whether this thread holds a loaded OCR engine (pooled parsers keep it warm). */
+export const ocrWarm = () => workerPromise !== null;
+
 export const OCR_ENGINE = "tesseract.js@5 eng 4.0.0_best_int";
 
 /**
@@ -78,6 +81,15 @@ export async function recognize(image, { onProgress = null } = {}) {
           rawText: l.text,
           bbox: l.bbox,
           confidence: l.confidence,
+          // Positioned words: a scanned page is laid out by the same
+          // reading/table engine as a digital page (ingest/pdf.mjs).
+          words: (l.words ?? [])
+            .filter((wd) => wd.text?.trim())
+            .map((wd) => ({
+              text: wd.text.trim(),
+              bbox: wd.bbox,
+              confidence: wd.confidence,
+            })),
         }))
         .filter((l) => l.text);
       if (!lines.length) continue;
