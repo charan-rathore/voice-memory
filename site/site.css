@@ -4880,3 +4880,33 @@ html:not(.voice-on) .voice-off {
 .cite-more-doc:hover {
   border-color: var(--ink-3);
 }
+
+/* ---------------------------------------------------------------- the source panel follows the reader
+   The panel used to fill the answer column's full height, so a short
+   panel (a hidden chart, a short document) left a tall empty block beside
+   a long answer. It now stays in view while the answer scrolls, at most
+   one screen tall, and scrolls inside itself. */
+@media (min-width: 1081px) {
+  .desk {
+    overflow: clip;
+  }
+  .viewer {
+    position: sticky;
+    inset: auto;
+    top: 84px;
+    height: calc(100vh - 104px);
+    max-height: 100%;
+  }
+  .viewer-body {
+    min-height: 0;
+  }
+}
+
+/* A citation is a line, not a page: a long span (a scanned page read as
+   one block) shows its first lines; the viewer shows the rest. */
+.cite-q {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

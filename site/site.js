@@ -964,6 +964,16 @@
   // the free host); visitor workspaces always POST. If the engine predates
   // GET /answer (the site deploys before the engine does), fall back to POST.
   let getAnswers = true;
+  document.addEventListener("vm:person", (e) => {
+    const id = e.detail?.id;
+    if (!id || !/^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(id)) return;
+    state.person = state.person ?? {};
+    // the overview's first person never overrides a person already chosen
+    if (e.detail?.initial && state.person[state.case]) return;
+    state.person[state.case] = id;
+    // a new person on screen: the next question starts fresh for them
+    if (!e.detail?.initial) state.context[state.case] = "";
+  });
   async function askEngine(caseId, question, context) {
     if (caseId !== "own" && getAnswers) {
       const qs = new URLSearchParams({ case: caseId, q: question });
@@ -1011,7 +1021,14 @@
         throw Object.assign(new Error("not live"), { offline: true });
       if (caseId === "own" && !state.cases.own?.ready)
         throw new Error("Upload a document first, then ask about it.");
-      result = await askEngine(caseId, question, state.context[caseId]);
+      // The person whose results are on screen is who an unnamed question
+      // is about; a follow-up keeps its own context.
+      const person = state.person?.[caseId];
+      const prev = state.context[caseId] || "";
+      const ctx = person
+        ? `person:${person}${prev && !prev.startsWith("person:") ? ` ${prev}` : ""}`.slice(0, 60)
+        : prev;
+      result = await askEngine(caseId, question, ctx);
     } catch (e) {
       if (stale()) return;
       if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
@@ -1071,7 +1088,7 @@
       r.final?.text ??
       (ev.length
         ? `From the document: “${prettyQuote(retrieved || ev[0].quote).slice(0, 280)}”${ev.length > 1 ? ` (and ${ev.length - 1} more cited passage${ev.length > 2 ? "s" : ""})` : ""}`
-        : "I don't see a supported answer to that in these documents.");
+        : "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.");
     // The companion opener ("Honest answer:") is shown before the answer
     // as well as spoken, so screen and voice are the same words. Every word
     // is a span with its index in the spoken text, for karaoke highlighting.
@@ -1795,7 +1812,11 @@
           .join("");
       }),
     );
-    const target = $("#viewer-body mark") ?? $("#viewer-body .rd-doc.focus");
+    // the cited line: a text mark, or the box drawn on a rendered PDF page
+    const target =
+      $("#viewer-body mark") ??
+      $("#viewer-body .rd-canvas .box") ??
+      $("#viewer-body .rd-doc.focus");
     if (
       target &&
       $("#viewer-body").scrollHeight > $("#viewer-body").clientHeight

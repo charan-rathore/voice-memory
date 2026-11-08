@@ -1253,6 +1253,18 @@
       hinglish: ["protein ka waste jo kidney saaf karti hai", "Jab body protein todti hai to urea naam ka waste banta hai. Kidney ise nikaalti hai, isliye blood mein iski matra kidney ke kaam ka ek sanket hai.", "Yeh test, aksar creatinine ke saath, kidney ka kaam dekhne ke liye hota hai."],
     },
   };
+  // What "above" or "below" a range usually points to, in general: the
+  // MedlinePlus page each primer cites says this. Never about this person;
+  // shown under the range line as general background, English only.
+  const MEANS = {
+    ferritin: { below: "In general, a low ferritin can mean the body's iron stores are low.", above: "In general, a high ferritin can come from too much stored iron, or from inflammation or liver problems." },
+    hemoglobin: { below: "In general, a low hemoglobin can be a sign of anemia, when the blood carries less oxygen than usual.", above: "In general, a high hemoglobin can come from dehydration, smoking, lung disease or living at high altitude." },
+    tsh: { above: "In general, a high TSH can mean the thyroid isn't making enough hormone, so the brain is turning the dial up.", below: "In general, a low TSH can mean the thyroid is making too much hormone, so the brain is turning the dial down." },
+    hba1c: { above: "In general, guidelines read an HbA1c of 5.7 to 6.4% as prediabetes and 6.5% or more as diabetes, but only a doctor can diagnose, often with a repeat test.", below: "In general, a low HbA1c is uncommon and can be affected by blood loss or some blood conditions." },
+    creatinine: { above: "In general, a high creatinine can mean the kidneys aren't filtering as well as usual; muscle mass, diet and fluids also move it.", below: "In general, a low creatinine usually reflects lower muscle mass and is rarely a concern on its own." },
+    ldl: { above: "In general, a higher LDL is linked with a higher chance of heart and blood vessel disease over time.", below: "In general, a lower LDL is what heart guidelines usually aim for." },
+    urea: { above: "In general, a high urea can mean the kidneys aren't clearing waste as well, or that the body is short of fluid.", below: "In general, a low urea can come from a low-protein diet or liver problems." },
+  };
   const primerKey = (t) => {
     const k = `${t.key ?? ""} ${t.name ?? ""}`.toLowerCase();
     if (/ferritin/.test(k)) return "ferritin";
@@ -1441,7 +1453,7 @@
       <ol class="ex-steps">
         ${p ? `<li class="ex-step ex-learn"><div class="ex-pair"><div><h4 class="ex-k"><span class="ex-n" aria-hidden="true">1</span>${esc(x.steps[0])}</h4><p>${esc(p[1])}</p></div><div><h4 class="ex-k"><span class="ex-n" aria-hidden="true">2</span>${esc(x.steps[1])}</h4><p>${esc(p[2])}</p></div></div><p class="ex-src">${esc(x.general)} · <a href="${esc(PRIMER[pk].src)}" target="_blank" rel="noopener">${esc(x.source)}</a> · ${esc(x.unreviewed)}</p></li>` : step(0, `<p>${esc(x.noPrimer)}</p>`)}
         ${step(2, `<div class="ex-report"><b class="ex-big">${esc(L.raw)}</b>${t.unit ? `<span class="ex-u">${esc(t.unit)}</span>` : ""}<span class="ex-d">${esc(shortDate(L.date, lang))}</span>${L.status ? statusChip(L.status) : ""}${src ? `<button type="button" class="ex-open" data-doc="${esc(src)}">${esc(x.openRow)} ↗</button>` : ""}</div>${L.status === "preliminary" ? `<p class="ex-say t-unsure">${esc(x.prelim)}</p>` : ""}`)}
-        ${step(3, `<div class="st-chart ex-chart">${chart}</div>${legend}<p class="ex-say t-${tone}">${esc(whereLine)}</p>${tone === "out" ? `<p class="ex-note">${esc(x.where.outside)}</p>` : ""}`)}
+        ${step(3, `<div class="st-chart ex-chart">${chart}</div>${legend}<p class="ex-say t-${tone}">${esc(whereLine)}</p>${tone === "out" ? `${lang === "en" && pk && MEANS[pk]?.[pos] ? `<p class="ex-means"><b>What that usually points to</b> ${esc(MEANS[pk][pos])} <a href="${esc(PRIMER[pk].src)}" target="_blank" rel="noopener">MedlinePlus</a></p>` : ""}<p class="ex-note">${esc(x.where.outside)}</p>` : ""}`)}
         ${step(4, `${changes}<ol class="ex-rows">${readings}</ol>`)}
         ${step(5, `<ul class="ex-cant">${cantList(t, lang).map((c) => `<li>${esc(c)}</li>`).join("")}</ul>`)}
       </ol>
@@ -1810,6 +1822,9 @@
       const rep = REPORTS.get(board?.dataset.rep);
       if (!rep) return;
       rep.subject = Number(subj.dataset.subject);
+      // the person on screen is the person typed questions are about
+      const sid = rep.v.subjects[rep.subject]?.id;
+      if (sid) document.dispatchEvent(new CustomEvent("vm:person", { detail: { id: sid } }));
       board.querySelector(".rp-body").innerHTML = labReport(rep.v, rep.opts, rep.subject);
       rep.stack = [];
       placeStage(board);
@@ -1976,7 +1991,13 @@
     const lang = opts.lang ?? v.lang ?? "en";
     const focus = v.focus === "answer";
     const id = `rp${++rid}`;
-    if (!focus) REPORTS.set(id, { v, opts, lang, subject: 0 });
+    if (!focus) {
+      REPORTS.set(id, { v, opts, lang, subject: 0 });
+      // the first person shown is who unnamed questions are about
+      const sid = v.subjects?.[0]?.id;
+      if (sid && v.subjects.length > 1)
+        document.dispatchEvent(new CustomEvent("vm:person", { detail: { id: sid, initial: true } }));
+    }
     // Answers show the picture of that answer (the test's own drill-down);
     // the overview is the report.
     const body = focus
