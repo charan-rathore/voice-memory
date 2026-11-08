@@ -98,3 +98,39 @@ test("one reading: nothing to compare, nothing claimed", () => {
   assert.equal(i.notCompared, null);
   assert.deepEqual(i.distance, { side: "above", by: 0.5, bound: "5.6" });
 });
+
+test("unreadable and equal-authority conflicts never become numeric charts", async () => {
+  const { caseVisual } = await import("../src/visual-summary.mjs");
+  const report = (raw, extra = {}) => ({
+    meta: {
+      patient: { id: "RX-1" },
+      collected: "2026-11-05",
+      reported: "2026-11-06",
+      status: "final",
+    },
+    observations: [
+      {
+        ...obs(raw, "%"),
+        key: "hba1c",
+        canon: "hba1c",
+        test: "HbA1c",
+        date: "2026-11-05",
+        ...extra,
+      },
+    ],
+  });
+  const uncertain = caseVisual({
+    clinical: [report("59", { unreadable: { reason: "confidence", page: 3 } })],
+  });
+  assert.equal(
+    uncertain,
+    null,
+    "unclear scan cannot display a numeric card or history",
+  );
+  const conflict = caseVisual({ clinical: [report("4"), report("40")] });
+  assert.equal(
+    conflict,
+    null,
+    "equal-authority disagreement cannot display upload-order value",
+  );
+});

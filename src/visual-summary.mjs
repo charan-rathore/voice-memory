@@ -103,7 +103,11 @@ export function insightOf(series, o, r, pos) {
 }
 
 function testCard(reports, key, sid) {
-  const series = seriesFor(reports, key, sid);
+  const allSeries = seriesFor(reports, key, sid);
+  // A visual number carries the same authority as a spoken number.
+  const safe = (s) => !s.current.unreadable && !s.conflicts?.length;
+  if (allSeries.length && !safe(allSeries.at(-1))) return null;
+  const series = allSeries.filter(safe);
   if (!series.length) return null;
   const last = series[series.length - 1];
   const o = last.current;
@@ -294,9 +298,11 @@ export function caseVisual(bundle, lang = "en") {
   // The person with the most reports first: that is whose story it is.
   const subjects = ids
     .map((id) => subjectBlock(reports, id))
+    .filter((s) => s.tests.length)
     .sort(
       (a, b) => b.reports.length - a.reports.length || ranged(b) - ranged(a),
     );
+  if (!subjects.length) return null;
   return {
     kind: "labs",
     lang,
@@ -315,6 +321,7 @@ export function visualFor(question, bundle, lead) {
     const sid = subjectOf(used[0].report);
     const keys = [...new Set(used.map((o) => o.key))];
     const block = subjectBlock(reports, sid, keys);
+    if (!block.tests.length) return null;
     return { kind: "labs", focus: "answer", lang, subjects: [block] };
   }
   if (["OVERVIEW", "FLAGGED", "SUMMARY"].includes(lead.verdict)) {
