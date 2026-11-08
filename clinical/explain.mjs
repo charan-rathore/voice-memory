@@ -19,17 +19,21 @@ import { OCR_REVIEW_CONFIDENCE } from "../ingest/errors.mjs";
 // Whether a question is about someone other than the caller ("his TSH",
 // "my father's report", "does he have"), so answers and declines never
 // say "you" to a person the results do not belong to.
+// Devanagari kinship sits outside \b anchors: JS word boundaries ignore
+// non-ASCII letters, so \b never fires around them.
+const DEV_KINSHIP =
+  /(?:मेरा|मेरी|मेरे)\s*(?:माँ|माता|पिता|पापा|मम्मी|पत्नी|पति|बेटा|बेटी|भाई|बहन|दादा|दादी|नाना|नानी)/;
 const ABOUT_OTHER =
-  /\b(he|she|they|him|his|her|hers|their|them)\b|\bmy\s+(dad|father|mother|mom|mum|mummy|papa|son|daughter|wife|husband|parents?|grand(?:father|mother|pa|ma)|brother|sister|child|kid|patient)\b|\b(unko|unhe|usko|use|inko|papa\s+ko|mummy\s+ko)\b|उन्हें|उनको|उसको|पापा|मम्मी/i;
+  /\b(he|she|they|him|his|her|hers|their|them)\b|\bmy\s+(dad|father|mother|mom|mum|mummy|papa|son|daughter|wife|husband|parents?|grand(?:father|mother|pa|ma)|brother|sister|child|kid|patient)\b|\b(?:my|mere|meri|mera)\s+(papa|mummy|mumma|ma|mata|pita|didi|bhai|mama|chacha|mausi|mausa|maasi|dada|dadi|nana|nani)\b|\b(unko|unhe|usko|use|inko|unke|uske|papa\s+ko|mummy\s+ko)\b|उन्हें|उनको|उसको|उनके|उसके|उनकी|उसकी|पापा|मम्मी/i;
+const ABOUT_OTHER_FULL = (q) => ABOUT_OTHER.test(q) || DEV_KINSHIP.test(q);
 /** True when the question is about someone other than the caller. */
+const KINSHIP =
+  /\b(?:my|mere|meri|mera)\s+(dad|father|mother|mom|mum|mummy|papa|mumma|ma|mata|pita|didi|bhai|mama|chacha|mausi|mausa|maasi|dada|dadi|nana|nani|son|daughter|wife|husband)\b|(?:मेरा|मेरी|मेरे)\s*(?:माँ|माता|पिता|पापा|मम्मी|पत्नी|पति|बेटा|बेटी|भाई|बहन|दादा|दादी|नाना|नानी)/gi;
+const OWN_REF =
+  /\b(i|me)\b|\b(?:my|mere|meri|mera)\s+(?:own|reports?|results?|tsh|ferritin)\b|(?:मेरा|मेरी|मेरे)\s*(?:खुद|अपन[ीेा]|रिपोर्ट|नतीजे)/i;
 export const aboutSomeoneElse = (q) =>
-  ABOUT_OTHER.test(String(q ?? "")) &&
-  !/\b(i|me|my\s+(own|report|results?|tsh|ferritin))\b/i.test(
-    String(q ?? "").replace(
-      /\bmy\s+(dad|father|mother|mom|mum|son|daughter|wife|husband)\b/gi,
-      "",
-    ),
-  );
+  ABOUT_OTHER_FULL(String(q ?? "")) &&
+  !OWN_REF.test(String(q ?? "").replace(KINSHIP, ""));
 
 /** English answer text about someone else: no "your" for their results. */
 export function thirdPerson(text) {

@@ -1,73 +1,92 @@
-// trimEvidenceQuote: display-layer excerpt trimming for diagnostic evidence.
-// The invariants that matter: an untrimmed quote never loses context; a
-// trimmed quote stays an exact slice of the original at shifted offsets;
-// the cut only ever happens at a source-printed record/section heading, so
-// the kept excerpt is whole records, never a cropped mid-record fragment;
-// and a salient token early in the quote (e.g. repeated in an unrelated
-// estimate) blocks trimming entirely - contradictory context is never
-// cropped to look relevant.
+// bindEvidenceToRecords: diagnostic evidence is bound to the source-owned
+// record the question matches, using the clinical packet segmentation -
+// not lexical guesses over rendered text. Invariants: a clipped span is an
+// exact slice of the original at shifted offsets; the clip only ever
+// happens at real record boundaries from packetSegments; the record
+// containing the first salient question token wins; a paraphrase (no
+// salient token) binds by largest character overlap; unsegmented sources
+// and undecidable cases are kept whole, never mis-clipped.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { trimEvidenceQuote } from "../src/library.mjs";
+import { bindEvidenceToRecords } from "../src/library.mjs";
 
 const REC = (name, id, body) =>
   `Patient name: ${name} Patient ID: ${id}\n\nDOB: 04 Dec 1968 Sex: Female\n\n${body}`;
 
-test("a chunk crossing a record boundary trims to the matching record", () => {
-  const before = REC("Other Person", "X-1", "Hemoglobin 13.1 g/dL\n\n");
-  const match = REC("Maya Sharma", "HLG-P1048", "HbA1c 6.9 %\n");
-  const pad = "x".repeat(310 - before.length) + "\n"; // push the match past 300
-  const quote = before + pad + match;
-  const q = "What is Maya's HbA1c?";
-  const t = trimEvidenceQuote(quote, q);
-  assert.ok(t.dropped > 0);
-  // exact slice at shifted offsets: source.slice(start+dropped, end)
-  assert.equal(t.quote, quote.slice(t.dropped));
-  assert.equal(t.quote, match);
-  // nothing from the matching record is lost: it starts at its own heading
-  assert.ok(t.quote.startsWith("Patient name: Maya Sharma"));
-});
-
-test("status and amendment lines inside the matching record are kept", () => {
-  const before = REC("Other Person", "X-1", "notes\n") + "y".repeat(300) + "\n";
+function fixture() {
+  const other = REC("Other Person", "X-1", "HbA1c 5.4 %\n");
+  const pad = "z".repeat(320) + "\n";
   const match = REC(
     "Maya Sharma",
     "HLG-P1048",
-    "Report status: AMENDED\n\nAmended: HbA1c corrected 7.1 to 6.9\n\nHbA1c 6.9 %\n",
+    "Report status: AMENDED\nCollected: 2026-10-22\nHbA1c 6.9 %\n",
   );
-  const t = trimEvidenceQuote(before + match, "What is Maya's HbA1c?");
-  assert.equal(t.quote, match);
-  assert.match(t.quote, /Report status: AMENDED/);
-  assert.match(t.quote, /corrected 7\.1 to 6\.9/);
+  const text = other + pad + match;
+  const reports = [
+    {
+      sourceId: "s1",
+      title: "packet.pdf · p.1",
+      span: { start: 0, end: other.length + pad.length },
+    },
+    {
+      sourceId: "s1",
+      title: "packet.pdf · p.2",
+      span: { start: other.length + pad.length, end: text.length },
+    },
+  ];
+  return { text, reports, other, pad, match };
+}
+
+test("evidence clips to the record holding the salient token", () => {
+  const { text, reports } = fixture();
+  const ev = { sourceId: "s1", start: 0, end: text.length, quote: text };
+  const [b] = bindEvidenceToRecords([ev], "What is Maya's HbA1c?", reports);
+  assert.equal(b.quote, text.slice(b.start, b.end)); // exact slice
+  assert.equal(b.start, reports[1].span.start); // opens at the record boundary
+  assert.equal(b.end, reports[1].span.end);
+  assert.match(b.quote, /Report status: AMENDED/); // status context kept
+  assert.match(b.quote, /Patient name: Maya Sharma/); // identity kept
+  assert.doesNotMatch(b.quote, /Other Person/);
+  assert.equal(b.record, "packet.pdf · p.2");
 });
 
-test("a salient token in an unrelated prefix blocks trimming entirely", () => {
-  // "Maya" repeats in an earlier estimate record: the first occurrence is
-  // near the start, so the excerpt is kept whole - cropping could hide that
-  // the question's words also match a record the answer did not use.
-  const estimate = REC("Maya Sharma", "HLG-P1047", "HbA1c not done\n");
-  const pad = "z".repeat(320) + "\n";
-  const other = REC("Maya Sharma", "HLG-P1048", "HbA1c 6.9 %\n");
-  const quote = estimate + pad + other;
-  const t = trimEvidenceQuote(quote, "What is Maya's HbA1c?");
-  assert.equal(t.dropped, 0);
-  assert.equal(t.quote, quote);
+test("a paraphrase with no verbatim token binds by largest overlap", () => {
+  const { text, reports, other, pad } = fixture();
+  // chunk mostly inside Maya's record, spilling into the prefix
+  const start = reports[1].span.start - 40;
+  const ev = { sourceId: "s1", start, end: text.length, quote: text.slice(start) };
+  const [b] = bindEvidenceToRecords(
+    [ev],
+    "What is her three-month sugar average?",
+    reports,
+  );
+  assert.equal(b.start, reports[1].span.start);
+  assert.equal(b.quote, text.slice(b.start, b.end));
+  assert.doesNotMatch(b.quote, /zzz/);
+  assert.ok(other.length + pad.length === reports[1].span.start);
 });
 
-test("no record heading before the match: quote kept whole", () => {
-  const prose = "Background notes without any record header. ".repeat(12);
-  const quote = prose + "the ferritin is 82";
-  const t = trimEvidenceQuote(quote, "What is her ferritin?");
-  assert.deepEqual(t, { quote, dropped: 0 });
+test("a salient token in an unrelated record keeps that record, not the prefix", () => {
+  const { text, reports } = fixture();
+  // question token "HbA1c" first occurs in the OTHER record: the match is
+  // bound to the record it actually sits in, never blended across both
+  const ev = { sourceId: "s1", start: 0, end: text.length, quote: text };
+  const [b] = bindEvidenceToRecords([ev], "What is the HbA1c?", reports);
+  assert.equal(b.start, reports[0].span.start);
+  assert.equal(b.end, reports[0].span.end);
+  assert.match(b.quote, /Other Person/);
+  assert.doesNotMatch(b.quote, /Maya Sharma/);
 });
 
-test("salient content near the start is never touched", () => {
-  const quote = REC("Maya Sharma", "HLG-P1048", "HbA1c 6.9 %\n");
-  const t = trimEvidenceQuote(quote, "What is Maya's HbA1c?");
-  assert.deepEqual(t, { quote, dropped: 0 });
+test("sources without record segmentation are left whole", () => {
+  const ev = { sourceId: "solo", start: 10, end: 90, quote: "q".repeat(80) };
+  const [b] = bindEvidenceToRecords([ev], "anything?", []);
+  assert.deepEqual(b, ev);
 });
 
-test("no question terms means no trim decision", () => {
-  const quote = "anything at all " + "w".repeat(400);
-  assert.deepEqual(trimEvidenceQuote(quote, ""), { quote, dropped: 0 });
+test("a single-record source is left whole", () => {
+  const ev = { sourceId: "s1", start: 0, end: 50, quote: "x".repeat(50) };
+  const reports = [{ sourceId: "s1", span: { start: 0, end: 1000 } }];
+  const [b] = bindEvidenceToRecords([ev], "anything?", reports);
+  assert.deepEqual(b, ev);
 });

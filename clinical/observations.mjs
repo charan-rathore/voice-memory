@@ -89,7 +89,7 @@ const DOB_LABEL = /^(date of birth|dob|d\.o\.b\.?|birth date)$/i;
 export function dobOf(full) {
   const head = full.slice(0, 6000);
   const inline =
-    /\b(?:DOB|D\.O\.B\.?|Date of birth)\s*[:|]?\s*(\d{1,2}[ -](?:[A-Za-z]{3,9})[ -]\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i.exec(
+    /\b(?:DOB|D\.O\.B\.?|Date of birth)\s*[:|]?\s*(\d{1,2}(?:st|nd|rd|th)?[ -](?:[A-Za-z]{3,9})\.?,?[ -]\d{4}|(?:[A-Za-z]{3,9})\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i.exec(
       head,
     );
   if (inline) return inline[1];
@@ -494,35 +494,53 @@ const STATUS_RANK = {
  * is unparseable: []. Month names parse via the month table, never
  * Date.parse - its local-midnight result shifts the day under toISOString.
  */
+/** Calendar-valid ISO key, or null: 2020-02-30 and 1980-00-00 are not dates. */
+function validIso(y, m, d) {
+  if (+m < 1 || +m > 12 || +d < 1 || +d > 31) return null;
+  const t = new Date(Date.UTC(+y, +m - 1, +d));
+  if (
+    t.getUTCFullYear() !== +y ||
+    t.getUTCMonth() !== +m - 1 ||
+    t.getUTCDate() !== +d
+  )
+    return null;
+  return `${y}-${String(+m).padStart(2, "0")}-${String(+d).padStart(2, "0")}`;
+}
+
 export function dobInterpretations(raw) {
   if (!raw) return [];
   const s = String(raw).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return [s];
+  const isoFast = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (isoFast) {
+    const k = validIso(isoFast[1], isoFast[2], isoFast[3]);
+    return k ? [k] : [];
+  }
   const yf = /^(\d{4})[/.](\d{1,2})[/.](\d{1,2})$/.exec(s);
   if (yf) {
-    const [, y, m, d] = yf;
-    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31)
-      return [`${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`];
-    return [];
+    const k = validIso(yf[1], yf[2], yf[3]);
+    return k ? [k] : [];
   }
   const num = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(s);
   if (num) {
     const [, a, b, y] = num;
-    if (+a > 31 || +b > 31 || +b === 0 && +a === 0) return [];
-    const dm =
-      +a >= 1 && +a <= 31 && +b >= 1 && +b <= 12
-        ? `${y}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`
-        : null;
-    const md =
-      +b >= 1 && +b <= 31 && +a >= 1 && +a <= 12
-        ? `${y}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`
-        : null;
-    return [...new Set([dm, md].filter(Boolean))];
+    return [...new Set([validIso(y, b, a), validIso(y, a, b)].filter(Boolean))];
   }
   if (/^[\d\/.-]+$/.test(s)) return []; // e.g. 2-digit year: century unknown
+  const ord = /^(\d{1,2})(?:st|nd|rd|th)\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})$/.exec(s);
+  if (ord) {
+    const k = isoDate(ord[1], ord[2], ord[3]);
+    return k ? [k] : [];
+  }
   const m = new RegExp(`^${DATE}$`).exec(s);
   if (m) {
     const k = isoDate(m[1], m[2], m[3]);
+    return k ? [k] : [];
+  }
+  const mf = /^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/.exec(
+    s,
+  );
+  if (mf) {
+    const k = isoDate(mf[2], mf[1], mf[3]);
     return k ? [k] : [];
   }
   const y = /^(\d{4})[ -]([A-Za-z]{3,9})\.?[ -](\d{1,2})$/.exec(s);
@@ -554,11 +572,14 @@ export function dobKey(raw) {
  * shown to share a birth date are not silently combined.
  */
 export function dobRelation(rawA, rawB) {
-  if (!rawA || !rawB) return "unknown";
+  if (!rawA || !rawB) return "unknown"; // a missing DOB proves nothing either way
   if (String(rawA).trim() === String(rawB).trim()) return "same";
   const ia = dobInterpretations(rawA);
   const ib = dobInterpretations(rawB);
-  if (!ia.length || !ib.length) return "unknown";
+  // Two different printed DOB strings neither side can parse are NOT
+  // "unknown": they cannot be shown to match, so combining the reports
+  // would rest on nothing. That is undecidable - abstain, never merge.
+  if (!ia.length || !ib.length) return "undecidable";
   const overlap = ia.some((x) => ib.includes(x));
   if (!overlap) return "conflict";
   return ia.length === 1 && ib.length === 1 ? "same" : "undecidable";

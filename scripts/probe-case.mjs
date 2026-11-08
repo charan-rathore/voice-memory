@@ -115,14 +115,32 @@ try {
   }
   console.log(`\n${pass}/${asked} passed`);
   // Integrity: a partial run never wears the full-suite artifact name (a
-  // 2/2 "pass" once overwrote the 35-question record), and any run that
-  // asked fewer questions than expected fails instead of filing a "pass".
+  // 2/2 "pass" once overwrote the 35-question record); a run that asked
+  // fewer questions than expected, or where any answer failed its
+  // expectation, exits non-zero; and the canonical artifact names are
+  // reserved for the canonical question file and document - any override
+  // is named for its inputs, with the inputs recorded inside the artifact.
   const expected = only ? only.size : QS.length;
-  const suite = process.env.VM_PROBE_QS ? "holdout" : "main";
+  const qsPath = process.env.VM_PROBE_QS || "evaluation/case-file/questions.json";
+  const canonical =
+    !process.env.VM_PROBE_QS ||
+    qsPath === "evaluation/case-file/questions-holdout.json";
+  const base = (p) => (p.split("/").pop() || "qs").replace(/\.[^.]+$/, "");
+  const suite = process.env.VM_PROBE_QS
+    ? qsPath === "evaluation/case-file/questions-holdout.json"
+      ? "holdout"
+      : `custom-${base(qsPath)}`
+    : process.env.VM_PROBE_FILE
+      ? `custom-${base(FILE)}`
+      : "main";
   if (asked !== expected) {
     console.error(`probe incomplete: asked ${asked} of ${expected}`);
     process.exitCode = 1;
   } else {
+    if (pass !== asked) {
+      console.error(`probe failed: ${pass}/${asked} met expectations`);
+      process.exitCode = 1;
+    }
     mkdirSync(new URL("evaluation/results/", root), { recursive: true });
     writeFileSync(
       new URL(
@@ -130,7 +148,19 @@ try {
         root,
       ),
       JSON.stringify(
-        { at: new Date().toISOString(), answerable, ready, pass, asked, out },
+        {
+          at: new Date().toISOString(),
+          suite,
+          canonical: canonical && !only && !process.env.VM_PROBE_FILE,
+          questions: qsPath,
+          questionCount: QS.length,
+          document: FILE,
+          answerable,
+          ready,
+          pass,
+          asked,
+          out,
+        },
         null,
         2,
       ) + "\n",

@@ -1,7 +1,12 @@
 {
-  "at": "2026-11-08T14:49:28.620Z",
-  "answerable": 374,
-  "ready": 2008,
+  "at": "2026-11-08T15:28:24.903Z",
+  "suite": "holdout",
+  "canonical": true,
+  "questions": "evaluation/case-file/questions-holdout.json",
+  "questionCount": 34,
+  "document": "evaluation/case-file/harborline-adversarial.pdf",
+  "answerable": 391,
+  "ready": 2030,
   "pass": 34,
   "asked": 34,
   "out": [
@@ -9,7 +14,7 @@
       "n": 1,
       "ask": "Is Maya anemic?",
       "ok": true,
-      "ms": 44,
+      "ms": 46,
       "kind": "answered",
       "text": "For their iron and red cell tests: Ferritin 50 ng/mL, within 15 to 150; and Hemoglobin 11.1 g/dL, below the 12.0 to 16.0 range. I can't diagnose from a report; their doctor can read these alongside how they feel and their history. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
     },
@@ -17,7 +22,7 @@
       "n": 2,
       "ask": "Her iron was 5, should she take iron tablets?",
       "ok": true,
-      "ms": 6,
+      "ms": 7,
       "kind": "refused",
       "text": "I can't say whether they should take, stop or change a medicine; that's a call for their doctor, who knows their history. What I can do is show exactly what the report says, so the right numbers reach that conversation. One thing to bring to that conversation: the Ferritin of 5 ng/mL was a preliminary value, corrected to 50 ng/mL in the amended report. Here is what the records say about medicines. Over-the-counter iron supplement: Patient verbal history · Use not confirmed (emergency encounter - intake, p.1)."
     },
@@ -41,7 +46,7 @@
       "n": 5,
       "ask": "Compare her September and October results",
       "ok": true,
-      "ms": 19,
+      "ms": 13,
       "kind": "answered",
       "text": "For Maya Sharma, comparing the latest report with the one before: Ferritin was corrected from 5 to 50. That is a fix to the report, not a change in the body, and I use the corrected value; Ferritin (28 to 50 ng/mL), TSH (3.2 to 6.8 mIU/L), LDL cholesterol (140 to 152 mg/dL) and HDL cholesterol (49 to 54 mg/dL) went up; Hemoglobin (11.8 to 11.1 g/dL) went down; Creatinine (serum) can't be compared because the units changed. Ask about any one test for its full detail. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
     },
@@ -49,7 +54,7 @@
       "n": 6,
       "ask": "What's her date of birth?",
       "ok": true,
-      "ms": 28,
+      "ms": 25,
       "kind": "answered",
       "text": "Date of birth: 18 Apr 1991 (emergency encounter - intake, p.1). Page 4 is for a different person with the same name (HLG-P1048), so I left it out."
     },
@@ -57,7 +62,7 @@
       "n": 7,
       "ask": "How long was she in the hospital?",
       "ok": true,
-      "ms": 12,
+      "ms": 13,
       "kind": "answered",
       "text": "Admitted 22 Oct 2026, 09:40 (emergency encounter - intake, p.1); discharged 24 Oct 2026 14:05 (discharge summary, p.8, no status). That is about 52 hours, a little over 2 days."
     },
@@ -65,7 +70,7 @@
       "n": 8,
       "ask": "Which doctor treated her?",
       "ok": true,
-      "ms": 8,
+      "ms": 11,
       "kind": "answered",
       "text": "The discharge summary (p.8, no status) names Dr. Leena Shah, attending physician, 24 Oct 15:10 (signatory). It's the only clinician named as signing; the records don't list everyone who treated her."
     },
@@ -89,7 +94,7 @@
       "n": 11,
       "ask": "How much is the deductible?",
       "ok": true,
-      "ms": 11,
+      "ms": 12,
       "kind": "answered",
       "text": "The final bill + insurer determination (p.9, final) charges Patient responsibility: USD 400.00 · 250 deductible + 150 coinsurance."
     },
@@ -97,7 +102,7 @@
       "n": 12,
       "ask": "Is the 400 dollars already paid?",
       "ok": true,
-      "ms": 13,
+      "ms": 15,
       "kind": "answered",
       "text": "Not according to the most authoritative record. Final bill + insurer determination (p.9, final) gives Patient payment recorded: USD 0.00 · No payment on this statement."
     },
@@ -137,7 +142,7 @@
       "n": 17,
       "ask": "Is her kidney function okay?",
       "ok": true,
-      "ms": 5,
+      "ms": 6,
       "kind": "answered",
       "text": "For their kidney tests: Creatinine (serum) 99 µmol/L, above the 45 to 90 range; and Urea nitrogen (BUN) 14 mg/dL, within 7 to 20. I can't diagnose from a report; their doctor can read these alongside how they feel and their history. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
     },
@@ -145,7 +150,7 @@
       "n": 18,
       "ask": "When should she see the doctor again?",
       "ok": true,
-      "ms": 9,
+      "ms": 8,
       "kind": "answered",
       "text": "Follow-up: Outpatient clinical review suggested within 7 days; booking not evidenced (discharge summary, p.8, no status)."
     },
@@ -153,7 +158,7 @@
       "n": 19,
       "ask": "Did the hospital make any mistakes?",
       "ok": true,
-      "ms": 10,
+      "ms": 12,
       "kind": "answered",
       "text": "Here is what the final records themselves correct or flag: Laboratory result - amended release (p.7): AMENDMENT NOTE (issued 23 Oct 2026 11:35): A transcription error affected the ferritin value in the preliminary release, LAB-55021 / VERSION 1. Laboratory result - amended release (p.7): The previously released ferritin value of 5 ng/mL is superseded by 50 ng/mL for the identical sample collected 22 Oct 2026 at 10:05. Laboratory result - amended release (p.7): Only the ferritin value was amended. Final bill + insurer determination (p.9): The statement alone does not establish duplicate billing or a billing error. I only report what the records say; whether anything was a mistake beyond that is for the hospital to answer."
     },
@@ -201,7 +206,7 @@
       "n": 25,
       "ask": "What did the draft note say about iron?",
       "ok": true,
-      "ms": 7,
+      "ms": 8,
       "kind": "answered",
       "text": "The care coordination - working note (p.6, no status) says: Iron treatment decision: Prescribing clinician · No order in this note. The team discussed whether iron supplementation might be considered after validation and clinician assessment. No iron prescription was signed or administered on the basis of this note."
     },
@@ -233,7 +238,7 @@
       "n": 29,
       "ask": "Tell me about page 4",
       "ok": true,
-      "ms": 6,
+      "ms": 7,
       "kind": "answered",
       "text": "Page 4 is the the record on page 4 for patient ID HLG-P1048, born 04 Dec 1968. That is a different person from HLG-P1047, the person the rest of the file is about, so I keep it separate. It lists Ferritin 8 ng/mL, TSH 14 mlU/L, Creatinine 1.16 mg/dL, HbA1c 6.9 %, Hemoglobin 12.8 g/dL (read from the scan). The page itself says: \"This report belongs to HLG-P1048, not HLG-P1047.\""
     },
@@ -257,7 +262,7 @@
       "n": 32,
       "ask": "How much was the imaging?",
       "ok": true,
-      "ms": 9,
+      "ms": 10,
       "kind": "answered",
       "text": "The final bill + insurer determination (p.9, final) charges Imaging / diagnostics: 22-23 Oct · USD 610.00. The earlier encounter cost estimate (estimate) had Imaging / diagnostics: USD 660.00; the final bill replaces it."
     },

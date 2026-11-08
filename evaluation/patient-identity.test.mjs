@@ -426,3 +426,34 @@ test("resolvable numeric formats naming the same day stay one person", async () 
     ["AR-104"],
   );
 });
+
+// Sol round 2: two different printed DOB strings that neither parser can
+// reconcile ("Jan 12, 1980" style, ordinals, 2-digit years) are
+// undecidable - the reports stay apart and abstain, never silently merge.
+test("unparseable but different printed DOBs abstain, not merge", async () => {
+  // month-first and ordinal forms parse unambiguously now
+  assert.equal(dobRelation("Jan 12, 1980", "1980-01-12"), "same");
+  assert.equal(dobRelation("Jan 12, 1980", "03 Jul 1965"), "conflict");
+  assert.equal(dobRelation("12th Jan 1980", "1980-01-12"), "same");
+  // still-unparseable different strings abstain instead of merging
+  assert.equal(dobRelation("01/02/80", "1980-02-01"), "undecidable");
+  // invalid calendar dates never establish identity either
+  assert.equal(dobRelation("2020-02-30", "30 Feb 2020"), "undecidable");
+  assert.equal(dobRelation("1980-00-00", "1980-01-12"), "undecidable");
+  assert.equal(dobRelation("29/02/2024", "2024-02-29"), "same"); // real leap day
+  const b = await loadSet([
+    reportOn(
+      "Patient: Asha Rao, ID AR-105\nDOB: Jan 12, 1980    Gender : Female",
+      "7.80",
+    ),
+    reportOn(
+      "Patient: Asha Rao, ID AR-105\nDOB: 03 Jul 1965    Gender : Female",
+      "1.20",
+      "20/3/2025",
+    ),
+  ]);
+  separate(b);
+  const a = ask2("Has Asha's TSH changed?", b.clinical).spoken;
+  assert.match(a, /more than one person/);
+  assert.doesNotMatch(a, /went from|higher than before|rose|dropped/i);
+});

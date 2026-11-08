@@ -695,38 +695,85 @@ const focusTerms = (s) =>
   );
 
 /**
- * A retrieval chunk can cross a record boundary, so its quote can lead with
- * a stranger's record before the line the question matches. Trim that
- * prefix: cut at the last record/section heading before the first salient
- * question token, keeping the quote on the record the match belongs to.
- * Returns the (possibly unchanged) quote and how many characters were cut,
- * so callers can shift the start offset. Salient content near the start is
- * never touched, and with no heading to anchor a cut the quote is left
- * whole - a wrong trim would misattribute the excerpt, a kept prefix only
- * shows extra context.
+ * Bind a retrieval chunk's evidence to the source-owned record it matches.
+ * A chunk can cross a record boundary; whose record the match sits in is
+ * decided by the clinical packet segmentation (packetSegments), not by
+ * lexical guessing over rendered text: the record containing the first
+ * salient question token wins, else the record with the largest character
+ * overlap. The span is clipped to that record's own start/end, so the
+ * excerpt always opens at a real record boundary and never leads with a
+ * stranger's record; offsets shift to stay an exact slice of the source.
+ * Entries with no salient token and no overlap majority, and sources with
+ * no record segmentation, are kept whole rather than mis-clipped.
  */
-const RECORD_HEAD =
-  /^\s*(?:patient\s+(?:name|id)\s*:|name\s*:|dob\s*:|date of birth\s*:|collected\s*:|report status\s*:|#{1,6}\s).*$/gim;
-export function trimEvidenceQuote(quote, question) {
-  if (!quote) return { quote, dropped: 0 };
+export function bindEvidenceToRecords(evidence, question, reports) {
+  if (!Array.isArray(evidence) || !evidence.length) return evidence;
   const q = focusTerms(question ?? "");
-  if (!q.size) return { quote, dropped: 0 };
-  const lower = quote.toLowerCase();
-  let first = -1;
-  for (const t of q) {
-    const at = lower.indexOf(t);
-    if (at >= 0 && (first < 0 || at < first)) first = at;
+  const bySource = new Map();
+  for (const r of reports ?? []) {
+    if (!r?.sourceId || !r.span) continue;
+    (bySource.get(r.sourceId) ?? bySource.set(r.sourceId, []).get(r.sourceId)).push(r);
   }
-  if (first < 300) return { quote, dropped: 0 };
-  RECORD_HEAD.lastIndex = 0;
-  let cut = -1;
-  for (;;) {
-    const m = RECORD_HEAD.exec(quote);
-    if (!m || m.index >= first) break;
-    cut = m.index;
-  }
-  if (cut <= 0) return { quote, dropped: 0 };
-  return { quote: quote.slice(cut), dropped: cut };
+  return evidence.map((ev) => {
+    const records = bySource.get(ev.sourceId);
+    if (!records?.length || ev.start == null || ev.end == null) return ev;
+    const own = records.filter(
+      (r) => r.span.start < ev.end && ev.start < r.span.end,
+    );
+    if (own.length < 2 && records.length < 2) return ev; // single-record source
+    const quote = ev.quote ?? "";
+    const lower = quote.toLowerCase();
+    let hit = null;
+    if (q.size && own.length) {
+      // The record this evidence is about: the one containing the most
+      // DISTINCT salient question tokens (a shared analyte name in another
+      // record must not pull the excerpt there when the patient's name sits
+      // here); earliest first occurrence breaks ties.
+      let best = -1;
+      let bestAt = Infinity;
+      for (const r of own) {
+        const lo = Math.max(r.span.start, ev.start) - ev.start;
+        const hi = Math.min(r.span.end, ev.end) - ev.start;
+        const slice = lower.slice(lo, hi);
+        let n = 0;
+        let first = Infinity;
+        for (const t of q) {
+          const at = slice.indexOf(t);
+          if (at >= 0) {
+            n++;
+            if (at < first) first = at;
+          }
+        }
+        if (n > best || (n === best && n > 0 && first < bestAt)) {
+          best = n;
+          bestAt = first;
+          hit = n > 0 ? r : hit;
+        }
+      }
+      if (best <= 0) hit = null;
+    }
+    if (!hit && own.length) {
+      // no salient token (a paraphrase): the record this chunk mostly covers
+      hit = own
+        .map((r) => ({
+          r,
+          n: Math.min(ev.end, r.span.end) - Math.max(ev.start, r.span.start),
+        }))
+        .sort((a, b) => b.n - a.n)[0].r;
+    }
+    if (!hit) return ev;
+    const start = Math.max(ev.start, hit.span.start);
+    const end = Math.min(ev.end, hit.span.end);
+    if (start === ev.start && end === ev.end) return ev;
+    if (start >= end) return ev;
+    return {
+      ...ev,
+      start,
+      end,
+      quote: quote.slice(start - ev.start, end - ev.start),
+      record: hit.title ?? null,
+    };
+  });
 }
 
 /**

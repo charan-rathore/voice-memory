@@ -107,7 +107,7 @@ import {
   removeEntry,
   publicEntry,
   documentView,
-  decorateResult,
+  bindEvidenceToRecords, decorateResult,
   libraryOf,
   locatorFor,
   LIMITS,
@@ -1037,6 +1037,14 @@ export function createLocalServer({
         available: denseAvailableFor(bundle),
       });
       const shown = decorateResult(raw, s);
+      // Diagnostic evidence is bound to the source-owned record the
+      // question matches inside (packet segmentation), so an excerpt can
+      // never lead with another person's record.
+      shown.evidence = bindEvidenceToRecords(
+        shown.evidence,
+        question,
+        bundle.clinical ?? [],
+      );
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
       shown.lead = leadFor(question, raw, bundle, ctx || null);

@@ -923,6 +923,9 @@ function reportsOf(bundle, entries, extract) {
           sourceId: src.id,
           title: `${src.title} · p.${p.seg.pages.length > 1 ? `${p.seg.pages[0]}-${p.seg.pages[p.seg.pages.length - 1]}` : p.seg.pages[0]}`,
           segment: p.seg.index,
+          // source-owned record boundaries: the exact span this record
+          // occupies in the document text (see packetSegments)
+          span: { start: p.seg.start, end: p.seg.end },
           haystack: p.haystack,
           meta: p.meta,
           observations: p.observations,
@@ -1217,15 +1220,23 @@ export function eachSubject(question, reports, fn) {
 const DOCTOR_RE =
   /\b(?:ask|tell|discuss|mention|bring up|raise|questions? for)\b[^?.]{0,30}\b(?:doctor|dr|physician|clinician|gp)\b|\bdoctor se\b[^?.]{0,25}\b(?:kya|kaun|puch|pooch|baat)\w*|(?:डॉक्टर|डाक्टर) से[^?।]{0,25}(?:क्या|कौन|पूछ|बात)/i;
 // Asking for someone else ("her reports", "my father's results"): the
-// suggested questions speak about the patient, not the caller. Possessive
-// first-person words keep the caller's own framing; FIRST_PERSON_RE itself
-// matches a bare "I"/"me", which a third-person question can carry, so only
-// possessives count here.
-const FIRST_POSSESSIVE_RE = /\b(my|mine|mera|meri|mere)\b|मेरा|मेरी|मेरे/i;
-const THIRD_PERSON_RE =
-  /\b(her|his|their|them|him|she|he|they|mother|father|mom|dad|mum|wife|husband|daughter|son|parent|parents|grandmother|grandfather|grandma|grandpa|sister|brother|uncle|aunt|aunty|mummy|papa|amma|appa|didi|bhai)\b|उनके|उनकी|उसके|उसकी|माँ|पिता|पत्नी|पति|बेटी|बेटा|भाई|बहन/i;
+// suggested questions speak about the patient, not the caller. Uses the
+// established aboutSomeoneElse helper (explain.mjs): it strips kinship
+// phrases before checking for the caller's own report, so "my father's
+// results" is third-person while "my results" stays first-person.
+// "What should I ask the doctor about her report?": the "I" is the asker,
+// not the subject - strip the asking scaffolding before judging whose
+// report the question is about.
 const thirdPersonAsk = (q) =>
-  THIRD_PERSON_RE.test(q) && !FIRST_POSSESSIVE_RE.test(q);
+  aboutSomeoneElse(
+    String(q ?? "")
+      .replace(
+        /\b(?:what|whom|kya|क्या)\s+(?:should|shall|can|could)\s+i\s+(?:ask|tell|discuss|mention|bring up|raise)\b/gi,
+        "",
+      )
+      .replace(/\bwhat should i\b/gi, "")
+      .replace(/\bi\s+(?:ask|tell|discuss|mention|raise)\b/gi, ""),
+  );
 
 const DOCTOR_SAY = {
   en: {
