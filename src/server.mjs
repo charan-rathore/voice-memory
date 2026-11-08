@@ -1368,6 +1368,48 @@ export function createLocalServer({
         ctx,
         opts.patient ?? null,
       );
+      if (raw?.requestedCoverage === "coordination_unresolved") {
+        // requestedChecked certifies neither decomposition nor whole-question
+        // completeness. Keep every byte of the unresolved caller requirement.
+        return {
+          raw,
+          shown: {
+            question: requestOriginal,
+            sourceQuestionPlan: immutableRequest,
+            lead: {
+              text: raw.spoken,
+              verdict: "UNKNOWN",
+              field: null,
+              citations: [],
+            },
+            evidence: decorateResult(
+              { question: requestOriginal, evidence: raw.reviewEvidence ?? [] },
+              s,
+            ).evidence,
+            visual: null,
+            closest: null,
+            admission: {
+              questionPlanKey: immutableRequest.key,
+              sourceGeneration: immutableRequest.sourceGeneration,
+              status: "unresolved",
+              userReady: false,
+              complete: false,
+              reason: "requirement_coverage_unverified",
+              outcomes: immutableRequest.requirements.map((r) => ({
+                requirementId: r.id,
+                status: "not_established",
+                claims: [],
+                reason: "coordinated_request_not_decomposed",
+              })),
+            },
+            semantic: {
+              intent: "UNRESOLVED_REQUIREMENT_COVERAGE",
+              lang,
+              steps: ["single_field_candidate_not_whole_question"],
+            },
+          },
+        };
+      }
       // A missing identifier binding cannot be rescued with a different field
       // or a provider-generated interpretation of nearby numbers.
       if (

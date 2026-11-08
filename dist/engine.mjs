@@ -23574,6 +23574,10 @@ function requested(question) {
   const m = /\b(units|items|packages|cartons)\b/i.exec(question);
   return m ? m[1].toLowerCase() : null;
 }
+function requestedCoverage(question) {
+  if (requested(question) === null) return "not_applicable";
+  return /\b(?:and|or|also|plus)\b|[;&]/i.test(question) ? "coordination_unresolved" : "single_field_only";
+}
 var absent = /^(?:not\b|no\b|none\b|unknown\b|unassigned\b|pending\b|tbd\b|n\/?a\b|unavailable\b|not recorded\b)/i;
 var labels = {
   receiver: /\b(?:receiver|recipient|received by|delivered to|signed for by)\s*(?::|=|-)?\s+(.+)$/i,
@@ -23679,6 +23683,7 @@ function explicitRecordRequest(question, sources) {
 function requestedSupportSpans(question, quote, rootUniverse) {
   const field = requested(question);
   if (field === null) return null;
+  if (requestedCoverage(question) === "coordination_unresolved") return [];
   if (/\b(?:not|never|neither|without|except)\b|n['’]t\b/i.test(question))
     return [];
   const ids = question.match(
@@ -33008,7 +33013,22 @@ function answer(question, bundle, dense) {
 }
 function constrainRequestedEvidence(question, bundle, result) {
   result.requestedChecked = requestedSupportSpans(question, "") !== null;
+  result.requestedCoverage = requestedCoverage(question);
   if (!result.requestedChecked) return result;
+  if (result.requestedCoverage === "coordination_unresolved") {
+    result.reviewEvidence = result.evidence.length ? result.evidence : result.reviewEvidence;
+    result.evidence = [];
+    result.refused = true;
+    result.supported = false;
+    result.unresolved = true;
+    result.evidenceStatus = "insufficient";
+    result.requestedScoped = false;
+    result.partial = false;
+    result.partialNotice = null;
+    result.answer = "I could not establish coverage of the whole request. The single-field lookup cannot settle coordinated requirements; inspect the related passages or ask each requirement separately.";
+    result.spoken = result.answer;
+    return result;
+  }
   const roots = bundle.sources.flatMap(
     (source) => explicitRequestedRoots(source.text)
   );
@@ -33135,7 +33155,8 @@ function answerFromRetrieval(question, bundle, found, expected, start = performa
     // recency-as-authority.
     spoken: null,
     requestedScoped: false,
-    requestedChecked: false
+    requestedChecked: false,
+    requestedCoverage: "not_applicable"
   };
 }
 function draft(result, bundle) {

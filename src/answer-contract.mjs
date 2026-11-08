@@ -42,11 +42,17 @@ export function finalAnswer(shown) {
   const lead = shown?.lead ?? null;
   if (lead?.text) {
     const verdict = lead.verdict ?? "UNKNOWN";
+    const kind = KIND[verdict] ?? "answered";
+    const relatedEvidence =
+      kind === "abstained"
+        ? (shown?.evidence ?? []).filter((c) => c?.quote)
+        : [];
     return {
       text: lead.text,
       verdict,
-      kind: KIND[verdict] ?? "answered",
+      kind,
       citations: lead.citations ?? [],
+      ...(relatedEvidence.length ? { relatedEvidence } : {}),
       from: "lead",
     };
   }

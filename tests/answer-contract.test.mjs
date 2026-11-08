@@ -63,3 +63,19 @@ test("evidence-only fallback abstains and keeps related passages separate", () =
   assert.equal(none.text, ABSTAIN_TEXT);
   assert.deepEqual(none.citations, []);
 });
+
+test("explicit abstention keeps retrieval context labelled related, never as answer citations", () => {
+  const evidence = [{ sourceId: "s", quote: "Tracking number: TRK-8273" }];
+  const result = finalAnswer({
+    lead: {
+      verdict: "UNKNOWN",
+      text: "Whole-question coverage remains unresolved.",
+      citations: [],
+    },
+    evidence,
+  });
+  assert.equal(result.kind, "abstained");
+  assert.deepEqual(result.citations, []);
+  assert.deepEqual(result.relatedEvidence, evidence);
+  assert.match(result.text, /coverage remains unresolved/);
+});
