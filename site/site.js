@@ -451,17 +451,21 @@
       try {
         id = await ensureWorkspace();
       } catch (e) {
+        // A quota or request rejection is not a cold engine. Do not retry it.
+        const rejected = e?.status >= 400 && e?.status < 500;
         for (const d of local)
-          if (d.status === "sending") d.local.phase = "waking";
+          if (d.status === "sending")
+            d.local.phase = rejected ? "rejected" : "waking";
         renderUploads();
-        if (attempt === 7) {
+        if (rejected || attempt === 7) {
           for (const d of local)
             if (d.status === "sending")
               Object.assign(d, {
                 status: "failed",
                 error: {
-                  message:
-                    "The live engine is still waking up and the upload did not go through. Try again in a few seconds.",
+                  message: rejected
+                    ? e.message
+                    : "The live engine is still waking up and the upload did not go through. Try again in a few seconds.",
                 },
               });
           renderUploads();
