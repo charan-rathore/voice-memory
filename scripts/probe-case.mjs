@@ -121,7 +121,8 @@ try {
   // reserved for the canonical question file and document - any override
   // is named for its inputs, with the inputs recorded inside the artifact.
   const expected = only ? only.size : QS.length;
-  const qsPath = process.env.VM_PROBE_QS || "evaluation/case-file/questions.json";
+  const qsPath =
+    process.env.VM_PROBE_QS || "evaluation/case-file/questions.json";
   const canonical =
     !process.env.VM_PROBE_QS ||
     qsPath === "evaluation/case-file/questions-holdout.json";

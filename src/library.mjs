@@ -712,7 +712,9 @@ export function bindEvidenceToRecords(evidence, question, reports, used = []) {
   const bySource = new Map();
   for (const r of reports ?? []) {
     if (!r?.sourceId || !r.span) continue;
-    (bySource.get(r.sourceId) ?? bySource.set(r.sourceId, []).get(r.sourceId)).push(r);
+    (
+      bySource.get(r.sourceId) ?? bySource.set(r.sourceId, []).get(r.sourceId)
+    ).push(r);
   }
   // Citations the answer itself was built from: the record one of those sits
   // in is the answer-selected record, which outranks any token/overlap
@@ -740,8 +742,7 @@ export function bindEvidenceToRecords(evidence, question, reports, used = []) {
       if (hit) break;
       if (c.start >= ev.end || c.end <= ev.start) continue;
       const mid = (Math.max(c.start, ev.start) + Math.min(c.end, ev.end)) / 2;
-      hit =
-        own.find((r) => r.span.start <= mid && mid < r.span.end) ?? hit;
+      hit = own.find((r) => r.span.start <= mid && mid < r.span.end) ?? hit;
     }
     if (!hit && q.size && own.length) {
       // The record this evidence is about: the one containing the most

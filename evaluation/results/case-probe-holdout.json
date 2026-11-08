@@ -1,12 +1,12 @@
 {
-  "at": "2026-11-08T15:28:24.903Z",
+  "at": "2026-11-08T15:48:38.326Z",
   "suite": "holdout",
   "canonical": true,
   "questions": "evaluation/case-file/questions-holdout.json",
   "questionCount": 34,
   "document": "evaluation/case-file/harborline-adversarial.pdf",
-  "answerable": 391,
-  "ready": 2030,
+  "answerable": 373,
+  "ready": 2006,
   "pass": 34,
   "asked": 34,
   "out": [
@@ -38,7 +38,7 @@
       "n": 4,
       "ask": "Is her thyroid getting worse?",
       "ok": true,
-      "ms": 14,
+      "ms": 12,
       "kind": "answered",
       "text": "The TSH went from 3.2 mIU/L on 8 September 2026 to 6.8 mIU/L on 22 October 2026. That's higher than before. It has moved outside the lab's range. That's above this lab's printed range of 0.4 to 4.5. Some general background: TSH is a hormone that tells your thyroid how much thyroid hormone to make, so it's used to check how the thyroid is working. Their doctor can read it alongside how they feel, their medicines and their other results. Whether that is better or worse is for the doctor to judge. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
     },
@@ -46,7 +46,7 @@
       "n": 5,
       "ask": "Compare her September and October results",
       "ok": true,
-      "ms": 13,
+      "ms": 14,
       "kind": "answered",
       "text": "For Maya Sharma, comparing the latest report with the one before: Ferritin was corrected from 5 to 50. That is a fix to the report, not a change in the body, and I use the corrected value; Ferritin (28 to 50 ng/mL), TSH (3.2 to 6.8 mIU/L), LDL cholesterol (140 to 152 mg/dL) and HDL cholesterol (49 to 54 mg/dL) went up; Hemoglobin (11.8 to 11.1 g/dL) went down; Creatinine (serum) can't be compared because the units changed. Ask about any one test for its full detail. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
     },
@@ -54,7 +54,7 @@
       "n": 6,
       "ask": "What's her date of birth?",
       "ok": true,
-      "ms": 25,
+      "ms": 31,
       "kind": "answered",
       "text": "Date of birth: 18 Apr 1991 (emergency encounter - intake, p.1). Page 4 is for a different person with the same name (HLG-P1048), so I left it out."
     },
@@ -62,7 +62,7 @@
       "n": 7,
       "ask": "How long was she in the hospital?",
       "ok": true,
-      "ms": 13,
+      "ms": 14,
       "kind": "answered",
       "text": "Admitted 22 Oct 2026, 09:40 (emergency encounter - intake, p.1); discharged 24 Oct 2026 14:05 (discharge summary, p.8, no status). That is about 52 hours, a little over 2 days."
     },
@@ -70,7 +70,7 @@
       "n": 8,
       "ask": "Which doctor treated her?",
       "ok": true,
-      "ms": 11,
+      "ms": 9,
       "kind": "answered",
       "text": "The discharge summary (p.8, no status) names Dr. Leena Shah, attending physician, 24 Oct 15:10 (signatory). It's the only clinician named as signing; the records don't list everyone who treated her."
     },
@@ -86,7 +86,7 @@
       "n": 10,
       "ask": "Why did the bill go from 3160 to 2840?",
       "ok": true,
-      "ms": 25,
+      "ms": 26,
       "kind": "answered",
       "text": "USD 3,160.00 was the encounter cost estimate (p.3, estimate); the final bill + insurer determination (p.9, final) replaced it with USD 2,840.00. The line items that differ (USD): Observation bed services 1,250 → Observation services 1,040; Laboratory bundle 810 → Lab panel (LAB-PNL-04) + Repeat panel (LAB-PNL-04) 750; Imaging / diagnostics 660 → Imaging / diagnostics 610. The records don't give a reason for each difference."
     },
@@ -102,7 +102,7 @@
       "n": 12,
       "ask": "Is the 400 dollars already paid?",
       "ok": true,
-      "ms": 15,
+      "ms": 19,
       "kind": "answered",
       "text": "Not according to the most authoritative record. Final bill + insurer determination (p.9, final) gives Patient payment recorded: USD 0.00 · No payment on this statement."
     },
@@ -150,7 +150,7 @@
       "n": 18,
       "ask": "When should she see the doctor again?",
       "ok": true,
-      "ms": 8,
+      "ms": 10,
       "kind": "answered",
       "text": "Follow-up: Outpatient clinical review suggested within 7 days; booking not evidenced (discharge summary, p.8, no status)."
     },
@@ -158,7 +158,7 @@
       "n": 19,
       "ask": "Did the hospital make any mistakes?",
       "ok": true,
-      "ms": 12,
+      "ms": 11,
       "kind": "answered",
       "text": "Here is what the final records themselves correct or flag: Laboratory result - amended release (p.7): AMENDMENT NOTE (issued 23 Oct 2026 11:35): A transcription error affected the ferritin value in the preliminary release, LAB-55021 / VERSION 1. Laboratory result - amended release (p.7): The previously released ferritin value of 5 ng/mL is superseded by 50 ng/mL for the identical sample collected 22 Oct 2026 at 10:05. Laboratory result - amended release (p.7): Only the ferritin value was amended. Final bill + insurer determination (p.9): The statement alone does not establish duplicate billing or a billing error. I only report what the records say; whether anything was a mistake beyond that is for the hospital to answer."
     },
@@ -166,7 +166,7 @@
       "n": 20,
       "ask": "What tests were done?",
       "ok": true,
-      "ms": 6,
+      "ms": 5,
       "kind": "answered",
       "text": "Tests in these records, by sample date: 8 September 2026: Ferritin, TSH, Creatinine (serum), Hemoglobin, LDL cholesterol, HDL cholesterol. 22 October 2026: Ferritin, TSH, Creatinine (serum), Urea nitrogen (BUN), BUN / creatinine ratio, Hemoglobin, LDL cholesterol, HDL cholesterol. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
     },
@@ -174,7 +174,7 @@
       "n": 21,
       "ask": "Was her sugar checked?",
       "ok": true,
-      "ms": 4,
+      "ms": 5,
       "kind": "abstained",
       "text": "Maya Sharma (HLG-P1047)'s records don't include blood sugar tests results. Page 4 shows HbA1c 6.9 %, but that belongs to a different person with the same name, Maya Sharma (HLG-P1048, born 04 Dec 1968), so I haven't used it."
     },
@@ -182,7 +182,7 @@
       "n": 22,
       "ask": "What's the HDL?",
       "ok": true,
-      "ms": 5,
+      "ms": 6,
       "kind": "answered",
       "text": "Maya Sharma's HDL cholesterol result is 54 mg/dL, from 22 October 2026. That's within this lab's range of 40 to 80. Some general background: HDL is the cholesterol carried in high-density lipoproteins, often called good cholesterol."
     },
@@ -190,7 +190,7 @@
       "n": 23,
       "ask": "Which result is the most worrying?",
       "ok": true,
-      "ms": 10,
+      "ms": 8,
       "kind": "answered",
       "text": "I can't rank how serious each result is; that depends on her history and symptoms, so it's a question for the doctor. Here is what is outside the printed ranges: In Maya Sharma's report, 7 results are printed with a range I can check; 4 are outside the lab's range: TSH 6.8 mIU/L (above the 0.4 to 4.5 range); Creatinine (serum) 99 µmol/L (above the 45 to 90 range); Hemoglobin 11.1 g/dL (below the 12.0 to 16.0 range); and LDL cholesterol 152 mg/dL (above the lab's limit of 130). The other 3 are within range. 1 other result has no printed range, so I haven't judged it. I can't diagnose from a report; their doctor can read these alongside how they feel and their history. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
     },
@@ -222,7 +222,7 @@
       "n": 27,
       "ask": "Who is Dr. Leena Shah?",
       "ok": true,
-      "ms": 7,
+      "ms": 8,
       "kind": "answered",
       "text": "The discharge summary (p.8, no status) names Dr. Leena Shah, attending physician, 24 Oct 15:10 (signatory). It's the only clinician named as signing; the records don't list everyone who treated her."
     },
@@ -262,7 +262,7 @@
       "n": 32,
       "ask": "How much was the imaging?",
       "ok": true,
-      "ms": 10,
+      "ms": 9,
       "kind": "answered",
       "text": "The final bill + insurer determination (p.9, final) charges Imaging / diagnostics: 22-23 Oct · USD 610.00. The earlier encounter cost estimate (estimate) had Imaging / diagnostics: USD 660.00; the final bill replaces it."
     },
@@ -270,7 +270,7 @@
       "n": 33,
       "ask": "Was she in the ICU?",
       "ok": true,
-      "ms": 6,
+      "ms": 7,
       "kind": "answered",
       "text": "The records don't mention intensive care. Admitting service: General medicine observation unit (emergency encounter - intake, p.1); Disposition: Discharged from observation on 24 Oct 2026 (discharge summary, p.8)."
     },
@@ -278,7 +278,7 @@
       "n": 34,
       "ask": "thanks, that helps",
       "ok": true,
-      "ms": 1,
+      "ms": 2,
       "kind": "social",
       "text": "You're welcome. Ask me anything else about these records whenever you like."
     }
