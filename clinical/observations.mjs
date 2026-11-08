@@ -1,3 +1,4 @@
+import { validIso } from "./calendar.mjs";
 // Clinical observation model (research prototype, synthetic data only).
 //
 // Deliberately separate from the commercial claim graph: a lab result is not
@@ -78,7 +79,7 @@ const DATE = String.raw`(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})`;
 function isoDate(d, m, y) {
   const mm = MONTHS[m.toLowerCase()];
   if (!mm) return null;
-  return `${y}-${String(mm).padStart(2, "0")}-${String(Number(d)).padStart(2, "0")}`;
+  return validIso(y, mm, d);
 }
 
 const WITHHELD =
@@ -495,17 +496,6 @@ const STATUS_RANK = {
  * Date.parse - its local-midnight result shifts the day under toISOString.
  */
 /** Calendar-valid ISO key, or null: 2020-02-30 and 1980-00-00 are not dates. */
-function validIso(y, m, d) {
-  if (+m < 1 || +m > 12 || +d < 1 || +d > 31) return null;
-  const t = new Date(Date.UTC(+y, +m - 1, +d));
-  if (
-    t.getUTCFullYear() !== +y ||
-    t.getUTCMonth() !== +m - 1 ||
-    t.getUTCDate() !== +d
-  )
-    return null;
-  return `${y}-${String(+m).padStart(2, "0")}-${String(+d).padStart(2, "0")}`;
-}
 
 export function dobInterpretations(raw) {
   if (!raw) return [];
@@ -538,7 +528,7 @@ export function dobInterpretations(raw) {
     return k ? [k] : [];
   }
   const mf =
-    /^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/.exec(s);
+    /^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i.exec(s);
   if (mf) {
     const k = isoDate(mf[2], mf[1], mf[3]);
     return k ? [k] : [];

@@ -702,7 +702,7 @@ const focusTerms = (s) =>
  */
 export function bindEvidenceToRecords(evidence, question, reports, used = []) {
   if (!Array.isArray(evidence)) return evidence;
-  return evidence.flatMap((ev) => {
+  const bound = evidence.flatMap((ev) => {
     const records = (reports ?? []).filter(
       (r) => r.sourceId === ev.sourceId && r.span,
     );
@@ -720,8 +720,8 @@ export function bindEvidenceToRecords(evidence, question, reports, used = []) {
         const associated = (used ?? []).some(
           (c) =>
             c.sourceId === ev.sourceId &&
-            c.start >= r.span.start &&
-            c.end <= r.span.end &&
+            c.start < r.span.end &&
+            c.end > r.span.start &&
             c.start < ev.end &&
             c.end > ev.start,
         );
@@ -746,6 +746,52 @@ export function bindEvidenceToRecords(evidence, question, reports, used = []) {
         };
       });
   });
+  // Aggregate overlapping retrieval spans per record and support class.
+  // Keep every identity without multiplying overlapping snippets.
+  const groups = new Map();
+  for (const ev of bound) {
+    const key = JSON.stringify([
+      ev.sourceId,
+      ev.record?.start,
+      ev.record?.end,
+      ev.record?.patientId,
+      ev.record?.patientName,
+      ev.contextOnly,
+      ev.binding,
+    ]);
+    const group = groups.get(key) ?? [];
+    group.push(ev);
+    groups.set(key, group);
+  }
+  const out = [];
+  for (const group of groups.values()) {
+    group.sort((a, b) => a.start - b.start || b.end - a.end);
+    let last = null;
+    for (const ev of group) {
+      if (last && Number.isFinite(ev.start) && ev.start <= last.end) {
+        if (ev.end > last.end) {
+          last.quote =
+            (last.quote ?? "") + (ev.quote ?? "").slice(last.end - ev.start);
+          last.end = ev.end;
+          last.location = null;
+        }
+      } else {
+        last = { ...ev };
+        out.push(last);
+      }
+    }
+  }
+  return out;
+}
+
+/** Bind final clinical citations; leave nonclinical citations unchanged. */
+export function bindAnswerCitations(citations, question, records) {
+  const known = new Set((records ?? []).map((r) => r.sourceId));
+  return (citations ?? []).flatMap((c) =>
+    c.clinical && known.has(c.sourceId)
+      ? bindEvidenceToRecords([c], question, records, citations)
+      : [c],
+  );
 }
 
 /**

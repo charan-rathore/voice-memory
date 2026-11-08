@@ -77,7 +77,7 @@ async function api(path, init) {
 
 const expected = only ? only.size : QS.length;
 const qsPath = process.env.VM_PROBE_QS || "evaluation/case-file/questions.json";
-const canonical =
+let canonical =
   !process.env.VM_PROBE_QS ||
   qsPath === "evaluation/case-file/questions-holdout.json";
 const base = (p) => (p.split("/").pop() || "qs").replace(/\.[^.]+$/, "");
@@ -92,13 +92,31 @@ let suite = process.env.VM_PROBE_QS
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const questionHash = hash(readFileSync(new URL(qsPath, root)));
 const documentHash = hash(readFileSync(new URL(FILE, root)));
+const questionPatients = QS.map((q) => q.patient ?? null);
+const hasQuestionContext = QS.some((q) => Object.hasOwn(q, "patient"));
+const frozenHashes = {
+  "evaluation/case-file/questions.json":
+    "72f099f5d99d1e787e76e74db72ef9225fc1eb135b9b79c8a6a8c0e5f64ddb6b",
+  "evaluation/case-file/questions-holdout.json":
+    "c51dee627c7b5c7ffdd9ecabbaeb06ef53589bcfe0c742c77d3047827451fb9c",
+};
+canonical =
+  canonical &&
+  !PATIENT &&
+  !hasQuestionContext &&
+  frozenHashes[qsPath] === questionHash &&
+  documentHash ===
+    "fac1aec0ad81161d0733604b1fa1b9c4219aa11aace88ec044718af2f698d9c0";
+
 if (PATIENT || !canonical || process.env.VM_PROBE_FILE)
-  suite += `-${hash(JSON.stringify([questionHash, documentHash, PATIENT])).slice(0, 12)}`;
+  suite += `-${hash(JSON.stringify([questionHash, documentHash, PATIENT, questionPatients])).slice(0, 12)}`;
 const artifactPath = `evaluation/results/case-probe-${suite}${only ? "-partial" : ""}.json`;
 const runMeta = {
   runId: randomUUID(),
   command: process.argv,
   patient: PATIENT,
+  questionPatients,
+  canonical: canonical && !only && !process.env.VM_PROBE_FILE && !PATIENT,
   env: {
     VM_PROBE_QS: process.env.VM_PROBE_QS ?? null,
     VM_PROBE_FILE: process.env.VM_PROBE_FILE ?? null,

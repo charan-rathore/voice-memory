@@ -12,7 +12,7 @@ const SETS = [
   "case-file/questions-holdout.json",
 ].map((f) => [f, JSON.parse(readFileSync(here(f), "utf8"))]);
 
-test("hospital case file: every question and trick question answered from the records", async () => {
+test("hospital selected-context regression: frozen questions with explicit HLG-P1047 selection", async () => {
   const prev = process.env.VM_PUBLIC_ASK_PER_MIN;
   process.env.VM_PUBLIC_ASK_PER_MIN = "100000";
   const srv = createLocalServer({ port: 0 });
@@ -62,6 +62,33 @@ test("hospital case file: every question and trick question answered from the re
         if (!ok) misses.push(`${file}: ${q.ask} -> ${text.slice(0, 200)}`);
       }
     assert.deepEqual(misses, []);
+    // Unselected corpus safety is a separate contract: preserve every
+    // original never-pattern and require no final citations on ambiguity.
+    // This is not a claim that the old value-answer want-patterns pass.
+    let reviewed = 0,
+      clarified = 0;
+    for (const [, qs] of SETS)
+      for (const q of qs) {
+        const a = await (
+          await fetch(base + "/ask", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ case: ws.id, question: q.ask }),
+          })
+        ).json();
+        for (const never of q.never ?? [])
+          assert.doesNotMatch(a.final.text, new RegExp(never, "i"), q.ask);
+        if (a.final.verdict === "AMBIGUOUS_PATIENT") {
+          assert.deepEqual(a.final.citations, []);
+          clarified++;
+        }
+        reviewed++;
+      }
+    assert.equal(reviewed, 69);
+    assert.ok(
+      clarified > 0,
+      "unselected questions clarify rather than count-select",
+    );
   } finally {
     await new Promise((r) => srv.close(r));
     if (prev === undefined) delete process.env.VM_PUBLIC_ASK_PER_MIN;
@@ -111,10 +138,18 @@ test("hospital case file: evidence excerpts start at the record they quote", asy
     ).json();
     for (const ev of a.evidence ?? []) {
       const head = (ev.quote ?? "").slice(0, 300).toLowerCase();
-      assert.ok(
-        head.includes("maya") || head.includes("hba1c"),
-        `evidence leads with unrelated text: ${(ev.quote ?? "").slice(0, 120)}`,
-      );
+      if (!ev.contextOnly)
+        assert.ok(
+          head.includes("maya") || head.includes("hba1c"),
+          `supporting evidence leads with unrelated text: ${(ev.quote ?? "").slice(0, 120)}`,
+        );
+      // Newly retained nonclinical packet records are allowed only as
+      // explicit context, with their own source-owned boundaries.
+      if (!head.includes("maya") && !head.includes("hba1c")) {
+        assert.equal(ev.contextOnly, true);
+        assert.equal(ev.binding, "record-span");
+        assert.ok(ev.start >= ev.record.start && ev.end <= ev.record.end);
+      }
       // offsets stay exact against the source: the quote is the slice
       assert.equal(
         ev.end - ev.start,

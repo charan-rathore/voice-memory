@@ -80,3 +80,73 @@ test("known segmented source with no matching record never displays uncovered qu
   });
   assert.deepEqual(xs, []);
 });
+
+test("a broad supporting citation associates with every intersected record", () => {
+  const xs = bind([{ sourceId: "s1", start: 50, end: 150 }]);
+  assert.equal(xs.length, 2);
+  assert.ok(xs.every((x) => !x.contextOnly));
+});
+
+test("repeated broad chunks do not multiply repeated record evidence", () => {
+  const recs = Array.from({ length: 100 }, (_, i) => ({
+    sourceId: "many",
+    title: `p${i}`,
+    span: { start: i * 100, end: (i + 1) * 100 },
+    meta: { patient: { id: `P${i}`, name: "Synthetic" } },
+  }));
+  const t = "x".repeat(10000),
+    ev = { sourceId: "many", start: 0, end: 10000, quote: t };
+  const out = bindEvidenceToRecords(
+    Array.from({ length: 250 }, () => ev),
+    "",
+    recs,
+    [],
+  );
+  assert.equal(out.length, 100);
+  assert.equal(new Set(out.map((x) => x.record.patientId)).size, 100);
+  assert.equal(
+    out.reduce((n, x) => n + x.quote.length, 0),
+    t.length,
+  );
+});
+
+test("distinct overlapping broad chunks aggregate without losing record coverage", () => {
+  const rs = Array.from({ length: 100 }, (_, i) => ({
+    sourceId: "s",
+    span: { start: i * 100, end: (i + 1) * 100 },
+    meta: { patient: { id: "P" + i } },
+  }));
+  const es = Array.from({ length: 250 }, (_, i) => ({
+    sourceId: "s",
+    start: 0,
+    end: 10000 - i,
+    quote: "x".repeat(10000 - i),
+  }));
+  const out = bindEvidenceToRecords(es, "", rs);
+  assert.equal(out.length, 100);
+  assert.equal(new Set(out.map((x) => x.record.patientId)).size, 100);
+  assert.equal(
+    out.reduce((n, x) => n + x.quote.length, 0),
+    10000,
+  );
+});
+
+test("nonclinical final citations in a partly clinical source remain unchanged", async () => {
+  const { bindAnswerCitations } = await import("../src/library.mjs");
+  const records = [
+    {
+      sourceId: "s",
+      span: { start: 100, end: 200 },
+      meta: { patient: { id: "P1" } },
+    },
+  ];
+  for (const start of [0, 120]) {
+    const c = {
+      sourceId: "s",
+      start,
+      end: start + 20,
+      quote: "generic source fact",
+    };
+    assert.deepEqual(bindAnswerCitations([c], "", records), [c]);
+  }
+});

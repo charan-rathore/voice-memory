@@ -11,6 +11,7 @@ import {
   MONTHS,
   packetSegments,
   extractSegment,
+  extractReport,
 } from "./observations.mjs";
 import {
   detectLang,
@@ -29,6 +30,7 @@ import {
   valueText,
   canonOf,
   aboutSomeoneElse,
+  hasKinshipRef,
   mixedSubjectRef,
   thirdPerson,
 } from "./explain.mjs";
@@ -230,14 +232,7 @@ const nameKey = (r) =>
     .toLowerCase();
 const realId = (id) => !/^(doc|name):/.test(id);
 
-/**
- * The person a consolidated record is about, when another person with the
- * SAME printed name appears in it (a misfiled page, a namesake's report).
- * "Maya's ferritin" cannot be settled by asking "Maya or Maya?", so the
- * record's main subject answers, and the other person is named and kept
- * separate. Only for a clear majority (at least two records and twice as
- * many as everyone else together); different printed names are still asked.
- */
+/** A subject is selected by explicit validated context, never by counts. */
 export function primarySubject(reports, selected = null) {
   return selected && reports.some((r) => subjectOf(r) === selected)
     ? selected
@@ -245,10 +240,14 @@ export function primarySubject(reports, selected = null) {
 }
 
 /** The question names a patient ID printed in these reports. */
-const explicitIds = (question, reports) =>
-  [...new Set(reports.map(subjectOf))].filter(
-    (id) => realId(id) && question.toUpperCase().includes(id),
+const explicitIds = (question, reports) => {
+  const tokens = new Set(
+    question.toUpperCase().match(/[A-Z0-9][A-Z0-9/-]*/g) ?? [],
   );
+  return [...new Set(reports.map(subjectOf))].filter(
+    (id) => realId(id) && tokens.has(id),
+  );
+};
 
 /** Pages of a person's records, for "page 4 belongs to ...". */
 function pagesOf(id, reports) {
@@ -293,27 +292,65 @@ export function namesakeNote(
   const where = who.map((w) => w.where ?? "another record").join("; ");
   const ids = others.join(", ");
   return {
-    en: ` (That is ${p}'s record. ${where[0].toUpperCase() + where.slice(1)} is a different person with the same name, ${ids}; I left it out.)`,
-    hi: ` (यह ${p} का रिकॉर्ड है। ${where} उसी नाम के दूसरे व्यक्ति ${ids} का है; मैंने उसे अलग रखा।)`,
-    hinglish: ` (Yeh ${p} ka record hai. ${where} same naam ke doosre insaan ${ids} ka hai; maine use alag rakha.)`,
+    en: ` (That is ${p}'s record. ${where[0].toUpperCase() + where.slice(1)} is a different person, ${ids}; I left it out.)`,
+    hi: ` (यह ${p} का रिकॉर्ड है। ${where} दूसरे व्यक्ति ${ids} का है; मैंने उसे अलग रखा।)`,
+    hinglish: ` (Yeh ${p} ka record hai. ${where} doosre insaan ${ids} ka hai; maine use alag rakha.)`,
   }[lang];
+}
+
+/** Printed names only. Full-name matches outrank first-name shorthand;
+ * shared first names cannot select a person. Boundaries prevent Ann/Joann.
+ */
+function namedSubjects(question, reports) {
+  const pattern = (name) =>
+    new RegExp(
+      `(?<![\\p{L}\\p{N}])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`,
+      "giu",
+    );
+  const names = reports
+    .map((r) => ({
+      id: subjectOf(r),
+      name: String(r.meta?.patient?.name ?? "")
+        .replace(/\s*\(synthetic\)/i, "")
+        .trim(),
+    }))
+    .filter((x) => x.name.length > 2);
+  const full = names.flatMap((x) =>
+    [...question.matchAll(pattern(x.name))].map((m) => ({
+      ...x,
+      start: m.index,
+      end: m.index + m[0].length,
+    })),
+  );
+  const found = names.filter((x) => {
+    const first = x.name.split(/\s+/)[0];
+    return (
+      first.length > 2 &&
+      [...question.matchAll(pattern(first))].some(
+        (m) =>
+          !full.some(
+            (f) => m.index >= f.start && m.index + m[0].length <= f.end,
+          ),
+      )
+    );
+  });
+  return [...new Set([...full, ...found].map((x) => x.id))];
 }
 
 /** Subjects with this test, narrowed to the one the question names, if any. */
 export function subjectsFor(question, reports, all = reports, selected = null) {
   let ids = [...new Set(reports.map(subjectOf))];
   const explicit = explicitIds(question, reports);
-  if (explicit.length) return explicit;
-  const named = ids.filter((id) => {
-    const r = reports.find((x) => subjectOf(x) === id);
-    const name = (r.meta.patient?.name ?? "")
-      .replace(/\s*\(synthetic\)/i, "")
-      .toLowerCase();
-    return (
-      (!/^(doc|name):/.test(id) && question.toUpperCase().includes(id)) ||
-      (name.length > 2 && question.toLowerCase().includes(name))
+  const named = namedSubjects(question, reports);
+  if (explicit.length) {
+    const refs = [...new Set([...explicit, ...named])];
+    const names = new Set(
+      reports
+        .filter((r) => refs.includes(subjectOf(r)))
+        .map((r) => r.meta?.patient?.name),
     );
-  });
+    return explicit.length === 1 && names.size === 1 ? explicit : refs;
+  }
   if (named.length) ids = named;
   if (ids.length > 1) {
     // A multi-patient question is narrowed ONLY by explicit, validated
@@ -408,7 +445,12 @@ export function clinicalTurn(question, reports, selected = null) {
   if (!reports?.length) return null;
   let hit = findTest(question, reports);
   if (!hit) return null;
-  if (hit.keys.length > 1) return groupAnswer(question, reports, hit.keys);
+  if (hit.keys.length > 1)
+    return groupAnswer(
+      question,
+      selected ? reports.filter((r) => subjectOf(r) === selected) : reports,
+      hit.keys,
+    );
   const lang = detectLang(question);
   const t = PHRASES[lang];
   // "creatinine" matched a namesake's "Creatinine" row exactly while the
@@ -452,9 +494,9 @@ export function clinicalTurn(question, reports, selected = null) {
     return {
       ...base,
       spoken: {
-        en: `${mainL}'s records don't include a ${test} result. ${pg ? `Page ${pg} shows` : "There is"} ${test}${val ? ` ${val}` : ""}, but that belongs to a different person with the same name, ${otherL}, so I haven't used it.`,
-        hi: `${mainL} के रिकॉर्ड में ${test} का कोई नतीजा नहीं है। ${pg ? `पेज ${pg} पर` : "एक जगह"} ${test}${val ? ` ${val}` : ""} है, पर वह उसी नाम के दूसरे व्यक्ति ${otherL} का है, इसलिए मैंने उसे नहीं लिया।`,
-        hinglish: `${mainL} ke records mein ${test} ka koi result nahi hai. ${pg ? `Page ${pg} par` : "Ek jagah"} ${test}${val ? ` ${val}` : ""} hai, par woh same naam ke doosre insaan ${otherL} ka hai, isliye maine use nahi liya.`,
+        en: `${mainL}'s records don't include a ${test} result. ${pg ? `Page ${pg} shows` : "There is"} ${test}${val ? ` ${val}` : ""}, but that belongs to a different person, ${otherL}, so I haven't used it.`,
+        hi: `${mainL} के रिकॉर्ड में ${test} का कोई नतीजा नहीं है। ${pg ? `पेज ${pg} पर` : "एक जगह"} ${test}${val ? ` ${val}` : ""} है, पर वह दूसरे व्यक्ति ${otherL} का है, इसलिए मैंने उसे नहीं लिया।`,
+        hinglish: `${mainL} ke records mein ${test} ka koi result nahi hai. ${pg ? `Page ${pg} par` : "Ek jagah"} ${test}${val ? ` ${val}` : ""} hai, par woh doosre insaan ${otherL} ka hai, isliye maine use nahi liya.`,
       }[lang],
       verdict: "NOT_IN_REPORT",
       used: [],
@@ -895,6 +937,7 @@ export function observationEvidence(o, bundle) {
   const { start, end } = o.source;
   return {
     sourceId: src.id,
+    clinical: true,
     title: src.title,
     hash: src.hash,
     start,
@@ -903,6 +946,34 @@ export function observationEvidence(o, bundle) {
     firstLine: src.text.slice(0, start).split("\n").length,
     lastLine: src.text.slice(0, end).split("\n").length,
   };
+}
+
+/** Source-owned record boundaries, including records with no lab observations. */
+export function sourceRecordsFor(bundle, entries) {
+  const clinicalSources = new Set(
+    (bundle.clinical ?? []).map((r) => r.sourceId),
+  );
+  return bundle.sources.flatMap((src, i) => {
+    if (!clinicalSources.has(src.id)) return [];
+    const doc = entries[i]?.doc;
+    if (!doc) return [];
+    const parts = packetSegments(doc);
+    return parts
+      ? parts.map((seg) => ({
+          sourceId: src.id,
+          title: `${src.title} · p.${seg.pages.join(",")}`,
+          span: { start: seg.start, end: seg.end },
+          meta: extractSegment(doc, seg).meta,
+        }))
+      : [
+          {
+            sourceId: src.id,
+            title: src.title,
+            span: { start: 0, end: src.text.length },
+            meta: extractReport(doc).meta,
+          },
+        ];
+  });
 }
 
 /** Clinical reports for a bundle built from library entries (same order). */
@@ -1720,9 +1791,9 @@ export function groupAnswer(question, reports, keys, label = null) {
     const otherL = subjectLabel(who.pid, reports);
     return {
       spoken: {
-        en: `${mainL}'s records don't include ${label ? `${label} results` : "these results"}. ${pg.length ? `Page ${pg.join(", ")} shows` : "The records show"} ${items}, but that belongs to a different person with the same name, ${otherL}, so I haven't used it.`,
-        hi: `${mainL} के रिकॉर्ड में ${label ?? "ये"} नतीजे नहीं हैं। ${pg.length ? `पेज ${pg.join(", ")} पर` : ""} ${items} है, पर वह उसी नाम के दूसरे व्यक्ति ${otherL} का है, इसलिए मैंने उसे नहीं लिया।`,
-        hinglish: `${mainL} ke records mein ${label ?? "ye"} results nahi hain. ${pg.length ? `Page ${pg.join(", ")} par` : ""} ${items} hai, par woh same naam ke doosre insaan ${otherL} ka hai, isliye maine use nahi liya.`,
+        en: `${mainL}'s records don't include ${label ? `${label} results` : "these results"}. ${pg.length ? `Page ${pg.join(", ")} shows` : "The records show"} ${items}, but that belongs to a different person, ${otherL}, so I haven't used it.`,
+        hi: `${mainL} के रिकॉर्ड में ${label ?? "ये"} नतीजे नहीं हैं। ${pg.length ? `पेज ${pg.join(", ")} पर` : ""} ${items} है, पर वह दूसरे व्यक्ति ${otherL} का है, इसलिए मैंने उसे नहीं लिया।`,
+        hinglish: `${mainL} ke records mein ${label ?? "ye"} results nahi hain. ${pg.length ? `Page ${pg.join(", ")} par` : ""} ${items} hai, par woh doosre insaan ${otherL} ka hai, isliye maine use nahi liya.`,
       }[lang],
       verdict: "NOT_IN_REPORT",
       field: null,
@@ -2020,9 +2091,51 @@ function howFar(t, question) {
 }
 
 export function clinicalAnswer(question, reports, selected = null) {
-  // A named patient in this question outranks a stale UI/API selection.
+  // Resolve all references together, including mixed printed IDs and names.
   const explicit = explicitIds(question, reports ?? []);
-  if (explicit.length === 1) selected = explicit[0];
+  const named = namedSubjects(question, reports ?? []);
+  const requested = [...new Set([...explicit, ...named])];
+  if (requested.length === 1) selected = requested[0];
+  else if (requested.length > 1) {
+    const names = new Set(
+      reports
+        .filter((r) => requested.includes(subjectOf(r)))
+        .map((r) =>
+          String(r.meta?.patient?.name ?? "")
+            .trim()
+            .toLowerCase(),
+        ),
+    );
+    if (explicit.length === 1 && names.size === 1) selected = explicit[0];
+    else if (names.size > 1 || explicit.length > 1) {
+      reports = reports.filter((r) => requested.includes(subjectOf(r)));
+      selected = null;
+    } else if (!requested.includes(selected)) selected = null;
+  }
+
+  if (
+    hasKinshipRef(question) &&
+    !explicit.length &&
+    namedSubjects(question, reports ?? []).length !== 1 &&
+    new Set((reports ?? []).map(subjectOf)).size > 1
+  ) {
+    selected = null;
+    if (!mixedSubjectRef(doctorSubjectText(question))) {
+      const lang = detectLang(question);
+      return {
+        spoken: SAY[lang].which(
+          [...new Set(reports.map(subjectOf))].map((id) =>
+            subjectLabel(id, reports),
+          ),
+        ),
+        verdict: "AMBIGUOUS_PATIENT",
+        intent: "IDENTITY",
+        field: null,
+        lang,
+        used: [],
+      };
+    }
+  }
   if (selected && !(reports ?? []).some((r) => subjectOf(r) === selected))
     selected = null;
   return namedPatient(
@@ -2166,6 +2279,8 @@ function answerFor0(question, reports, selected = null) {
     selected && reports.some((r) => subjectOf(r) === selected)
       ? reports.filter((r) => subjectOf(r) === selected)
       : reports;
+  const doctor = doctorQuestions(question, reports, { selected });
+  if (doctor) return doctor;
   const t = clinicalTurn(question, reports, selected);
   if (t) return howFar(t, question);
   if (MONEY_RE.test(question) || ENCOUNTER_RE.test(question)) return null;
@@ -2174,8 +2289,6 @@ function answerFor0(question, reports, selected = null) {
   // "What should I ask the doctor about my mother's and my results?" is an
   // ask-the-doctor question, not a lookup of a test called "mother's and
   // my": it must be settled before the unmatched-test clarification.
-  const doctor = doctorQuestions(question, reports, { selected });
-  if (doctor) return doctor;
   // A test-shaped question whose test none of these reports holds ("what is
   // my heritage level"): say which tests ARE here and ask, instead of a
   // generic overview or summary that answers a different question.
@@ -2199,12 +2312,12 @@ function answerFor0(question, reports, selected = null) {
   // "What tests were done?": the tests, per report, for the main person.
   if (TESTS_LIST_RE.test(question)) {
     const pid =
-      primarySubject(reports) ??
-      ([...new Set(reports.map(subjectOf))].length === 1
-        ? subjectOf(reports[0])
+      primarySubject(scope, selected) ??
+      ([...new Set(scope.map(subjectOf))].length === 1
+        ? subjectOf(scope[0])
         : null);
     if (pid) {
-      const own = reports.filter(
+      const own = scope.filter(
         (r) => subjectOf(r) === pid && r.observations.length,
       );
       const byDate = new Map();
@@ -2268,9 +2381,9 @@ function answerFor0(question, reports, selected = null) {
         const pg = hit.source?.page;
         return {
           spoken: {
-            en: `${selL}'s records don't include a ${test} result. ${pg ? `Page ${pg} shows` : "There is"} ${test} on a record belonging to a different person with the same name, ${othL}, so I haven't used it.`,
-            hi: `${selL} के रिकॉर्ड में ${test} का कोई नतीजा नहीं है। ${pg ? `पेज ${pg} पर` : "एक जगह"} ${test} उसी नाम के दूसरे व्यक्ति ${othL} के रिकॉर्ड में है, इसलिए मैंने उसे नहीं लिया।`,
-            hinglish: `${selL} ke records mein ${test} ka koi result nahi hai. ${pg ? `Page ${pg} par` : "Ek jagah"} ${test} same naam ke doosre insaan ${othL} ke record mein hai, isliye maine use nahi liya.`,
+            en: `${selL}'s records don't include a ${test} result. ${pg ? `Page ${pg} shows` : "There is"} ${test} on a record belonging to a different person, ${othL}, so I haven't used it.`,
+            hi: `${selL} के रिकॉर्ड में ${test} का कोई नतीजा नहीं है। ${pg ? `पेज ${pg} पर` : "एक जगह"} ${test} दूसरे व्यक्ति ${othL} के रिकॉर्ड में है, इसलिए मैंने उसे नहीं लिया।`,
+            hinglish: `${selL} ke records mein ${test} ka koi result nahi hai. ${pg ? `Page ${pg} par` : "Ek jagah"} ${test} doosre insaan ${othL} ke record mein hai, isliye maine use nahi liya.`,
           }[lang],
           verdict: "NOT_IN_REPORT",
           field: null,

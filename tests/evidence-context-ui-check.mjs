@@ -90,11 +90,11 @@ try {
   await mkdir("/downloads", { recursive: true });
   await page
     .locator("#answer")
-    .screenshot({ path: "/downloads/evidence-context-desktop.png" });
+    .screenshot({ path: "/downloads/r6-evidence-context-desktop.png" });
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .locator("#answer")
-    .screenshot({ path: "/downloads/evidence-context-mobile.png" });
+    .screenshot({ path: "/downloads/r6-evidence-context-mobile.png" });
 
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page
@@ -110,6 +110,11 @@ try {
   assert.match(result2.final.text, /90 ng\/mL/);
   assert.ok(result2.final.citations.some((c) => c.quote.includes("90")));
   assert.ok(!result2.final.citations.some((c) => c.quote.includes("40")));
+  assert.ok(
+    result2.final.citations.every(
+      (c) => c.record?.patientId === "TV-P2002" && c.contextOnly === false,
+    ),
+  );
   await page.waitForFunction(() =>
     document.querySelector("#answer .a-lead")?.innerText.includes("90"),
   );
@@ -118,16 +123,69 @@ try {
       document.querySelectorAll("#answer .cite").length > 0 &&
       document.querySelector("#answer .vz-focus"),
   );
+  await page
+    .locator("#answer .cite-owner")
+    .filter({ hasText: "TV-P2002" })
+    .first()
+    .waitFor();
+  assert.doesNotMatch(
+    await page.locator("#answer .cite").first().innerText(),
+    /Context only/,
+  );
   await page.waitForTimeout(1800); // presentation animation, not readiness
   assert.match(await page.locator("#answer .vz").innerText(), /90/);
   assert.doesNotMatch(await page.locator("#answer .vz").innerText(), /40 ng/);
   await page
     .locator("#answer")
-    .screenshot({ path: "/downloads/evidence-selected-desktop.png" });
+    .screenshot({ path: "/downloads/r6-evidence-selected-desktop.png" });
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .locator("#answer")
-    .screenshot({ path: "/downloads/evidence-selected-mobile.png" });
+    .screenshot({ path: "/downloads/r6-evidence-selected-mobile.png" });
+  // A production-extracted 60-character ID, selected by an actual tab click.
+  const lp = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await lp.goto(`http://127.0.0.1:${port}`);
+  await lp.locator('.case-tab[data-case="own"]').click();
+  const longId = "A" + "1".repeat(59),
+    otherId = "B" + "2".repeat(59);
+  await lp.locator("#files").setInputFiles(
+    [longId, otherId].map((id, i) => ({
+      name: `long${i}.txt`,
+      mimeType: "text/plain",
+      buffer: Buffer.from(
+        `Patient: Same Person, ID ${id}\nDOB: 12 Jan 1980 Sex: Female\nCollected: 10 October 2026\n\nTest Name    Result    Units    Reference range\nTSH    ${i ? "1.2" : "7.8"}    mIU/L    0.4 - 4.0\n`,
+      ),
+    })),
+  );
+  await lp
+    .locator("#upl-list li")
+    .filter({ hasText: "Ready" })
+    .nth(1)
+    .waitFor({ timeout: 45000 });
+  await lp.locator("#ov-body .rp-subj").filter({ hasText: longId }).click();
+  await lp.locator("#q").fill("What is my TSH?");
+  const longRes = lp.waitForResponse((r) =>
+    r.url().endsWith("/api/public/ask"),
+  );
+  await lp.locator("#askbar").evaluate((f) => f.requestSubmit());
+  const response = await longRes,
+    body = await response.json();
+  assert.equal(response.request().postDataJSON().patient, longId);
+  assert.match(body.final.text, /7\.8/);
+  assert.ok(body.final.citations.every((c) => c.record?.patientId === longId));
+  await lp.locator("#answer .cite-owner").filter({ hasText: longId }).waitFor();
+  await lp.waitForTimeout(1800); // wait for the answer reveal, not data readiness
+  assert.equal(
+    await lp.locator("#answer").evaluate((e) => e.scrollWidth <= e.clientWidth),
+    true,
+    "long ID wraps within answer",
+  );
+  await lp
+    .locator("#answer")
+    .screenshot({ path: "/downloads/r6-long-id-mobile.png" });
+  console.log(
+    "PASS actual long patient ID survives upload, tab selection, separate API field, answer and source",
+  );
   console.log(
     "PASS initial overview is not a selection; deliberate second-patient tab scopes the next answer and cited row",
   );

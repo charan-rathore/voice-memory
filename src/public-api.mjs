@@ -630,6 +630,7 @@ export function createPublicApi({
               case: url.searchParams.get("case"),
               question: url.searchParams.get("q"),
               context: url.searchParams.get("context") ?? "",
+              patient: url.searchParams.get("patient"),
             }
           : await readJson(req);
         if (cacheable && !Object.hasOwn(CASES, data.case))

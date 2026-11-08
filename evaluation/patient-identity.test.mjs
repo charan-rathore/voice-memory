@@ -464,5 +464,156 @@ test("DOB validation precedes raw equality and accepts uppercase ordinals", () =
   assert.equal(dobRelation("2020-02-30", "2020-02-30"), "undecidable");
   assert.equal(dobRelation("01/02/80", "01/02/80"), "undecidable");
   assert.equal(dobRelation("12TH Jan 1980", "1980-01-12"), "same");
+  assert.equal(dobRelation("Jan 1ST, 1980", "1980-01-01"), "same");
   assert.equal(dobRelation("03/07/1965", "04/08/1965"), "undecidable");
+});
+
+test("text-month invalid dates never establish identity, even identical", () => {
+  for (const d of [
+    "30 Feb 2020",
+    "31 Apr 1980",
+    "29 Feb 2023",
+    "30th February 2020",
+  ])
+    assert.equal(dobRelation(d, d), "undecidable", d);
+});
+
+test("a named person overrides stale selection for summaries and sample dates", async () => {
+  const b = await loadSet([
+    report(
+      "Patient: Alice Smith, ID AL-101\nDOB: 12 Jan 1980 Gender: Female",
+      "7.8",
+    ),
+    report(
+      "Patient: Bob Jones, ID BJ-202\nDOB: 12 Jan 1980 Gender: Female",
+      "1.2",
+    ),
+  ]);
+  for (const q of [
+    "Summarise Bob Jones's results",
+    "Summarize Bob's results",
+    "What are Bob Jones's thyroid results?",
+  ]) {
+    const a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.doesNotMatch(a.spoken, /7\.8/, q);
+    assert.ok(
+      a.used.every((o) => subjectOf(o.report) === "BJ-202"),
+      q,
+    );
+  }
+});
+
+test("kinship cannot map an old selected person, including summaries and dates", async () => {
+  const b = await loadSet([
+    report(
+      "Patient: Alice Smith, ID AL-101\nDOB: 12 Jan 1980 Gender: Female",
+      "7.8",
+    ),
+    report(
+      "Patient: Bob Jones, ID BJ-202\nDOB: 12 Jan 1980 Gender: Female",
+      "1.2",
+    ),
+  ]);
+  for (const q of [
+    "Summarise my mother's results",
+    "What is my mother's TSH?",
+    "When was my mother's sample collected?",
+  ]) {
+    const a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.equal(a.verdict, "AMBIGUOUS_PATIENT", q);
+    assert.deepEqual(a.used, []);
+  }
+  for (const q of [
+    "Summarise Alice Smith and Bob Jones's results",
+    "Summarise AL-101 and BJ-202",
+  ]) {
+    const a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.ok(
+      a.used.some((o) => subjectOf(o.report) === "BJ-202"),
+      q,
+    );
+  }
+});
+
+test("mixed doctor prompts without flags do not assign a relative-only pronoun", async () => {
+  const b = await loadSet([
+    report(
+      "Patient: Alice Smith, ID AL-101\nDOB: 12 Jan 1980 Gender: Female",
+      "1.8",
+    ),
+  ]);
+  for (const q of [
+    "What should I ask the doctor about my mother's and my HbA1c results?",
+    "What should I ask the doctor about my mother's HbA1c and mine?",
+    "meri maa aur mera sugar result doctor se kya poochun?",
+    "मेरी माँ और मेरी HbA1c रिपोर्ट डॉक्टर से क्या पूछूं?",
+  ]) {
+    const a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.equal(a.intent, "ASK_DOCTOR", q);
+    assert.doesNotMatch(
+      a.spoken,
+      /for them|their history|for you|your history|उनकी|उनके|आपकी|unke|aapki/,
+      q,
+    );
+  }
+});
+
+test("every report-date parser rejects impossible calendar dates", async () => {
+  const { genericMeta } = await import("../clinical/lab-lines.mjs");
+  for (const d of [
+    "2026-02-30",
+    "30 Feb 2026",
+    "31 Apr 2026",
+    "30/02/2026",
+    "02/30/2026",
+  ]) {
+    const m = genericMeta(
+      `Patient ID: TEST-123\nCollected: ${d}\nReported: ${d}`,
+    );
+    assert.equal(m.collected, null, d);
+    assert.equal(m.reported, null, d);
+  }
+});
+
+test("mixed full-name, shorthand and ID references preserve every requested person", async () => {
+  const b = await loadSet([
+    report("Patient: Alice Smith, ID AL-101", "7.8"),
+    report("Patient: Bob Jones, ID BJ-202", "1.2"),
+  ]);
+  for (const q of [
+    "Summarise Bob Jones's and Alice's results",
+    "Summarise AL-101 and Bob Jones's results",
+    "Summarise Alice's and BJ-202's results",
+  ]) {
+    const a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.deepEqual(
+      new Set(a.used.map((o) => subjectOf(o.report))),
+      new Set(["AL-101", "BJ-202"]),
+      q,
+    );
+  }
+  for (const who of [
+    "aunt",
+    "uncle",
+    "cousin",
+    "niece",
+    "nephew",
+    "partner",
+    "chachi",
+    "bua",
+  ]) {
+    const q = `What is my ${who}'s TSH?`,
+      a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.equal(a.verdict, "AMBIGUOUS_PATIENT", q);
+    assert.deepEqual(a.used, []);
+  }
+  for (const q of [
+    "What should I ask the doctor about my uncle's report?",
+    "mere chacha ki report doctor se kya poochun?",
+    "मेरी मौसी की रिपोर्ट डॉक्टर से क्या पूछूं?",
+  ]) {
+    const a = clinicalAnswer(q, [b.clinical[0]]);
+    assert.equal(a.intent, "ASK_DOCTOR", q);
+    assert.doesNotMatch(a.spoken, /for me|मेरे लिए|mere liye/, q);
+  }
 });

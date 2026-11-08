@@ -285,3 +285,20 @@ test("Hindi and Hinglish mother spelling variants never speak as the caller", as
     assert.doesNotMatch(a.spoken, no);
   }
 });
+
+test("mixed caller-relative named-measurement doctor prompts stay neutral", async () => {
+  for (const q of [
+    "What should I ask the doctor about my mother's and my HbA1c results?",
+    "What should I ask the doctor about my mother's HbA1c and mine?",
+    "meri maa aur mera sugar result doctor se kya poochun?",
+    "मेरी माँ और मेरी HbA1c रिपोर्ट डॉक्टर से क्या पूछूं?",
+  ]) {
+    const a = clinicalAnswer(q, await one());
+    assert.equal(a?.intent, "ASK_DOCTOR", q);
+    assert.doesNotMatch(
+      a.spoken,
+      /for (me|them)\?|उनके लिए|मेरे लिए|unke liye|mere liye/,
+      q,
+    );
+  }
+});

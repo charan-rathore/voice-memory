@@ -975,10 +975,11 @@
     // a new person on screen: the next question starts fresh for them
     if (!e.detail?.initial) state.context[state.case] = "";
   });
-  async function askEngine(caseId, question, context) {
+  async function askEngine(caseId, question, context, patient = null) {
     if (caseId !== "own" && getAnswers) {
       const qs = new URLSearchParams({ case: caseId, q: question });
       if (context) qs.set("context", context);
+      if (patient) qs.set("patient", patient);
       try {
         return await api("/answer?" + qs);
       } catch (e) {
@@ -993,6 +994,7 @@
         case: apiCase(caseId),
         question,
         context: context || undefined,
+        patient: patient || undefined,
         semantic: caseId === "own" ? !!state.aiConsent : undefined,
       }),
     });
@@ -1026,13 +1028,8 @@
       // is about; a follow-up keeps its own context.
       const person = state.person?.[caseId];
       const prev = state.context[caseId] || "";
-      const ctx = person
-        ? `person:${person}${prev && !prev.startsWith("person:") ? ` ${prev}` : ""}`.slice(
-            0,
-            60,
-          )
-        : prev;
-      result = await askEngine(caseId, question, ctx);
+      const ctx = prev;
+      result = await askEngine(caseId, question, ctx, person);
     } catch (e) {
       if (stale()) return;
       if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();

@@ -1,3 +1,4 @@
+import { validIso } from "./calendar.mjs";
 // Lab results from real-world report layouts (research prototype).
 //
 // observations.mjs reads tables whose header it recognises (Test | Result |
@@ -655,7 +656,6 @@ const MONTHS = {
   nov: 11,
   dec: 12,
 };
-const pad = (x) => String(x).padStart(2, "0");
 /** Numeric dates are ambiguous (11/06/2026). Decide the order once per document. */
 export function dateOrder(text) {
   let dmy = 0,
@@ -673,13 +673,13 @@ function toIso(d, m, y, order) {
     const mm =
       MONTHS[m.slice(0, 4).toLowerCase()] ??
       MONTHS[m.slice(0, 3).toLowerCase()];
-    return mm ? `${year}-${pad(mm)}-${pad(d)}` : null;
+    return mm ? validIso(year, mm, d) : null;
   }
   let [a, b] = [Number(d), Number(m)];
-  if (a > 12 && b <= 12) return `${year}-${pad(b)}-${pad(a)}`;
-  if (b > 12 && a <= 12) return `${year}-${pad(a)}-${pad(b)}`;
-  if (order === "dmy") return `${year}-${pad(b)}-${pad(a)}`;
-  if (order === "mdy") return `${year}-${pad(a)}-${pad(b)}`;
+  if (a > 12 && b <= 12) return validIso(year, b, a);
+  if (b > 12 && a <= 12) return validIso(year, a, b);
+  if (order === "dmy") return validIso(year, b, a);
+  if (order === "mdy") return validIso(year, a, b);
   return null; // honest: cannot tell 11 June from 6 November
 }
 function dateAfter(label, text, order) {
@@ -691,7 +691,8 @@ function dateAfter(label, text, order) {
   if (!m) return null;
   const s = m[1];
   let x;
-  if ((x = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s))) return { iso: s, raw: s };
+  if ((x = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)))
+    return { iso: validIso(x[1], x[2], x[3]), raw: s };
   if ((x = /^(\d{1,2})\s+([A-Za-z]{3,9}),?\s+(\d{4})$/.exec(s)))
     return { iso: toIso(x[1], x[2], x[3], order), raw: s };
   if ((x = new RegExp(`^${DMY}$`).exec(s)))

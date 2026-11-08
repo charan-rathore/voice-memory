@@ -22,15 +22,15 @@ import { OCR_REVIEW_CONFIDENCE } from "../ingest/errors.mjs";
 // Devanagari kinship sits outside \b anchors: JS word boundaries ignore
 // non-ASCII letters, so \b never fires around them.
 const DEV_KINSHIP =
-  /(?:मेरा|मेरी|मेरे)\s*(?:माँ|मां|माता|पिता|पापा|मम्मी|पत्नी|पति|बेटा|बेटी|भाई|बहन|दादा|दादी|नाना|नानी)/;
+  /(?:मेरा|मेरी|मेरे)\s*(?:मौसी|मौसा|चाचा|चाची|मामा|मामी|बुआ|फूफा|चचेरे|चचेरी|साथी|माँ|मां|माता|पिता|पापा|मम्मी|पत्नी|पति|बेटा|बेटी|भाई|बहन|दादा|दादी|नाना|नानी)/;
 const ABOUT_OTHER =
-  /\b(he|she|they|him|his|her|hers|their|them)\b|\bmy\s+(dad|father|mother|mom|mum|mummy|papa|son|daughter|wife|husband|parents?|grand(?:father|mother|pa|ma)|brother|sister|child|kid|patient)\b|\b(?:my|mere|meri|mera)\s+(papa|mummy|mumma|maa|ma|mata|pita|didi|bhai|mama|chacha|mausi|mausa|maasi|dada|dadi|nana|nani)\b|\b(unko|unhe|usko|use|inko|unke|uske|papa\s+ko|mummy\s+ko)\b|उन्हें|उनको|उसको|उनके|उसके|उनकी|उसकी|पापा|मम्मी/i;
+  /\b(he|she|they|him|his|her|hers|their|them)\b|\bmy\s+(dad|father|mother|aunt|uncle|cousin|niece|nephew|partner|fiancee?|mom|mum|mummy|papa|son|daughter|wife|husband|parents?|grand(?:father|mother|pa|ma)|brother|sister|child|kid|patient)\b|\b(?:my|mere|meri|mera)\s+(papa|chachi|chacha|bua|phupha|tau|tai|mami|mausa|mausi|cousin|partner|mummy|mumma|maa|ma|mata|pita|didi|bhai|mama|chacha|mausi|mausa|maasi|dada|dadi|nana|nani)\b|\b(unko|unhe|usko|use|inko|unke|uske|papa\s+ko|mummy\s+ko)\b|उन्हें|उनको|उसको|उनके|उसके|उनकी|उसकी|पापा|मम्मी/i;
 const ABOUT_OTHER_FULL = (q) => ABOUT_OTHER.test(q) || DEV_KINSHIP.test(q);
 /** True when the question is about someone other than the caller. */
 const KINSHIP =
-  /\b(?:my|mere|meri|mera)\s+(dad|father|mother|mom|mum|mummy|papa|mumma|maa|ma|mata|pita|didi|bhai|mama|chacha|mausi|mausa|maasi|dada|dadi|nana|nani|grandmother|grandfather|grandma|grandpa|parents?|child|kid|son|daughter|wife|husband)\b|(?:मेरा|मेरी|मेरे)\s*(?:माँ|मां|माता|पिता|पापा|मम्मी|पत्नी|पति|बेटा|बेटी|भाई|बहन|दादा|दादी|नाना|नानी)/gi;
+  /\b(?:my|mere|meri|mera)\s+(dad|father|mother|aunt|uncle|cousin|niece|nephew|partner|fiancee?|mom|mum|mummy|papa|chachi|bua|phupha|tau|tai|mami|cousin|partner|mumma|maa|ma|mata|pita|didi|bhai|mama|chacha|mausi|mausa|maasi|dada|dadi|nana|nani|grandmother|grandfather|grandma|grandpa|parents?|child|kid|son|daughter|wife|husband)\b|(?:मेरा|मेरी|मेरे)\s*(?:मौसी|मौसा|चाचा|चाची|मामा|मामी|बुआ|फूफा|चचेरे|चचेरी|साथी|माँ|मां|माता|पिता|पापा|मम्मी|पत्नी|पति|बेटा|बेटी|भाई|बहन|दादा|दादी|नाना|नानी)/gi;
 const OWN_REF =
-  /\b(i|me)\b|\b(?:my|mere|meri|mera)\s+(?:own|reports?|results?|tsh|ferritin)\b|(?:मेरा|मेरी|मेरे)\s*(?:खुद|अपन[ीेा]|रिपोर्ट|नतीजे)/i;
+  /\b(i|me|mine)\b|\b(?:my|mere|meri|mera)\s+(?!(?:doctor|dr|physician|clinician|gp)\b)(?:[a-z][a-z0-9-]*)(?:\s+(?:results?|reports?|tests?))?\b|(?:मेरा|मेरी|मेरे)\s*(?:खुद|अपन[ीेा]|रिपोर्ट|नतीजे|[A-Za-z][A-Za-z0-9-]*)/i;
 export const aboutSomeoneElse = (q) =>
   ABOUT_OTHER_FULL(String(q ?? "")) &&
   !OWN_REF.test(String(q ?? "").replace(KINSHIP, ""));

@@ -208,6 +208,19 @@ test("asked through a workspace: the amendment wins, the other patient stays sep
             a.final.citations.some((c) => c.quote.includes(value)),
             "chosen value cited",
           );
+          for (const c of a.final.citations) {
+            assert.equal(
+              c.record?.patientId,
+              patient,
+              "visible citation owner",
+            );
+            assert.equal(
+              c.contextOnly,
+              false,
+              "answer support is not diagnostic context",
+            );
+            assert.ok(c.location?.pages?.length, "pinpoint remains located");
+          }
           assert.ok(
             !a.final.citations.some((c) =>
               c.quote.includes(patient === "TV-P2001" ? "90" : "40"),

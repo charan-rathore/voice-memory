@@ -52,6 +52,7 @@ import { extractiveSpoken } from "./spoken-extract.mjs";
 import {
   clinicalAnswer,
   clinicalReportsFor,
+  sourceRecordsFor,
   observationEvidence,
   findTest,
   subjectsFor,
@@ -108,6 +109,7 @@ import {
   publicEntry,
   documentView,
   bindEvidenceToRecords,
+  bindAnswerCitations,
   decorateResult,
   libraryOf,
   locatorFor,
@@ -813,6 +815,7 @@ export function createLocalServer({
     if (bundle) {
       bundle.locateEvidence = locatorFor(s.sourceToEntry);
       bundle.clinical = clinicalReportsFor(bundle, docs, extractReport);
+      bundle.sourceRecords = sourceRecordsFor(bundle, docs);
       attachRecords(bundle, docs);
       attachDigests(bundle, docs, denseStatus());
     }
@@ -964,7 +967,22 @@ export function createLocalServer({
       );
       // A missing identifier binding cannot be rescued with a different field
       // or a provider-generated interpretation of nearby numbers.
-      if (identifierRequest(question)) return { raw, shown };
+      if (identifierRequest(question)) {
+        if (shown.lead?.citations?.length)
+          shown.lead.citations = decorateResult(
+            {
+              question: original,
+              evidence: bindAnswerCitations(
+                shown.lead.citations,
+                original,
+                bundle.sourceRecords ?? [],
+                shown.lead.citations,
+              ),
+            },
+            s,
+          ).evidence;
+        return { raw, shown };
+      }
 
       // Understand first, verify after: intent-specific rescue (grounded
       // background, composed summaries, model interpretation, verified
@@ -1002,6 +1020,18 @@ export function createLocalServer({
           s,
         ).evidence;
       shown.lead = sem.lead;
+      if (shown.lead?.citations?.length) {
+        const bound = bindAnswerCitations(
+          shown.lead.citations,
+          original,
+          bundle.sourceRecords ?? bundle.clinical ?? [],
+          shown.lead.citations,
+        );
+        shown.lead.citations = decorateResult(
+          { evidence: bound, question: original },
+          s,
+        ).evidence;
+      }
       shown.semantic = sem.trace;
       // A Hindi or Hinglish visitor with nothing supported hears that in
       // their own language, not a silent English fallback.
@@ -1056,16 +1086,19 @@ export function createLocalServer({
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
       shown.lead = leadFor(question, raw, bundle, ctx || null, selectedPatient);
-      // Diagnostic evidence is bound to the source-owned record the answer
-      // itself selected (its citations), falling back to the record the
-      // question matches inside (packet segmentation), so an excerpt can
-      // never lead with another person's record.
+      // Diagnostic retrieval chunks are split at known clinical record
+      // boundaries, not ranked into a guessed owner. Context-only spans
+      // remain explicitly separate from the answer's supporting citations.
       shown.evidence = bindEvidenceToRecords(
         shown.evidence,
         question,
-        bundle.clinical ?? [],
+        bundle.sourceRecords ?? bundle.clinical ?? [],
         shown.lead?.citations ?? [],
       );
+      shown.evidence = decorateResult(
+        { evidence: shown.evidence, question },
+        s,
+      ).evidence;
       if (identifierRequest(question)) {
         if (shown.lead)
           shown.lead.citations = decorateResult(
@@ -1271,6 +1304,7 @@ export function createLocalServer({
     target.library = docsIn;
     bundle.locateEvidence = locatorFor(target.sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsIn, extractReport);
+    bundle.sourceRecords = sourceRecordsFor(bundle, docsIn);
     attachRecords(bundle, docsIn);
     attachDigests(bundle, docsIn, denseStatus());
     target.bundle = bundle;
@@ -1536,6 +1570,7 @@ export function createLocalServer({
       bundle.sources[i].provisional = docsNow[i].status === "partial";
     bundle.locateEvidence = locatorFor(sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsNow, extractReport);
+    bundle.sourceRecords = sourceRecordsFor(bundle, docsNow);
     attachRecords(bundle, docsNow);
     attachDigests(bundle, docsNow, denseStatus());
     // Commit source identity and answer index together. A failed digest,

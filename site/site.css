@@ -4961,3 +4961,13 @@ html:not(.voice-on) .voice-off {
   position: relative;
   top: 0;
 }
+
+/* Verified patient identifiers can be longer than a narrow display. */
+.a-lead,
+.cite-owner {
+  overflow-wrap: anywhere;
+}
+.a-lead .w {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
