@@ -166,7 +166,16 @@ for (const packet of [false, true])
         return null;
       },
     };
-    const s = createLocalServer({ port: 0, gemini });
+    // Explicit fixture segmentation keeps this test focused on source isolation.
+    // The production opaque-default no-disclosure path has its own regression.
+    const s = createLocalServer({
+      port: 0,
+      gemini,
+      resolveDocumentDecomposition: (q) => ({
+        provenance: "explicit-owner-isolation-fixture",
+        segments: [{ kind: "requirement", start: 0, end: q.length }],
+      }),
+    });
     await new Promise((r) => s.listen(0, "127.0.0.1", r));
     const base = `http://127.0.0.1:${s.address().port}/api/public`;
     try {
@@ -211,7 +220,11 @@ for (const packet of [false, true])
             patient,
             semantic,
             documentConsent: semantic
-              ? { generation: state.bundleGeneration, model: null, provider: "Google Gemini" }
+              ? {
+                  generation: state.bundleGeneration,
+                  model: null,
+                  provider: "Google Gemini",
+                }
               : undefined,
           }),
         }).then((r) => r.json());

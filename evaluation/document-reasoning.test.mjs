@@ -2,15 +2,30 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { importBundle } from "../dist/engine.mjs";
 import {
-  readDocumentQuestion,
+  readDocumentQuestion as actualReadDocumentQuestion,
   DOCUMENT_CONTEXT_LIMIT,
 } from "../src/semantic/document.mjs";
 const text =
   "The board proposed a grant of $10 on 4 June. Approval remained pending. Alice was expected to become CEO next year, not during 2024.";
 const bundle = importBundle([{ title: "Public synthetic notice", text }]);
 const question = "Was the grant approved and was Alice already CEO in 2024?";
+import { createDecomposition } from "../src/question-decomposition.mjs";
+// Explicit fixture decomposition only. This helper tests the wire contract,
+// not a production language parser. Compound coverage has a separate test.
+const fixtureSegments = (q) => ({
+  provenance: "explicit-source-validator-development-fixture",
+  segments: [{ kind: "requirement", start: 0, end: q.length }],
+});
+const readDocumentQuestion = (opts) =>
+  actualReadDocumentQuestion({
+    ...opts,
+    decomposition: createDecomposition({
+      question: opts.question,
+      ...fixtureSegments(opts.question),
+    }),
+  });
 function fake(changes = {}) {
-  return {
+  const provider = {
     enabled: () => true,
     documentRead: async () => ({
       question,
@@ -25,13 +40,6 @@ function fake(changes = {}) {
             },
           ],
         },
-        {
-          request: "CEO timing",
-          status: "not_established",
-          reason:
-            "The supplied evidence does not establish a completed appointment.",
-          claims: [],
-        },
       ],
     }),
     documentAudit: async (q, p, ss) => ({
@@ -42,6 +50,45 @@ function fake(changes = {}) {
       items: ss.map((s, index) => ({ index, accept: true })),
     }),
     ...changes,
+  };
+  return {
+    ...provider,
+    documentRead: async (plan, documents, opts) => {
+      const r = await provider.documentRead(
+        plan.originalQuestion,
+        documents,
+        opts,
+      );
+      if (!r) return r;
+      return {
+        ...r,
+        questionPlanKey: plan.key,
+        scopeKey: plan.scopeKey,
+        requirements: (r.parts ?? []).map((part, i) => ({
+          ...plan.requirements[i],
+          ...part,
+          text: plan.requirements[i]?.text,
+          id: plan.requirements[i]?.id,
+        })),
+      };
+    },
+    documentAudit: async (plan, p, ss, opts) => {
+      const r = await provider.documentAudit(
+        plan.originalQuestion,
+        p,
+        ss,
+        opts,
+      );
+      return {
+        ...r,
+        questionPlanKey: plan.key,
+        scopeKey: plan.scopeKey,
+        items: r.items?.map((item) => ({
+          ...item,
+          requirementId: ss[item.index]?.requirementId,
+        })),
+      };
+    },
   };
 }
 test("no consent or provider means no document disclosure", async () => {
@@ -185,7 +232,7 @@ test("actual public upload API requires consent and audits a strong lexical answ
   const calls = [];
   let throwRead = false,
     badAudit = false;
-  const gemini = {
+  const gemini = fake({
     enabled: () => true,
     searchEnabled: () => false,
     interpret: async () => null,
@@ -221,8 +268,12 @@ test("actual public upload API requires consent and audits a strong lexical answ
         items: statements.map((x, index) => ({ index, accept: true })),
       };
     },
-  };
-  const s = createLocalServer({ port: 0, gemini });
+  });
+  const s = createLocalServer({
+    port: 0,
+    gemini,
+    resolveDocumentDecomposition: fixtureSegments,
+  });
   await new Promise((r) => s.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${s.address().port}/api/public`;
   try {
@@ -255,7 +306,11 @@ test("actual public upload API requires consent and audits a strong lexical answ
           question,
           semantic,
           documentConsent: semantic
-            ? { generation: state.bundleGeneration, model: null, provider: "Google Gemini" }
+            ? {
+                generation: state.bundleGeneration,
+                model: null,
+                provider: "Google Gemini",
+              }
             : undefined,
         }),
       });
@@ -292,4 +347,170 @@ test("actual public upload API requires consent and audits a strong lexical answ
     if (oldCounter === undefined) delete process.env.VM_COUNTERS_ALLOW_FILE;
     else process.env.VM_COUNTERS_ALLOW_FILE = oldCounter;
   }
+});
+
+test("repeated quotations may use explicit exact spans but never guessed offsets or wrong source IDs", async () => {
+  const quote = "Approval remained pending.";
+  const b = importBundle([
+    {
+      title: "Repeated synthetic source",
+      text: quote + " Interim note. " + quote,
+    },
+  ]);
+  const start = b.sources[0].text.lastIndexOf(quote),
+    end = start + quote.length;
+  for (const [ref, allowed] of [
+    [{ document: 0, sourceId: b.sources[0].id, start, end, quote }, true],
+    [
+      { document: 0, sourceId: b.sources[0].id, start: start + 1, end, quote },
+      false,
+    ],
+    [{ document: 0, sourceId: "different-source", start, end, quote }, false],
+    [{ document: 0, start, end: end + 1, quote }, false],
+    [{ document: 0, start, quote }, false],
+    [{ document: 0, quote }, false],
+  ]) {
+    const gemini = fake({
+      documentRead: async () => ({
+        question,
+        parts: [
+          {
+            request: "Grant status",
+            status: "answered",
+            claims: [{ statement: quote, evidence: [ref] }],
+          },
+        ],
+      }),
+    });
+    const answer = await readDocumentQuestion({
+      question,
+      bundle: b,
+      gemini,
+      consent: true,
+    });
+    assert.equal(!!answer, allowed);
+    if (allowed) {
+      assert.equal(answer.citations[0].start, start);
+      assert.equal(answer.citations[0].end, end);
+    }
+  }
+});
+
+test("opaque default makes no provider call and fake audit cannot assert semantic coverage", async () => {
+  let calls = 0;
+  const result = await actualReadDocumentQuestion({
+    question,
+    bundle,
+    consent: true,
+    gemini: fake({
+      documentRead: async () => {
+        calls++;
+        throw Error("must not disclose");
+      },
+    }),
+  });
+  assert.equal(calls, 0);
+  assert.equal(result.origin, "document-unqualified-question");
+  assert.equal(result.requestPlan.coverageEstablished, false);
+  assert.equal(result.verdict, "UNKNOWN");
+});
+
+test("actual reader rejects omitted, duplicated or replaced caller requirements before a favorable audit", async () => {
+  const q = "Was the launch approved, and who paid the deposit?";
+  const b = importBundle([
+    {
+      title: "Exposed development fixture",
+      text: "The launch was approved. Mina paid the deposit.",
+    },
+  ]);
+  const cut = q.indexOf(", and ");
+  const decomposition = createDecomposition({
+    question: q,
+    provenance: "explicit-compound-development-fixture",
+    segments: [
+      { kind: "requirement", start: 0, end: cut },
+      { kind: "glue", start: cut, end: cut + 6 },
+      { kind: "requirement", start: cut + 6, end: q.length },
+    ],
+  });
+  for (const mutate of [
+    (r) => r.requirements.pop(),
+    (r) => (r.requirements[1] = r.requirements[0]),
+    (r) => (r.requirements[1].text = "Who approved?"),
+  ]) {
+    let audits = 0;
+    const result = await actualReadDocumentQuestion({
+      question: q,
+      bundle: b,
+      decomposition,
+      consent: true,
+      gemini: {
+        enabled: () => true,
+        documentRead: async (p) => {
+          const r = {
+            question: q,
+            questionPlanKey: p.key,
+            scopeKey: p.scopeKey,
+            requirements: p.requirements.map((x) => ({
+              ...x,
+              status: "not_established",
+              claims: [],
+            })),
+          };
+          mutate(r);
+          return r;
+        },
+        documentAudit: async () => {
+          audits++;
+          return { complete: true, relevant: true, supported: true };
+        },
+      },
+    });
+    assert.equal(result, null);
+    assert.equal(audits, 0);
+  }
+});
+
+test("reader rejects changed source generation and missing or mislabeled audit judgments", async () => {
+  for (const mutate of [
+    (r) => (r.items = []),
+    (r) => (r.items[0].requirementId = "wrong-requirement"),
+    (r) => (r.questionPlanKey = "stale-plan"),
+    (r) => r.items.push(r.items[0]),
+  ]) {
+    const provider = fake();
+    const audit = provider.documentAudit;
+    provider.documentAudit = async (...args) => {
+      const r = await audit(...args);
+      mutate(r);
+      return r;
+    };
+    assert.equal(
+      await readDocumentQuestion({
+        question,
+        bundle,
+        gemini: provider,
+        consent: true,
+      }),
+      null,
+    );
+  }
+  let current = true;
+  const provider = fake();
+  const audit = provider.documentAudit;
+  provider.documentAudit = async (...args) => {
+    const r = await audit(...args);
+    current = false;
+    return r;
+  };
+  assert.equal(
+    await readDocumentQuestion({
+      question,
+      bundle,
+      gemini: provider,
+      consent: true,
+      isCurrent: () => current,
+    }),
+    null,
+  );
 });

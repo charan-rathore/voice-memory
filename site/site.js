@@ -49,7 +49,9 @@
         readerConsent = createReaderConsent(state, $);
         readerConsent.sync();
       })
-      .catch(() => { readerLoading = null; });
+      .catch(() => {
+        readerLoading = null;
+      });
   }
 
   function invalidateKeyScope() {
@@ -291,7 +293,7 @@
     AGREED: ["v-ok", "Agreed"],
     OPEN: ["v-warn", "Still open"],
     "NO-RECORD": ["v-no", "Not on record"],
-    UNKNOWN: ["v-no", "Not in these documents"],
+    UNKNOWN: ["v-ask", "Answer not established"],
     UNBOUND_OWNER: ["v-ask", "Record identity unresolved"],
     EXPLAINED: ["v-ok", "Explained"],
     NO_REASON: ["v-warn", "No reason recorded"],
@@ -310,7 +312,7 @@
     VERDICT[v] ??
     (v
       ? ["v-ok", v.replace(/[_-]/g, " ").toLowerCase()]
-      : ["v-no", "Not in these documents"]);
+      : ["v-ask", "Answer not established"]);
   const statusOfDoc = (title) => {
     const t = String(title ?? "").toLowerCase();
     if (t.includes("amended")) return "amended";
@@ -1025,7 +1027,7 @@
         context: context || undefined,
         patient: patient || undefined,
         ...(caseId === "own"
-          ? readerConsent?.request() ?? { semantic: false }
+          ? (readerConsent?.request() ?? { semantic: false })
           : {}),
       }),
     });
@@ -1119,23 +1121,15 @@
         ? ["v-ask", "Related evidence"]
         : verdictOf(null);
     const ev = r.evidence ?? [];
-    // Without a structured lead (bring-your-own documents), the citation
-    // quote can span the whole document; the retrieved passage in r.answer
-    // names the actual lines the answer rests on, so show that instead.
     const retrieved = /Relevant source excerpts\n\n([\s\S]*?)\n\[[^\n]+\]/
       .exec(r.retrieval?.text ?? r.answer ?? "")?.[1]
       ?.trim();
-    // The one answer (src/answer-contract.mjs); the fallback below only
-    // serves saved answers from before `final` existed.
     const text =
       lead?.text ??
       r.final?.text ??
       (ev.length
         ? `From the document: “${prettyQuote(retrieved || ev[0].quote).slice(0, 280)}”${ev.length > 1 ? ` (and ${ev.length - 1} more cited passage${ev.length > 2 ? "s" : ""})` : ""}`
         : "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.");
-    // The companion opener ("Honest answer:") is shown before the answer
-    // as well as spoken, so screen and voice are the same words. Every word
-    // is a span with its index in the spoken text, for karaoke highlighting.
     const opener = lead?.opener ?? null;
     let wi = 0;
     const spans = (t, offset) =>
@@ -1175,11 +1169,13 @@
             ? "Saved run of the same engine · live engine waking"
             : via === "call"
               ? "Spoken by Bolna from this exact sentence"
-              : cloudAnswer
-                ? "Cloud answer · inspect the sources. Voice is not enabled for this answer."
-                : caseId === "own"
-                  ? "Computed from these documents · inspect the cited sources"
-                  : "Computed live · same sentence a call would speak"
+              : lead?.origin === "document-unqualified-question"
+                ? "Question interpretation unresolved · no model reading. Voice is not enabled for this answer."
+                : cloudAnswer
+                  ? "Cloud answer · inspect the sources. Voice is not enabled for this answer."
+                  : caseId === "own"
+                    ? "Computed from these documents · inspect the cited sources"
+                    : "Computed live · same sentence a call would speak"
         }</span>
       </div>
       ${r.final?.relatedEvidence?.length ? '<p class="a-understood">Related evidence, not an answer</p>' : ""}
@@ -1200,7 +1196,11 @@
             <span class="cite-q" ${!lead && retrieved ? 'style="display:block"' : ""}>${
               c.broadCitation
                 ? "Wider passage cited - it supports the source, not a pinpoint line."
-                : esc(prettyQuote(!lead && i === 0 && retrieved ? retrieved : c.quote))
+                : esc(
+                    prettyQuote(
+                      !lead && i === 0 && retrieved ? retrieved : c.quote,
+                    ),
+                  )
             }</span>
           </button>`;
         })
@@ -2910,10 +2910,6 @@
     syncVoiceClasses();
   })();
 
-  // The saved memory graphs live in snapshot-graphs.js, off the first load.
-  // The landing's 3D band reads them from VM_SNAPSHOT.graphs when it nears
-  // the viewport, so fetch them well before that (page idle, or 1600 px out)
-  // and expose them there.
   (() => {
     const cv = $("#graph-mini");
     if (!cv || !window.VM_SNAPSHOT) return;

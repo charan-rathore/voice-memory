@@ -75,7 +75,7 @@ const KIND = {
   APPROVED: "status",
   NOT_IN_REPORT: "absent",
   NOT_IN_DOCUMENTS: "absent",
-  UNKNOWN: "absent",
+  // UNKNOWN is uncertainty, not evidence that every page was checked.
   UNBOUND_OWNER: "refuse",
   NO_REASON: "absent",
   EXPLAINED: "explain",

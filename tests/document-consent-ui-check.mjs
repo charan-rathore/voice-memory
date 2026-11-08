@@ -23,6 +23,7 @@ Object.assign(process.env, {
 delete process.env.VM_SEMANTIC_AUDIENCE;
 delete process.env.VM_GEMINI;
 let calls = 0;
+let fixtureDecomposition = true;
 const gemini = {
   model: "fake/local-only",
   enabled: () => true,
@@ -30,14 +31,16 @@ const gemini = {
   status: () => ({ provider: "openrouter" }),
   interpret: async () => null,
   planClaims: async () => null,
-  documentRead: async (question, documents) => {
+  documentRead: async (requestPlan, documents) => {
     calls++;
     assert.match(documents[0].text, /retention window is 17 days/);
     return {
-      question,
-      parts: [
+      question: requestPlan.originalQuestion,
+      questionPlanKey: requestPlan.key,
+      scopeKey: requestPlan.scopeKey,
+      requirements: [
         {
-          request: "Retention window",
+          ...requestPlan.requirements[0],
           status: "answered",
           claims: [
             {
@@ -51,19 +54,37 @@ const gemini = {
       ],
     };
   },
-  documentAudit: async (question, plan, statements) => {
+  documentAudit: async (requestPlan, plan, statements) => {
     calls++;
     return {
-      question,
+      question: requestPlan.originalQuestion,
+      questionPlanKey: requestPlan.key,
+      scopeKey: requestPlan.scopeKey,
       complete: true,
       relevant: true,
       supported: true,
-      items: statements.map((_, index) => ({ index, accept: true })),
+      items: statements.map((_, index) => ({
+        index,
+        requirementId: statements[index].requirementId,
+        accept: true,
+      })),
     };
   },
 };
 const { createLocalServer } = await import("../src/server.mjs");
-const engine = createLocalServer({ port: 0, gemini });
+// This injected single-requirement fixture tests consent UI only. It is not
+// a qualified arbitrary-document decomposition implementation.
+const engine = createLocalServer({
+  port: 0,
+  gemini,
+  resolveDocumentDecomposition: (q) =>
+    fixtureDecomposition
+      ? {
+          provenance: "explicit-consent-ui-fixture",
+          segments: [{ kind: "requirement", start: 0, end: q.length }],
+        }
+      : null,
+});
 await new Promise((r) => engine.listen(0, "127.0.0.1", r));
 await engine.loadPublicCases();
 const apiPort = engine.address().port;
@@ -200,6 +221,32 @@ try {
   });
   const box = await page.locator("#document-consent").boundingBox();
   assert.ok(box.x >= 0 && box.x + box.width <= 321);
+  // Exercise the production opaque behavior after the consent-only fixture.
+  fixtureDecomposition = false;
+  await ask("Was the retention policy approved, and who authorized it?");
+  assert.equal(
+    calls,
+    2,
+    "unqualified decomposition must not disclose documents",
+  );
+  assert.match(
+    await page.locator("#answer").innerText(),
+    /interpretation remains unresolved/,
+  );
+  assert.doesNotMatch(
+    await page.locator("#answer").innerText(),
+    /Not in these documents|checked every page|Cloud answer/,
+  );
+  await page.locator("#answer").evaluate(async (el) => {
+    await Promise.all(
+      el
+        .getAnimations({ subtree: true })
+        .map((a) => a.finished.catch(() => {})),
+    );
+  });
+  await page
+    .locator("#answer")
+    .screenshot({ path: "/downloads/voice-memory-opaque-question-mobile.png" });
   await input.uncheck();
   await ask("Which retention window is in the policy?");
   assert.equal(requests.at(-1).semantic, false);

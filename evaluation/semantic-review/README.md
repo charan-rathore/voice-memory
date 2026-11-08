@@ -31,3 +31,19 @@ The wrapped deadline/fee retrieval fixture has complete source text but no admit
 Implemented: exact-original rewrite promotion only; no-lead retrieval evidence remains related evidence under abstention; legacy model claim verification requires a separate server-owned relation verifier instead of accepting numbers and quotes as entailment; exact immutable original question attached outside normalized cache results; pure request/admission contracts with opaque/unresolved interpretation explicitly marked. New pure contract and HTTP identity tests are registered in existing npm test and test:boundaries targets, without changing workflow files.
 
 Still open: broad deterministic/requestedChecked admission certificates; caller-owned qualified document requirements and actual reader validation; full factual voice unification; general summary; identity-majority removal; structured per-requirement retrieval; typed role/action/time/version parsing and adjudicated semantic evaluation. The pure admission module is not a universal production gate yet. A model's own proposed relation or ok flag cannot enable it. No release qualification is claimed.
+
+## Caller-owned reader protocol checkpoint
+
+Implemented after the first-stage checkpoint:
+
+- Reader input requirements now come from a server-side decomposition contract, never provider-created `parts`. Existing `validateDocumentPlan` enforces exact question, scope, IDs, text and owners before source validation or auditing. Audit judgments must name the exact request and each statement's requirement ID, with no missing, duplicated or mislabeled judgment.
+- The default decomposition is lossless and opaque. It cannot establish whole-question coverage and makes no document-read/audit calls. This intentionally reduces answer availability even with typed cloud permission. It is not a qualified arbitrary-language parser, and the public reader remains off. Server-only fixture resolvers exercise protocol and disclosure-scope behavior without claiming language qualification. No HTTP body field can supply a resolver.
+- Repeated exact source quotations may carry an explicit source ID and exact UTF-16 start/end span. Invalid, partial, out-of-bounds, wrong-source or ambiguous legacy quotations are rejected. Legacy unique quotes remain mechanically checkable. Neither span validity nor an audit flag proves semantic entailment.
+- The reader checks source fingerprint and caller generation/currentness again after model work. Uncertain outcomes use a fixed epistemic sentence, not ungrounded provider-authored absence explanations. UNKNOWN is displayed as "Answer not established" and no longer receives the companion's claim that every page was checked. Server trace and UI distinguish requested, unavailable and actually completed model reading.
+- A real 320px browser check includes the production opaque behavior after its explicitly injected consent fixture. Zero additional provider calls, no "Not in these documents"/"checked every page"/"Cloud answer" claim, and a readable refusal card are asserted and visually inspected.
+
+Availability loss is deliberate and incomplete: a qualified independent request resolver, reconstruction of deterministic certificates, universal factual admission and full typed/voice parity are still open. This checkpoint does not reclassify the first-stage red examples as semantic passes or run the preserved frozen artifact.
+
+## Hosted weight regression
+
+The first-stage branch alone passed the strict eager-byte gate, but the PR's merge with current main included the legitimate upload 4xx-rejection handling (+232 bytes), making the merge 530,066 bytes against `<530,000`. Eager comment prose was removed, without changing the threshold or runtime behavior, to pay for that source payload. Measure the actual candidate merge as well as the branch; a branch-only weight pass was insufficient evidence. No workflow changes are included.

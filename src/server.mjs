@@ -99,6 +99,7 @@ import { documentScope, evidencePermission } from "./document-scope.mjs";
 import { ownerView, originalCitation } from "./owner-view.mjs";
 import { readDocumentQuestion } from "./semantic/document.mjs";
 import { questionPlan } from "./question-plan.mjs";
+import { createDecomposition } from "./question-decomposition.mjs";
 const evidenceWithinOwner = (bundle, owner, ev) => {
   if (!owner) return true;
   const scope = documentScope({
@@ -537,6 +538,9 @@ export function createLocalServer({
   // Semantic layer, injectable so tests can count provider calls without a
   // network. Default builds from the host's encrypted environment.
   gemini = createGemini(),
+  // Trusted server-side resolver only. No request-body field supplies this.
+  // Default is opaque until an independently qualified parser is available.
+  resolveDocumentDecomposition = null,
 } = {}) {
   // Deployment configuration (all optional; unset = local-only behavior):
   // VM_PUBLIC_HOST / VM_PUBLIC_ORIGIN: the one public hostname/origin the UI
@@ -1300,7 +1304,7 @@ export function createLocalServer({
             trace: {
               intent: "DOCUMENT",
               lang,
-              steps: ["whole_context_read_and_independent_audit"],
+              steps: ["document_reasoning_requested"],
             },
           }
         : raw?.requestedChecked
@@ -1398,6 +1402,16 @@ export function createLocalServer({
       if (documentEnabled) {
         const documentLead = await readDocumentQuestion({
           question: original,
+          decomposition: resolveDocumentDecomposition
+            ? createDecomposition({
+                ...(await resolveDocumentDecomposition(original)),
+                question: original,
+              })
+            : undefined,
+          sourceGeneration: answerGenerations.get(bundle),
+          isCurrent: () =>
+            s.bundle === bundle &&
+            answerGenerations.get(bundle) === immutableRequest.sourceGeneration,
           bundle: semanticBundle,
           gemini,
           consent,
@@ -1410,6 +1424,13 @@ export function createLocalServer({
           field: null,
           citations: [],
         };
+        sem.trace.steps = [
+          documentLead?.origin === "document-model-audited"
+            ? "whole_context_read_and_independent_audit"
+            : documentLead?.origin === "document-unqualified-question"
+              ? "document_interpretation_unresolved_no_disclosure"
+              : "document_reasoning_unavailable",
+        ];
         if (documentLead) {
           const restored = documentLead.citations.map(restore);
           if (restored.every(Boolean))
