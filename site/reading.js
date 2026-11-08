@@ -183,8 +183,9 @@
     // when the terminal log event falls outside the replay window (an older
     // server could stamp it 1 ms after the final timing). Live view only:
     // a replay (livePages null) keeps its honest mid-flight states.
-    if (livePages && s.finalAt == null && TERMINAL.has(doc.status)) {
-      s.finalAt = tau;
+    if (livePages && TERMINAL.has(doc.status)) {
+      s.status = doc.status;
+      s.finalAt ??= tau;
       if (doc.status !== "failed" && s.textAt == null) s.textAt = tau;
     }
     return s;
@@ -202,7 +203,7 @@
     const final = s.finalAt != null;
     const answerable = s.partialAt != null || (final && !failed);
     const st = {
-      received: "done",
+      received: failed && doc.local && !doc.serverId ? "bad" : "done",
       checked: s.checkedAt != null ? "done" : failed ? "bad" : "active",
       text:
         textDone || final
@@ -493,11 +494,18 @@
     let active = 0;
     STEPS.forEach((st, i) => {
       const li = root.querySelector(`[data-step="${st.id}"]`);
+      if (st.id === "received")
+        li.querySelector("b").textContent =
+          steps.received === "bad" ? "Not received" : st.plain;
+      if (st.id === "answer")
+        li.querySelector("b").textContent =
+          s.status === "failed" ? "Not ready to ask" : st.plain;
       li.dataset.state = steps[st.id];
       if (["done", "live", "warn"].includes(steps[st.id])) active = i;
       if (steps[st.id] === "active") active = i;
       const stamp = {
-        received: d.status === "sending" ? null : o || null,
+        received:
+          d.status === "sending" || steps.received === "bad" ? null : o || null,
         checked: at(s.checkedAt),
         text: at(s.textAt),
         ocr:
@@ -625,7 +633,7 @@
     const foot = root.querySelector(".rd-foot");
     const total = done ? s.finalAt + o : null;
     const html = done
-      ? `<span>${s.status === "failed" ? "Stopped" : "Read"} in <b>${fmtS(total)}</b>${askAt != null && s.partialAt != null ? ` · you could ask from <b>${fmtS(askAt)}</b>` : ""}${total <= BUDGET_S * 1000 ? " · inside the 2-minute budget" : ""}</span>${!reduced() && total > 1500 && !replaying ? `<button type="button" data-replay>Replay</button>` : ""}`
+      ? `<span>${s.status === "failed" ? "Stopped" : "Read"} in <b>${fmtS(total)}</b>${askAt != null && s.partialAt != null ? ` · you could ask from <b>${fmtS(askAt)}</b>` : ""}${s.status !== "failed" && total <= BUDGET_S * 1000 ? " · inside the 2-minute budget" : ""}</span>${!reduced() && total > 1500 && !replaying ? `<button type="button" data-replay>Replay</button>` : ""}`
       : s.partialAt != null
         ? `<span class="live">Answers are live while the rest is read</span>`
         : "";
