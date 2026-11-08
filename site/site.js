@@ -296,6 +296,7 @@
     UNKNOWN: ["v-ask", "Answer not established"],
     SCHEMA_FIELDS: ["v-ok", "Recorded fields"],
     PARTIAL_FIELDS: ["v-warn", "Partial answer"],
+    SOURCE_OUTLINE: ["v-warn", "Source headings, not a summary"],
     UNBOUND_OWNER: ["v-ask", "Record identity unresolved"],
     EXPLAINED: ["v-ok", "Explained"],
     NO_REASON: ["v-warn", "No reason recorded"],

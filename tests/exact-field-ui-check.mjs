@@ -109,8 +109,52 @@ try {
   await page
     .locator("#answer")
     .screenshot({ path: join(shots, "exact-fields-partial-mobile.png") });
+  const outlinePage = await browser.newPage({
+    viewport: { width: 390, height: 844 },
+  });
+  await outlinePage.goto("http://127.0.0.1:4500/");
+  await outlinePage.locator('.case-tab[data-case="own"]').click();
+  await outlinePage.locator("#files").setInputFiles({
+    name: "incident.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(
+      "# Incident record\nDatabase requests timed out.\n## Detection\nAlert fired at 03:14.\n## Remaining uncertainty\nCause remains under investigation.",
+    ),
+  });
+  await outlinePage
+    .locator("#upl-list li", { hasText: "Ready" })
+    .first()
+    .waitFor();
+  await outlinePage.locator("#q").fill("Summarize these documents");
+  await outlinePage.locator(".ask-go").click();
+  await outlinePage.waitForFunction(
+    () => !document.querySelector(".ask-go").disabled,
+  );
+  const outline = outlinePage.locator("#answer");
+  assert.match(await outline.innerText(), /not established a complete summary/);
+  assert.match(await outline.innerText(), /Remaining uncertainty/);
+  assert.doesNotMatch(
+    await outline.innerText(),
+    /fee|deadline|signed contract/,
+  );
+  assert.equal(
+    await outlinePage.locator("#answer .verdict-chip").innerText(),
+    "Source headings, not a summary",
+  );
+  await outline.evaluate(async (el) => {
+    await Promise.all(
+      el
+        .getAnimations({ subtree: true })
+        .map((a) => a.finished.catch(() => {})),
+    );
+  });
+  assert.equal(
+    await outline.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    true,
+  );
+  await outline.screenshot({ path: join(shots, "source-outline-mobile.png") });
   console.log(
-    `PASS bounded exact fields, complete and partial with source conflict; screenshots ${shots}. No provider calls.`,
+    `PASS bounded exact fields, complete/partial with conflict, source-heading aid not contract summary; screenshots ${shots}. No provider calls.`,
   );
 } finally {
   await browser?.close();

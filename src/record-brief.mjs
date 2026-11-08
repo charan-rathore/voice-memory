@@ -1,3 +1,4 @@
+import { recordSubject } from "../clinical/answer.mjs";
 // Questions about a whole set of records, not one value in them.
 //
 // record-facts.mjs answers "what does the most authoritative record say
@@ -94,15 +95,10 @@ function sentencesOf(text, start, end) {
   return out;
 }
 
-/** The person the records are about, and the namesake records to set aside. */
-function people(entries) {
-  const count = new Map();
-  for (const e of entries)
-    for (const r of e.records)
-      if (r.patient) count.set(r.patient, (count.get(r.patient) ?? 0) + 1);
-  const ranked = [...count].sort((a, b) => b[1] - a[1]);
-  const main = ranked[0]?.[0] ?? null;
-  return { main, others: ranked.slice(1).map(([id]) => id) };
+/** Distinct source-bound identities. Frequency has no identity authority. */
+function people(records) {
+  const ids = [...new Set(records.map((x) => x.r.patient).filter(Boolean))];
+  return { unique: ids.length === 1 ? ids[0] : null, ids };
 }
 
 /** A record's patient, from its header or a "PATIENT: name / ID" fact. */
@@ -118,8 +114,13 @@ function flatten(entries) {
   const out = [];
   for (const e of entries)
     for (const r of e.records) {
-      r.patient = patientOf(r);
-      out.push({ e, r });
+      // Prefer the shared, source-bound identity map, including validated
+      // name-only/ID-poor records. Never mutate cached record metadata.
+      const patient =
+        e.recordSubjects instanceof Map
+          ? recordSubject(e, r)
+          : (recordSubject(e, r) ?? patientOf(r));
+      out.push({ e, r: { ...r, patient } });
     }
   return out;
 }
@@ -186,10 +187,14 @@ export function briefAnswer(question, bundle, cite, extra = {}) {
   // A single plain record has no story across records: leave it to the
   // lab and fact layers, except for a planted instruction worth reporting.
   const multi = all.length >= 3;
-  const identity = people(entries);
-  const main = extra.patient ?? (identity.others.length ? null : identity.main);
-  const others = identity.others;
-  const mine = all.filter((x) => !x.r.patient || !main || x.r.patient === main);
+  const identity = people(all);
+  const main = extra.patient
+    ? identity.ids.includes(extra.patient)
+      ? extra.patient
+      : null
+    : identity.unique;
+  const others = identity.ids.filter((id) => id !== main);
+  const mine = all.filter((x) => !main || x.r.patient === main);
   const otherRecs = all.filter(
     (x) => main && x.r.patient && x.r.patient !== main,
   );
@@ -225,7 +230,26 @@ export function briefAnswer(question, bundle, cite, extra = {}) {
     return found;
   };
   const q = question;
-  if (!main && identity.others.length && INTENTS.summary.test(q)) return null;
+
+  // Without one validated identity, patient-specific facts cannot be pooled.
+  // Document/page inventories remain available as document facts.
+  if (
+    !main &&
+    identity.ids.length > 1 &&
+    [
+      "summary",
+      "medication",
+      "diagnosis",
+      "reason",
+      "stay",
+      "clinician",
+      "followUp",
+      "unit",
+      "identity",
+    ].some((kind) => INTENTS[kind].test(q))
+  )
+    return null;
+  if (extra.patient && !identity.ids.includes(extra.patient)) return null;
   // A question about one named lab test ("what was ferritin before the
   // correction?") belongs to the lab layer; only record-level questions that
   // can't be about a single test are answered here.

@@ -7,7 +7,7 @@
 //            ─► deterministic engine (claim graph, clinical answers, sections, search)
 //            ─► semanticRescue, only when it can change the outcome:
 //                 - TERM not in the vetted glossary   -> grounded search (generic term only)
-//                 - SUMMARY of non-lab documents      -> cited sub-answers composed
+//                 - SUMMARY of non-lab documents      -> exact printed source headings
 //                 - low-confidence / unanswered       -> Gemini interprets, the engine
 //                                                       answers the rewrite
 //                 - still unanswered (consented)       -> Gemini claims, each verified
@@ -21,6 +21,7 @@ import { clinicalWhy, clinicalTerm } from "../../clinical/why.mjs";
 import { observationEvidence, findTest } from "../../clinical/answer.mjs";
 import { detectLang, nameOf } from "../../clinical/explain.mjs";
 import { subjectOf } from "../../clinical/observations.mjs";
+import { sourceOutline } from "../source-outline.mjs";
 
 const MISSING = {
   en: (m, have) =>
@@ -359,29 +360,13 @@ export async function semanticRescue(a) {
     }
   }
 
-  // SUMMARY of non-lab documents: compose from cited sub-answers the engine
-  // already gives, so a summary is never less checked than its parts.
-  if (intent.intent === "SUMMARY" && !isClinical && WEAK(lead) && rerun) {
-    const probes = [
-      "What is the fee?",
-      "What is the deadline?",
-      "What's still open?",
-      "Is there a signed contract?",
-    ];
-    const parts = [];
-    for (const p of probes) {
-      const l = await rerun(p);
-      if (l && !WEAK(l) && !["UNKNOWN"].includes(l.verdict)) parts.push(l);
-    }
-    if (parts.length >= 2) {
-      trace.steps.push("composed_summary");
-      lead = {
-        text: parts.map((l) => l.text).join(" "),
-        verdict: "OVERVIEW",
-        field: null,
-        citations: parts.flatMap((l) => l.citations ?? []).slice(0, 6),
-        intent: "SUMMARY",
-      };
+  // A general source outline is a reading aid, not a contract-shaped answer.
+  // Unknown document classes must not become fee/deadline/signature probes.
+  if (intent.intent === "SUMMARY" && !isClinical && WEAK(lead)) {
+    const outline = sourceOutline(bundle, validate);
+    if (outline) {
+      lead = outline;
+      trace.steps.push("printed_headings_not_summary");
     }
   }
 
