@@ -24,6 +24,7 @@ delete process.env.VM_SEMANTIC_AUDIENCE;
 delete process.env.VM_GEMINI;
 let calls = 0;
 let fixtureDecomposition = true;
+let partialFixture = false;
 const gemini = {
   model: "fake/local-only",
   enabled: () => true,
@@ -51,6 +52,9 @@ const gemini = {
             },
           ],
         },
+        ...(partialFixture
+          ? [{ ...requestPlan.requirements[1], status: "clarify", claims: [] }]
+          : []),
       ],
     };
   },
@@ -78,12 +82,29 @@ const engine = createLocalServer({
   port: 0,
   gemini,
   resolveDocumentDecomposition: (q) =>
-    fixtureDecomposition
+    partialFixture
       ? {
-          provenance: "explicit-consent-ui-fixture",
-          segments: [{ kind: "requirement", start: 0, end: q.length }],
+          provenance: "explicit-partial-consent-fixture",
+          segments: [
+            { kind: "requirement", start: 0, end: q.indexOf(", and ") },
+            {
+              kind: "glue",
+              start: q.indexOf(", and "),
+              end: q.indexOf(", and ") + 6,
+            },
+            {
+              kind: "requirement",
+              start: q.indexOf(", and ") + 6,
+              end: q.length,
+            },
+          ],
         }
-      : null,
+      : fixtureDecomposition
+        ? {
+            provenance: "explicit-consent-ui-fixture",
+            segments: [{ kind: "requirement", start: 0, end: q.length }],
+          }
+        : null,
 });
 await new Promise((r) => engine.listen(0, "127.0.0.1", r));
 await engine.loadPublicCases();
@@ -297,6 +318,38 @@ try {
     (await fetch(origin + "/api/public/status").then((r) => r.json())).semantic
       .documentReader.enabled,
     false,
+  );
+  delete process.env.VM_SEMANTIC_AUDIENCE;
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
+  await input.waitFor({ state: "visible" });
+  partialFixture = true;
+  await input.check();
+  await ask("What is the retention window, and who approved it?");
+  const answer = page.locator("#answer");
+  assert.match(await answer.innerText(), /17 days/);
+  assert.match(await answer.innerText(), /could not establish/);
+  const badge = answer.locator(".verdict-chip");
+  assert.equal(await badge.innerText(), "Partial answer");
+  assert.ok((await badge.getAttribute("class")).includes("v-warn"));
+  assert.equal(await answer.locator("[data-listen]").count(), 0);
+  assert.equal(
+    await page.evaluate(() => document.documentElement.scrollWidth <= 320),
+    true,
+  );
+  await answer.evaluate(async (el) => {
+    await Promise.all(
+      el
+        .getAnimations({ subtree: true })
+        .map((a) => a.finished.catch(() => {})),
+    );
+  });
+  await answer.screenshot({
+    path: "/downloads/voice-memory-partial-document-mobile.png",
+  });
+  console.log(
+    "PASS mixed document outcomes remain partial with known fact and unresolved requirement; mobile screenshot captured.",
   );
   console.log(
     "PASS default-off/explicit-on/off/new-document/reload consent, actual fake-provider calls, mobile width. No real provider requests.",

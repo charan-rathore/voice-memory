@@ -514,3 +514,73 @@ test("reader rejects changed source generation and missing or mislabeled audit j
     null,
   );
 });
+
+test("an audited mixed document outcome remains partial rather than a whole-question answer", async () => {
+  const q = "What is the retention window, and who approved it?";
+  const cut = q.indexOf(", and ");
+  const decomposition = createDecomposition({
+    question: q,
+    provenance: "explicit-partial-development-fixture",
+    segments: [
+      { kind: "requirement", start: 0, end: cut },
+      { kind: "glue", start: cut, end: cut + 6 },
+      { kind: "requirement", start: cut + 6, end: q.length },
+    ],
+  });
+  const b = importBundle([
+    {
+      title: "Synthetic policy",
+      text: "The retention window is 17 days. The approving authority is not identified.",
+    },
+  ]);
+  const out = await actualReadDocumentQuestion({
+    question: q,
+    bundle: b,
+    decomposition,
+    consent: true,
+    gemini: {
+      enabled: () => true,
+      documentRead: async (p) => ({
+        question: q,
+        questionPlanKey: p.key,
+        scopeKey: p.scopeKey,
+        requirements: p.requirements.map((r, i) => ({
+          ...r,
+          status: i ? "clarify" : "answered",
+          claims: i
+            ? []
+            : [
+                {
+                  statement: "The retention window is 17 days.",
+                  evidence: [
+                    { document: 0, quote: "The retention window is 17 days." },
+                  ],
+                },
+              ],
+        })),
+      }),
+      documentAudit: async (p, _, ss) => ({
+        question: q,
+        questionPlanKey: p.key,
+        scopeKey: p.scopeKey,
+        complete: true,
+        relevant: true,
+        supported: true,
+        items: ss.map((s, index) => ({
+          index,
+          requirementId: s.requirementId,
+          accept: true,
+        })),
+      }),
+    },
+  });
+  const { finalAnswer } = await import("../src/answer-contract.mjs");
+  assert.equal(out.verdict, "PARTIAL_DOCUMENT");
+  assert.equal(finalAnswer({ lead: out }).kind, "partial");
+  assert.match(out.text, /17 days/);
+  assert.match(out.text, /could not establish/);
+  assert.deepEqual(
+    out.outcomes.map((x) => x.status),
+    ["answered", "clarify"],
+  );
+});

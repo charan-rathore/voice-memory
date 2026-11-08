@@ -12,6 +12,7 @@
 // What kind of answer each verdict is. Anything not listed is "answered".
 const KIND = {
   PARTIAL_FIELDS: "partial",
+  PARTIAL_DOCUMENT: "partial",
   SOURCE_OUTLINE: "partial",
   AMBIGUOUS_PATIENT: "clarify",
   CLARIFY: "clarify",

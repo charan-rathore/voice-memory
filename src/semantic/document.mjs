@@ -183,7 +183,13 @@ export async function readDocumentQuestion({
     return null;
   return {
     text: statements.map((s) => `${s.request}: ${s.text}`).join("\n\n"),
-    verdict: citations.length ? "DOCUMENT_ANSWER" : "UNKNOWN",
+    verdict: citations.length
+      ? plan.requirements.every((r) => r.status === "answered")
+        ? "DOCUMENT_ANSWER"
+        : "PARTIAL_DOCUMENT"
+      : plan.requirements.some((r) => r.status === "clarify")
+        ? "CLARIFY"
+        : "UNKNOWN",
     requestPlan,
     coverageEstablished: requestPlan.coverageEstablished,
     outcomes: plan.requirements.map((r) => ({
