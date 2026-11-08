@@ -86,6 +86,7 @@ export function createVoiceAdapter({
   allowClientReplay = true,
 } = {}) {
   let resolveBundle = null;
+  let resolveAnswer = null;
   if (
     !Number.isSafeInteger(ttlMs) ||
     ttlMs < 1 ||
@@ -1308,6 +1309,55 @@ export function createVoiceAdapter({
               )
               .trim();
         }
+        // Optional server-owned common answer boundary. Caller messages never
+        // select a provider, grant consent, or supply this resolver. Scope and
+        // cancellation are checked again after the asynchronous result.
+        if (
+          resolveAnswer &&
+          !social &&
+          !ownerBlocked &&
+          !mixedTurn &&
+          !secondQ &&
+          !clinicalHit &&
+          !adviceKind(transcript)
+        ) {
+          const unified = await resolveAnswer({
+            question: asked,
+            bundle,
+            caseId,
+            call: callTag,
+          });
+          if (req.signal.aborted) return new Response(null, { status: 499 });
+          if (streaming && !current())
+            return Response.json({ error: "Superseded turn" }, { status: 409 });
+          if (unified) {
+            const lead = unified.lead;
+            const evs = lead?.citations ?? [];
+            if (
+              !lead?.text ||
+              evs.some((ev) => {
+                try {
+                  return !validateEvidence(ev, bundle);
+                } catch {
+                  return true;
+                }
+              })
+            )
+              throw Error("Common answer evidence contract mismatch");
+            spoken = isHindi(lang) ? toHindi(lead.text) : lead.text;
+            if (bundle.clinical?.length) spoken = thirdPerson(spoken);
+            turn = {
+              result: unified.raw ?? null,
+              spokenTurn: {
+                intent: lead.intent ?? "SHARED",
+                verdict: lead.verdict,
+                field: lead.field ?? null,
+                spoken,
+                citations: evs,
+              },
+            };
+          }
+        }
         // The page may have moved this call to another case while the answer
         // was being built (tab switched mid-turn). An answer for a case that is
         // no longer on screen is not spoken: say what happened instead, with
@@ -1519,6 +1569,9 @@ export function createVoiceAdapter({
     },
     setBundleResolver(fn) {
       resolveBundle = typeof fn === "function" ? fn : null;
+    },
+    setAnswerResolver(fn) {
+      resolveAnswer = typeof fn === "function" ? fn : null;
     },
     setOnTurn(fn) {
       onTurn = typeof fn === "function" ? fn : null;

@@ -919,7 +919,9 @@ export function createLocalServer({
     // May this document set's passages go to the model? Fictional demo
     // cases: yes. A visitor's own documents: only with their consent, and
     // only outside VM_SEMANTIC_AUDIENCE=demo trial scope (see scope.mjs).
-    const consent = semanticConsentFor(s.sid, opts.consent);
+    const consent = opts.noModel
+      ? false
+      : semanticConsentFor(s.sid, opts.consent);
     const mode = gemini.enabled() ? (consent ? ":g1" : ":g0") : ":d";
     const identities = identityReportsFor(bundle);
     let decision = patientDecision(
@@ -2264,6 +2266,40 @@ export function createLocalServer({
     eleven: createElevenStt(),
     fallback: gemini,
   });
+  if (process.env.VM_SHARED_VOICE_REASONING === "on") {
+    const sharedVoiceAnswer = async ({ question, bundle }) => {
+      const candidates = [
+        voiceCase,
+        ...Object.values(caseSessions),
+        ...[...workspaces.values()].map((w) => w.s),
+        ...sessions.values(),
+      ];
+      const sourceSession = candidates.find((s) => s?.bundle === bundle);
+      if (!sourceSession) return null;
+      // Voice has no trusted per-turn document-provider consent yet. A typed
+      // checkbox or a caller's system/history content cannot authorize egress.
+      // Explicitly prevent model calls even for synthetic source sessions.
+      const result = await resolveAnswer(sourceSession, question, "", {
+        noModel: true,
+      });
+      const value = JSON.parse(result.json);
+      if (sourceSession.bundle !== bundle)
+        throw Error("Voice source changed during shared answer");
+      // Specialized voice conversation renderers retain clinical history,
+      // language, mixed-domain and broad-deal orchestration. A missing lead
+      // cannot replace their already validated fallback with an empty turn.
+      if (!value.shown?.lead?.text) return null;
+      if (
+        sourceSession === caseSessions.deal &&
+        value.shown.lead.verdict === "UNKNOWN" &&
+        BROAD_DEAL.test(question)
+      )
+        return null;
+      return { ...value.shown, raw: value.raw };
+    };
+    voice.setAnswerResolver?.(sharedVoiceAnswer);
+    byoVoice.setAnswerResolver?.(sharedVoiceAnswer);
+  }
   const publicApi = createPublicApi({
     cases: caseSessions,
     workspaces: workspaceApi,
