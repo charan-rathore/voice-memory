@@ -805,8 +805,11 @@ test("counter store failure fails closed (no mint, 503)", async () => {
   }
 });
 
-test("per-call max duration: ticket dies and vendor stop is attempted", async () => {
+test("per-call max duration: ticket dies and vendor stop is attempted", async (t) => {
   const restore = saveEnv();
+  // Freeze both clocks. Injecting validity time alone still left the real
+  // cutoff timer racing the initial HTTP assertion on a loaded CI runner.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   let clock = Date.now();
   const f = await voiceFactory({
     env: { VM_PUBLIC_CALL_MAX_MS: "60" },
@@ -818,8 +821,16 @@ test("per-call max duration: ticket dies and vendor stop is attempted", async ()
     const { vm_ticket } = await mint.json();
     const ok = await fetch(f.b + `/api/public/voice/turns?ticket=${vm_ticket}`);
     assert.equal(ok.status, 200);
-    clock += 61;
-    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(f.stops(), 0);
+    clock += 59;
+    t.mock.timers.tick(59);
+    const beforeCutoff = await fetch(
+      f.b + `/api/public/voice/turns?ticket=${vm_ticket}`,
+    );
+    assert.equal(beforeCutoff.status, 200);
+    assert.equal(f.stops(), 0);
+    clock += 2;
+    t.mock.timers.tick(2);
     const gone = await fetch(
       f.b + `/api/public/voice/turns?ticket=${vm_ticket}`,
     );
