@@ -154,12 +154,21 @@ export function repairRecordTerms(text, vocab) {
   const fixes = [];
   const edits = [];
   // A token as a spelled character: a letter word, a single letter, a digit.
+  // A letter after an apostrophe is a possessive or contraction ("SYN-0001's"),
+  // never a spelled character.
   const charOf = (tk) =>
-    LETTER[tk.lo] ??
-    DIGIT[tk.lo] ??
-    (/^[a-z]$/i.test(tk.t) || /^\d+$/.test(tk.t) ? tk.lo : null);
+    /['’]$/.test(src.slice(0, tk.at))
+      ? null
+      : (LETTER[tk.lo] ??
+        DIGIT[tk.lo] ??
+        (/^[a-z]$/i.test(tk.t) || /^\d+$/.test(tk.t) ? tk.lo : null));
   let i = 0;
   while (i < tokens.length) {
+    // the "s" of a possessive or the "t" of a contraction is never a name
+    if (/['’]$/.test(src.slice(0, tokens[i].at))) {
+      i++;
+      continue;
+    }
     let done = false;
     // 1) Patient ids spoken letter by letter or with a word prefix:
     //    "s y n zero zero zero one", "syn double zero zero one".
