@@ -1037,17 +1037,19 @@ export function createLocalServer({
         available: denseAvailableFor(bundle),
       });
       const shown = decorateResult(raw, s);
-      // Diagnostic evidence is bound to the source-owned record the
+      // Typed follow-ups ("so finance rejected it?") inherit the previous
+      // question's field, exactly as the voice grant does.
+      shown.lead = leadFor(question, raw, bundle, ctx || null);
+      // Diagnostic evidence is bound to the source-owned record the answer
+      // itself selected (its citations), falling back to the record the
       // question matches inside (packet segmentation), so an excerpt can
       // never lead with another person's record.
       shown.evidence = bindEvidenceToRecords(
         shown.evidence,
         question,
         bundle.clinical ?? [],
+        shown.lead?.citations ?? [],
       );
-      // Typed follow-ups ("so finance rejected it?") inherit the previous
-      // question's field, exactly as the voice grant does.
-      shown.lead = leadFor(question, raw, bundle, ctx || null);
       if (identifierRequest(question)) {
         if (shown.lead)
           shown.lead.citations = decorateResult(

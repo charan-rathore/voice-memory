@@ -35,6 +35,17 @@ export const aboutSomeoneElse = (q) =>
   ABOUT_OTHER_FULL(String(q ?? "")) &&
   !OWN_REF.test(String(q ?? "").replace(KINSHIP, ""));
 
+// Non-global kinship detector (KINSHIP is /g, so .test on it is stateful).
+const KINSHIP_ONCE = new RegExp(KINSHIP.source, "i");
+/** True when the question references a relative ("my mother's ..."). */
+export const hasKinshipRef = (q) => KINSHIP_ONCE.test(String(q ?? ""));
+/** True when the question references both a relative and the caller's own
+ *  records ("my mother's and my results"): phrasing must stay neutral. */
+export const mixedSubjectRef = (q) => {
+  const s = String(q ?? "");
+  return KINSHIP_ONCE.test(s) && OWN_REF.test(s.replace(KINSHIP, ""));
+};
+
 /** English answer text about someone else: no "your" for their results. */
 export function thirdPerson(text) {
   return String(text ?? "")

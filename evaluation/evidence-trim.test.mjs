@@ -90,3 +90,25 @@ test("a single-record source is left whole", () => {
   const [b] = bindEvidenceToRecords([ev], "anything?", reports);
   assert.deepEqual(b, ev);
 });
+
+test("the answer-cited record wins over a token-favored unrelated record", () => {
+  const { text, reports } = fixture();
+  const ev = { sourceId: "s1", start: 0, end: text.length, quote: text };
+  // "HbA1c" occurs in the OTHER record first, so the token heuristic alone
+  // binds there (see the test above). A citation the answer itself used
+  // inside Maya's record must outrank it: the excerpt belongs to the
+  // record the answer was actually built from.
+  const mid = reports[1].span.start + 60;
+  const [b] = bindEvidenceToRecords([ev], "What is the HbA1c?", reports, [
+    { sourceId: "s1", start: mid, end: mid + 12 },
+  ]);
+  assert.equal(b.start, reports[1].span.start);
+  assert.equal(b.end, reports[1].span.end);
+  assert.match(b.quote, /Maya Sharma/);
+  assert.doesNotMatch(b.quote, /Other Person/);
+  // a citation that does not intersect the chunk changes nothing
+  const [c] = bindEvidenceToRecords([ev], "What is the HbA1c?", reports, [
+    { sourceId: "s1", start: 99999, end: 100010 },
+  ]);
+  assert.equal(c.start, reports[0].span.start); // heuristic fallback intact
+});

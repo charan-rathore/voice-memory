@@ -698,21 +698,33 @@ const focusTerms = (s) =>
  * Bind a retrieval chunk's evidence to the source-owned record it matches.
  * A chunk can cross a record boundary; whose record the match sits in is
  * decided by the clinical packet segmentation (packetSegments), not by
- * lexical guessing over rendered text: the record containing the first
- * salient question token wins, else the record with the largest character
- * overlap. The span is clipped to that record's own start/end, so the
+ * lexical guessing over rendered text: a record the answer itself cited
+ * wins, else the record containing the most salient question tokens, else
+ * the record with the largest character overlap. The span is clipped to that record's own start/end, so the
  * excerpt always opens at a real record boundary and never leads with a
  * stranger's record; offsets shift to stay an exact slice of the source.
  * Entries with no salient token and no overlap majority, and sources with
  * no record segmentation, are kept whole rather than mis-clipped.
  */
-export function bindEvidenceToRecords(evidence, question, reports) {
+export function bindEvidenceToRecords(evidence, question, reports, used = []) {
   if (!Array.isArray(evidence) || !evidence.length) return evidence;
   const q = focusTerms(question ?? "");
   const bySource = new Map();
   for (const r of reports ?? []) {
     if (!r?.sourceId || !r.span) continue;
     (bySource.get(r.sourceId) ?? bySource.set(r.sourceId, []).get(r.sourceId)).push(r);
+  }
+  // Citations the answer itself was built from: the record one of those sits
+  // in is the answer-selected record, which outranks any token/overlap
+  // heuristic (the heuristic remains the fallback for citation-less answers
+  // such as abstentions).
+  const usedBySource = new Map();
+  for (const c of used ?? []) {
+    if (!c?.sourceId || c.start == null || c.end == null) continue;
+    (
+      usedBySource.get(c.sourceId) ??
+      usedBySource.set(c.sourceId, []).get(c.sourceId)
+    ).push(c);
   }
   return evidence.map((ev) => {
     const records = bySource.get(ev.sourceId);
@@ -724,7 +736,14 @@ export function bindEvidenceToRecords(evidence, question, reports) {
     const quote = ev.quote ?? "";
     const lower = quote.toLowerCase();
     let hit = null;
-    if (q.size && own.length) {
+    for (const c of usedBySource.get(ev.sourceId) ?? []) {
+      if (hit) break;
+      if (c.start >= ev.end || c.end <= ev.start) continue;
+      const mid = (Math.max(c.start, ev.start) + Math.min(c.end, ev.end)) / 2;
+      hit =
+        own.find((r) => r.span.start <= mid && mid < r.span.end) ?? hit;
+    }
+    if (!hit && q.size && own.length) {
       // The record this evidence is about: the one containing the most
       // DISTINCT salient question tokens (a shared analyte name in another
       // record must not pull the excerpt there when the patient's name sits

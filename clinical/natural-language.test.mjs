@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ingestFile } from "../ingest/index.mjs";
 import { extractReport } from "./observations.mjs";
-import { clinicalAnswer, changesFor } from "./answer.mjs";
+import { clinicalAnswer, changesFor, subjectsFor } from "./answer.mjs";
 import { socialTurn } from "../src/conversation.mjs";
 
 const cache = new Map();
@@ -196,4 +196,59 @@ test("doctor questions for someone else's report speak about them, not me", asyn
   assert.doesNotMatch(a.spoken, /for me\?/);
   const b = clinicalAnswer("What should I ask my doctor?", await one());
   assert.match(b.spoken, /for me\?/);
+});
+
+// "my mother's and my results" names both a relative and the caller: no
+// single pronoun is right, so the suggested questions stay neutral -
+// never "for me" (drops the mother) and never "for them" (drops the caller).
+test("mixed caller + kinship doctor questions stay pronoun-neutral", async () => {
+  const a = clinicalAnswer(
+    "What should I ask the doctor about my mother's and my results?",
+    await one(),
+  );
+  assert.equal(a?.intent, "ASK_DOCTOR");
+  assert.match(a.spoken, /what does that mean\?/);
+  assert.doesNotMatch(a.spoken, /for (me|them)\?/);
+  assert.match(a.spoken, /not a diagnosis/);
+  // pure third-person and pure first-person phrasing is unchanged
+  const b = clinicalAnswer(
+    "What should I ask the doctor about her report?",
+    await one(),
+  );
+  assert.match(b.spoken, /for them\?/);
+  const c = clinicalAnswer("What should I ask my doctor?", await one());
+  assert.match(c.spoken, /for me\?/);
+});
+
+// A kinship reference ("my mother's HbA1c") names someone the record-count
+// majority knows nothing about: the same-name tie must NOT be broken by
+// counts - every candidate stays in so the caller is asked which person.
+test("kinship question blocks the same-name majority pick", () => {
+  const rep = (id, n) => ({
+    sourceId: `${id}-${n}`,
+    title: `${id}-${n}.pdf`,
+    meta: { patient: { id, name: "Maya Sharma" } },
+    observations: [],
+  });
+  const reports = [
+    rep("HLG-P1047", 1),
+    rep("HLG-P1047", 2),
+    rep("HLG-P1047", 3),
+    rep("HLG-P1048", 1),
+  ];
+  // majority pick still breaks a plain same-name tie (grounded default)
+  assert.deepEqual(subjectsFor("what is my hba1c?", reports), ["HLG-P1047"]);
+  // an explicit id in the question always wins
+  assert.deepEqual(subjectsFor("what is HLG-P1048's hba1c?", reports), [
+    "HLG-P1048",
+  ]);
+  // kinship: no silent majority answer for the wrong person
+  assert.deepEqual(subjectsFor("my mother's hba1c?", reports).sort(), [
+    "HLG-P1047",
+    "HLG-P1048",
+  ]);
+  assert.deepEqual(subjectsFor("mere papa ka sugar?", reports).sort(), [
+    "HLG-P1047",
+    "HLG-P1048",
+  ]);
 });

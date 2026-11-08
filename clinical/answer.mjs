@@ -29,6 +29,8 @@ import {
   valueText,
   canonOf,
   aboutSomeoneElse,
+  hasKinshipRef,
+  mixedSubjectRef,
   thirdPerson,
 } from "./explain.mjs";
 import { GROUPS } from "./glossary-more.mjs";
@@ -323,7 +325,12 @@ export function subjectsFor(question, reports, all = reports) {
   if (named.length) ids = named;
   if (ids.length > 1) {
     const p = primarySubject(all);
-    if (p && ids.includes(p)) return [p];
+    // The record-count majority breaks a same-name tie only when the
+    // question gives no subject context of its own. A kinship reference
+    // ("my mother's HbA1c") names someone the record counts know nothing
+    // about: picking the majority there would answer for the wrong person,
+    // so leave every candidate in and let the caller be asked which one.
+    if (p && ids.includes(p) && !hasKinshipRef(question)) return [p];
   }
   return ids;
 }
@@ -1243,7 +1250,9 @@ const DOCTOR_SAY = {
     head: (who) =>
       `Questions you could bring to your doctor${who ? ` about ${who}'s report` : ""}, each from a line in these reports: `,
     flagged: (item, third) =>
-      `${item}: what does that mean for ${third ? "them" : "me"}?`,
+      third == null
+        ? `${item}: what does that mean?`
+        : `${item}: what does that mean for ${third ? "them" : "me"}?`,
     corrected: (x) =>
       `${x.test} was corrected${x.from ? ` from ${x.from} to ${x.to}` : ""} in an amended report: which value should we go by?`,
     unclear: (t, p) =>
@@ -1253,14 +1262,18 @@ const DOCTOR_SAY = {
     noRange: (n) =>
       `${n} result${n === 1 ? " has" : "s have"} no printed range: should any of them be looked at?`,
     none: (who, third) =>
-      `${who ? `For ${who}, n` : "N"}othing here is outside the lab's printed ranges and nothing was corrected, so a good question is what these results mean for ${third ? "them, given their" : "you, given your"} history.`,
+      `${who ? `For ${who}, n` : "N"}othing here is outside the lab's printed ranges and nothing was corrected, so a good question is what these results mean${
+        third == null
+          ? ", given the history"
+          : ` for ${third ? "them, given their" : "you, given your"} history`
+      }.`,
     tail: " These are questions to ask, not a diagnosis.",
   },
   hi: {
     head: (who) =>
       `${who ? `${who} की रिपोर्ट के बारे में ` : ""}डॉक्टर से पूछने लायक सवाल, हर एक इन रिपोर्ट्स की किसी लाइन से: `,
     flagged: (item, third) =>
-      `${item}: ${third ? "उनके" : "मेरे"} लिए इसका क्या मतलब है?`,
+      `${item}: ${third == null ? "इसका" : third ? "उनके" : "मेरे"} लिए इसका क्या मतलब है?`,
     corrected: (x) =>
       `${x.test} को संशोधित रिपोर्ट में ${x.from ? `${x.from} से ${x.to} ` : ""}सुधारा गया: हमें कौन-सा मान मानना चाहिए?`,
     unclear: (t, p) =>
@@ -1270,14 +1283,20 @@ const DOCTOR_SAY = {
     noRange: (n) =>
       `${n} नतीजों की सीमा नहीं छपी: क्या इनमें से किसी को देखना चाहिए?`,
     none: (who, third) =>
-      `${who ? `${who} के लिए: ` : ""}यहाँ कुछ भी लैब की छपी सीमा से बाहर नहीं है और कुछ सुधारा नहीं गया, इसलिए एक अच्छा सवाल है कि ${third ? "उनके इतिहास को देखते हुए इन नतीजों का उनके" : "आपके इतिहास को देखते हुए इन नतीजों का आपके"} लिए क्या मतलब है।`,
+      `${who ? `${who} के लिए: ` : ""}यहाँ कुछ भी लैब की छपी सीमा से बाहर नहीं है और कुछ सुधारा नहीं गया, इसलिए एक अच्छा सवाल है कि ${
+        third == null
+          ? "इतिहास को देखते हुए इन नतीजों का"
+          : third
+            ? "उनके इतिहास को देखते हुए इन नतीजों का उनके"
+            : "आपके इतिहास को देखते हुए इन नतीजों का आपके"
+      } लिए क्या मतलब है।`,
     tail: " ये पूछने के सवाल हैं, निदान नहीं।",
   },
   hinglish: {
     head: (who) =>
       `${who ? `${who} ki report ke baare mein ` : ""}doctor se poochne layak sawaal, har ek in reports ki kisi line se: `,
     flagged: (item, third) =>
-      `${item}: ${third ? "unke" : "mere"} liye iska kya matlab hai?`,
+      `${item}: ${third == null ? "iska" : third ? "unke" : "mere"} liye iska kya matlab hai?`,
     corrected: (x) =>
       `${x.test} ko amended report mein ${x.from ? `${x.from} se ${x.to} ` : ""}sudhara gaya: kaunsa value maanna chahiye?`,
     unclear: (t, p) =>
@@ -1287,7 +1306,13 @@ const DOCTOR_SAY = {
     noRange: (n) =>
       `${n} results ki range nahi chhapi: kya inmein se kisi ko dekhna chahiye?`,
     none: (who, third) =>
-      `${who ? `${who} ke liye: ` : ""}Yahan kuch bhi lab ki range se bahar nahi hai aur kuch sudhara nahi gaya, isliye accha sawaal hai ki ${third ? "unki history dekhte hue in results ka unke" : "aapki history dekhte hue in results ka aapke"} liye kya matlab hai.`,
+      `${who ? `${who} ke liye: ` : ""}Yahan kuch bhi lab ki range se bahar nahi hai aur kuch sudhara nahi gaya, isliye accha sawaal hai ki ${
+        third == null
+          ? "history dekhte hue in results ka"
+          : third
+            ? "unki history dekhte hue in results ka unke"
+            : "aapki history dekhte hue in results ka aapke"
+      } liye kya matlab hai.`,
     tail: " Yeh poochne ke sawaal hain, diagnosis nahi.",
   },
 };
@@ -1319,7 +1344,9 @@ export function doctorQuestions(question, reports, { tail = true } = {}) {
     (o) => position(o) === "unknown" && !o.ref?.adultOnly,
   ).length;
   const ch = changesFor(pid, own);
-  const third = thirdPersonAsk(question);
+  // "my mother's and my results": both a relative and the caller are in
+  // scope, so no single pronoun is right - neutral phrasing, never "me".
+  const third = mixedSubjectRef(question) ? null : thirdPersonAsk(question);
   const qs = [
     ...ch.corrected.map((x) => D.corrected(x)),
     ...flagged
@@ -2108,6 +2135,11 @@ function answerFor0(question, reports) {
   if (MONEY_RE.test(question) || ENCOUNTER_RE.test(question)) return null;
   const lang = detectLang(question);
   if (DATE_ASK_RE.test(question)) return reportDates(reports, lang);
+  // "What should I ask the doctor about my mother's and my results?" is an
+  // ask-the-doctor question, not a lookup of a test called "mother's and
+  // my": it must be settled before the unmatched-test clarification.
+  const doctor = doctorQuestions(question, reports);
+  if (doctor) return doctor;
   // A test-shaped question whose test none of these reports holds ("what is
   // my heritage level"): say which tests ARE here and ask, instead of a
   // generic overview or summary that answers a different question.
@@ -2225,8 +2257,6 @@ function answerFor0(question, reports) {
       g.keys,
       g.id ? GROUP_LABEL[lang][g.id] : g.label,
     );
-  const doctor = doctorQuestions(question, reports);
-  if (doctor) return doctor;
   if (SUMMARY_RE.test(question) && !(change && multiReport(question, reports)))
     return reportSummary(question, reports);
   return clinicalOverview(question, reports) ?? notInReport(question, reports);
