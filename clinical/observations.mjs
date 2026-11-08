@@ -81,6 +81,35 @@ function isoDate(d, m, y) {
   return `${y}-${String(mm).padStart(2, "0")}-${String(Number(d)).padStart(2, "0")}`;
 }
 
+const WITHHELD =
+  /^(not released|not reported|not done|pending|to follow|cancelled|canceled|withheld)$/i;
+
+const DOB_LABEL = /^(date of birth|dob|d\.o\.b\.?|birth date)$/i;
+/** Date of birth as printed: "DOB: 04 Dec 1968", or a stacked table header. */
+export function dobOf(full) {
+  const head = full.slice(0, 6000);
+  const inline =
+    /\b(?:DOB|D\.O\.B\.?|Date of birth)\s*[:|]?\s*(\d{1,2}[ -](?:[A-Za-z]{3,9})[ -]\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i.exec(
+      head,
+    );
+  if (inline) return inline[1];
+  const lines = head.split("\n");
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (!lines[i].startsWith("|")) continue;
+    const cells = lines[i]
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
+    const at = cells.findIndex((c) => DOB_LABEL.test(c));
+    if (at < 0) continue;
+    let j = i + 1;
+    if (/^\|\s*-{3}/.test(lines[j] ?? "")) j++;
+    const v = (lines[j] ?? "").split("|").slice(1, -1)[at]?.trim();
+    if (v && /\d{4}/.test(v)) return v;
+  }
+  return null;
+}
+
 export function reportMeta(full) {
   const text = flatHeader(full.slice(0, 6000)) + full.slice(6000);
   // The synthetic header: "Patient: Test Person A (synthetic), ID SYN-0001".
@@ -123,6 +152,7 @@ export function reportMeta(full) {
           age: g.patient?.age ?? null,
         }
       : g.patient,
+    dob: dobOf(full),
     accession: g.accession ?? null,
     collected: collected
       ? isoDate(collected[1], collected[2], collected[3])
@@ -264,9 +294,51 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
         inFlag = fm[1] ?? fm[4];
         raw = fm[2] ?? fm[3];
       }
+      // A test the lab printed without releasing a number ("NOT RELEASED",
+      // "PENDING"): kept, so "what is the ratio?" is answered with what the
+      // report says instead of "not in these reports".
+      if (test && raw == null) {
+        const held = row.cells
+          .map((c) => (c ?? "").trim())
+          .find((c) => WITHHELD.test(c));
+        if (held && !/^(test|analyte)/i.test(test))
+          observations.push({
+            test,
+            key: testKey(test),
+            canon: canonOf(test),
+            raw: held,
+            comparator: null,
+            value: null,
+            notation: "withheld",
+            unit: null,
+            unitRaw: null,
+            range: null,
+            flag: null,
+            flagConflict: false,
+            qual: "not released",
+            notReleased: true,
+            ref: null,
+            section: null,
+            source: {
+              elementId: row.id,
+              start: row.start,
+              end: row.end,
+              page: row.page ?? null,
+              bbox: row.bbox ?? null,
+              method: row.method,
+              confidence: row.confidence ?? null,
+            },
+          });
+        continue;
+      }
       if (!test || raw == null) continue;
       const v = parseValue(raw);
-      const qual = v.value == null ? (parseResult(raw)?.qual ?? null) : null;
+      const withheld = v.value == null && WITHHELD.test(raw);
+      const qual = withheld
+        ? "not released"
+        : v.value == null
+          ? (parseResult(raw)?.qual ?? null)
+          : null;
       // "Primary Sample Type : | Blood" is a label, not a result.
       if (
         v.value == null &&
@@ -291,6 +363,7 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
         flag: cell("flag") ?? inFlag,
         flagConflict: flagConflict(v, cell("range"), cell("flag") ?? inFlag),
         qual,
+        ...(withheld ? { notReleased: true } : {}),
         ref: parseReference(
           cell("range"),
           meta.patient?.sex ?? null,

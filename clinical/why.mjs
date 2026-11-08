@@ -140,7 +140,7 @@ function oneSubject(question, reports, key) {
   const withTest = reports.filter((r) =>
     r.observations.some((o) => o.key === key),
   );
-  const ids = subjectsFor(question, withTest);
+  const ids = subjectsFor(question, withTest, reports);
   return { ids, withTest };
 }
 

@@ -463,7 +463,7 @@ export const GROUPS = {
     keys: ["tsh", "t3", "t4"],
   },
   sugar: {
-    words: ["sugar", "diabetes", "glucose", "शुगर", "मधुमेह"],
+    words: ["sugar", "diabetes", "diabetic", "glucose", "शुगर", "मधुमेह"],
     keys: ["glucose", "hba1c"],
   },
   lipids: {
@@ -529,7 +529,15 @@ export const GROUPS = {
     ],
   },
   iron: {
-    words: ["iron", "anemia", "anaemia", "आयरन", "खून की कमी"],
+    words: [
+      "iron",
+      "anemia",
+      "anaemia",
+      "anemic",
+      "anaemic",
+      "आयरन",
+      "खून की कमी",
+    ],
     keys: ["hemoglobin", "ferritin", "mcv", "mch", "rbc"],
   },
   vitamins: {

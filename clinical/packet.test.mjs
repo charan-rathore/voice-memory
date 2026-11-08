@@ -157,13 +157,14 @@ test("asked through a workspace: the amendment wins, the other patient stays sep
       await ask("What was TV-P2001's ferritin before the correction?"),
       /\b4 ng\/mL[\s\S]*40/,
     );
-    // two people share the printed name: an unnamed question asks whose
+    // two people share the printed name, one of them on a single misfiled
+    // page: an unnamed question is about the record's main person, names
+    // them by ID, and names the namesake it left out; never the namesake's
+    // value, never the superseded one.
     const unnamed = await ask("What is my ferritin?");
-    assert.match(
-      unnamed,
-      /TV-P2001[\s\S]*TV-P2002|TV-P2002[\s\S]*TV-P2001|which|whose/i,
-    );
-    assert.doesNotMatch(unnamed, /result is (4|40|90) ng/);
+    assert.match(unnamed, /\b40 ng\/mL/);
+    assert.match(unnamed, /TV-P2001[\s\S]*TV-P2002/);
+    assert.doesNotMatch(unnamed, /result is (4|90) ng/);
   } finally {
     await new Promise((r) => srv.close(r));
   }

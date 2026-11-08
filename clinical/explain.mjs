@@ -464,7 +464,7 @@ export function span(r, lang = "en") {
  */
 export function position(o) {
   // A scanned value the reader could not vouch for is never judged.
-  if (o.unreadable) return "unknown";
+  if (o.unreadable || o.notReleased) return "unknown";
   if (o.qual) {
     if (!o.ref?.expected) return "unknown";
     return sameQual(o.qual, o.ref.expected) ? "within" : "qual_differs";
@@ -534,6 +534,8 @@ const T = {
       `One thing to check: the report's ${o.flag} flag doesn't match its own range, so it's worth confirming with the lab.`,
     obscured: (o, date) =>
       `The report's embedded text reads ${o.raw} for ${nameOf(o)}, from ${date}. An overlaid stamp or watermark crosses that row, so the value may not be what is visibly printed; I can't confirm it from the page, and I won't judge it against the printed range.`,
+    notReleased: (o, date) =>
+      `The ${date} report lists ${nameOf(o)} but released no number for it (it is marked "${o.raw}"), so there is no result to read yet.`,
     unreadable: (o) =>
       `Page ${o.unreadable.page ?? "?"} prints ${o.test}, but the scan is too unclear to read it safely: it looks like “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}”${o.unreadable.reason === "unit" ? ", and I could not verify the unit" : ""}. Please check the original before relying on it.`,
     stampNote: `One caveat: this copy carries an overlaid stamp, so some printed cells may not be readable on the page itself; it's worth confirming against the original report.`,
@@ -547,6 +549,8 @@ const T = {
       `रिपोर्ट के एम्बेडेड टेक्स्ट में ${nameOf(o)} का नतीजा ${valueText(o, "hi")} लिखा है, ${date} से।`,
     obscured: (o, date) =>
       `रिपोर्ट के एम्बेडेड टेक्स्ट में ${date} की ${nameOf(o)} जांच का नतीजा ${o.raw} लिखा है। उस पंक्ति पर स्टैम्प या वॉटरमार्क आ रहा है, इसलिए मैं पेज पर छपे नतीजे की पुष्टि नहीं कर सकती, और इसे रेंज से भी नहीं तौलूँगी।`,
+    notReleased: (o, date) =>
+      `${date} की रिपोर्ट में ${nameOf(o)} लिखा है, पर उसका कोई नतीजा जारी नहीं हुआ ("${o.raw}"), इसलिए अभी पढ़ने को कोई संख्या नहीं है।`,
     unreadable: (o) =>
       `पेज ${o.unreadable.page ?? "?"} पर ${o.test} छपा है, पर स्कैन इतना साफ़ नहीं कि इसे भरोसे से पढ़ा जा सके: यह “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}” जैसा दिखता है${""}। इस पर भरोसा करने से पहले मूल रिपोर्ट देख लें।`,
     stampNote: `एक बात: इस कॉपी पर स्टैम्प लगी है, इसलिए कुछ छपे हुए सेल पेज पर पढ़े नहीं जा सकते; मूल रिपोर्ट से जाँच लेना ठीक रहेगा।`,
@@ -604,6 +608,8 @@ const T = {
       `Report ke embedded text mein ${nameOf(o)} ka result ${valueText(o, "hinglish")} likha hai, ${date} se.`,
     obscured: (o, date) =>
       `Report ke embedded text mein ${date} ka ${nameOf(o)} result ${o.raw} likha hai. Us row par stamp ya watermark aa raha hai, isliye main page par chhape result ki confirm nahi kar sakti, aur ise range se bhi nahi tolungi.`,
+    notReleased: (o, date) =>
+      `${date} ki report mein ${nameOf(o)} likha hai, par uska koi number release nahi hua ("${o.raw}"), isliye abhi padhne ko koi result nahi hai.`,
     unreadable: (o) =>
       `Page ${o.unreadable.page ?? "?"} par ${o.test} chhapa hai, par scan itna saaf nahi ki ise bharose se padha ja sake: yeh “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}” jaisa dikhta hai${""}. Is par bharosa karne se pehle original dekh lijiye.`,
     stampNote: `Ek baat: is copy par overlaid stamp hai, isliye kuch printed cells page par padhe nahi ja sakte; original report se confirm kar lena.`,
@@ -680,6 +686,8 @@ export function explainOne(o, date, lang) {
   // A scanned value that looks misread: say what the page seems to show and
   // why it is doubtful, never state it as the result.
   if (o.unreadable) return t.unreadable(o);
+  // The lab printed the test but released no number for it.
+  if (o.notReleased) return t.notReleased(o, sayDate(date, lang));
   const pos = position(o);
   if (o.qual) {
     const parts = [

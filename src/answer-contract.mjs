@@ -27,7 +27,7 @@ const KIND = {
 const RETRIEVED = /Relevant source excerpts\n\n([\s\S]*?)\n\[Source 1\]/;
 
 export const ABSTAIN_TEXT =
-  "I don't see a supported answer to that in these documents.";
+  "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.";
 
 /** @typedef {"answered"|"clarify"|"refused"|"abstained"|"social"|"quoted"} FinalKind */
 
