@@ -150,7 +150,7 @@
   "lab-en": [
     {
       "say": "Did my ferritin change since the last report for Test Person A?",
-      "spoken": "Your Ferritin went from 0.5 ng/mL on 3 September 2026 to 50 ng/mL on 12 October 2026. That's higher than before. It's now inside the lab's range. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value. Some general background: Ferritin shows how much iron your body has stored. Your doctor can read it alongside how you feel, your medicines and your other results."
+      "spoken": "The Ferritin went from 0.5 ng/mL on 3 September 2026 to 50 ng/mL on 12 October 2026. That's higher than before. It's now inside the lab's range. The 12 October 2026 result was corrected from 5 to 50, and I'm using the corrected value. Some general background: Ferritin shows how much iron your body has stored. Their doctor can read it alongside how they feel, their medicines and their other results."
     }
   ],
   "lab-hi": [
