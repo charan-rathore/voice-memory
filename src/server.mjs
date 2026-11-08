@@ -1,5 +1,9 @@
 import { finalAnswer } from "./answer-contract.mjs";
 import {
+  resolveExplicitEvents,
+  eventQuestionPlan,
+} from "./event-admission.mjs";
+import {
   briefAnswer,
   briefIntent,
   recordViewIntent,
@@ -1303,6 +1307,61 @@ export function createLocalServer({
           },
         };
       }
+      const events = await resolveExplicitEvents({
+        question: requestOriginal,
+        bundle,
+        sourceGeneration: immutableRequest.sourceGeneration,
+        isCurrent: () =>
+          s.bundle === bundle &&
+          answerGenerations.get(bundle) === immutableRequest.sourceGeneration,
+      });
+      if (events) {
+        const { plan, admission } = events;
+        const parts = admission.outcomes.map((o) => {
+          const r = plan.requirements.find((r) => r.id === o.requirementId);
+          return o.status === "answered"
+            ? `${plan.requirements.length > 1 ? r.text + " " : ""}${o.claims.map((c) => c.text).join(" ")}`
+            : `${r.text} ${o.status === "clarify" ? "The source assertions conflict; I could not settle this requirement." : "I could not establish this requirement from these documents."}`;
+        });
+        return {
+          raw: null,
+          shown: {
+            lead: {
+              text: parts.join(" "),
+              verdict: admission.complete
+                ? "RECORDED_EVENT"
+                : admission.userReady
+                  ? "PARTIAL_DOCUMENT"
+                  : admission.status === "clarify"
+                    ? "CLARIFY"
+                    : "UNKNOWN",
+              field: null,
+              citations: decorateResult(
+                {
+                  question: requestOriginal,
+                  evidence: admission.outcomes.flatMap((o) =>
+                    o.claims.flatMap((c) => c.citations),
+                  ),
+                },
+                s,
+              ).evidence,
+              origin: "source-event-certificate",
+              limitations: plan.limitations,
+            },
+            sourceQuestionPlan: plan,
+            admission,
+            evidence: [],
+            semantic: {
+              intent: "EXPLICIT_EVENT_REQUIREMENTS",
+              lang,
+              steps: [
+                "caller_owned_event_slots",
+                "independent_source_relation_reconstruction",
+              ],
+            },
+          },
+        };
+      }
       const { raw, shown } = await deterministicAnswer(
         s,
         question,
@@ -2437,7 +2496,11 @@ export function createLocalServer({
       ];
       const sourceSession = candidates.find((s) => s?.bundle === bundle);
       if (!sourceSession) return null;
-      if (exactSchemaOnly && !exactFieldPlan(originalQuestion, bundle, 0))
+      if (
+        exactSchemaOnly &&
+        !exactFieldPlan(originalQuestion, bundle, 0) &&
+        !eventQuestionPlan(originalQuestion, bundle, 0)
+      )
         return null;
       // Voice has no trusted per-turn document-provider consent yet. A typed
       // checkbox or a caller's system/history content cannot authorize egress.
