@@ -1306,24 +1306,6 @@ export function createVoiceAdapter({
           spoken = toHindi(spoken);
         if (!social && bundle.clinical?.length) spoken = thirdPerson(spoken);
         releaseBusy();
-        // Answer first, nothing repeated: a general explanation already spoken
-        // earlier in THIS call ("Some general background: ferritin shows...")
-        // is not read out again. Facts are never dropped, only these fixed
-        // explanation sentences, and the page shows the same words.
-        {
-          const before = data.messages
-            .slice(0, -1)
-            .filter((m) => m?.role === "assistant")
-            .map((m) => messageText(m.content))
-            .join(" ");
-          if (before)
-            spoken = spoken
-              .replace(
-                /(?:Some general background|Thodi general jaankari|थोड़ी सामान्य जानकारी): [^.।]+[.।]\s*|Your doctor can read it[^.]+\.\s*|Results just outside a range are common[^.]+\.\s*|आपके डॉक्टर इसे[^।]+।\s*|Aapke doctor ise[^.]+\.\s*/g,
-                (m) => (before.includes(m.trim()) ? "" : m),
-              )
-              .trim();
-        }
         // Optional server-owned common answer boundary. Caller messages never
         // select a provider, grant consent, or supply this resolver. Scope and
         // cancellation are checked again after the asynchronous result.
@@ -1333,10 +1315,11 @@ export function createVoiceAdapter({
           !ownerBlocked &&
           !adviceKind(transcript)
         ) {
-          // Existing specialist cases stay separate except for the bounded
-          // server-owned exact-schema contract. A split cannot drop one of
-          // its caller-owned field requirements.
-          const exactSchemaOnly = !!(mixedTurn || secondQ || clinicalHit);
+          // Mixed/compound specialist cases stay separate except for the
+          // bounded exact-schema contract. Direct clinical questions now use
+          // the common resolver after channel history/repair. A split cannot
+          // drop one of its caller-owned field requirements.
+          const exactSchemaOnly = !!(mixedTurn || secondQ);
           const unified = await resolveAnswer({
             question: exactSchemaOnly ? transcript : asked,
             exactSchemaOnly,
@@ -1376,6 +1359,24 @@ export function createVoiceAdapter({
               },
             };
           }
+        }
+        // Answer first, nothing repeated: a general explanation already spoken
+        // earlier in THIS call ("Some general background: ferritin shows...")
+        // is not read out again. Facts are never dropped, only these fixed
+        // explanation sentences, and the page shows the same words.
+        {
+          const before = data.messages
+            .slice(0, -1)
+            .filter((m) => m?.role === "assistant")
+            .map((m) => messageText(m.content))
+            .join(" ");
+          if (before)
+            spoken = spoken
+              .replace(
+                /(?:Some general background|Thodi general jaankari|थोड़ी सामान्य जानकारी): [^.।]+[.।]\s*|Your doctor can read it[^.]+\.\s*|Results just outside a range are common[^.]+\.\s*|आपके डॉक्टर इसे[^।]+।\s*|Aapke doctor ise[^.]+\.\s*/g,
+                (m) => (before.includes(m.trim()) ? "" : m),
+              )
+              .trim();
         }
         // The page may have moved this call to another case while the answer
         // was being built (tab switched mid-turn). An answer for a case that is
