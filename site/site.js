@@ -1170,6 +1170,9 @@
         window.VMVisual.render($("#a-visual"), r.visual, {
           lang: state.currentLang,
           narrateButton: false,
+          unresolved:
+            r.final?.verdict === "AMBIGUOUS_PATIENT" ||
+            lead?.verdict === "AMBIGUOUS_PATIENT",
         });
       });
     else $("#a-visual")?.remove();

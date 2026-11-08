@@ -466,7 +466,13 @@ export function clinicalTurn(question, reports, selected = null) {
   const namedAll = subjectsFor(question, reports, reports, selected).filter(
     (id) => !/^(doc|name):/.test(id) || reports.length > 1,
   );
-  if (namedAll.length > 1)
+  if (
+    namedAll.length > 1 &&
+    new Set(
+      namedAll.map((id) => nameKey(reports.find((r) => subjectOf(r) === id))),
+    ).size === 1 &&
+    !namedAll.some((id) => id.startsWith("doc:"))
+  )
     return {
       ...base,
       spoken: t.which(
@@ -2014,6 +2020,11 @@ function howFar(t, question) {
 }
 
 export function clinicalAnswer(question, reports, selected = null) {
+  // A named patient in this question outranks a stale UI/API selection.
+  const explicit = explicitIds(question, reports ?? []);
+  if (explicit.length === 1) selected = explicit[0];
+  if (selected && !(reports ?? []).some((r) => subjectOf(r) === selected))
+    selected = null;
   return namedPatient(
     question,
     reports,

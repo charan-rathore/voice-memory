@@ -220,6 +220,24 @@ test("asked through a workspace: the amendment wins, the other patient stays sep
         }
       }
     }
+    for (const [question, patient, context, expected] of [
+      ["What is my ferritin?", null, "person:TV-P2002", "90"],
+      ["What is my ferritin?", null, "person:TV-P2001", "40"],
+      ["What is my ferritin?", null, "person:TV-P9999", null],
+      ["What is TV-P2002's ferritin?", "TV-P2001", "person:TV-P2001", "90"],
+    ]) {
+      const a = await (
+        await fetch(base + "/ask", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ case: ws.id, question, patient, context }),
+        })
+      ).json();
+      if (expected) {
+        assert.match(a.final.text, new RegExp(expected + " ng/mL"));
+        assert.ok(a.final.citations.some((c) => c.quote.includes(expected)));
+      } else assert.equal(a.final.verdict, "AMBIGUOUS_PATIENT");
+    }
     const mismatched = await askP("What is my ferritin?", "TV-P9999");
     assert.match(mismatched, /Whose results should I look at\?/);
   } finally {

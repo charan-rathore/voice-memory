@@ -283,6 +283,7 @@ function leadFor(question, result, bundle, ctx, selectedPatient = null) {
     // Lab results across reports first (synthetic-data research prototype):
     // typed observations, comparability checks, no clinical judgement.
     if (bundle.clinical?.length) {
+      const originalClinicalQuestion = question;
       question = withFocus(question, bundle.clinical, focus);
       question = withLabContext(question, bundle.clinical, prevField);
       // What kind of answer would answer this? A "why" gets a reason, a
@@ -291,7 +292,11 @@ function leadFor(question, result, bundle, ctx, selectedPatient = null) {
         validateEvidence(ev, bundle),
       );
       if (il) return il;
-      const c = clinicalAnswer(question, bundle.clinical, selectedPatient);
+      const c = clinicalAnswer(
+        withLabContext(originalClinicalQuestion, bundle.clinical, prevField),
+        bundle.clinical,
+        selectedPatient ?? focus,
+      );
       if (c)
         return {
           text: c.spoken,

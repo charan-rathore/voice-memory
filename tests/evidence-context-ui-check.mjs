@@ -79,6 +79,14 @@ try {
   assert.match(answer, /TV-P2002/);
   const blocks = await page.locator("#answer .cite-context").count();
   assert.ok(blocks >= 2);
+  assert.equal(
+    await page.locator("#answer .rp-who [aria-selected=true]").count(),
+    0,
+  );
+  assert.equal(
+    await page.locator("#answer .rp-detail, #answer .rp-timeline").count(),
+    0,
+  );
   await mkdir("/downloads", { recursive: true });
   await page
     .locator("#answer")
@@ -102,6 +110,24 @@ try {
   assert.match(result2.final.text, /90 ng\/mL/);
   assert.ok(result2.final.citations.some((c) => c.quote.includes("90")));
   assert.ok(!result2.final.citations.some((c) => c.quote.includes("40")));
+  await page.waitForFunction(() =>
+    document.querySelector("#answer .a-lead")?.innerText.includes("90"),
+  );
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll("#answer .cite").length > 0 &&
+      document.querySelector("#answer .vz-focus"),
+  );
+  await page.waitForTimeout(1800); // presentation animation, not readiness
+  assert.match(await page.locator("#answer .vz").innerText(), /90/);
+  assert.doesNotMatch(await page.locator("#answer .vz").innerText(), /40 ng/);
+  await page
+    .locator("#answer")
+    .screenshot({ path: "/downloads/evidence-selected-desktop.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .locator("#answer")
+    .screenshot({ path: "/downloads/evidence-selected-mobile.png" });
   console.log(
     "PASS initial overview is not a selection; deliberate second-patient tab scopes the next answer and cited row",
   );

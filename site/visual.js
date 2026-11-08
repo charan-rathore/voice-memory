@@ -1991,7 +1991,7 @@
     const lang = opts.lang ?? v.lang ?? "en";
     const focus = v.focus === "answer";
     const id = `rp${++rid}`;
-    if (!focus) {
+    if (!focus || opts.unresolved) {
       REPORTS.set(id, { v, opts, lang, subject: 0 });
       // the first person shown is who unnamed questions are about
       const sid = v.subjects?.[0]?.id;
@@ -2000,7 +2000,10 @@
     }
     // Answers show the picture of that answer (the test's own drill-down);
     // the overview is the report.
-    const body = focus
+    const unresolved = opts.unresolved && v.kind !== "records" && v.subjects?.length > 1;
+    const body = unresolved
+      ? `<p class="rp-choice-notice">Choose whose results to inspect. No patient is selected.</p><div class="rp-who" role="tablist">${v.subjects.map((s,i)=>`<button type="button" role="tab" class="rp-subj" data-subject="${i}" aria-selected="false">${esc(s.label)}</button>`).join("")}</div>`
+      : focus
       ? v.kind === "records"
         ? records(v, opts)
         : v.subjects[0]?.tests?.length
@@ -2010,8 +2013,8 @@
         ? recordsReport(v, opts)
         : labReport(v, opts, 0);
     const narration = opts.narration ?? v.narration ?? null;
-    el.innerHTML = `<div class="vz ${v.kind === "records" ? "vz-rec" : "vz-lab"}${focus ? " vz-focus" : " vz-report"}${reduced ? " still" : ""}"${focus ? "" : ` data-rep="${id}"`} lang="${lang === "hi" ? "hi" : "en"}">
-      ${focus ? body : `${DEFS}<div class="rp-body">${body}</div>`}
+    el.innerHTML = `<div class="vz ${v.kind === "records" ? "vz-rec" : "vz-lab"}${focus ? " vz-focus" : " vz-report"}${reduced ? " still" : ""}"${focus && !unresolved ? "" : ` data-rep="${id}"`} lang="${lang === "hi" ? "hi" : "en"}">
+      ${focus && !unresolved ? body : `${DEFS}<div class="rp-body">${body}</div>`}
       ${narration && (opts.narrateButton !== false || !focus) ? `<div class="vz-say${opts.narrateButton === false ? " no-voice" : ""}">${opts.narrateButton === false ? "" : `<button type="button" class="vz-listen"><i aria-hidden="true"></i><span>${esc(W(lang).listen)}</span></button>`}<div><p class="vz-narr clamp">${esc(narration)}</p><button type="button" class="vz-more">${esc(W(lang).full[0])}</button></div></div>` : ""}
     </div>`;
     const board = el.querySelector(".vz[data-rep]");

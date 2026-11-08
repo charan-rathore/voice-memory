@@ -1,3 +1,11 @@
+# Round 5 disposition of round 4 regressions
+
+All failures below were investigated without changing their assertions. Root cause was the newly added early `namedAll` identity guard in clinicalTurn, not 15 independent product changes: it ran for every multi-subject report set before the original test-specific routing, including unrelated names and anonymous records. It forced AMBIGUOUS_PATIENT where only one non-confusable person's reports contained the requested test, and bypassed the established anonymous-comparability decline. The guard now applies only to multiple subjects sharing the same printed name, excluding anonymous doc subjects. Record-count narrowing remains removed. Same-name ambiguity is covered separately by packet/API/UI tests.
+
+Verified after the fix: clinical118/118, evaluation443/443, misc90/90; format, typecheck and build pass. The assertion details below are retained as the original failing checkpoint, not current failures. Every listed failure reran in those green suites. Frozen unselected hospital probe expectations are a separate non-green result (main21/35, holdout25/34 at round4); selected-context main35/35, holdout34/34 are separately identified regression evidence, not independent validation.
+
+## Original round 4 failure record
+
 # Round 4 open regressions
 
 Not release-qualified. Individual failures below need classification and repair; do not blanket-treat them as expected snapshots.
