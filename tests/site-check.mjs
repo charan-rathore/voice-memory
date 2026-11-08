@@ -8,6 +8,12 @@
 //   3. the source viewer marks only the focused line, not the whole page.
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+const shots =
+  process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-site-check-shots");
+mkdirSync(shots, { recursive: true });
 // Synthetic catering agreement as a real PDF, generated deterministically
 // with the repo's declared pdf-lib: each visual line is drawn separately with
 // paragraph-like spacing, so the text layer wraps the deadline sentence
@@ -145,7 +151,7 @@ try {
   }
   await page.waitForTimeout(1800); // completed answer-reveal animation, not data readiness
   await page.locator("#answer").screenshot({
-    path: "/downloads/voice-memory-related-evidence-answer.png",
+    path: join(shots, "voice-memory-related-evidence-answer.png"),
   });
   await page.setViewportSize({ width: 390, height: 844 });
   if (
@@ -155,7 +161,7 @@ try {
   )
     fail("related evidence answer overflows mobile");
   await page.locator("#answer").screenshot({
-    path: "/downloads/voice-memory-related-evidence-answer-mobile.png",
+    path: join(shots, "voice-memory-related-evidence-answer-mobile.png"),
   });
   await page.screenshot({ path: "/tmp/site-check-answer.png" });
 
