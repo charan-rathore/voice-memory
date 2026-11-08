@@ -3,9 +3,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createLocalServer } from "../src/server.mjs";
-import { patientDecision, clinicalAnswer } from "../clinical/answer.mjs";
+import {
+  patientDecision,
+  clinicalAnswer,
+  identityReportsFor,
+} from "../clinical/answer.mjs";
 import { ingestFile } from "../ingest/index.mjs";
-import { extractReport } from "../clinical/observations.mjs";
+import { extractReport, subjectOf } from "../clinical/observations.mjs";
+import { visualFor } from "../src/visual-summary.mjs";
 
 const lab = async (id, name) => {
   const r = await ingestFile(
@@ -204,5 +209,61 @@ test("public API preserves both requested people against stale selection and sco
     assert.equal(neutral.final.verdict, "AMBIGUOUS_PATIENT");
   } finally {
     await new Promise((r) => s.close(r));
+  }
+});
+
+test("name-only document records participate in shared identity without merging names", () => {
+  const a = {
+    id: "a",
+    text: "Patient: Alice Smith\nDischarged: 24 October 2026",
+  };
+  const b = {
+    id: "b",
+    text: "Patient: Bob Jones\nDischarged: 30 October 2026",
+  };
+  const identities = identityReportsFor({
+    records: [a, b].map((source) => ({
+      source,
+      records: [{ start: 0, end: source.text.length }],
+    })),
+  });
+  assert.equal(identities.length, 2);
+  assert.equal(
+    patientDecision("When was she discharged?", identities).clarify,
+    true,
+  );
+  assert.notEqual(subjectOf(identities[0]), subjectOf(identities[1]));
+});
+
+test("selected visual fallback cannot display a different person without lead.used", async () => {
+  const a = await lab("AL-101", "Alice Smith"),
+    b = await lab("BJ-202", "Bob Jones");
+  for (const verdict of ["OVERVIEW", "FLAGGED", "SUMMARY"]) {
+    const v = visualFor(
+      "overview",
+      { clinical: [a, b] },
+      { verdict, used: [] },
+      "AL-101",
+    );
+    assert.deepEqual(
+      v.subjects.map((s) => s.id),
+      ["AL-101"],
+    );
+  }
+});
+
+test("a known name never erases an unresolved coordinated requested owner", async () => {
+  const a = await lab("AL-101", "Alice Smith");
+  for (const q of [
+    "When were Alice and Carol discharged?",
+    "when were alice and carol discharged?",
+    "What are Alice and Carol's results?",
+    "When were Carol and Alice discharged?",
+    "what are carol and alice's results?",
+  ]) {
+    const d = patientDecision(q, [a], "AL-101");
+    assert.equal(d.clarify, true, q);
+    assert.equal(d.patient, null);
+    assert.match(d.spoken, /could not bind/i);
   }
 });

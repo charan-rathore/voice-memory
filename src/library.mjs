@@ -720,8 +720,8 @@ export function bindEvidenceToRecords(evidence, question, reports, used = []) {
         const associated = (used ?? []).some(
           (c) =>
             c.sourceId === ev.sourceId &&
-            c.start < r.span.end &&
-            c.end > r.span.start &&
+            r.span.start <= c.start &&
+            c.end <= r.span.end &&
             c.start < ev.end &&
             c.end > ev.start,
         );

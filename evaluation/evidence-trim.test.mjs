@@ -81,10 +81,10 @@ test("known segmented source with no matching record never displays uncovered qu
   assert.deepEqual(xs, []);
 });
 
-test("a broad supporting citation associates with every intersected record", () => {
+test("a cross-record citation retains context but cannot promote either owner as support", () => {
   const xs = bind([{ sourceId: "s1", start: 50, end: 150 }]);
   assert.equal(xs.length, 2);
-  assert.ok(xs.every((x) => !x.contextOnly));
+  assert.ok(xs.every((x) => x.contextOnly));
 });
 
 test("repeated broad chunks do not multiply repeated record evidence", () => {

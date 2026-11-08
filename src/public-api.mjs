@@ -664,7 +664,7 @@ export function createPublicApi({
           );
         const ctx =
           typeof data.context === "string" &&
-          /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(data.context)
+          /^[A-Za-z0-9][A-Za-z0-9 .:_#/-]{0,255}$/.test(data.context)
             ? data.context
             : "";
         // Explicit current-patient context: honored only when it names an
@@ -916,7 +916,7 @@ export function createPublicApi({
           return (send(res, 400, { error: "Ask a question first." }), true);
         const ctx =
           typeof data.context === "string" &&
-          /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(data.context)
+          /^[A-Za-z0-9][A-Za-z0-9 .:_#/-]{0,255}$/.test(data.context)
             ? data.context
             : "";
         const shown = await resolve(s, q, ctx, {

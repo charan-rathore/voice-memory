@@ -312,7 +312,15 @@ export function caseVisual(bundle, lang = "en") {
 }
 
 /** The visual for one answer: the tests it used, for the subject it used. */
-export function visualFor(question, bundle, lead) {
+export function visualFor(question, bundle, lead, selected = null) {
+  const owners = selected
+    ? new Set(Array.isArray(selected) ? selected : [selected])
+    : null;
+  if (owners && lead?.verdict !== "AMBIGUOUS_PATIENT")
+    bundle = {
+      ...bundle,
+      clinical: (bundle.clinical ?? []).filter((r) => owners.has(subjectOf(r))),
+    };
   const reports = bundle?.clinical ?? [];
   if (!reports.length || !lead) return null;
   const lang = detectLang(question);

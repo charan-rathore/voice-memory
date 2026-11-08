@@ -115,7 +115,7 @@ export function reportMeta(full) {
   const text = flatHeader(full.slice(0, 6000)) + full.slice(6000);
   // The synthetic header: "Patient: Test Person A (synthetic), ID SYN-0001".
   const patient =
-    /\b[Pp]atient:\s*([^\n,|]+?)\s*,\s*\bID\b\s*:?\s*([A-Z0-9][A-Z0-9-]{2,})/.exec(
+    /\b[Pp]atient:\s*([^\n,|]+?)\s*,\s*\bID\b\s*:?\s*([A-Z0-9][A-Z0-9_.-]{2,})/i.exec(
       text,
     );
   const collected = new RegExp(`Collected:?\\s*(?:on\\s*)?${DATE}`, "i").exec(

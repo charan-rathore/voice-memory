@@ -914,6 +914,12 @@ export function briefAnswer(question, bundle, cite, extra = {}) {
 }
 
 /** Does a question belong to this layer? (Cheap check before the work.) */
+// A page or catalog request is about source material, not implicitly about
+// the active patient's medical facts. Personal/explicit owner references
+// are still resolved by the shared identity boundary before using this.
+export const recordViewIntent = (q) =>
+  INTENTS.page.test(q) || INTENTS.status.test(q);
+
 export const briefIntent = (q) =>
   Object.values(INTENTS).some((re) => re.test(q)) ||
   (/\b(happen\w*|events?)\b/i.test(q) && !!dateIn(q));

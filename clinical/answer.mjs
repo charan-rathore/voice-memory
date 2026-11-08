@@ -242,11 +242,13 @@ export function primarySubject(reports, selected = null) {
 
 /** The question names a patient ID printed in these reports. */
 const explicitIds = (question, reports) => {
-  const tokens = new Set(
-    question.toUpperCase().match(/[A-Z0-9][A-Z0-9/-]*/g) ?? [],
-  );
   return [...new Set(reports.map(subjectOf))].filter(
-    (id) => realId(id) && tokens.has(id),
+    (id) =>
+      realId(id) &&
+      new RegExp(
+        `(?<![\\p{L}\\p{N}_.-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_.-])`,
+        "iu",
+      ).test(question),
   );
 };
 
@@ -2149,11 +2151,16 @@ export function identityReportsFor(bundle) {
   for (const entry of bundle?.records ?? [])
     for (const r of entry.records ?? []) {
       const meta = reportMeta((entry.source?.text ?? "").slice(r.start, r.end));
-      if (!meta.patient?.id) continue;
+      if (!meta.patient?.id && !meta.patient?.name) continue;
       if (
         out.some(
           (x) =>
-            subjectOf(x) === meta.patient.id && x.sourceId === entry.source?.id,
+            subjectOf(x) ===
+              subjectOf({
+                sourceId: entry.source?.id,
+                segment: r.start,
+                meta,
+              }) && x.sourceId === entry.source?.id,
         )
       )
         continue;
@@ -2166,6 +2173,17 @@ export function identityReportsFor(bundle) {
       });
     }
   return out;
+}
+
+/** Exact record identity, including a name-only record's document-local ID.
+ * Unknown-owner pages never inherit a selected person's identity.
+ */
+export function recordSubject(entry, record) {
+  const meta = reportMeta(
+    (entry.source?.text ?? "").slice(record.start, record.end),
+  );
+  if (!meta.patient?.id && !meta.patient?.name) return null;
+  return subjectOf({ sourceId: entry.source?.id, segment: record.start, meta });
 }
 
 /** Shared identity preflight for every answer route, before retrieval rescue.
@@ -2187,6 +2205,52 @@ export function patientDecision(question, reports, selected = null) {
     ).size === 1
   )
     refs = explicit;
+  // A known mention cannot consume an unresolved adjacent coordinated
+  // reference. This is a veto, not a binding or proof that records are absent.
+  if (refs.length >= 1) {
+    const labels = [
+      ...new Set(
+        reports
+          .filter((r) => refs.includes(subjectOf(r)))
+          .flatMap((r) => [
+            r.meta?.patient?.id,
+            r.meta?.patient?.name,
+            r.meta?.patient?.name?.split(/\s+/)[0],
+          ])
+          .filter(Boolean),
+      ),
+    ].sort((a, b) => b.length - a.length);
+    for (const label of labels) {
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const coordinate = new RegExp(
+        `(?<![\\p{L}\\p{N}])${escaped}\\s+(?:and|or|&|aur)\\s+([\\p{L}][\\p{L} .'-]{0,60}?)(?=\\s+(?:were|was|have|has|had|is|are|did|does|discharged|admitted|results?|levels?)\\b|['’]s\\b|[?]|$)`,
+        "iu",
+      ).exec(question);
+      const reverse = new RegExp(
+        `(?:^|\\b(?:were|was|are|is|did|do|does|for|of)\\s+)([\\p{L}][\\p{L} .'-]{0,60}?)\\s+(?:and|or|&|aur)\\s+${escaped}(?![\\p{L}\\p{N}])`,
+        "iu",
+      ).exec(question);
+      if (coordinate || reverse) {
+        const unresolved = (coordinate ?? reverse)[1]
+          .trim()
+          .replace(
+            /^(?:(?:what|when|who|how)\s+)?(?:were|was|are|is|did|do|does)\s+/i,
+            "",
+          )
+          .replace(/^(?:summari[sz]e|compare|show|explain|list)\s+/i, "")
+          .replace(/['’]s$/i, "");
+        // Already-grounded aliases of this same subject add no new owner.
+        if (!labels.some((x) => x.toLowerCase() === unresolved.toLowerCase()))
+          return {
+            patient: null,
+            candidates: refs,
+            clarify: true,
+            unresolved: [unresolved],
+            spoken: `I found a matching record, but could not bind "${unresolved}" to a record. Please give the other person's printed name or ID so I can answer every requested part.`,
+          };
+      }
+    }
+  }
   if (refs.length === 1)
     return { patient: refs[0], candidates: refs, clarify: false };
   // Multiple distinctly named or explicitly identified people are a valid
@@ -2243,7 +2307,7 @@ export function patientDecision(question, reports, selected = null) {
   const clarify = candidates.length > 1 && referential;
   const lang = detectLang(question);
   return {
-    patient: candidates.length === 1 ? candidates[0] : null,
+    patient: candidates.length === 1 && referential ? candidates[0] : null,
     candidates,
     clarify,
     spoken: clarify
@@ -2257,8 +2321,13 @@ export function patientDecision(question, reports, selected = null) {
   };
 }
 
-export function clinicalAnswer(question, reports, selected = null) {
-  const pre = patientDecision(question, reports ?? [], selected);
+export function clinicalAnswer(
+  question,
+  reports,
+  selected = null,
+  identityCatalog = reports,
+) {
+  const pre = patientDecision(question, identityCatalog ?? [], selected);
   if (pre.clarify)
     return {
       spoken: pre.spoken,

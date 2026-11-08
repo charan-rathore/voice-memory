@@ -1,6 +1,7 @@
 import {
   briefAnswer,
   briefIntent,
+  recordViewIntent,
   suggestQuestions,
   quotedCorrection,
 } from "./record-brief.mjs";
@@ -53,6 +54,7 @@ import {
   clinicalAnswer,
   patientDecision,
   identityReportsFor,
+  recordSubject,
   absentMeasurement,
   clinicalReportsFor,
   sourceRecordsFor,
@@ -93,6 +95,28 @@ import { createMemory, recordTurn, liveEpisodes } from "../memory/memory.mjs";
 import { buildGraph } from "../memory/graph.mjs";
 import { createStore, snapshotOf, restoreInto } from "../memory/store.mjs";
 import { createAnswerCache } from "./cache.mjs";
+import { documentScope, evidencePermission } from "./document-scope.mjs";
+import { ownerView, originalCitation } from "./owner-view.mjs";
+const evidenceWithinOwner = (bundle, owner, ev) => {
+  if (!owner) return true;
+  const scope = documentScope({
+    corpusId: bundle.scope,
+    generation: 0,
+    owners: [owner],
+  });
+  const records = (bundle.sourceRecords ?? []).map((r, i) => ({
+    id: String(i),
+    sourceId: r.sourceId,
+    start: r.span?.start,
+    end: r.span?.end,
+    owner:
+      r.meta?.patient?.id || r.meta?.patient?.name
+        ? subjectOf({ ...r, segment: r.span?.start })
+        : null,
+  }));
+  return evidencePermission(scope, ev, records).allowed;
+};
+
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { createPublicApi, publicAnswer, clientAddress } from "./public-api.mjs";
@@ -265,9 +289,7 @@ const labField = (c) => {
 // when one person's results are on screen. Only that explicit choice
 // focuses an unnamed question; a previous answer alone never picks a person.
 function splitFocus(ctx) {
-  const m = /^person:([A-Za-z]{2,5}-[A-Za-z]?\d{3,6})(?:\s+(.+))?$/.exec(
-    ctx ?? "",
-  );
+  const m = /^person:([^\s]{1,256})(?:\s+(.+))?$/.exec(ctx ?? "");
   return m ? { focus: m[1], field: m[2] ?? null } : { focus: null, field: ctx };
 }
 
@@ -898,6 +920,21 @@ export function createLocalServer({
     // only outside VM_SEMANTIC_AUDIENCE=demo trial scope (see scope.mjs).
     const consent = semanticConsentFor(s.sid, opts.consent);
     const mode = gemini.enabled() ? (consent ? ":g1" : ":g0") : ":d";
+    const identities = identityReportsFor(bundle);
+    let decision = patientDecision(
+      question,
+      identities,
+      opts.patient ?? splitFocus(ctx).focus,
+    );
+    const directDecision = patientDecision(question, identities, null);
+    if (
+      recordViewIntent(question) &&
+      !directDecision.patient &&
+      !directDecision.clarify
+    )
+      decision = { ...decision, patient: null };
+    opts = { ...opts, patient: decision.patient ?? null };
+
     // Retrieval mode is part of the key: a keyword or partial-warm
     // answer cached while the embedder was cold or warming must not
     // outlive that state (see denseCacheSuffix in dense.mjs).
@@ -924,12 +961,27 @@ export function createLocalServer({
       if (lead.advice !== "treatment" || langOfText(question) !== "en")
         return lead;
       try {
-        const fix = quotedCorrection(question, bundle.clinical ?? []);
+        const fix = quotedCorrection(
+          question,
+          (bundle.clinical ?? []).filter(
+            (r) => !opts.patient || subjectOf(r) === opts.patient,
+          ),
+        );
         const med = briefAnswer(
           "What medicines are recorded?",
-          bundle,
+          opts.patient
+            ? {
+                ...bundle,
+                records: (bundle.records ?? []).map((e) => ({
+                  ...e,
+                  records: e.records.filter(
+                    (r) => recordSubject(e, r) === opts.patient,
+                  ),
+                })),
+              }
+            : bundle,
           citeSpan,
-          {},
+          { patient: opts.patient },
         );
         const medLine = med?.spoken
           .split(/(?<=\.)\s+/)
@@ -948,12 +1000,6 @@ export function createLocalServer({
     return answerCache.resolve(key, async () => {
       const original = question;
       const lang = langOfText(original);
-      const decision = patientDecision(
-        original,
-        identityReportsFor(bundle),
-        opts.patient ?? splitFocus(ctx).focus,
-      );
-      opts = { ...opts, patient: decision.patient ?? null };
       // Treatment, diagnosis or a decision that is the visitor's to make:
       // say no clearly, in their language, before any retrieval can turn a
       // nearby value into something that sounds like advice.
@@ -982,10 +1028,10 @@ export function createLocalServer({
             ),
             records: (bundle.records ?? []).map((e) => ({
               ...e,
-              records: e.records.filter((r) => r.patient === id),
+              records: e.records.filter((r) => recordSubject(e, r) === id),
             })),
           };
-          const c = clinicalAnswer(original, own.clinical, id);
+          const c = clinicalAnswer(original, own.clinical, id, identities);
           let a = c?.used?.length
             ? {
                 spoken: thirdPerson(c.spoken),
@@ -1001,6 +1047,8 @@ export function createLocalServer({
                 patient: id,
                 reports: own.clinical,
               }) ?? bundleFactAnswer(original, own, citeSpan);
+          if (a?.citations?.some((c) => !evidenceWithinOwner(bundle, id, c)))
+            a = null;
           const nm = identityReportsFor(bundle).find((r) => subjectOf(r) === id)
             ?.meta?.patient?.name;
           parts.push(
@@ -1025,7 +1073,7 @@ export function createLocalServer({
             .evidence,
           used,
         };
-        const visual = visualFor(original, bundle, lead);
+        const visual = visualFor(original, bundle, lead, decision.candidates);
         delete lead.used;
         return {
           raw: null,
@@ -1077,7 +1125,7 @@ export function createLocalServer({
           ...ev,
           contextOnly: true,
         }));
-        shown.visual = visualFor(original, bundle, shown.lead);
+        shown.visual = visualFor(original, bundle, shown.lead, opts.patient);
         shown.semantic = {
           intent: "IDENTITY",
           lang,
@@ -1112,6 +1160,42 @@ export function createLocalServer({
       );
       // A missing identifier binding cannot be rescued with a different field
       // or a provider-generated interpretation of nearby numbers.
+      if (
+        directDecision.patient &&
+        /^\s*who\s+is\s+/i.test(original) &&
+        identities.some(
+          (r) =>
+            subjectOf(r) === directDecision.patient &&
+            [
+              r.meta?.patient?.id,
+              r.meta?.patient?.name,
+              r.meta?.patient?.name?.split(/\s+/)[0],
+            ]
+              .filter(Boolean)
+              .some(
+                (label) =>
+                  original
+                    .replace(/^\s*who\s+is\s+/i, "")
+                    .replace(/[?.!]+$/, "")
+                    .trim()
+                    .toLowerCase() === label.toLowerCase(),
+              ),
+        )
+      ) {
+        const rr = (bundle.sourceRecords ?? []).find(
+          (r) => subjectOf({ ...r, segment: r.span?.start }) === opts.patient,
+        );
+        const src = bundle.sources.find((s) => s.id === rr?.sourceId);
+        if (rr && src) {
+          const meta = rr.meta.patient;
+          shown.lead = {
+            text: `${meta.name ?? "The patient"} (${meta.id ?? "document-local identity"})${rr.meta.dob ? `, date of birth ${rr.meta.dob}` : ""}. This is a separate record identity; a shared name does not link different patient IDs.`,
+            verdict: "IDENTITY",
+            field: null,
+            citations: [citeSpan(src, rr.span)],
+          };
+        }
+      }
       if (identifierRequest(question)) {
         if (shown.lead?.citations?.length)
           shown.lead.citations = decorateResult(
@@ -1132,7 +1216,12 @@ export function createLocalServer({
       // Understand first, verify after: intent-specific rescue (grounded
       // background, composed summaries, model interpretation, verified
       // model claims) and the final "does this answer the question" audit.
-      const validate = (ev) => validateEvidence(ev, bundle);
+      const semanticBundle = ownerView(bundle, opts.patient);
+      const restore = (ev) =>
+        originalCitation(ev, bundle, semanticBundle, (c) =>
+          evidenceWithinOwner(bundle, opts.patient, c),
+        );
+      const validate = (ev) => !!restore(ev);
       const sem = raw?.requestedChecked
         ? {
             lead: shown.lead,
@@ -1144,7 +1233,7 @@ export function createLocalServer({
           }
         : await semanticRescue({
             question: original,
-            bundle,
+            bundle: semanticBundle,
             lead: shown.lead,
             raw,
             ctx,
@@ -1159,12 +1248,60 @@ export function createLocalServer({
             lead: shown.lead,
             trace: { steps: ["semantic_error"] },
           }));
+      if (sem.lead?.citations?.length) {
+        const restored = sem.lead.citations.map(restore);
+        sem.lead = restored.some((c) => !c)
+          ? {
+              text: "I could not verify the requested answer in the selected person's records.",
+              verdict: "UNKNOWN",
+              field: null,
+              citations: [],
+            }
+          : { ...sem.lead, citations: restored };
+      }
       if (sem.lead !== shown.lead && sem.lead?.citations?.length)
         sem.lead.citations = decorateResult(
           { evidence: sem.lead.citations, question: original },
           s,
         ).evidence;
       shown.lead = sem.lead;
+      if (
+        opts.patient &&
+        shown.lead?.used?.length &&
+        identities.some(
+          (r) =>
+            subjectOf(r) !== opts.patient &&
+            String(r.meta?.patient?.name ?? "").toLowerCase() ===
+              String(
+                identities.find((x) => subjectOf(x) === opts.patient)?.meta
+                  ?.patient?.name ?? "",
+              ).toLowerCase(),
+        )
+      ) {
+        const others = [...new Set(identities.map(subjectOf))].filter(
+          (id) => id !== opts.patient,
+        );
+        shown.lead.text += ` This answer uses ${opts.patient}; ${others.join(", ")} identifies a different person's records, which I excluded.`;
+      }
+      if (
+        opts.patient &&
+        shown.lead?.verdict === "NOT_IN_REPORT" &&
+        new Set(identities.map(subjectOf)).size > 1
+      )
+        shown.lead.text +=
+          " Records for a different person are excluded from this selected-person answer.";
+      if (
+        opts.patient &&
+        shown.lead?.citations?.some(
+          (c) => !evidenceWithinOwner(bundle, opts.patient, c),
+        )
+      )
+        shown.lead = {
+          text: "I could not verify the requested answer in the selected person's records.",
+          verdict: "UNKNOWN",
+          field: null,
+          citations: [],
+        };
       if (shown.lead?.citations?.length) {
         const bound = bindAnswerCitations(
           shown.lead.citations,
@@ -1184,7 +1321,7 @@ export function createLocalServer({
         shown.lead = noAnswerLead(lang);
       // The picture of the answer: ranges, series, corrections, units,
       // drawn from the same typed rows the sentence came from.
-      shown.visual = visualFor(original, bundle, shown.lead);
+      shown.visual = visualFor(original, bundle, shown.lead, opts.patient);
       if (shown.lead) delete shown.lead.used;
       return { raw, shown };
     });
@@ -1193,7 +1330,12 @@ export function createLocalServer({
   // fields, hybrid sentence search), unchanged in behaviour; the semantic
   // router above decides what to do with its result.
   async function deterministicAnswer(s, question, ctx, selectedPatient = null) {
-    const bundle = s.bundle;
+    const originalBundle = s.bundle;
+    const bundle = ownerView(originalBundle, selectedPatient);
+    const restore = (ev) =>
+      originalCitation(ev, originalBundle, bundle, (c) =>
+        evidenceWithinOwner(originalBundle, selectedPatient, c),
+      );
     {
       // Phrased any way: drop a leading greeting, repair the deal's names,
       // and ask a Hindi deal question in the English the engine reads (lab
@@ -1227,7 +1369,22 @@ export function createLocalServer({
         model: DENSE_MODEL_ID,
         available: denseAvailableFor(bundle),
       });
+      if (selectedPatient) {
+        raw.evidence = (raw.evidence ?? []).map(restore).filter(Boolean);
+        raw.reviewEvidence = (raw.reviewEvidence ?? [])
+          .map(restore)
+          .filter(Boolean);
+      }
+      if (selectedPatient) {
+        raw.evidence = (raw.evidence ?? []).filter((ev) =>
+          evidenceWithinOwner(bundle, selectedPatient, ev),
+        );
+        raw.reviewEvidence = (raw.reviewEvidence ?? []).filter((ev) =>
+          evidenceWithinOwner(bundle, selectedPatient, ev),
+        );
+      }
       const shown = decorateResult(raw, s);
+      if (selectedPatient) shown.answer = ""; // no unscoped retrieval text fallback
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
       shown.lead = leadFor(question, raw, bundle, ctx || null, selectedPatient);
@@ -1245,6 +1402,17 @@ export function createLocalServer({
         s,
       ).evidence;
       if (identifierRequest(question)) {
+        if (shown.lead?.citations?.length) {
+          const restored = shown.lead.citations.map(restore);
+          if (restored.some((c) => !c))
+            shown.lead = {
+              text: "I could not verify the requested identifier in the selected person's records.",
+              verdict: "UNKNOWN",
+              field: null,
+              citations: [],
+            };
+          else shown.lead.citations = restored;
+        }
         if (shown.lead)
           shown.lead.citations = decorateResult(
             { evidence: shown.lead.citations, question },
@@ -1316,7 +1484,7 @@ export function createLocalServer({
                 records: (bundle.records ?? []).map((e) => ({
                   ...e,
                   records: e.records.filter(
-                    (r) => !r.patient || r.patient === selectedPatient,
+                    (r) => recordSubject(e, r) === selectedPatient,
                   ),
                 })),
               }
@@ -1437,6 +1605,38 @@ export function createLocalServer({
           { evidence: shown.lead.citations, question },
           s,
         ).evidence;
+      if (selectedPatient && shown.lead?.citations?.length) {
+        const restored = shown.lead.citations.map(restore);
+        if (restored.some((c) => !c))
+          shown.lead = {
+            text: "I could not verify the requested answer in the selected person's records.",
+            verdict: "UNKNOWN",
+            field: null,
+            citations: [],
+          };
+        else shown.lead.citations = restored;
+      }
+      if (selectedPatient) {
+        shown.evidence = (shown.evidence ?? []).filter((ev) =>
+          evidenceWithinOwner(bundle, selectedPatient, ev),
+        );
+        if (
+          shown.closest &&
+          !evidenceWithinOwner(bundle, selectedPatient, shown.closest.citation)
+        )
+          delete shown.closest;
+        if (
+          shown.lead?.citations?.some(
+            (c) => !evidenceWithinOwner(bundle, selectedPatient, c),
+          )
+        )
+          shown.lead = {
+            text: "I could not verify the requested answer in the selected person's records.",
+            verdict: "UNKNOWN",
+            field: null,
+            citations: [],
+          };
+      }
       return { raw, shown };
     }
   }
@@ -2820,7 +3020,7 @@ export function createLocalServer({
           data.context === null
             ? ""
             : typeof data.context === "string" &&
-                /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(data.context)
+                /^[A-Za-z0-9][A-Za-z0-9 .:_#/-]{0,255}$/.test(data.context)
               ? data.context
               : (s.lastField ?? "");
         const bundle = s.bundle;

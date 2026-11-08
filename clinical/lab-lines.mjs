@@ -749,6 +749,23 @@ function stackedFields(head, order) {
         : null;
     const lc = cellsOf(label);
     const vc = cellsOf(value);
+    // A combined patient cell may print "Name / ID" beside a distinct
+    // encounter column. Only the PATIENT cell establishes the owner;
+    // never promote the adjacent encounter number to patient identity.
+    if (!out.id && lc && vc) {
+      const at = lc.findIndex((c) => /^PATIENT$/i.test(c));
+      if (at >= 0 && vc[at]) {
+        const m = STACKED_ID.exec(vc[at]);
+        if (m) {
+          out.id = m[1];
+          const nm = vc[at]
+            .slice(0, m.index)
+            .replace(/[\/|,]+\s*$/, "")
+            .trim();
+          if (/^[A-Za-z][A-Za-z.' -]{1,40}$/.test(nm)) out.name = nm;
+        }
+      }
+    }
     const idLabel = /PATIENT\s*ID/.exec(label);
     if (idLabel && !out.id) {
       let m = null;
@@ -829,11 +846,11 @@ export function genericMeta(text, raw = text) {
   const head = flatHeader(text.slice(0, 2500));
   const order = dateOrder(text);
   const id =
-    /\b(UHID|MRN|MR\s*#|MR\s*No\.?|Patient\s*ID|Pt\.?\s*ID|PID|Reg(?:istration)?\.?\s*No\.?|Patient\s*No\.?|NRIC[^:]*)\s*[:#.-]?\s*(?:\|\s*)?([A-Z0-9][A-Z0-9\/-]{2,})/i.exec(
+    /\b(UHID|MRN|MR\s*#|MR\s*No\.?|Patient\s*ID|Pt\.?\s*ID|PID|Reg(?:istration)?\.?\s*No\.?|Patient\s*No\.?|NRIC[^:]*)\s*[:#.-]?\s*(?:\|\s*)?([A-Z0-9][A-Z0-9\/_.-]{2,})/i.exec(
       head,
     );
   const name =
-    /\b(?:Patient(?:'s)?\s*Name|Full name of patient|Name)\s*[:.-]\s*(?:\|\s*)?(?:(?:Mr|Mrs|Ms|Miss|Master|Baby|Dr)\.?\s+)?([A-Za-z][A-Za-z.' ]{1,40}?)(?=\s*(?:\||\n|$|\s{2,}|\b(?:Age|Date|Sex|Gender|UHID|Bill|Lab|Reg|ID|Ref|MR|PID|Email|DOB|Patient)\b))/i.exec(
+    /\b(?:Patient(?:'s)?(?:\s*Name)?|Full name of patient|Name)\s*[:.-]\s*(?:\|\s*)?(?:(?:Mr|Mrs|Ms|Miss|Master|Baby|Dr)\.?\s+)?([A-Za-z][A-Za-z.' ]{1,40}?)(?=\s*(?:\||\n|$|\s{2,}|\b(?:Age|Date|Sex|Gender|UHID|Bill|Lab|Reg|ID|Ref|MR|PID|Email|DOB|Patient)\b))/i.exec(
       head,
     );
   const sexM =
