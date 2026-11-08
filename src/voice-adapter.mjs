@@ -1295,10 +1295,13 @@ export function createVoiceAdapter({
         // the case that is not on screen are spoken.
         let pointed = false;
         if (
-          !earlyUnified &&
+          (!earlyUnified ||
+            (earlyUnified.lead?.verdict === "UNKNOWN" &&
+              !earlyUnified.lead?.citations?.length)) &&
           !social &&
           !mixedTurn &&
-          (refusal(spoken) ||
+          (earlyUnified ||
+            refusal(spoken) ||
             /^I (don't|do not) see .{1,80} in these documents\.?$/i.test(
               spoken,
             )) &&
@@ -1313,6 +1316,15 @@ export function createVoiceAdapter({
                 : null;
           if (want) {
             pointed = true;
+            if (earlyUnified) {
+              // Navigation has no factual draft source from this or a prior turn.
+              grant.last = {
+                refused: true,
+                evidence: [],
+                requestedChecked: true,
+              };
+              grant.lastField = null;
+            }
             spoken = isHindi(lang)
               ? want === "deal"
                 ? "यह Northstar deal के बारे में है, जो अभी स्क्रीन पर खुला नहीं है। Northstar टैब खोलिए और मुझसे फिर पूछिए।"
@@ -1350,6 +1362,7 @@ export function createVoiceAdapter({
         // cancellation are checked again after the asynchronous result.
         if (
           resolveAnswer &&
+          !pointed &&
           !social &&
           !ownerBlocked &&
           !adviceKind(transcript)

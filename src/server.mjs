@@ -2449,12 +2449,11 @@ export function createLocalServer({
       const value = JSON.parse(result.json);
       if (sourceSession.bundle !== bundle)
         throw Error("Voice source changed during shared answer");
-      // Direct nonclinical abstentions use the same final contract as typed,
-      // not a separate voice fallback. Clinical/mixed orchestration is still
-      // migrating and keeps its existing renderer when no lead is available.
+      // A missing clinical or nonclinical lead uses the typed final contract,
+      // never a second voice factual fallback. Broad demo-deal orchestration
+      // retains its existing explicit exception while migration continues.
       if (!value.shown?.lead?.text) {
-        if (bundle.clinical?.length || sourceSession === caseSessions.deal)
-          return null;
+        if (sourceSession === caseSessions.deal) return null;
         const final = finalAnswer(value.shown);
         return {
           ...value.shown,

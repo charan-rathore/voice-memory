@@ -15,6 +15,7 @@ test("opt-in direct clinical factual turns use the typed resolver after channel 
     VM_COUNTERS_ALLOW_FILE: "on",
   });
   let calls = 0;
+  let providerEnabled = true;
   const forbidden = async () => {
     calls++;
     throw Error("no provider consent");
@@ -22,7 +23,7 @@ test("opt-in direct clinical factual turns use the typed resolver after channel 
   const s = createLocalServer({
     port: 0,
     gemini: {
-      enabled: () => true,
+      enabled: () => providerEnabled,
       searchEnabled: () => false,
       interpret: forbidden,
       planClaims: forbidden,
@@ -77,6 +78,23 @@ test("opt-in direct clinical factual turns use the typed resolver after channel 
       assert.ok(typed.final.citations.length, question);
       const spoken = await voice([{ role: "user", content: question }]);
       assert.equal(spoken, typed.final.text, question);
+    }
+    for (const unsupported of [
+      "What is SYN-0001's favorite food?",
+      "What is SYN-0001's insurance premium?",
+      "Who approved SYN-0001's treatment?",
+      "Where was SYN-0001 born?",
+    ]) {
+      // The synthetic demo's typed weak-lead route can use its configured
+      // provider. Compare its deterministic baseline without that provider,
+      // then turn it back on to prove voice still cannot call it.
+      providerEnabled = false;
+      const typed = await ask(unsupported);
+      providerEnabled = true;
+      assert.equal(typed.final.kind, "abstained");
+      assert.equal(typed.final.citations.length, 0);
+      const spoken = await voice([{ role: "user", content: unsupported }]);
+      assert.equal(spoken, typed.final.text, unsupported);
     }
     const question = "What is SYN-0001's ferritin result?",
       first = await ask(question),
