@@ -254,3 +254,96 @@ test("independent finite event cross-product oracle cannot trade actor, action, 
     );
   }
 });
+
+test("explicit active, perfect and passive syntax maps independently to the same event roles", async () => {
+  const source =
+    "Priya approved the commercial scope.\nKamal signed the delivery plan.\nMira paid $1,500 to Lena.";
+  for (const [forms, expected] of [
+    [
+      [
+        "Did Priya approve the commercial scope?",
+        "Has Priya approved the commercial scope?",
+        "Was the commercial scope approved by Priya?",
+      ],
+      {
+        actor: "Priya",
+        action: "approve",
+        object: "the commercial scope",
+        amount: null,
+        recipient: null,
+        polarity: "positive",
+      },
+    ],
+    [
+      [
+        "Did Kamal sign the delivery plan?",
+        "Has Kamal signed the delivery plan?",
+        "Was the delivery plan signed by Kamal?",
+      ],
+      {
+        actor: "Kamal",
+        action: "sign",
+        object: "the delivery plan",
+        amount: null,
+        recipient: null,
+        polarity: "positive",
+      },
+    ],
+    [
+      ["Did Mira pay $1,500 to Lena?", "Has Mira paid $1,500 to Lena?"],
+      {
+        actor: "Mira",
+        action: "pay",
+        object: "payment",
+        amount: "$1,500",
+        recipient: "Lena",
+        polarity: "positive",
+      },
+    ],
+  ])
+    for (const q of forms) {
+      const r = await resolve(q, source);
+      assert.ok(r, q);
+      assert.deepEqual(r.plan.requirements[0].slots, expected, q);
+      assert.equal(r.admission.complete, true, q);
+    }
+  for (const q of [
+    "Has Kamal approved the commercial scope?",
+    "Was the commercial scope signed by Priya?",
+    "Was the delivery plan signed by Priya?",
+    "Has Lena paid $1,500 to Mira?",
+  ]) {
+    const r = await resolve(q, source);
+    assert.equal(r.admission.userReady, false, q);
+  }
+  const negativeSource = "Kamal did not sign the delivery plan.";
+  for (const q of [
+    "Has Kamal not signed the delivery plan?",
+    "Was the delivery plan not signed by Kamal?",
+  ]) {
+    const r = await resolve(q, negativeSource);
+    assert.equal(r.plan.requirements[0].slots.polarity, "negative");
+    assert.match(r.admission.outcomes[0].claims[0].text, /^Yes\./);
+  }
+  const compound = await resolve(
+    "Has Priya approved the commercial scope and was the commercial scope signed by Kamal?",
+    source,
+  );
+  assert.equal(compound.admission.status, "partial");
+  assert.equal(compound.plan.requirements.length, 2);
+  assert.deepEqual(
+    compound.admission.outcomes.map((o) => o.status),
+    ["answered", "not_established"],
+  );
+  for (const q of [
+    "Was the scope signed by her?",
+    "Has Priya never signed the scope?",
+    "Did Priya really sign the scope?",
+    "Was the delivery plan signed by Kamal after approval?",
+    "Has Priya approved the scope and who paid?",
+    "Has Priya signed the scope or approved it?",
+    "Was the delivery plan signed?",
+  ]) {
+    assert.equal(eventQuestionPlan(q, bundle(source), 3), null, q);
+  }
+});

@@ -109,12 +109,19 @@ test("actual HTTP wrong signature inference is blocked; certified event requirem
     };
     for (const q of [
       "Did Arjun pay $1,500 to Nimbus?",
+      "Has Arjun paid $1,500 to Nimbus?",
       "Did Priya approve the commercial scope?",
+      "Has Priya approved the commercial scope?",
+      "Was the commercial scope approved by Priya?",
+      "Was the delivery plan signed by Kamal?",
       "Did Kamal sign the delivery plan?",
       "Did Arjun pay $1,500 to Nimbus and did Priya sign the commercial scope?",
     ]) {
       const r = await ask(w, q);
-      assert.equal(r.admission.userReady, true);
+      assert.ok(
+        r.admission?.userReady,
+        `${q} must retain independently admitted source support`,
+      );
       assert.equal(r.questionPlan.originalQuestion, q);
       assert.equal(await voice(q), r.final.text, q);
       if (q.includes(" and did ")) {
@@ -133,6 +140,8 @@ test("actual HTTP wrong signature inference is blocked; certified event requirem
       "Did Nimbus pay $1,500 to Arjun?",
       "Did Arjun pay $5,000 to Nimbus?",
       "Did Priya sign the commercial scope?",
+      "Has Priya signed the commercial scope?",
+      "Was the commercial scope signed by Priya?",
     ]) {
       const r = await ask(w, q);
       assert.equal(r.final.kind, "abstained", q);

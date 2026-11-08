@@ -25,7 +25,10 @@ const eventPattern = (question) =>
 const canon = (actor, action, target, polarity) => {
   const pronoun =
     /^(?:I|You|He|She|It|We|They|Me|Him|Her|Us|Them|Mine|Yours|His|Hers|Ours|Theirs|This|That|Someone|Anyone|Nobody|Everybody)$/i;
-  if (pronoun.test(actor)) return null;
+  // Case-insensitive auxiliaries must not turn an adverb or polarity word
+  // into part of the actor. Entity labels retain their explicit name syntax.
+  const named = new RegExp(`^${entity}$`);
+  if (pronoun.test(actor) || !named.test(actor)) return null;
   if (
     /\b(and|or|if|unless|before|after|when|not|no|without|subject|pending|proposed|draft|former|current|latest|yesterday|today|tomorrow|previously|originally|recently|already|still)\b/i.test(
       actor + " " + target,
@@ -34,7 +37,7 @@ const canon = (actor, action, target, polarity) => {
     return null;
   if (action === "pay") {
     const m = new RegExp(`^(${money}) to (${entity})$`).exec(target);
-    return m && !pronoun.test(m[2])
+    return m && !pronoun.test(m[2]) && named.test(m[2])
       ? {
           actor,
           action,
@@ -55,15 +58,42 @@ const canon = (actor, action, target, polarity) => {
     polarity,
   };
 };
+const actionOf = (participle) =>
+  ({ paid: "pay", approved: "approve", signed: "sign" })[
+    participle.toLowerCase()
+  ];
 function parseQuestionPart(s) {
-  const m = eventPattern(true).exec(s);
-  if (!m) return null;
-  return canon(
-    m[1],
-    (m[3] || m[6]).toLowerCase(),
-    m[3] ? `${m[4]} to ${m[5]}` : m[7],
-    m[2] ? "negative" : "positive",
-  );
+  const direct = eventPattern(true).exec(s);
+  if (direct)
+    return canon(
+      direct[1],
+      (direct[3] || direct[6]).toLowerCase(),
+      direct[3] ? `${direct[4]} to ${direct[5]}` : direct[7],
+      direct[2] ? "negative" : "positive",
+    );
+  const perfect = new RegExp(
+    `^Has (${entity}) (not )?(?:(paid) (${money}) to (${entity})|(approved|signed) (${object}))$`,
+    "i",
+  ).exec(s);
+  if (perfect)
+    return canon(
+      perfect[1],
+      actionOf(perfect[3] || perfect[6]),
+      perfect[3] ? `${perfect[4]} to ${perfect[5]}` : perfect[7],
+      perfect[2] ? "negative" : "positive",
+    );
+  const passive = new RegExp(
+    `^Was (${object}?) (not )?(approved|signed) by (${entity})$`,
+    "i",
+  ).exec(s);
+  if (passive)
+    return canon(
+      passive[4],
+      actionOf(passive[3]),
+      passive[1],
+      passive[2] ? "negative" : "positive",
+    );
+  return null;
 }
 function parseAssertion(s) {
   const m = eventPattern(false).exec(s);
@@ -84,15 +114,15 @@ export function eventQuestionPlan(question, bundle, generation) {
     return null;
   // This exact connective is part of the small language. No guessed split of
   // opaque clauses, follow-up pronouns, corrections or temporal modifiers.
-  const m = /^Did .+\?$/i.exec(question);
+  const m = /^(?:Did|Has|Was) .+\?$/i.exec(question);
   if (!m) return null;
-  const parts = question.slice(0, -1).split(/ and did /i);
+  const parts = question.slice(0, -1).split(/ and (?=(?:did|has|was) )/i);
   if (parts.length > 4) return null;
-  const parsed = parts.map((p, i) => parseQuestionPart(i ? "Did " + p : p));
+  const parsed = parts.map(parseQuestionPart);
   if (parsed.some((p) => !p)) return null;
   const requirements = parsed.map((slots, i) => ({
     id: "event-" + digest([question, i, slots]).slice(0, 16),
-    text: i ? "Did " + parts[i] + "?" : parts[i] + "?",
+    text: parts[i][0].toUpperCase() + parts[i].slice(1) + "?",
     protectedText: question,
     owners: [],
     slots,
