@@ -7,9 +7,9 @@
 //   node scripts/probe-case.mjs                         # local server
 //   VM_BASE=https://host node scripts/probe-case.mjs    # any deployment
 //   node scripts/probe-case.mjs --only 3,7              # some questions
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 
 const LOCAL = !process.env.VM_BASE;
 const BASE = process.env.VM_BASE || "http://127.0.0.1:4519";
@@ -110,9 +110,70 @@ canonical =
 
 if (PATIENT || !canonical || process.env.VM_PROBE_FILE)
   suite += `-${hash(JSON.stringify([questionHash, documentHash, PATIENT, questionPatients])).slice(0, 12)}`;
+const gitValue = (args) => {
+  const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+  return r.status === 0 ? r.stdout.trim() : null;
+};
+const revision = gitValue(["rev-parse", "HEAD"]),
+  tree = gitValue(["rev-parse", "HEAD^{tree}"]);
+const dirtyState = gitValue(["status", "--porcelain"]);
+const sourceFiles = [];
+const visit = (dir) => {
+  for (const x of readdirSync(new URL(dir, root), { withFileTypes: true })) {
+    const p = dir + x.name;
+    if (
+      x.isDirectory() &&
+      !/^(fixtures|results|node_modules|vendor)$/.test(x.name)
+    )
+      visit(p + "/");
+    else if (x.isFile() && /\.(mjs|ts|json)$/.test(x.name)) sourceFiles.push(p);
+  }
+};
+for (const dir of [
+  "src/",
+  "clinical/",
+  "scripts/",
+  "ingest/",
+  "memory/",
+  "mcp/",
+]) {
+  try {
+    visit(dir);
+  } catch {}
+}
+for (const x of readdirSync(root, { withFileTypes: true }))
+  if (x.isFile() && /\.(mjs|ts|json)$/.test(x.name)) sourceFiles.push(x.name);
+const sourceHash = hash(
+  sourceFiles
+    .sort()
+    .map((p) => p + ":" + hash(readFileSync(new URL(p, root))))
+    .join("\n"),
+);
+const inputCanonical = canonical;
+const implementationVerified =
+  LOCAL &&
+  revision &&
+  tree &&
+  dirtyState === "" &&
+  process.env.VM_PROBE_REVISION === revision;
+canonical = Boolean(canonical && implementationVerified);
+if (inputCanonical && !implementationVerified)
+  suite += `-unverified-${hash(JSON.stringify([revision, sourceHash, LOCAL])).slice(0, 12)}`;
 const artifactPath = `evaluation/results/case-probe-${suite}${only ? "-partial" : ""}.json`;
+const implementation = {
+  revision,
+  tree,
+  dirty: dirtyState === null ? null : dirtyState !== "",
+  sourceHash,
+  probeHash: hash(readFileSync(new URL("scripts/probe-case.mjs", root))),
+  expectedRevision: process.env.VM_PROBE_REVISION ?? null,
+  verified: !!implementationVerified,
+  server: LOCAL ? "spawned-local-source" : "remote-implementation-unverified",
+};
 const runMeta = {
   runId: randomUUID(),
+  inputCanonical,
+  implementation,
   command: process.argv,
   patient: PATIENT,
   questionPatients,
@@ -135,27 +196,27 @@ writeFileSync(
 );
 
 let server;
-if (LOCAL) {
-  server = spawn(process.execPath, ["scripts/site-dev.mjs"], {
-    cwd: new URL(".", root),
-    env: {
-      ...process.env,
-      SITE_PORT: "4519",
-      VM_PUBLIC_ASK_PER_MIN: "100000",
-    },
-    stdio: "ignore",
-  });
-  for (let i = 0; i < 300; i++) {
-    if (
-      await fetch(BASE + "/api/public/cases")
-        .then((r) => r.ok)
-        .catch(() => false)
-    )
-      break;
-    await sleep(100);
-  }
-}
 try {
+  if (LOCAL) {
+    server = spawn(process.execPath, ["scripts/site-dev.mjs"], {
+      cwd: new URL(".", root),
+      env: {
+        ...process.env,
+        SITE_PORT: "4519",
+        VM_PUBLIC_ASK_PER_MIN: "100000",
+      },
+      stdio: "ignore",
+    });
+    for (let i = 0; i < 300; i++) {
+      if (
+        await fetch(BASE + "/api/public/cases")
+          .then((r) => r.ok)
+          .catch(() => false)
+      )
+        break;
+      await sleep(100);
+    }
+  }
   const { id: ws } = await api("/workspace", { method: "POST" });
   const t0 = performance.now();
   await api(`/workspace/${ws}/upload`, {
@@ -244,6 +305,7 @@ try {
                 : "passed",
           exitCode: process.exitCode ?? 0,
           at: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
           suite,
           canonical:
             canonical && !only && !process.env.VM_PROBE_FILE && !PATIENT,
@@ -262,6 +324,21 @@ try {
       ) + "\n",
     );
   }
+} catch (error) {
+  process.exitCode = 1;
+  const failed = {
+    ...runMeta,
+    status: "failed",
+    exitCode: 1,
+    finishedAt: new Date().toISOString(),
+    errorClass:
+      error?.cause?.code ?? error?.code ?? error?.name ?? "probe_error",
+  };
+  writeFileSync(
+    new URL(artifactPath, root),
+    JSON.stringify(failed, null, 2) + "\n",
+  );
+  console.error(`probe failed: ${failed.errorClass}`);
 } finally {
   server?.kill();
 }

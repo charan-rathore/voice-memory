@@ -62,13 +62,18 @@ test("hospital selected-context regression: frozen questions with explicit HLG-P
         if (!ok) misses.push(`${file}: ${q.ask} -> ${text.slice(0, 200)}`);
       }
     assert.deepEqual(misses, []);
-    // Unselected corpus safety is a separate contract: preserve every
-    // original never-pattern and require no final citations on ambiguity.
-    // This is not a claim that the old value-answer want-patterns pass.
-    let reviewed = 0,
-      clarified = 0;
-    for (const [, qs] of SETS)
-      for (const q of qs) {
+    // A manually reviewed post-exposure contract, not an independent holdout.
+    // Preserve frozen questions and original forbidden strings; require a
+    // positive source answer, an explicit identity clarification, an advice
+    // decline, or a bounded out-of-scope/social response for every question.
+    const contract = JSON.parse(
+      readFileSync(here("case-file/unselected-contract.json"), "utf8"),
+    );
+    let reviewed = 0;
+    for (const [si, [, qs]] of SETS.entries())
+      for (const [qi, q] of qs.entries()) {
+        const expectation = contract.sets[si].questions[qi];
+        assert.equal(expectation.ask, q.ask);
         const a = await (
           await fetch(base + "/ask", {
             method: "POST",
@@ -76,19 +81,37 @@ test("hospital selected-context regression: frozen questions with explicit HLG-P
             body: JSON.stringify({ case: ws.id, question: q.ask }),
           })
         ).json();
-        for (const never of q.never ?? [])
+        for (const never of [...(q.never ?? []), ...(expectation.never ?? [])])
           assert.doesNotMatch(a.final.text, new RegExp(never, "i"), q.ask);
-        if (a.final.verdict === "AMBIGUOUS_PATIENT") {
-          assert.deepEqual(a.final.citations, []);
-          clarified++;
-        }
+        if (expectation.outcome === "clarify_identity") {
+          assert.equal(a.final.verdict, "AMBIGUOUS_PATIENT", q.ask);
+          assert.deepEqual(a.final.citations, [], q.ask);
+          assert.match(a.final.text, /HLG-P1047/, q.ask);
+          assert.match(a.final.text, /HLG-P1048/, q.ask);
+          assert.equal(a.visual?.focus, "patients", q.ask);
+          assert.ok(
+            (a.evidence ?? []).every((e) => e.contextOnly),
+            q.ask,
+          );
+        } else if (expectation.outcome === "answer_from_record") {
+          assert.notEqual(a.final.verdict, "AMBIGUOUS_PATIENT", q.ask);
+          assert.ok(a.final.citations.length, q.ask);
+          for (const want of [...(q.want ?? []), ...(expectation.want ?? [])])
+            assert.match(a.final.text, new RegExp(want, "i"), q.ask);
+        } else if (expectation.outcome === "decline_advice") {
+          assert.equal(a.final.verdict, "DECLINE_ADVICE", q.ask);
+          assert.match(a.final.text, /doctor/i, q.ask);
+          assert.doesNotMatch(
+            a.final.text,
+            /corrected to 50|medicines.*recorded/i,
+            q.ask,
+          );
+        } else if (expectation.outcome === "out_of_scope")
+          assert.equal(a.final.verdict, "UNKNOWN", q.ask);
+        else assert.equal(a.final.verdict, "HELP", q.ask);
         reviewed++;
       }
     assert.equal(reviewed, 69);
-    assert.ok(
-      clarified > 0,
-      "unselected questions clarify rather than count-select",
-    );
   } finally {
     await new Promise((r) => srv.close(r));
     if (prev === undefined) delete process.env.VM_PUBLIC_ASK_PER_MIN;

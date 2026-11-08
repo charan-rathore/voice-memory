@@ -17,8 +17,17 @@ test("mixed, help, overview, thanks and goodbye turns from a real call", async (
       "नहीं मेरे सवाल ख़त्म हो गए हैं thank you",
       "how do I upload my own reports?",
     ]);
-    // both halves answered, in Hindi, each from its own records
-    assert.match(mixed.spoken, /Ferritin[^।]*50 ng\/mL/);
+    // Post-exposure identity contract: the historical first-person ask has
+    // no identity binding. The independent deal half remains answerable.
+    assert.match(mixed.spoken, /SYN-0001/);
+    assert.match(mixed.spoken, /SYN-0003/);
+    assert.doesNotMatch(mixed.spoken, /50 ng\/mL/);
+    // Preserve the original positive value independently under explicit identity.
+    const [selected] = await v.call([
+      "SYN-0001 का ferritin कितना है and exactly north star deal में क्या change हुआ था",
+    ]);
+    assert.match(selected.spoken, /Ferritin[^।]*50 ng\/mL/);
+    assert.match(selected.spoken, /\$42,000/);
     assert.match(mixed.spoken, /\$42,000/);
     assert.match(mixed.spoken, /मंज़ूर नहीं/);
     assert.doesNotMatch(mixed.spoken, /I don't see/);

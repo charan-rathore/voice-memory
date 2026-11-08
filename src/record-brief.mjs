@@ -186,7 +186,9 @@ export function briefAnswer(question, bundle, cite, extra = {}) {
   // A single plain record has no story across records: leave it to the
   // lab and fact layers, except for a planted instruction worth reporting.
   const multi = all.length >= 3;
-  const { main, others } = people(entries);
+  const identity = people(entries);
+  const main = extra.patient ?? (identity.others.length ? null : identity.main);
+  const others = identity.others;
   const mine = all.filter((x) => !x.r.patient || !main || x.r.patient === main);
   const otherRecs = all.filter(
     (x) => main && x.r.patient && x.r.patient !== main,
@@ -223,6 +225,7 @@ export function briefAnswer(question, bundle, cite, extra = {}) {
     return found;
   };
   const q = question;
+  if (!main && identity.others.length && INTENTS.summary.test(q)) return null;
   // A question about one named lab test ("what was ferritin before the
   // correction?") belongs to the lab layer; only record-level questions that
   // can't be about a single test are answered here.
@@ -341,7 +344,11 @@ export function briefAnswer(question, bundle, cite, extra = {}) {
           (obs.length
             ? ` It lists ${obs
                 .slice(0, 8)
-                .map((o) => `${o.test} ${o.raw}${o.unit ? " " + o.unit : ""}`)
+                .map((o) =>
+                  o.unreadable
+                    ? `${o.test}: too unclear to read safely, check the original scan`
+                    : `${o.test} ${o.raw}${o.unit ? " " + o.unit : ""}`,
+                )
                 .join(
                   ", ",
                 )}${obs[0].source?.method === "ocr" ? " (read from the scan)" : ""}.`

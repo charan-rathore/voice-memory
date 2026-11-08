@@ -617,3 +617,46 @@ test("mixed full-name, shorthand and ID references preserve every requested pers
     assert.doesNotMatch(a.spoken, /for me|मेरे लिए|mere liye/, q);
   }
 });
+
+test("shared identity decision does not choose the sole matching test or a count-majority person", async () => {
+  const { patientDecision } = await import("../clinical/answer.mjs");
+  const b = await loadSet([
+    report("Patient: Same Person, ID SP-101", "7.8"),
+    report("Patient: Same Person, ID SP-202", "1.2"),
+  ]);
+  for (const q of [
+    "Was her sugar checked?",
+    "When was she discharged?",
+    "What's her patient ID?",
+    "What should I ask her doctor?",
+    "Summarise her records for me",
+  ]) {
+    assert.equal(patientDecision(q, b.clinical, "SP-999").clarify, true, q);
+    assert.equal(patientDecision(q, b.clinical, "SP-202").patient, "SP-202", q);
+  }
+  assert.equal(
+    patientDecision("What is SP-202's TSH?", b.clinical, "SP-101").patient,
+    "SP-202",
+  );
+});
+
+test("calendar validation holds through synthetic, plain, table and stacked date layouts", async () => {
+  for (const layout of [
+    "Patient: Layout Person, ID LP-101\nCollected: 30 Feb 2026\nReported: 31 Apr 2026",
+    "Patient ID: LP-101\nCollected: 30/02/2026\nReported: 31/04/2026",
+    "| Patient ID | Collected | Reported |\n| --- | --- | --- |\n| LP-101 | 30 Feb 2026 | 31 Apr 2026 |",
+    "PATIENT NAME PATIENT ID\nLayout Person LP-101\nSAMPLE COLLECTED REPORT ISSUED\n30 Feb 2026 09:00 31 Apr 2026 10:00",
+  ]) {
+    const r = await ingestFile(
+      Buffer.from(
+        layout +
+          "\nTest Name    Results    Units    Bio. Ref. Interval\nTSH    1.2    mIU/L    0.4 - 4.0\n",
+      ),
+      "invalid-layout.txt",
+    );
+    assert.ok(r.ok);
+    const m = extractReport(r.doc).meta;
+    assert.equal(m.collected, null, layout);
+    assert.equal(m.reported, null, layout);
+  }
+});

@@ -318,11 +318,23 @@ export function visualFor(question, bundle, lead) {
   const lang = detectLang(question);
   const used = (lead.used ?? []).filter((o) => o?.report);
   if (used.length) {
-    const sid = subjectOf(used[0].report);
-    const keys = [...new Set(used.map((o) => o.key))];
-    const block = subjectBlock(reports, sid, keys);
-    if (!block.tests.length) return null;
-    return { kind: "labs", focus: "answer", lang, subjects: [block] };
+    const ids = [...new Set(used.map((o) => subjectOf(o.report)))];
+    const subjects = ids
+      .map((id) =>
+        subjectBlock(reports, id, [
+          ...new Set(
+            used.filter((o) => subjectOf(o.report) === id).map((o) => o.key),
+          ),
+        ]),
+      )
+      .filter((b) => b.tests.length);
+    if (!subjects.length) return null;
+    return {
+      kind: "labs",
+      focus: subjects.length > 1 ? "overview" : "answer",
+      lang,
+      subjects,
+    };
   }
   if (["OVERVIEW", "FLAGGED", "SUMMARY"].includes(lead.verdict)) {
     const v = caseVisual(bundle, lang);

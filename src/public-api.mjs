@@ -1,3 +1,4 @@
+import { identityReportsFor } from "../clinical/answer.mjs";
 // Public, key-free API for the landing page. Visitors ask questions about
 // built-in fictional cases (synthetic lab reports for SYN-0001, and the
 // Northstar deal records); every answer is the same deterministic,
@@ -671,7 +672,7 @@ export function createPublicApi({
         // nothing, never a wrong person.
         const patient =
           typeof data.patient === "string" &&
-          (s.bundle.clinical ?? []).some(
+          identityReportsFor(s.bundle).some(
             (r) => subjectOf(r) === data.patient.trim(),
           )
             ? data.patient.trim()

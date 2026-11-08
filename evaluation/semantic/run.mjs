@@ -71,6 +71,7 @@ const caseId = (c) =>
 const ABSTAIN = new Set([
   "UNKNOWN",
   "NOT_IN_REPORT",
+  "AMBIGUOUS_PATIENT",
   "NOT_IN_DOCUMENTS",
   "NO_REASON",
 ]);
@@ -152,13 +153,18 @@ const wilson = (k, n, z = 1.96) => {
   return [Math.max(0, (c - m) / d), Math.min(1, (c + m) / d)];
 };
 
+const selectedCases = JSON.parse(process.env.VM_EVAL_SELECTED_CASES ?? "{}");
 const rows = [];
 for (const c of cases) {
   const t0 = performance.now();
   const res = await fetch(base + "/api/public/ask", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ case: caseId(c), question: c.q }),
+    body: JSON.stringify({
+      case: caseId(c),
+      question: c.q,
+      patient: selectedCases[c.id] ?? null,
+    }),
   });
   const r = await res.json();
   const ms = performance.now() - t0;
@@ -190,6 +196,7 @@ const unnecessaryRefusal = answerable.filter(
 
 const summary = {
   label,
+  selectedCases,
   commit: (() => {
     try {
       return execSync("git rev-parse --short HEAD", { cwd: root })

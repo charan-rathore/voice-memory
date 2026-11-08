@@ -38,8 +38,10 @@ test("cases load with no cookie, key or session", async () => {
   assert.equal(cases.find((c) => c.id === "deal").documents.length, 7);
 });
 
-test("speech-misrecognised analyte: 'ferrite in' routes to ferritin, not a generic overview", async () => {
-  const { status, body } = await ask("health", "what is my ferrite in level");
+test("selected-context speech-misrecognised analyte preserves the original positive result", async () => {
+  const { status, body } = await ask("health", "what is my ferrite in level", {
+    patient: "SYN-0001",
+  });
   assert.equal(status, 200);
   assert.equal(body.lead.verdict, "LATEST");
   assert.match(body.lead.text, /Ferritin result is 50 ng\/mL/);
@@ -49,8 +51,10 @@ test("speech-misrecognised analyte: 'ferrite in' routes to ferritin, not a gener
   );
 });
 
-test("unmatched analyte in a test-shaped question clarifies, never a generic overview", async () => {
-  const { status, body } = await ask("health", "what is my heritage level");
+test("selected-context unmatched analyte clarifies the test, never a generic overview", async () => {
+  const { status, body } = await ask("health", "what is my heritage level", {
+    patient: "SYN-0001",
+  });
   assert.equal(status, 200);
   assert.equal(body.lead.verdict, "CLARIFY");
   assert.match(body.lead.text, /couldn't find a "heritage" test/i);
@@ -80,8 +84,15 @@ test("a generic 'my blood levels' phrasing also keeps each person apart", async 
   const { status, body } = await ask("health", "what are my blood levels");
   assert.equal(status, 200);
   assert.notEqual(body.lead.verdict, "LATEST");
-  assert.match(body.lead.text, /for 2 people/);
-  assert.match(body.lead.text, /which of these is you/);
+  assert.equal(body.lead.verdict, "AMBIGUOUS_PATIENT");
+  assert.match(body.lead.text, /SYN-0001/);
+  assert.match(body.lead.text, /SYN-0003/);
+  assert.deepEqual(body.lead.citations, []);
+  const selected = await ask("health", "what are my blood levels", {
+    patient: "SYN-0001",
+  });
+  assert.equal(selected.body.lead.verdict, "OVERVIEW");
+  assert.match(selected.body.lead.text, /SYN-0001/);
 });
 
 test("an overview naming the patient still answers for that patient", async () => {
@@ -1435,5 +1446,48 @@ test("same-file HTTP retry keeps one workspace upload and isolates another works
     );
   } finally {
     await new Promise((r) => isolated.close(r));
+  }
+});
+
+test("GET selected-patient answers and final citation ownership survive both cache orders", async () => {
+  for (const order of [
+    ["SYN-0003", "SYN-0001"],
+    ["SYN-0001", "SYN-0003"],
+  ]) {
+    for (const patient of [...order, ...order]) {
+      const q = new URLSearchParams({
+        case: "health",
+        q: "What is my hemoglobin?",
+        patient,
+      });
+      const res = await fetch(base + "/api/public/answer?" + q);
+      assert.equal(res.status, 200);
+      const a = await res.json();
+      assert.ok(a.final.citations.length);
+      assert.ok(
+        a.final.citations.every(
+          (c) => c.record?.patientId === patient && c.contextOnly === false,
+        ),
+        JSON.stringify(a.final),
+      );
+      if (patient === "SYN-0003")
+        assert.match(a.final.text, /15(?:\.0)? g\/dL/);
+      else assert.doesNotMatch(a.final.text, /15(?:\.0)? g\/dL/);
+    }
+  }
+});
+
+// Post-exposure identity contract, separate from the selected positive checks.
+test("unselected first-person analyte requests clarify identity before retrieval repair", async () => {
+  for (const q of [
+    "what is my ferrite in level",
+    "what is my heritage level",
+  ]) {
+    const { body } = await ask("health", q);
+    assert.equal(body.final.verdict, "AMBIGUOUS_PATIENT");
+    assert.match(body.final.text, /SYN-0001/);
+    assert.match(body.final.text, /SYN-0003/);
+    assert.deepEqual(body.final.citations, []);
+    assert.ok(body.evidence.every((e) => e.contextOnly));
   }
 });

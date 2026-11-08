@@ -51,6 +51,9 @@ import { visualFor, caseVisual } from "./visual-summary.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import {
   clinicalAnswer,
+  patientDecision,
+  identityReportsFor,
+  absentMeasurement,
   clinicalReportsFor,
   sourceRecordsFor,
   observationEvidence,
@@ -67,7 +70,12 @@ import {
 } from "./record-facts.mjs";
 import { cite as citeSpan } from "./spoken-routes.mjs";
 import { attachDigests } from "./index-digest.mjs";
-import { detectLang, aliasesFor, nameOf } from "../clinical/explain.mjs";
+import {
+  detectLang,
+  aliasesFor,
+  nameOf,
+  thirdPerson,
+} from "../clinical/explain.mjs";
 import {
   labVocabulary,
   repairTestNames,
@@ -290,7 +298,15 @@ function leadFor(question, result, bundle, ctx, selectedPatient = null) {
       question = withLabContext(question, bundle.clinical, prevField);
       // What kind of answer would answer this? A "why" gets a reason, a
       // "what is X" a definition, an absent measurement an honest "not here".
-      const il = intentLead(question, bundle, (ev) =>
+      const intentBundle = selectedPatient
+        ? {
+            ...bundle,
+            clinical: bundle.clinical.filter(
+              (r) => subjectOf(r) === selectedPatient,
+            ),
+          }
+        : bundle;
+      const il = intentLead(question, intentBundle, (ev) =>
         validateEvidence(ev, bundle),
       );
       if (il) return il;
@@ -900,6 +916,11 @@ export function createLocalServer({
     // A decline still hands over what the records say for that conversation:
     // a corrected value the asker quoted, and the signed medicine record.
     const withRecordContext = (lead) => {
+      if (
+        patientDecision(question, identityReportsFor(bundle), opts.patient)
+          .clarify
+      )
+        return lead;
       if (lead.advice !== "treatment" || langOfText(question) !== "en")
         return lead;
       try {
@@ -927,6 +948,12 @@ export function createLocalServer({
     return answerCache.resolve(key, async () => {
       const original = question;
       const lang = langOfText(original);
+      const decision = patientDecision(
+        original,
+        identityReportsFor(bundle),
+        opts.patient ?? splitFocus(ctx).focus,
+      );
+      opts = { ...opts, patient: decision.patient ?? null };
       // Treatment, diagnosis or a decision that is the visitor's to make:
       // say no clearly, in their language, before any retrieval can turn a
       // nearby value into something that sounds like advice.
@@ -940,6 +967,124 @@ export function createLocalServer({
             evidence: [],
           },
         };
+      if (decision.multiple) {
+        // Answer every explicitly requested owner from their own records.
+        // No retrieval fallback may replace a missing person's block with
+        // a different person's facts or silently omit that person.
+        const parts = [],
+          citations = [],
+          used = [];
+        for (const id of decision.candidates) {
+          const own = {
+            ...bundle,
+            clinical: (bundle.clinical ?? []).filter(
+              (r) => subjectOf(r) === id,
+            ),
+            records: (bundle.records ?? []).map((e) => ({
+              ...e,
+              records: e.records.filter((r) => r.patient === id),
+            })),
+          };
+          const c = clinicalAnswer(original, own.clinical, id);
+          let a = c?.used?.length
+            ? {
+                spoken: thirdPerson(c.spoken),
+                citations: c.used
+                  .map((o) => observationEvidence(o, bundle))
+                  .filter(Boolean),
+                used: c.used,
+              }
+            : null;
+          if (!a)
+            a =
+              briefAnswer(original, own, citeSpan, {
+                patient: id,
+                reports: own.clinical,
+              }) ?? bundleFactAnswer(original, own, citeSpan);
+          const nm = identityReportsFor(bundle).find((r) => subjectOf(r) === id)
+            ?.meta?.patient?.name;
+          parts.push(
+            `${nm ? nm + " (" + id + ")" : id}: ${a?.spoken ?? { en: "I could not find the requested fact in this person's records.", hinglish: "Is vyakti ke records mein maanga hua result nahi mila.", hi: "इस व्यक्ति के रिकॉर्ड में मांगी गई जानकारी नहीं मिली।" }[lang]}`,
+          );
+          citations.push(
+            ...(a?.citations ?? []).map((c) => ({ ...c, recordOwned: true })),
+          );
+          used.push(...(a?.used ?? []));
+        }
+        const bound = bindAnswerCitations(
+          citations,
+          original,
+          bundle.sourceRecords ?? bundle.clinical ?? [],
+          citations,
+        );
+        const lead = {
+          text: parts.join(" "),
+          verdict: citations.length ? "QUOTED" : "NOT_IN_REPORT",
+          field: null,
+          citations: decorateResult({ evidence: bound, question: original }, s)
+            .evidence,
+          used,
+        };
+        const visual = visualFor(original, bundle, lead);
+        delete lead.used;
+        return {
+          raw: null,
+          shown: {
+            lead,
+            evidence: [],
+            visual,
+            semantic: {
+              intent: "MULTI_SUBJECT",
+              lang,
+              steps: ["explicit_owners_separately_scoped"],
+            },
+          },
+        };
+      }
+      if (decision.clarify) {
+        const absent = absentMeasurement(original, bundle.clinical ?? []);
+        if (absent)
+          return {
+            raw: null,
+            shown: {
+              lead: {
+                text: absent.spoken,
+                verdict: absent.verdict,
+                field: null,
+                citations: [],
+              },
+              evidence: [],
+              semantic: {
+                intent: "ABSENT_MEASUREMENT",
+                lang,
+                steps: ["absent_for_every_candidate"],
+              },
+            },
+          };
+        const { raw, shown } = await deterministicAnswer(
+          s,
+          question,
+          ctx,
+          null,
+        );
+        shown.lead = {
+          text: decision.spoken,
+          verdict: "AMBIGUOUS_PATIENT",
+          field: null,
+          citations: [],
+        };
+        shown.evidence = (shown.evidence ?? []).map((ev) => ({
+          ...ev,
+          contextOnly: true,
+        }));
+        shown.visual = visualFor(original, bundle, shown.lead);
+        shown.semantic = {
+          intent: "IDENTITY",
+          lang,
+          steps: ["shared_identity_preflight"],
+        };
+        return { raw, shown };
+      }
       const unbound = unboundOwnerTurn(selfRepair(original), bundle);
       if (unbound)
         return {
@@ -1127,6 +1272,7 @@ export function createLocalServer({
             labs: labDigest(bundle.clinical ?? [], selectedPatient),
             clinical: /\d/.test(clinicalLine) ? clinicalLine : null,
             reports: bundle.clinical ?? [],
+            patient: selectedPatient,
             // a test named now, or carried from the previous answer ("it")
             namedTest:
               !!findTest(question, bundle.clinical ?? []) ||
@@ -1141,7 +1287,7 @@ export function createLocalServer({
             text: b.spoken,
             verdict: "QUOTED",
             field: null,
-            citations: b.citations,
+            citations: b.citations.map((c) => ({ ...c, recordOwned: true })),
             intent: b.intent,
           };
         }
@@ -1162,7 +1308,21 @@ export function createLocalServer({
           recordIntent(question) ||
           openLead)
       ) {
-        let fa = bundleFactAnswer(question, bundle, citeSpan);
+        let fa = bundleFactAnswer(
+          question,
+          selectedPatient
+            ? {
+                ...bundle,
+                records: (bundle.records ?? []).map((e) => ({
+                  ...e,
+                  records: e.records.filter(
+                    (r) => !r.patient || r.patient === selectedPatient,
+                  ),
+                })),
+              }
+            : bundle,
+          citeSpan,
+        );
         // An open lead gives way to a fact only when an authoritative record
         // settles it: it supersedes one of the open values, or answers a
         // different field than the one left open.
@@ -1185,7 +1345,7 @@ export function createLocalServer({
             text: fa.spoken,
             verdict: fa.clarify ? "AMBIGUOUS_PATIENT" : "QUOTED",
             field: null,
-            citations: fa.citations,
+            citations: fa.citations.map((c) => ({ ...c, recordOwned: true })),
             record: fa.record
               ? {
                   title: fa.record.title,
@@ -2669,7 +2829,7 @@ export function createLocalServer({
         // (an unknown or stale id) selects nothing, never a wrong person.
         const patient =
           typeof data.patient === "string" &&
-          (s.bundle.clinical ?? []).some(
+          identityReportsFor(s.bundle).some(
             (r) => subjectOf(r) === data.patient.trim(),
           )
             ? data.patient.trim()

@@ -67,8 +67,13 @@ test("failed invocations replace stale artifacts with this invocation's non-pass
     assert.notEqual(r.status, 0);
     const a = JSON.parse(readFileSync(artifact, "utf8"));
     assert.notEqual(a.runId, "stale");
-    assert.equal(a.status, "running");
-    assert.equal(a.exitCode, null);
+    assert.equal(a.status, "failed");
+    assert.equal(a.exitCode, 1);
+    assert.ok(a.finishedAt);
+    assert.ok(a.errorClass);
+    assert.ok(a.implementation.sourceHash);
+    assert.equal(a.implementation.verified, false);
+    assert.equal(a.canonical, false);
     assert.equal(a.questionHash, hash(q));
     assert.equal(a.documentHash, hash(doc));
   } finally {

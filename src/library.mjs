@@ -788,7 +788,14 @@ export function bindEvidenceToRecords(evidence, question, reports, used = []) {
 export function bindAnswerCitations(citations, question, records) {
   const known = new Set((records ?? []).map((r) => r.sourceId));
   return (citations ?? []).flatMap((c) =>
-    c.clinical && known.has(c.sourceId)
+    (c.clinical || c.recordOwned) &&
+    known.has(c.sourceId) &&
+    records.some(
+      (r) =>
+        r.sourceId === c.sourceId &&
+        r.span?.start < c.end &&
+        c.start < r.span?.end,
+    )
       ? bindEvidenceToRecords([c], question, records, citations)
       : [c],
   );
