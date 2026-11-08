@@ -11,6 +11,7 @@
 
 // What kind of answer each verdict is. Anything not listed is "answered".
 const KIND = {
+  PARTIAL_FIELDS: "partial",
   AMBIGUOUS_PATIENT: "clarify",
   CLARIFY: "clarify",
   NOT_COMPARABLE: "refused",
@@ -27,7 +28,7 @@ const KIND = {
 export const ABSTAIN_TEXT =
   "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.";
 
-/** @typedef {"answered"|"clarify"|"refused"|"abstained"|"social"|"quoted"} FinalKind */
+/** @typedef {"answered"|"clarify"|"refused"|"abstained"|"social"|"quoted"|"partial"} FinalKind */
 
 /**
  * The single answer for a resolved question.

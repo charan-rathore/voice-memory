@@ -1331,13 +1331,15 @@ export function createVoiceAdapter({
           resolveAnswer &&
           !social &&
           !ownerBlocked &&
-          !mixedTurn &&
-          !secondQ &&
-          !clinicalHit &&
           !adviceKind(transcript)
         ) {
+          // Existing specialist cases stay separate except for the bounded
+          // server-owned exact-schema contract. A split cannot drop one of
+          // its caller-owned field requirements.
+          const exactSchemaOnly = !!(mixedTurn || secondQ || clinicalHit);
           const unified = await resolveAnswer({
-            question: asked,
+            question: exactSchemaOnly ? transcript : asked,
+            exactSchemaOnly,
             bundle,
             caseId,
             call: callTag,
@@ -1365,6 +1367,8 @@ export function createVoiceAdapter({
               result: unified.raw ?? null,
               spokenTurn: {
                 intent: lead.intent ?? "SHARED",
+                questionPlan: unified.questionPlan ?? null,
+                admission: unified.admission ?? null,
                 verdict: lead.verdict,
                 field: lead.field ?? null,
                 spoken,

@@ -1423,6 +1423,7 @@ export function publicAnswer(shown) {
   return {
     question: shown.question,
     questionPlan: shown.questionPlan ?? null,
+    admission: shown.admission ?? null,
     transforms: shown.transforms ?? null,
     lead: shown.lead
       ? {

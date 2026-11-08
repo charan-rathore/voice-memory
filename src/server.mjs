@@ -100,6 +100,10 @@ import { ownerView, originalCitation } from "./owner-view.mjs";
 import { readDocumentQuestion } from "./semantic/document.mjs";
 import { questionPlan } from "./question-plan.mjs";
 import { createDecomposition } from "./question-decomposition.mjs";
+import {
+  resolveExactFields,
+  exactFieldPlan,
+} from "./exact-field-admission.mjs";
 const evidenceWithinOwner = (bundle, owner, ev) => {
   if (!owner) return true;
   const scope = documentScope({
@@ -948,6 +952,9 @@ export function createLocalServer({
       sourceGeneration: answerGenerations.get(bundle),
     });
 
+    const schemaPlanKey =
+      exactFieldPlan(question, bundle, immutableRequest.sourceGeneration)
+        ?.key ?? null;
     // Retrieval mode is part of the key: a keyword or partial-warm
     // answer cached while the embedder was cold or warming must not
     // outlive that state (see denseCacheSuffix in dense.mjs).
@@ -956,6 +963,7 @@ export function createLocalServer({
         bundle.scope,
         answerGenerations.get(bundle),
         opts.patient ?? null,
+        schemaPlanKey,
       ]) +
         denseCacheSuffix(bundle) +
         mode +
@@ -1221,6 +1229,65 @@ export function createLocalServer({
             },
           },
         };
+      const exactFields = await resolveExactFields({
+        question: original,
+        bundle,
+        sourceGeneration: immutableRequest.sourceGeneration,
+        isCurrent: () =>
+          s.bundle === bundle &&
+          answerGenerations.get(bundle) === immutableRequest.sourceGeneration,
+      });
+      if (exactFields) {
+        const { plan, admission } = exactFields;
+        const claims = admission.outcomes.flatMap((o) => o.claims ?? []);
+        const unresolved = admission.outcomes
+          .filter((o) => o.status !== "answered")
+          .map(
+            (o) => plan.requirements.find((r) => r.id === o.requirementId).text,
+          );
+        return {
+          raw: null,
+          shown: {
+            lead: {
+              text: [
+                ...claims.map((c) => c.text),
+                ...(unresolved.length
+                  ? [
+                      `I found conflicting table values for: ${unresolved.join(", ")}. Which source should I use?`,
+                    ]
+                  : []),
+                "These are recorded table values, not a finding that surrounding conditions were met.",
+              ].join(" "),
+              verdict: admission.complete
+                ? "SCHEMA_FIELDS"
+                : claims.length
+                  ? "PARTIAL_FIELDS"
+                  : "CLARIFY",
+              field: null,
+              citations: decorateResult(
+                {
+                  question: original,
+                  evidence: claims.flatMap((c) => c.citations),
+                },
+                s,
+              ).evidence,
+              origin: "source-field-certificate",
+              limitations: plan.limitations,
+            },
+            sourceQuestionPlan: plan,
+            admission,
+            evidence: [],
+            semantic: {
+              intent: "EXACT_SCHEMA_FIELDS",
+              lang,
+              steps: [
+                "source_schema_requirement_coverage",
+                "reconstructed_field_certificates",
+              ],
+            },
+          },
+        };
+      }
       const { raw, shown } = await deterministicAnswer(
         s,
         question,
@@ -1466,7 +1533,25 @@ export function createLocalServer({
     // exact original bytes even when normalized cache keys coalesce wording.
     const value = JSON.parse(cached.json);
     value.shown.question = immutableRequest.originalQuestion;
-    value.shown.questionPlan = immutableRequest;
+    value.shown.questionPlan =
+      value.shown.sourceQuestionPlan ?? immutableRequest;
+    if (
+      value.shown.sourceQuestionPlan &&
+      (s.bundle !== bundle ||
+        value.shown.sourceQuestionPlan.originalQuestion !== question)
+    ) {
+      value.shown.lead = {
+        text: "The source scope changed before this answer was ready. Ask again against the current documents.",
+        verdict: "UNKNOWN",
+        citations: [],
+        field: null,
+      };
+      value.shown.admission = {
+        status: "unresolved",
+        userReady: false,
+        reason: "stale_or_wrong_request",
+      };
+    }
     return { ...cached, json: JSON.stringify(value) };
   }
   // The deterministic chain (claim graph, clinical answers, sections, form
@@ -2309,7 +2394,11 @@ export function createLocalServer({
     fallback: gemini,
   });
   if (process.env.VM_SHARED_VOICE_REASONING === "on") {
-    const sharedVoiceAnswer = async ({ question, bundle }) => {
+    const sharedVoiceAnswer = async ({
+      question,
+      bundle,
+      exactSchemaOnly = false,
+    }) => {
       const candidates = [
         voiceCase,
         ...Object.values(caseSessions),
@@ -2318,6 +2407,7 @@ export function createLocalServer({
       ];
       const sourceSession = candidates.find((s) => s?.bundle === bundle);
       if (!sourceSession) return null;
+      if (exactSchemaOnly && !exactFieldPlan(question, bundle, 0)) return null;
       // Voice has no trusted per-turn document-provider consent yet. A typed
       // checkbox or a caller's system/history content cannot authorize egress.
       // Explicitly prevent model calls even for synthetic source sessions.
