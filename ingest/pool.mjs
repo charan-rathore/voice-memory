@@ -146,7 +146,24 @@ class PooledJob extends EventEmitter {
       this.finished = true;
       inFlight--;
       if (m.warm) ocrHolder = this.thread;
-      this.emit("message", m.result);
+      const stopped = () =>
+        this.emit("message", {
+          type: "event",
+          event: { k: "ocr-engine-stopped" },
+        });
+      // The last file of a batch frees the warm OCR engine before its
+      // result is handed over, as a fresh worker would: nothing OCR-sized
+      // stays in memory once ingestion resolves. Within a batch the engine
+      // is kept for the next scan.
+      if (m.warm && inFlight === 0)
+        releaseOcr().then(() => {
+          stopped();
+          this.emit("message", m.result);
+        });
+      else {
+        if (!m.warm) stopped();
+        this.emit("message", m.result);
+      }
       return;
     }
     const { id, ...rest } = m;

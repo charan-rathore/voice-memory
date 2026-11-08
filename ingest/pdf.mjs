@@ -618,22 +618,26 @@ export async function parsePdf(
 
 /** Reading-order blocks from text-layer lines plus any OCR'd pages. */
 function assemble(pageLines, pages, ocrBlocks) {
+  // Document statistics (furniture, font sizes) come from the text layer
+  // only, so the text pages read the same before and after the scans are
+  // OCR'd; a scan-only document uses its OCR lines.
+  const textLines = pageLines.flat().filter((l) => !l.ocr);
+  const statLines = textLines.length ? textLines : pageLines.flat();
   // Page furniture: margin lines whose digit-normalized text repeats on 2+ pages.
   const furniture = new Set();
   if (pages.length > 1) {
     const seen = new Map();
-    for (const lines of pageLines)
-      for (const l of lines) {
-        const inMargin = l.y < l.pageHeight * 0.08 || l.y > l.pageHeight * 0.92;
-        if (!inMargin) continue;
-        const k = furnitureKey(l.text);
-        seen.set(k, (seen.get(k) ?? new Set()).add(l.page));
-      }
+    for (const l of statLines) {
+      const inMargin = l.y < l.pageHeight * 0.08 || l.y > l.pageHeight * 0.92;
+      if (!inMargin) continue;
+      const k = furnitureKey(l.text);
+      seen.set(k, (seen.get(k) ?? new Set()).add(l.page));
+    }
     for (const [k, ps] of seen) if (ps.size >= 2) furniture.add(k);
   }
 
   // Document-wide font statistics for heading detection.
-  const allLines = pageLines.flat();
+  const allLines = statLines;
   const body = median(
     allLines.flatMap((l) => Array(Math.max(1, l.text.length)).fill(l.size)),
   );
@@ -644,8 +648,13 @@ function assemble(pageLines, pages, ocrBlocks) {
         .map((l) => Math.round(l.size)),
     ),
   ].sort((a, b) => b - a);
+  // A size the text layer never used (an OCR'd heading) ranks among the
+  // known sizes instead of falling off the scale.
   const levelOf = (size) =>
-    Math.min(4, headingSizes.indexOf(Math.round(size)) + 1);
+    Math.min(
+      4,
+      Math.max(1, headingSizes.filter((h) => h > Math.round(size)).length + 1),
+    );
 
   const blocks = [];
   for (let p = 0; p < pageLines.length; p++) {
