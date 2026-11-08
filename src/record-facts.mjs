@@ -1,3 +1,4 @@
+import { bindRecordIdentities } from "../clinical/answer.mjs";
 import {
   recordOwnerIds,
   unboundRequestedOwner,
@@ -804,6 +805,7 @@ export function attachRecords(bundle, entries) {
     }
     return { source, records };
   });
+  bindRecordIdentities(bundle);
   return bundle;
 }
 

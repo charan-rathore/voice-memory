@@ -40,6 +40,8 @@ import {
   observationEvidence,
   findTest,
   DATE_ASK_RE,
+  identityReportsFor,
+  patientDecision,
 } from "../clinical/answer.mjs";
 import { aliasesFor, nameOf, thirdPerson } from "../clinical/explain.mjs";
 import {
@@ -799,7 +801,20 @@ export function createVoiceAdapter({
           return new Response(null, { status: 499 });
         }
         let spoken, turn;
-        const ownerBlocked = unboundOwnerTurn(transcript, bundle);
+        const identityDecision = patientDecision(
+          transcript,
+          identityReportsFor(bundle),
+        );
+        const ownerBlocked =
+          unboundOwnerTurn(transcript, bundle) ??
+          (identityDecision.conflictIdentity
+            ? {
+                intent: "AMBIGUOUS_PATIENT",
+                verdict: "AMBIGUOUS_PATIENT",
+                spoken: identityDecision.spoken,
+                citations: [],
+              }
+            : null);
         if (ownerBlocked) {
           spoken = ownerBlocked.spoken;
           grant.last = {

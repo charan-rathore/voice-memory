@@ -48,6 +48,9 @@ export function ownerView(original, owner) {
     })),
     clinical: (original.clinical ?? []).filter((r) => subjectOf(r) === owner),
     sourceRecords: ranges,
+    identityReports: original.identityReports?.filter(
+      (r) => subjectOf(r) === owner,
+    ),
     records: (original.records ?? []).map((e) => ({
       ...e,
       records: e.records.filter((r) => recordSubject(e, r) === owner),

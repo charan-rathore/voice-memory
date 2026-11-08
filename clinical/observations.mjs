@@ -627,6 +627,7 @@ export function markIdentityConflicts(reports) {
 }
 
 export function subjectOf(r) {
+  if (r.identityOwner) return r.identityOwner;
   // Identity contract: only a printed PATIENT identifier links reports. A
   // shared printed name (two John Smiths) or lab/accession number never
   // does; such reports stay separate and the answer asks whose they are.

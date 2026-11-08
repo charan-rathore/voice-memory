@@ -2145,40 +2145,103 @@ export function absentMeasurement(question, reports) {
   return null;
 }
 
-/** Patient-bearing records are identity evidence even without lab rows. */
-export function identityReportsFor(bundle) {
-  const out = [...(bundle?.clinical ?? [])];
-  for (const entry of bundle?.records ?? [])
+/** One source-bound identity partition for clinical and nonclinical records.
+ * Metadata is copied before cross-record conflict marking: library caches must
+ * not retain a conflict decision made for a different document set.
+ */
+export function bindRecordIdentities(bundle) {
+  const copyMeta = (meta) => ({
+    ...meta,
+    patient: meta?.patient ? { ...meta.patient } : null,
+  });
+  const records = (bundle.sourceRecords ?? []).map((r) => ({
+    ...r,
+    identityOwner: undefined,
+    segment: r.span?.start ?? 0,
+    meta: copyMeta(r.meta),
+  }));
+  for (const entry of bundle.records ?? []) {
     for (const r of entry.records ?? []) {
-      const meta = reportMeta((entry.source?.text ?? "").slice(r.start, r.end));
-      if (!meta.patient?.id && !meta.patient?.name) continue;
       if (
-        out.some(
+        records.some(
           (x) =>
-            subjectOf(x) ===
-              subjectOf({
-                sourceId: entry.source?.id,
-                segment: r.start,
-                meta,
-              }) && x.sourceId === entry.source?.id,
+            x.sourceId === entry.source?.id &&
+            x.span?.start === r.start &&
+            x.span?.end === r.end,
         )
       )
         continue;
-      out.push({
+      const meta = reportMeta((entry.source?.text ?? "").slice(r.start, r.end));
+      if (!meta.patient?.id && !meta.patient?.name) continue;
+      records.push({
         sourceId: entry.source?.id,
         title: r.title,
         segment: r.start,
-        meta,
-        observations: [],
+        span: { start: r.start, end: r.end },
+        meta: copyMeta(meta),
       });
     }
+  }
+  const clinical = (bundle.clinical ?? []).map((r) => ({
+    ...r,
+    identityOwner: undefined,
+    meta: copyMeta(r.meta),
+  }));
+  const all = [...records, ...clinical];
+  markIdentityConflicts(all);
+  // An explicit owner key keeps packet offsets identical across consumers;
+  // clinical segment indices and source character starts are not equivalent.
+  for (const r of records) r.identityOwner = subjectOf(r);
+  for (const r of clinical) {
+    const candidates = records.filter(
+      (x) =>
+        x.sourceId === r.sourceId &&
+        (!r.span || (x.span.start <= r.span.start && x.span.end >= r.span.end)),
+    );
+    const exact = candidates.length === 1 ? candidates[0] : null;
+    r.identityOwner = exact?.identityOwner ?? subjectOf(r);
+  }
+  bundle.sourceRecords = records;
+  bundle.clinical = clinical;
+  for (const entry of bundle.records ?? []) {
+    entry.recordSubjects = new Map(
+      (entry.records ?? []).map((r) => {
+        const hits = records.filter(
+          (x) =>
+            x.sourceId === entry.source?.id &&
+            x.span.start === r.start &&
+            x.span.end === r.end,
+        );
+        return [r, hits.length === 1 ? hits[0].identityOwner : null];
+      }),
+    );
+  }
+  const out = [...clinical];
+  for (const r of records) {
+    if (!r.meta?.patient?.id && !r.meta?.patient?.name) continue;
+    if (
+      out.some(
+        (x) => x.sourceId === r.sourceId && subjectOf(x) === r.identityOwner,
+      )
+    )
+      continue;
+    out.push({ ...r, observations: [] });
+  }
+  bundle.identityReports = out;
   return out;
+}
+
+/** Patient-bearing records are identity evidence even without lab rows. */
+export function identityReportsFor(bundle) {
+  return bundle.identityReports ?? bindRecordIdentities(bundle);
 }
 
 /** Exact record identity, including a name-only record's document-local ID.
  * Unknown-owner pages never inherit a selected person's identity.
  */
 export function recordSubject(entry, record) {
+  if (entry.recordSubjects instanceof Map)
+    return entry.recordSubjects.get(record) ?? null;
   const meta = reportMeta(
     (entry.source?.text ?? "").slice(record.start, record.end),
   );
@@ -2192,6 +2255,37 @@ export function recordSubject(entry, record) {
  */
 export function patientDecision(question, reports, selected = null) {
   const ids = [...new Set((reports ?? []).map(subjectOf))];
+  // A contradicted printed ID is not an unambiguous alias of either
+  // document-local owner, even when both records share the same name.
+  const contradicted = [
+    ...new Set(
+      (reports ?? [])
+        .filter((r) => r.meta?.patient?.idConflict)
+        .map((r) => r.meta.patient.id),
+    ),
+  ];
+  for (const id of contradicted) {
+    const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (
+      new RegExp(
+        `(?<![\\p{L}\\p{N}_.-])${escaped}(?![\\p{L}\\p{N}_.-])`,
+        "iu",
+      ).test(question)
+    ) {
+      const candidates = [
+        ...new Set(
+          reports.filter((r) => r.meta?.patient?.id === id).map(subjectOf),
+        ),
+      ];
+      return {
+        patient: null,
+        candidates,
+        clarify: true,
+        conflictIdentity: true,
+        spoken: `The printed identifier ${id} appears on conflicting records. Please select the specific source record; I will not combine their facts.`,
+      };
+    }
+  }
   const explicit = explicitIds(question, reports ?? []),
     named = namedSubjects(question, reports ?? []);
   let refs = [...new Set([...explicit, ...named])];
