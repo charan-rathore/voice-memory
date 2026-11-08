@@ -1422,6 +1422,8 @@ export function publicAnswer(shown) {
   });
   return {
     question: shown.question,
+    questionPlan: shown.questionPlan ?? null,
+    transforms: shown.transforms ?? null,
     lead: shown.lead
       ? {
           text: shown.lead.text,
@@ -1489,6 +1491,7 @@ export function publicAnswer(shown) {
       kind: final.kind,
       from: final.from,
       citations: final.citations.map(cite),
+      relatedEvidence: (final.relatedEvidence ?? []).map(cite),
     },
     answer: final.text,
     status: final.kind,

@@ -127,6 +127,9 @@ test("verifyClaims: literal quotes only; values, units, status, polarity, subjec
       { statement: "x", passage: 9, quote: "anything", polarity: "affirmed" },
     ],
     passages,
+    // Isolate the mechanical checks in this test. This injected verifier is
+    // NOT production evidence of semantic entailment.
+    { verifyRelation: () => ({ ok: true }) },
   );
   assert.deepEqual(
     accepted.map((a) => a.statement),
@@ -377,6 +380,7 @@ test("router: verified model claims are accepted, fabricated ones rejected, with
     "any rejected claim fails the whole model answer closed",
   );
   assert.deepEqual(out.trace.rejected.sort(), [
+    "relation_entailment_unverified",
     "status_upgraded",
     "value_not_in_quote:39000",
   ]);
@@ -398,7 +402,7 @@ test("router: verified model claims are accepted, fabricated ones rejected, with
   );
 });
 
-test("router: the model's rewrite is answered by the engine; invented numbers in a rewrite are refused", async () => {
+test("router: unqualified model rewrites remain candidates and cannot become answers", async () => {
   const bundle = northstar();
   let rewrite = "What is the engagement fee?";
   const gem = createGemini({
@@ -429,8 +433,8 @@ test("router: the model's rewrite is answered by the engine; invented numbers in
     gemini: gem,
     consent: true,
   });
-  assert.equal(out.lead.verdict, "PROPOSED");
-  assert.equal(out.lead.interpretedAs, "What is the engagement fee?");
+  assert.equal(out.lead, null);
+  assert.ok(!out.trace.steps.includes("rewrite_answered"));
 
   rewrite = "Is the fee $45,000?";
   const gem2 = createGemini({
@@ -910,7 +914,7 @@ test("privacy: demo trial scope gates paid semantics off for visitor uploads, co
   );
 });
 
-test("router: a fully verified claim set ships with per-claim citations; failed citation validation abstains", async () => {
+test("router: source-valid model claims still need independent relation admission", async () => {
   const bundle = northstar();
   const src = bundle.sources.find((s) => /Commercial_Revision/.test(s.title));
   const i = src.text.indexOf("1. Following");
@@ -955,9 +959,8 @@ test("router: a fully verified claim set ships with per-claim citations; failed 
     gemini: gem,
     consent: true,
   });
-  assert.equal(out.lead?.origin, "model");
-  assert.equal(out.lead.text, "The revised fee is $42,000.");
-  assert.equal(out.lead.citations.length, 1);
+  assert.equal(out.lead, null);
+  assert.deepEqual(out.trace.rejected, ["relation_entailment_unverified"]);
 
   const out2 = await semanticRescue({
     question: "what is the revised fee",

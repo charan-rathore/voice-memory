@@ -639,10 +639,20 @@ test("bring-your-own answers complete wrapped sentences and keep one supporting 
   assert.ok(occurrences <= 2, `deadline repeated ${occurrences} times`);
   // Continuation must not swallow the following unrelated block.
   assert.doesNotMatch(excerpt.split("[Source 1]")[0], /Allergens/);
-  // The one shown answer quotes that excerpt, not the whole document.
-  assert.match(a.body.final.text, /27 March 2027/);
-  assert.match(a.body.final.text, /Rs 18,000/);
-  assert.doesNotMatch(a.body.final.text, /Allergens/);
+  // Source completeness is a retrieval invariant, not proof that both
+  // requested obligations were independently admitted. Preserve the complete
+  // excerpt separately rather than turning it into an apparent answer.
+  assert.equal(a.body.final.kind, "abstained");
+  assert.equal(a.body.final.verdict, "UNKNOWN");
+  assert.ok(a.body.final.relatedEvidence.length > 0);
+  assert.match(
+    a.body.final.relatedEvidence.map((c) => c.quote).join(" "),
+    /27 March 2027/,
+  );
+  assert.match(
+    a.body.final.relatedEvidence.map((c) => c.quote).join(" "),
+    /Rs 18,000/,
+  );
   assert.equal(a.body.answer, a.body.final.text);
 });
 

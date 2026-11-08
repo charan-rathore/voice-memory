@@ -98,6 +98,7 @@ import { createAnswerCache } from "./cache.mjs";
 import { documentScope, evidencePermission } from "./document-scope.mjs";
 import { ownerView, originalCitation } from "./owner-view.mjs";
 import { readDocumentQuestion } from "./semantic/document.mjs";
+import { questionPlan } from "./question-plan.mjs";
 const evidenceWithinOwner = (bundle, owner, ev) => {
   if (!owner) return true;
   const scope = documentScope({
@@ -937,6 +938,11 @@ export function createLocalServer({
     )
       decision = { ...decision, patient: null };
     opts = { ...opts, patient: decision.patient ?? null };
+    const immutableRequest = questionPlan({
+      originalQuestion: question,
+      selectedOwners: opts.patient ? [opts.patient] : [],
+      sourceGeneration: answerGenerations.get(bundle),
+    });
 
     // Retrieval mode is part of the key: a keyword or partial-warm
     // answer cached while the embedder was cold or warming must not
@@ -1001,7 +1007,7 @@ export function createLocalServer({
         return lead;
       }
     };
-    return answerCache.resolve(key, async () => {
+    const cached = await answerCache.resolve(key, async () => {
       const original = question;
       const lang = langOfText(original);
       // Treatment, diagnosis or a decision that is the visitor's to make:
@@ -1435,6 +1441,12 @@ export function createLocalServer({
       if (shown.lead) delete shown.lead.used;
       return { raw, shown };
     });
+    // Cached candidates are not the identity of the current request. Keep
+    // exact original bytes even when normalized cache keys coalesce wording.
+    const value = JSON.parse(cached.json);
+    value.shown.question = immutableRequest.originalQuestion;
+    value.shown.questionPlan = immutableRequest;
+    return { ...cached, json: JSON.stringify(value) };
   }
   // The deterministic chain (claim graph, clinical answers, sections, form
   // fields, hybrid sentence search), unchanged in behaviour; the semantic
@@ -1494,6 +1506,12 @@ export function createLocalServer({
         );
       }
       const shown = decorateResult(raw, s);
+      shown.transforms = {
+        originalQuestion: original,
+        retrievalQuestion: question,
+        purpose: "legacy_deterministic_input",
+        semanticPreservationVerified: false,
+      };
       if (selectedPatient) shown.answer = ""; // no unscoped retrieval text fallback
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.

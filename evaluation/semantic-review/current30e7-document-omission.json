@@ -1,0 +1,28 @@
+{
+  "sourceSha": "30e7b4cf42652d713ac19a45db7a14aab95ccc9d",
+  "classification": "local reader function with fake provider only, no HTTP or real model",
+  "question": "Was the launch approved, and who paid the deposit?",
+  "result": {
+    "text": "Launch approval: The launch was approved.",
+    "verdict": "DOCUMENT_ANSWER",
+    "citations": [
+      {
+        "sourceId": "9d3e0105-7431-4f9b-9316-1a22c1d2b34b",
+        "title": "Synthetic review fixture",
+        "hash": "8c5259b98c598338413b69efd567a819661991976a3d14048de4befd9d9b2f82",
+        "start": 0,
+        "end": 24,
+        "quote": "The launch was approved."
+      }
+    ],
+    "field": null,
+    "origin": "document-model-audited",
+    "limitations": [
+      "Model entailment audit is fallible; source verification is exact."
+    ]
+  },
+  "fakeCalls": 2,
+  "omittedRequirement": "who paid the deposit",
+  "exposedDevelopmentCase": true,
+  "frozenHoldoutRun": false
+}

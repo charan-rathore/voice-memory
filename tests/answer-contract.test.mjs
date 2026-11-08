@@ -48,11 +48,16 @@ test("clarifying questions and refusals are labelled as such", () => {
   }
 });
 
-test("no lead: the cited passage, then an honest abstention", () => {
-  const q = finalAnswer({ evidence: [cite, cite] });
-  assert.equal(q.kind, "quoted");
-  assert.match(q.text, /^From the document: “\| Ferritin \| 50/);
-  assert.match(q.text, /and 1 more cited passage\)$/);
+test("evidence-only fallback abstains and keeps related passages separate", () => {
+  const q = finalAnswer({
+    question: "Who approved the launch?",
+    evidence: [cite, cite],
+  });
+  assert.equal(q.kind, "abstained");
+  assert.equal(q.verdict, "UNKNOWN");
+  assert.deepEqual(q.citations, []);
+  assert.deepEqual(q.relatedEvidence, [cite, cite]);
+  assert.doesNotMatch(q.text, /50|From the document/);
   const none = finalAnswer({ answer: "I could not find supporting passages." });
   assert.equal(none.kind, "abstained");
   assert.equal(none.text, ABSTAIN_TEXT);

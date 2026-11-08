@@ -1116,13 +1116,13 @@
     const [cls, label] = lead
       ? verdictOf(lead.verdict)
       : (r.evidence ?? []).length
-        ? ["v-ask", "Cited passages"]
+        ? ["v-ask", "Related evidence"]
         : verdictOf(null);
     const ev = r.evidence ?? [];
     // Without a structured lead (bring-your-own documents), the citation
     // quote can span the whole document; the retrieved passage in r.answer
     // names the actual lines the answer rests on, so show that instead.
-    const retrieved = /Relevant source excerpts\n\n([\s\S]*?)\n\[Source 1\]/
+    const retrieved = /Relevant source excerpts\n\n([\s\S]*?)\n\[[^\n]+\]/
       .exec(r.retrieval?.text ?? r.answer ?? "")?.[1]
       ?.trim();
     // The one answer (src/answer-contract.mjs); the fallback below only
@@ -1182,6 +1182,7 @@
                   : "Computed live · same sentence a call would speak"
         }</span>
       </div>
+      ${r.final?.relatedEvidence?.length ? '<p class="a-understood">Related evidence, not an answer</p>' : ""}
       <div class="cites">${cites
         .map((c, i) => {
           // Report status (preliminary / amended) is what a reader needs on a
@@ -1196,10 +1197,10 @@
             }</span>
             ${c.record ? `<span class="cite-owner">Record: ${esc(c.record.patientName ?? "Unidentified")} (${esc(c.record.patientId ?? "no verified ID")})</span>` : ""}
             ${c.contextOnly ? `<span class="cite-context">Context only - not evidence for this answer</span>` : ""}
-            <span class="cite-q">${
+            <span class="cite-q" ${!lead && retrieved ? 'style="display:block"' : ""}>${
               c.broadCitation
                 ? "Wider passage cited - it supports the source, not a pinpoint line."
-                : esc(prettyQuote(c.quote))
+                : esc(prettyQuote(!lead && i === 0 && retrieved ? retrieved : c.quote))
             }</span>
           </button>`;
         })
