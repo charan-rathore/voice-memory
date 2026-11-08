@@ -1,3 +1,10 @@
+import {
+  briefAnswer,
+  briefIntent,
+  suggestQuestions,
+  quotedCorrection,
+} from "./record-brief.mjs";
+import { labDigest } from "../clinical/answer.mjs";
 import { unboundOwnerTurn } from "./requested-owner.mjs";
 import http from "node:http";
 import path from "node:path";
@@ -182,6 +189,29 @@ const LAB_FOLLOWUP_RE =
 // "SYN-0003" alone, said back after "whose TSH?", answers that question.
 const BARE_ID_RE =
   /^\s*(?:(?:and|for|of|the|patient)\s+)*[A-Za-z]{2,5}[- ]?\d{3,6}(?:'s)?\s*[?.!]?\s*$/i;
+/**
+ * The person in focus (on screen, or the subject of the previous answer):
+ * an unnamed question about several people's records is about them, so
+ * "is hemoglobin low?" answers instead of asking "whose?". A question that
+ * names someone keeps its own subject.
+ */
+function withFocus(question, reports, id) {
+  if (!id) return question;
+  const ids = new Set(reports.map((r) => r.meta?.patient?.id).filter(Boolean));
+  if (ids.size < 2 || !ids.has(id.toUpperCase())) return question;
+  if (/\b[A-Za-z]{2,5}[- ]?[A-Za-z]?\d{3,6}\b/.test(question)) return question;
+  const named = reports.some((r) => {
+    const n = r.meta?.patient?.name?.split(/\s+/)[0];
+    return (
+      n &&
+      n.length > 2 &&
+      !/^(test|person|patient)$/i.test(n) &&
+      new RegExp(`\\b${n.replace(/\W/g, "")}\\b`, "i").test(question)
+    );
+  });
+  if (named) return question;
+  return `${question.replace(/[?.!\s]+$/, "")} for ${id.toUpperCase()}?`;
+}
 function withLabContext(question, reports, prevField) {
   if (
     !prevField ||
@@ -220,7 +250,18 @@ const labField = (c) => {
   const f = `${/^[A-Z]{2,5}-\d{3,6}$/.test(pid ?? "") ? pid + " " : ""}${nameOf(o)}${day}`;
   return /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(f) ? f : null;
 };
-function leadFor(question, result, bundle, prevField) {
+// The site sends "person:<ID>" (plus any follow-up field after a space)
+// when one person's results are on screen. Only that explicit choice
+// focuses an unnamed question; a previous answer alone never picks a person.
+function splitFocus(ctx) {
+  const m = /^person:([A-Za-z]{2,5}-[A-Za-z]?\d{3,6})(?:\s+(.+))?$/.exec(
+    ctx ?? "",
+  );
+  return m ? { focus: m[1], field: m[2] ?? null } : { focus: null, field: ctx };
+}
+
+function leadFor(question, result, bundle, ctx) {
+  const { focus, field: prevField } = splitFocus(ctx);
   try {
     if (result?.requestedChecked) {
       const t = extractiveSpoken(
@@ -241,6 +282,7 @@ function leadFor(question, result, bundle, prevField) {
     // Lab results across reports first (synthetic-data research prototype):
     // typed observations, comparability checks, no clinical judgement.
     if (bundle.clinical?.length) {
+      question = withFocus(question, bundle.clinical, focus);
       question = withLabContext(question, bundle.clinical, prevField);
       // What kind of answer would answer this? A "why" gets a reason, a
       // "what is X" a definition, an absent measurement an honest "not here".
@@ -842,6 +884,33 @@ export function createLocalServer({
       ctx,
       detectLang(question),
     );
+    // A decline still hands over what the records say for that conversation:
+    // a corrected value the asker quoted, and the signed medicine record.
+    const withRecordContext = (lead) => {
+      if (lead.advice !== "treatment" || langOfText(question) !== "en")
+        return lead;
+      try {
+        const fix = quotedCorrection(question, bundle.clinical ?? []);
+        const med = briefAnswer(
+          "What medicines are recorded?",
+          bundle,
+          citeSpan,
+          {},
+        );
+        const medLine = med?.spoken
+          .split(/(?<=\.)\s+/)
+          .slice(0, 2)
+          .join(" ");
+        if (!fix && !medLine) return lead;
+        return {
+          ...lead,
+          text: [lead.text, fix, medLine].filter(Boolean).join(" "),
+          citations: med?.citations ?? [],
+        };
+      } catch {
+        return lead;
+      }
+    };
     return answerCache.resolve(key, async () => {
       const original = question;
       const lang = langOfText(original);
@@ -853,7 +922,7 @@ export function createLocalServer({
         return {
           raw: null,
           shown: {
-            lead: declineLead(advice, lang, original),
+            lead: withRecordContext(declineLead(advice, lang, original)),
             semantic: { intent: "ADVICE", lang, steps: ["decline_advice"] },
             evidence: [],
           },
@@ -986,6 +1055,38 @@ export function createLocalServer({
       // A section-shaped question ("what does this report suggest?", "why
       // was the scan done?") is answered with that headed section, verbatim.
       let sectioned = raw.requestedChecked === true;
+      // A question across a set of records (summarise, drafts, a day's
+      // events, medicines, duplicate charges, reason, diagnosis): one
+      // grounded answer from all of them, authoritative records first.
+      if (!sectioned && briefIntent(question)) {
+        let b = null;
+        try {
+          const clinicalLine = String(shown.lead?.text ?? "").split(
+            /(?<=\.)\s+(?=Some general background|I can't diagnose|This is for)/,
+          )[0];
+          b = briefAnswer(question, bundle, citeSpan, {
+            labs: labDigest(bundle.clinical ?? []),
+            clinical: /\d/.test(clinicalLine) ? clinicalLine : null,
+            reports: bundle.clinical ?? [],
+            // a test named now, or carried from the previous answer ("it")
+            namedTest:
+              !!findTest(question, bundle.clinical ?? []) ||
+              !!findTest(splitFocus(ctx).field ?? "", bundle.clinical ?? []),
+          });
+        } catch {
+          b = null;
+        }
+        if (b) {
+          sectioned = true;
+          shown.lead = {
+            text: b.spoken,
+            verdict: "QUOTED",
+            field: null,
+            citations: b.citations,
+            intent: b.intent,
+          };
+        }
+      }
       // A fact stated in a record's table, from the most authoritative
       // record that states it (signed / final / posted over estimate /
       // draft / preliminary), with superseded provisional values named.
@@ -1644,7 +1745,29 @@ export function createLocalServer({
       const lang = langOfText(question);
       // About the page, not the records ("how can you help", "how do I use
       // my own reports", "thanks"): a fixed reply, and a page action.
-      const social = socialTurn(repairDealTerms(question), { lang });
+      const uploadedCase =
+        cs !== caseSessions.health && cs !== caseSessions.deal;
+      const social = socialTurn(repairDealTerms(question), {
+        lang,
+        uploaded: uploadedCase,
+      });
+      // Greeting or help on uploaded records: examples from those records.
+      if (
+        social &&
+        uploadedCase &&
+        ["GREET", "HELP"].includes(social.intent) &&
+        lang === "en"
+      ) {
+        const ex = (() => {
+          try {
+            return suggestQuestions(cs.bundle);
+          } catch {
+            return [];
+          }
+        })();
+        if (ex.length)
+          social.spoken = `Hi! I've read your documents. You could ask: ${ex.map((x) => `"${x.replace(/^./, (c) => c.toUpperCase())}"`).join(", ")}. I'll show the exact line each answer comes from.`;
+      }
       if (social && TYPED_SOCIAL.has(social.intent))
         return {
           question,

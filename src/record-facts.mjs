@@ -60,7 +60,7 @@ export function recordStatus(text) {
 const CONCEPTS = [
   [
     "signatory",
-    /signator|signed by|\bwho signed|\bsign(?:ed)? (?:the|this|it)\b/i,
+    /signator|signed by|\bwho signed|\bsign(?:ed)? (?:the|this|it)\b|which (doctor|physician)|who (treated|looked after|was the doctor)|treating (doctor|physician)|attending/i,
   ],
   [
     "amount owed",
@@ -81,10 +81,16 @@ const CONCEPTS = [
     "delivery",
     /deliver|dispatch|shipped|arriv|handed over|hand-?over|returned|picked up|(?:get|got|getting) (?:\w+ ){0,3}back/i,
   ],
-  ["admission", /\badmi(t|ssion)|arrival/i],
+  [
+    "admission",
+    /\badmi(t|ssion)|arrival|\bicu\b|intensive care|\bward\b|which unit|admitting service/i,
+  ],
   ["medication", /prescri|medication|\biron\b|\bdrug/i],
   ["diagnosis", /diagnos|clinical status|assessment/i],
-  ["follow-up", /follow-?up|appointment/i],
+  [
+    "follow-up",
+    /follow-?up|appointment|see (the|a|her|his) doctor again|next (visit|review|check)|come back|check-?up/i,
+  ],
   ["invoice", /invoice|claim number|\bbill\b/i],
 ];
 export const conceptOf = (label) =>

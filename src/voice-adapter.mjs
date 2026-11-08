@@ -1,3 +1,5 @@
+import { briefAnswer, briefIntent } from "./record-brief.mjs";
+import { labDigest } from "../clinical/answer.mjs";
 import { unboundOwnerTurn } from "./requested-owner.mjs";
 import { identifierRequest, explicitRecordRequest } from "../dist/engine.mjs";
 /** OpenAI-compatible streaming contract for a future Bolna custom LLM.
@@ -1099,7 +1101,42 @@ export function createVoiceAdapter({
         // calibrated paraphrase gate is unambiguous (paraphrase.mjs).
         // A record question ("was iron prescribed?") is answered from the
         // records' facts even when a lab answer was found.
+        let briefed = false;
         if (
+          !turn?.result?.requestedChecked &&
+          !social &&
+          !mixedTurn &&
+          briefIntent(asked)
+        ) {
+          const b = (() => {
+            try {
+              return briefAnswer(asked, bundle, citeSpan, {
+                labs: labDigest(bundle.clinical ?? []),
+                reports: bundle.clinical ?? [],
+                namedTest:
+                  !!findTest(asked, bundle.clinical ?? []) ||
+                  !!findTest(grant?.lastField ?? "", bundle.clinical ?? []),
+              });
+            } catch {
+              return null;
+            }
+          })();
+          if (b) {
+            briefed = true;
+            spoken = b.spoken;
+            turn = {
+              ...turn,
+              spokenTurn: {
+                intent: b.intent,
+                verdict: "QUOTED",
+                spoken,
+                citations: b.citations,
+              },
+            };
+          }
+        }
+        if (
+          !briefed &&
           !turn?.result?.requestedChecked &&
           !social &&
           !mixedTurn &&
