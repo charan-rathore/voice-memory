@@ -46,7 +46,13 @@ test("hospital case file: every question and trick question answered from the re
           await fetch(base + "/ask", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ case: ws.id, question: q.ask }),
+            body: JSON.stringify({
+              case: ws.id,
+              question: q.ask,
+              // Explicit API-context regression, not an existing screen selection.
+              // Frozen question expectations are exercised under this context.
+              patient: q.patient ?? "HLG-P1047",
+            }),
           })
         ).json();
         const text = a.final?.text ?? a.lead?.text ?? "";

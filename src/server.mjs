@@ -57,7 +57,7 @@ import {
   subjectsFor,
   DATE_ASK_RE,
 } from "../clinical/answer.mjs";
-import { extractReport } from "../clinical/observations.mjs";
+import { extractReport, subjectOf } from "../clinical/observations.mjs";
 import { sectionAnswer, fieldAnswer } from "./doc-sections.mjs";
 import {
   attachRecords,
@@ -261,7 +261,7 @@ function splitFocus(ctx) {
   return m ? { focus: m[1], field: m[2] ?? null } : { focus: null, field: ctx };
 }
 
-function leadFor(question, result, bundle, ctx) {
+function leadFor(question, result, bundle, ctx, selectedPatient = null) {
   const { focus, field: prevField } = splitFocus(ctx);
   try {
     if (result?.requestedChecked) {
@@ -291,7 +291,7 @@ function leadFor(question, result, bundle, ctx) {
         validateEvidence(ev, bundle),
       );
       if (il) return il;
-      const c = clinicalAnswer(question, bundle.clinical);
+      const c = clinicalAnswer(question, bundle.clinical, selectedPatient);
       if (c)
         return {
           text: c.spoken,
@@ -878,7 +878,11 @@ export function createLocalServer({
     // answer cached while the embedder was cold or warming must not
     // outlive that state (see denseCacheSuffix in dense.mjs).
     const key = answerCache.key(
-      JSON.stringify([bundle.scope, answerGenerations.get(bundle)]) +
+      JSON.stringify([
+        bundle.scope,
+        answerGenerations.get(bundle),
+        opts.patient ?? null,
+      ]) +
         denseCacheSuffix(bundle) +
         mode,
       question,
@@ -947,7 +951,12 @@ export function createLocalServer({
             },
           },
         };
-      const { raw, shown } = await deterministicAnswer(s, question, ctx);
+      const { raw, shown } = await deterministicAnswer(
+        s,
+        question,
+        ctx,
+        opts.patient ?? null,
+      );
       // A missing identifier binding cannot be rescued with a different field
       // or a provider-generated interpretation of nearby numbers.
       if (identifierRequest(question)) return { raw, shown };
@@ -976,7 +985,8 @@ export function createLocalServer({
             consent,
             ip: opts.ip,
             rerun: async (q) =>
-              (await deterministicAnswer(s, q, ctx)).shown.lead ?? null,
+              (await deterministicAnswer(s, q, ctx, opts.patient ?? null)).shown
+                .lead ?? null,
           }).catch(() => ({
             lead: shown.lead,
             trace: { steps: ["semantic_error"] },
@@ -1002,7 +1012,7 @@ export function createLocalServer({
   // The deterministic chain (claim graph, clinical answers, sections, form
   // fields, hybrid sentence search), unchanged in behaviour; the semantic
   // router above decides what to do with its result.
-  async function deterministicAnswer(s, question, ctx) {
+  async function deterministicAnswer(s, question, ctx, selectedPatient = null) {
     const bundle = s.bundle;
     {
       // Phrased any way: drop a leading greeting, repair the deal's names,
@@ -1040,7 +1050,7 @@ export function createLocalServer({
       const shown = decorateResult(raw, s);
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
-      shown.lead = leadFor(question, raw, bundle, ctx || null);
+      shown.lead = leadFor(question, raw, bundle, ctx || null, selectedPatient);
       // Diagnostic evidence is bound to the source-owned record the answer
       // itself selected (its citations), falling back to the record the
       // question matches inside (packet segmentation), so an excerpt can
@@ -1076,7 +1086,7 @@ export function createLocalServer({
             /(?<=\.)\s+(?=Some general background|I can't diagnose|This is for)/,
           )[0];
           b = briefAnswer(question, bundle, citeSpan, {
-            labs: labDigest(bundle.clinical ?? []),
+            labs: labDigest(bundle.clinical ?? [], selectedPatient),
             clinical: /\d/.test(clinicalLine) ? clinicalLine : null,
             reports: bundle.clinical ?? [],
             // a test named now, or carried from the previous answer ("it")
@@ -2614,7 +2624,19 @@ export function createLocalServer({
               ? data.context
               : (s.lastField ?? "");
         const bundle = s.bundle;
-        const { json, cache } = await resolveAnswer(s, data.question, ctx);
+        // Explicit current-patient context from the screen: honored only
+        // when it names an actual subject of these records; anything else
+        // (an unknown or stale id) selects nothing, never a wrong person.
+        const patient =
+          typeof data.patient === "string" &&
+          (s.bundle.clinical ?? []).some(
+            (r) => subjectOf(r) === data.patient.trim(),
+          )
+            ? data.patient.trim()
+            : null;
+        const { json, cache } = await resolveAnswer(s, data.question, ctx, {
+          patient,
+        });
         if (s.bundle !== bundle)
           throw Error("Documents changed while answering; ask again.");
         const cached = JSON.parse(json);

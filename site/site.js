@@ -968,8 +968,9 @@
     const id = e.detail?.id;
     if (!id || !/^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(id)) return;
     state.person = state.person ?? {};
-    // the overview's first person never overrides a person already chosen
-    if (e.detail?.initial && state.person[state.case]) return;
+    // Displaying the first overview card is not a user identity choice.
+    // Only an explicit person click can scope later unnamed questions.
+    if (e.detail?.initial) return;
     state.person[state.case] = id;
     // a new person on screen: the next question starts fresh for them
     if (!e.detail?.initial) state.context[state.case] = "";
@@ -1026,7 +1027,10 @@
       const person = state.person?.[caseId];
       const prev = state.context[caseId] || "";
       const ctx = person
-        ? `person:${person}${prev && !prev.startsWith("person:") ? ` ${prev}` : ""}`.slice(0, 60)
+        ? `person:${person}${prev && !prev.startsWith("person:") ? ` ${prev}` : ""}`.slice(
+            0,
+            60,
+          )
         : prev;
       result = await askEngine(caseId, question, ctx);
     } catch (e) {
@@ -1107,9 +1111,7 @@
       ? `<span class="a-opener">${spans(opener, 0)}</span> `
       : "";
     const words = spans(text, opener ? opener.split(/\s+/).length * 2 : 0);
-    const cites = lead?.citations?.length
-      ? lead.citations
-      : (r.evidence ?? []).slice(0, 3);
+    const cites = lead?.citations?.length ? lead.citations : (r.evidence ?? []);
     $("#answer").innerHTML = `
       <p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : via === "voice" ? "You said" : "You asked"}</span><q>${esc(question)}</q></p>
       <p class="a-lead"><span class="verdict-chip ${cls}">${esc(label)}</span>${openerHtml}${words}</p>
@@ -1148,6 +1150,8 @@
                 ? `<span>page ${c.location.pages[0]}</span>`
                 : ""
             }</span>
+            ${c.record ? `<span class="cite-owner">Record: ${esc(c.record.patientName ?? "Unidentified")} (${esc(c.record.patientId ?? "no verified ID")})</span>` : ""}
+            ${c.contextOnly ? `<span class="cite-context">Context only - not evidence for this answer</span>` : ""}
             <span class="cite-q">${
               c.broadCitation
                 ? "Wider passage cited - it supports the source, not a pinpoint line."

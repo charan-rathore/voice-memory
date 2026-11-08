@@ -694,105 +694,57 @@ const focusTerms = (s) =>
     ).filter((t) => t.length > 1 && !FOCUS_STOP.has(t)),
   );
 
-/**
- * Bind a retrieval chunk's evidence to the source-owned record it matches.
- * A chunk can cross a record boundary; whose record the match sits in is
- * decided by the clinical packet segmentation (packetSegments), not by
- * lexical guessing over rendered text: a record the answer itself cited
- * wins, else the record containing the most salient question tokens, else
- * the record with the largest character overlap. The span is clipped to that record's own start/end, so the
- * excerpt always opens at a real record boundary and never leads with a
- * stranger's record; offsets shift to stay an exact slice of the source.
- * Entries with no salient token and no overlap majority, and sources with
- * no record segmentation, are kept whole rather than mis-clipped.
+/** Split diagnostic retrieval spans at known record boundaries.
+ * Never infer ownership from keywords, overlap size, or citation order.
+ * Every intersected record is retained separately; identity metadata is
+ * explicit even when a chunk starts after the record header. A citation
+ * association labels support, not proof that every claim is supported.
  */
 export function bindEvidenceToRecords(evidence, question, reports, used = []) {
-  if (!Array.isArray(evidence) || !evidence.length) return evidence;
-  const q = focusTerms(question ?? "");
-  const bySource = new Map();
-  for (const r of reports ?? []) {
-    if (!r?.sourceId || !r.span) continue;
-    (
-      bySource.get(r.sourceId) ?? bySource.set(r.sourceId, []).get(r.sourceId)
-    ).push(r);
-  }
-  // Citations the answer itself was built from: the record one of those sits
-  // in is the answer-selected record, which outranks any token/overlap
-  // heuristic (the heuristic remains the fallback for citation-less answers
-  // such as abstentions).
-  const usedBySource = new Map();
-  for (const c of used ?? []) {
-    if (!c?.sourceId || c.start == null || c.end == null) continue;
-    (
-      usedBySource.get(c.sourceId) ??
-      usedBySource.set(c.sourceId, []).get(c.sourceId)
-    ).push(c);
-  }
-  return evidence.map((ev) => {
-    const records = bySource.get(ev.sourceId);
-    if (!records?.length || ev.start == null || ev.end == null) return ev;
-    const own = records.filter(
-      (r) => r.span.start < ev.end && ev.start < r.span.end,
+  if (!Array.isArray(evidence)) return evidence;
+  return evidence.flatMap((ev) => {
+    const records = (reports ?? []).filter(
+      (r) => r.sourceId === ev.sourceId && r.span,
     );
-    if (own.length < 2 && records.length < 2) return ev; // single-record source
-    const quote = ev.quote ?? "";
-    const lower = quote.toLowerCase();
-    let hit = null;
-    for (const c of usedBySource.get(ev.sourceId) ?? []) {
-      if (hit) break;
-      if (c.start >= ev.end || c.end <= ev.start) continue;
-      const mid = (Math.max(c.start, ev.start) + Math.min(c.end, ev.end)) / 2;
-      hit = own.find((r) => r.span.start <= mid && mid < r.span.end) ?? hit;
-    }
-    if (!hit && q.size && own.length) {
-      // The record this evidence is about: the one containing the most
-      // DISTINCT salient question tokens (a shared analyte name in another
-      // record must not pull the excerpt there when the patient's name sits
-      // here); earliest first occurrence breaks ties.
-      let best = -1;
-      let bestAt = Infinity;
-      for (const r of own) {
-        const lo = Math.max(r.span.start, ev.start) - ev.start;
-        const hi = Math.min(r.span.end, ev.end) - ev.start;
-        const slice = lower.slice(lo, hi);
-        let n = 0;
-        let first = Infinity;
-        for (const t of q) {
-          const at = slice.indexOf(t);
-          if (at >= 0) {
-            n++;
-            if (at < first) first = at;
-          }
-        }
-        if (n > best || (n === best && n > 0 && first < bestAt)) {
-          best = n;
-          bestAt = first;
-          hit = n > 0 ? r : hit;
-        }
-      }
-      if (best <= 0) hit = null;
-    }
-    if (!hit && own.length) {
-      // no salient token (a paraphrase): the record this chunk mostly covers
-      hit = own
-        .map((r) => ({
-          r,
-          n: Math.min(ev.end, r.span.end) - Math.max(ev.start, r.span.start),
-        }))
-        .sort((a, b) => b.n - a.n)[0].r;
-    }
-    if (!hit) return ev;
-    const start = Math.max(ev.start, hit.span.start);
-    const end = Math.min(ev.end, hit.span.end);
-    if (start === ev.start && end === ev.end) return ev;
-    if (start >= end) return ev;
-    return {
-      ...ev,
-      start,
-      end,
-      quote: quote.slice(start - ev.start, end - ev.start),
-      record: hit.title ?? null,
-    };
+    if (
+      !records.length ||
+      !Number.isFinite(ev.start) ||
+      !Number.isFinite(ev.end)
+    )
+      return [{ ...ev, binding: "unsegmented", contextOnly: true }];
+    return records
+      .filter((r) => r.span.start < ev.end && ev.start < r.span.end)
+      .map((r) => {
+        const start = Math.max(ev.start, r.span.start);
+        const end = Math.min(ev.end, r.span.end);
+        const associated = (used ?? []).some(
+          (c) =>
+            c.sourceId === ev.sourceId &&
+            c.start >= r.span.start &&
+            c.end <= r.span.end &&
+            c.start < ev.end &&
+            c.end > ev.start,
+        );
+        return {
+          ...ev,
+          start,
+          end,
+          quote: (ev.quote ?? "").slice(start - ev.start, end - ev.start),
+          // Prior page boxes may cover a different record; do not carry them
+          // onto a narrower quote as if they were an exact location.
+          location: start === ev.start && end === ev.end ? ev.location : null,
+          record: {
+            title: r.title ?? null,
+            patientId: r.meta?.patient?.id ?? null,
+            patientName: r.meta?.patient?.name ?? null,
+            status: r.meta?.status ?? null,
+            start: r.span.start,
+            end: r.span.end,
+          },
+          binding: "record-span",
+          contextOnly: !associated,
+        };
+      });
   });
 }
 

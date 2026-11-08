@@ -220,10 +220,13 @@ test("mixed caller + kinship doctor questions stay pronoun-neutral", async () =>
   assert.match(c.spoken, /for me\?/);
 });
 
-// A kinship reference ("my mother's HbA1c") names someone the record-count
-// majority knows nothing about: the same-name tie must NOT be broken by
-// counts - every candidate stays in so the caller is asked which person.
-test("kinship question blocks the same-name majority pick", () => {
+// Multi-patient questions narrow ONLY on explicit, validated context.
+// Record counts never break a same-name tie ("what is my HbA1c?" with two
+// Maya Sharmas stays ambiguous and asks which person); a kinship reference
+// ("my mother's HbA1c") names someone counts know nothing about; a selected
+// patient id the caller passed (API/UI) is honored only when it is an
+// actual subject - an unknown or stale id selects nothing.
+test("explicit context, not counts, resolves a same-name tie", () => {
   const rep = (id, n) => ({
     sourceId: `${id}-${n}`,
     title: `${id}-${n}.pdf`,
@@ -236,19 +239,49 @@ test("kinship question blocks the same-name majority pick", () => {
     rep("HLG-P1047", 3),
     rep("HLG-P1048", 1),
   ];
-  // majority pick still breaks a plain same-name tie (grounded default)
-  assert.deepEqual(subjectsFor("what is my hba1c?", reports), ["HLG-P1047"]);
+  const both = ["HLG-P1047", "HLG-P1048"];
+  // no context: counts do not decide, every candidate stays in
+  assert.deepEqual(subjectsFor("what is my hba1c?", reports).sort(), both);
+  assert.deepEqual(subjectsFor("my mother's hba1c?", reports).sort(), both);
+  assert.deepEqual(subjectsFor("mere papa ka sugar?", reports).sort(), both);
   // an explicit id in the question always wins
   assert.deepEqual(subjectsFor("what is HLG-P1048's hba1c?", reports), [
     "HLG-P1048",
   ]);
-  // kinship: no silent majority answer for the wrong person
-  assert.deepEqual(subjectsFor("my mother's hba1c?", reports).sort(), [
-    "HLG-P1047",
-    "HLG-P1048",
-  ]);
-  assert.deepEqual(subjectsFor("mere papa ka sugar?", reports).sort(), [
-    "HLG-P1047",
-    "HLG-P1048",
-  ]);
+  // validated explicit context (a selected patient id) wins
+  assert.deepEqual(
+    subjectsFor("what is my hba1c?", reports, reports, "HLG-P1048"),
+    ["HLG-P1048"],
+  );
+  // mismatched context (not a subject here) selects nothing
+  assert.deepEqual(
+    subjectsFor("what is my hba1c?", reports, reports, "HLG-P9999").sort(),
+    both,
+  );
+});
+
+test("Hindi and Hinglish mother spelling variants never speak as the caller", async () => {
+  for (const [q, yes, no] of [
+    [
+      "मेरी मां की रिपोर्ट के बारे में डॉक्टर से क्या पूछूं?",
+      /उनके/,
+      /मेरे लिए/,
+    ],
+    [
+      "मेरी माँ की रिपोर्ट के बारे में डॉक्टर से क्या पूछूं?",
+      /उनके/,
+      /मेरे लिए/,
+    ],
+    ["meri maa ki report doctor se kya poochun?", /unke/, /mere liye/],
+    [
+      "What should I ask the doctor about my grandmother's report?",
+      /for them/,
+      /for me/,
+    ],
+  ]) {
+    const a = clinicalAnswer(q, await one());
+    assert.equal(a?.intent, "ASK_DOCTOR", q);
+    assert.match(a.spoken, yes);
+    assert.doesNotMatch(a.spoken, no);
+  }
 });

@@ -526,7 +526,8 @@ export function dobInterpretations(raw) {
     return [...new Set([validIso(y, b, a), validIso(y, a, b)].filter(Boolean))];
   }
   if (/^[\d\/.-]+$/.test(s)) return []; // e.g. 2-digit year: century unknown
-  const ord = /^(\d{1,2})(?:st|nd|rd|th)\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})$/.exec(s);
+  const ord =
+    /^(\d{1,2})(?:st|nd|rd|th)\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})$/i.exec(s);
   if (ord) {
     const k = isoDate(ord[1], ord[2], ord[3]);
     return k ? [k] : [];
@@ -536,9 +537,8 @@ export function dobInterpretations(raw) {
     const k = isoDate(m[1], m[2], m[3]);
     return k ? [k] : [];
   }
-  const mf = /^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/.exec(
-    s,
-  );
+  const mf =
+    /^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/.exec(s);
   if (mf) {
     const k = isoDate(mf[2], mf[1], mf[3]);
     return k ? [k] : [];
@@ -573,7 +573,6 @@ export function dobKey(raw) {
  */
 export function dobRelation(rawA, rawB) {
   if (!rawA || !rawB) return "unknown"; // a missing DOB proves nothing either way
-  if (String(rawA).trim() === String(rawB).trim()) return "same";
   const ia = dobInterpretations(rawA);
   const ib = dobInterpretations(rawB);
   // Two different printed DOB strings neither side can parse are NOT
@@ -581,7 +580,8 @@ export function dobRelation(rawA, rawB) {
   // would rest on nothing. That is undecidable - abstain, never merge.
   if (!ia.length || !ib.length) return "undecidable";
   const overlap = ia.some((x) => ib.includes(x));
-  if (!overlap) return "conflict";
+  if (!overlap)
+    return ia.length === 1 || ib.length === 1 ? "conflict" : "undecidable";
   return ia.length === 1 && ib.length === 1 ? "same" : "undecidable";
 }
 
@@ -627,7 +627,11 @@ export function markIdentityConflicts(reports) {
       .map((x) => dobRelation(r.meta?.dob, x.meta?.dob))
       .find((r2) => r2 === "conflict" || r2 === "undecidable");
     p.idConflictKind =
-      rel === "conflict" ? "dob" : rel === "undecidable" ? "dob-undecidable" : undefined;
+      rel === "conflict"
+        ? "dob"
+        : rel === "undecidable"
+          ? "dob-undecidable"
+          : undefined;
   }
   return reports;
 }

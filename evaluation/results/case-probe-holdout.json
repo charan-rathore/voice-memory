@@ -1,22 +1,38 @@
 {
-  "at": "2026-11-08T15:48:38.326Z",
+  "runId": "b054049d-dd97-4dfb-976c-aa1351f9d722",
+  "command": [
+    "/usr/bin/node",
+    "/tmp/vm/scripts/probe-case.mjs"
+  ],
+  "patient": null,
+  "env": {
+    "VM_PROBE_QS": "evaluation/case-file/questions-holdout.json",
+    "VM_PROBE_FILE": null,
+    "VM_PROBE_PATIENT": null
+  },
+  "questionHash": "c51dee627c7b5c7ffdd9ecabbaeb06ef53589bcfe0c742c77d3047827451fb9c",
+  "documentHash": "fac1aec0ad81161d0733604b1fa1b9c4219aa11aace88ec044718af2f698d9c0",
+  "startedAt": "2026-11-08T16:09:38.911Z",
+  "status": "failed",
+  "exitCode": 1,
+  "at": "2026-11-08T16:09:41.575Z",
   "suite": "holdout",
   "canonical": true,
   "questions": "evaluation/case-file/questions-holdout.json",
   "questionCount": 34,
   "document": "evaluation/case-file/harborline-adversarial.pdf",
-  "answerable": 373,
-  "ready": 2006,
-  "pass": 34,
+  "answerable": 415,
+  "ready": 2046,
+  "pass": 25,
   "asked": 34,
   "out": [
     {
       "n": 1,
       "ask": "Is Maya anemic?",
-      "ok": true,
-      "ms": 46,
-      "kind": "answered",
-      "text": "For their iron and red cell tests: Ferritin 50 ng/mL, within 15 to 150; and Hemoglobin 11.1 g/dL, below the 12.0 to 16.0 range. I can't diagnose from a report; their doctor can read these alongside how they feel and their history. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+      "ok": false,
+      "ms": 45,
+      "kind": "clarify",
+      "text": "These reports belong to more than one person (Maya Sharma (HLG-P1047), Maya Sharma (HLG-P1048, born 04 Dec 1968)). Whose report should I look at?"
     },
     {
       "n": 2,
@@ -29,32 +45,32 @@
     {
       "n": 3,
       "ask": "What does a TSH of 6.8 mean?",
-      "ok": true,
-      "ms": 13,
-      "kind": "answered",
-      "text": "Maya Sharma's TSH result is 6.8 mIU/L, from 22 October 2026. That's above this lab's printed range of 0.4 to 4.5. Some general background: TSH is a hormone that tells your thyroid how much thyroid hormone to make, so it's used to check how the thyroid is working. Their doctor can read it alongside how they feel, their medicines and their other results. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+      "ok": false,
+      "ms": 10,
+      "kind": "clarify",
+      "text": "These reports have TSH results for more than one person (Maya Sharma (HLG-P1047), Maya Sharma (HLG-P1048, born 04 Dec 1968)). Whose results should I look at?"
     },
     {
       "n": 4,
       "ask": "Is her thyroid getting worse?",
-      "ok": true,
-      "ms": 12,
-      "kind": "answered",
-      "text": "The TSH went from 3.2 mIU/L on 8 September 2026 to 6.8 mIU/L on 22 October 2026. That's higher than before. It has moved outside the lab's range. That's above this lab's printed range of 0.4 to 4.5. Some general background: TSH is a hormone that tells your thyroid how much thyroid hormone to make, so it's used to check how the thyroid is working. Their doctor can read it alongside how they feel, their medicines and their other results. Whether that is better or worse is for the doctor to judge. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+      "ok": false,
+      "ms": 13,
+      "kind": "abstained",
+      "text": "I don't see thyroid results in these reports. They include Ferritin, TSH, Creatinine (serum), Urea nitrogen (BUN), BUN / creatinine ratio, Hemoglobin, LDL cholesterol, HDL cholesterol and 2 more."
     },
     {
       "n": 5,
       "ask": "Compare her September and October results",
       "ok": true,
-      "ms": 14,
+      "ms": 23,
       "kind": "answered",
-      "text": "For Maya Sharma, comparing the latest report with the one before: Ferritin was corrected from 5 to 50. That is a fix to the report, not a change in the body, and I use the corrected value; Ferritin (28 to 50 ng/mL), TSH (3.2 to 6.8 mIU/L), LDL cholesterol (140 to 152 mg/dL) and HDL cholesterol (49 to 54 mg/dL) went up; Hemoglobin (11.8 to 11.1 g/dL) went down; Creatinine (serum) can't be compared because the units changed. Ask about any one test for its full detail. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+      "text": "For HLG-P1047: These reports are for 2 people, so I keep their results apart. For Maya Sharma, comparing the latest report with the one before: Ferritin was corrected from 5 to 50. That is a fix to the report, not a change in the body, and I use the corrected value; Ferritin (28 to 50 ng/mL), TSH (3.2 to 6.8 mIU/L), LDL cholesterol (140 to 152 mg/dL) and HDL cholesterol (49 to 54 mg/dL) went up; Hemoglobin (11.8 to 11.1 g/dL) went down; Creatinine (serum) can't be compared because the units changed. Ask about any one test for its full detail. Maya Sharma has only one report here, so there is nothing to compare yet."
     },
     {
       "n": 6,
       "ask": "What's her date of birth?",
       "ok": true,
-      "ms": 31,
+      "ms": 25,
       "kind": "answered",
       "text": "Date of birth: 18 Apr 1991 (emergency encounter - intake, p.1). Page 4 is for a different person with the same name (HLG-P1048), so I left it out."
     },
@@ -62,7 +78,7 @@
       "n": 7,
       "ask": "How long was she in the hospital?",
       "ok": true,
-      "ms": 14,
+      "ms": 12,
       "kind": "answered",
       "text": "Admitted 22 Oct 2026, 09:40 (emergency encounter - intake, p.1); discharged 24 Oct 2026 14:05 (discharge summary, p.8, no status). That is about 52 hours, a little over 2 days."
     },
@@ -70,7 +86,7 @@
       "n": 8,
       "ask": "Which doctor treated her?",
       "ok": true,
-      "ms": 9,
+      "ms": 8,
       "kind": "answered",
       "text": "The discharge summary (p.8, no status) names Dr. Leena Shah, attending physician, 24 Oct 15:10 (signatory). It's the only clinician named as signing; the records don't list everyone who treated her."
     },
@@ -78,7 +94,7 @@
       "n": 9,
       "ask": "What's her patient ID?",
       "ok": true,
-      "ms": 10,
+      "ms": 9,
       "kind": "answered",
       "text": "Patient id: HLG-P1047 (emergency encounter - intake, p.1). Page 4 is for a different person with the same name (HLG-P1048), so I left it out."
     },
@@ -86,7 +102,7 @@
       "n": 10,
       "ask": "Why did the bill go from 3160 to 2840?",
       "ok": true,
-      "ms": 26,
+      "ms": 25,
       "kind": "answered",
       "text": "USD 3,160.00 was the encounter cost estimate (p.3, estimate); the final bill + insurer determination (p.9, final) replaced it with USD 2,840.00. The line items that differ (USD): Observation bed services 1,250 → Observation services 1,040; Laboratory bundle 810 → Lab panel (LAB-PNL-04) + Repeat panel (LAB-PNL-04) 750; Imaging / diagnostics 660 → Imaging / diagnostics 610. The records don't give a reason for each difference."
     },
@@ -94,7 +110,7 @@
       "n": 11,
       "ask": "How much is the deductible?",
       "ok": true,
-      "ms": 12,
+      "ms": 11,
       "kind": "answered",
       "text": "The final bill + insurer determination (p.9, final) charges Patient responsibility: USD 400.00 · 250 deductible + 150 coinsurance."
     },
@@ -102,33 +118,33 @@
       "n": 12,
       "ask": "Is the 400 dollars already paid?",
       "ok": true,
-      "ms": 19,
+      "ms": 13,
       "kind": "answered",
       "text": "Not according to the most authoritative record. Final bill + insurer determination (p.9, final) gives Patient payment recorded: USD 0.00 · No payment on this statement."
     },
     {
       "n": 13,
       "ask": "What was wrong with the ferritin result?",
-      "ok": true,
-      "ms": 8,
-      "kind": "answered",
-      "text": "Maya Sharma's Ferritin result is 50 ng/mL, from 22 October 2026. That's within this lab's range of 15 to 150. Some general background: Ferritin shows how much iron your body has stored. The 22 October 2026 result was corrected from 5 to 50, and I'm using the corrected value. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+      "ok": false,
+      "ms": 7,
+      "kind": "clarify",
+      "text": "These reports have Ferritin results for more than one person (Maya Sharma (HLG-P1047), Maya Sharma (HLG-P1048, born 04 Dec 1968)). Whose results should I look at?"
     },
     {
       "n": 14,
       "ask": "Kya Maya ko thyroid ki bimari hai?",
       "ok": true,
-      "ms": 8,
+      "ms": 7,
       "kind": "answered",
-      "text": "The discharge summary (p.8, no status) records: Clinical status: Further outpatient evaluation advised; no final thyroid diagnosis documented. Aapke thyroid ke results: TSH 6.8 mIU/L, range 0.4 se 4.5 se zyada. Thodi general jaankari: TSH ek hormone hai jo thyroid ko batata hai ki kitna hormone banana hai, isliye isse thyroid ke kaam ki jaanch hoti hai. Main report se diagnosis nahi kar sakti; aapke doctor inhe aapki tabiyat aur history ke saath dekh sakte hain. (Yeh HLG-P1047 ka record hai. page 4 same naam ke doosre insaan HLG-P1048 ka hai; maine use alag rakha.) A result outside the printed range is not a diagnosis; the doctor decides that."
+      "text": "The discharge summary (p.8, no status) records: Clinical status: Further outpatient evaluation advised; no final thyroid diagnosis documented. Yeh reports ek se zyada logon ki hain (Maya Sharma (HLG-P1047), Maya Sharma (HLG-P1048, born 04 Dec 1968)). Main kiski report dekhoon? A result outside the printed range is not a diagnosis; the doctor decides that."
     },
     {
       "n": 15,
       "ask": "माया का हीमोग्लोबिन कितना है?",
-      "ok": true,
+      "ok": false,
       "ms": 16,
-      "kind": "answered",
-      "text": "आपका Hemoglobin नतीजा 11.1 g/dL है, 22 अक्टूबर 2026 की जांच से। यह इस लैब की छपी सीमा (12.0 से 16.0) से कम है। थोड़ी सामान्य जानकारी: हीमोग्लोबिन लाल रक्त कोशिकाओं में एक प्रोटीन है जो शरीर में ऑक्सीजन पहुंचाता है। आपके डॉक्टर इसे आपकी तबीयत, दवाओं और बाकी जांचों के साथ देखकर सही मतलब समझा सकते हैं। (यह HLG-P1047 का रिकॉर्ड है। page 4 उसी नाम के दूसरे व्यक्ति HLG-P1048 का है; मैंने उसे अलग रखा।)"
+      "kind": "clarify",
+      "text": "इन रिपोर्ट्स में एक से ज़्यादा लोगों के Hemoglobin नतीजे हैं (Maya Sharma (HLG-P1047), Maya Sharma (HLG-P1048, born 04 Dec 1968))। मैं किसके नतीजे देखूं?"
     },
     {
       "n": 16,
@@ -136,21 +152,21 @@
       "ok": true,
       "ms": 6,
       "kind": "answered",
-      "text": "For their cholesterol tests: LDL cholesterol 152 mg/dL, above the lab's limit of 130; and HDL cholesterol 54 mg/dL, within 40 to 80. I can't diagnose from a report; their doctor can read these alongside how they feel and their history. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+      "text": "For HLG-P1047: For their cholesterol tests: LDL cholesterol 152 mg/dL, above the lab's limit of 130; and HDL cholesterol 54 mg/dL, within 40 to 80. I can't diagnose from a report; their doctor can read these alongside how they feel and their history."
     },
     {
       "n": 17,
       "ask": "Is her kidney function okay?",
-      "ok": true,
+      "ok": false,
       "ms": 6,
-      "kind": "answered",
-      "text": "For their kidney tests: Creatinine (serum) 99 µmol/L, above the 45 to 90 range; and Urea nitrogen (BUN) 14 mg/dL, within 7 to 20. I can't diagnose from a report; their doctor can read these alongside how they feel and their history. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+      "kind": "clarify",
+      "text": "These reports belong to more than one person (Maya Sharma (HLG-P1047), Maya Sharma (HLG-P1048, born 04 Dec 1968)). Whose report should I look at?"
     },
     {
       "n": 18,
       "ask": "When should she see the doctor again?",
       "ok": true,
-      "ms": 10,
+      "ms": 9,
       "kind": "answered",
       "text": "Follow-up: Outpatient clinical review suggested within 7 days; booking not evidenced (discharge summary, p.8, no status)."
     },
@@ -158,7 +174,7 @@
       "n": 19,
       "ask": "Did the hospital make any mistakes?",
       "ok": true,
-      "ms": 11,
+      "ms": 10,
       "kind": "answered",
       "text": "Here is what the final records themselves correct or flag: Laboratory result - amended release (p.7): AMENDMENT NOTE (issued 23 Oct 2026 11:35): A transcription error affected the ferritin value in the preliminary release, LAB-55021 / VERSION 1. Laboratory result - amended release (p.7): The previously released ferritin value of 5 ng/mL is superseded by 50 ng/mL for the identical sample collected 22 Oct 2026 at 10:05. Laboratory result - amended release (p.7): Only the ferritin value was amended. Final bill + insurer determination (p.9): The statement alone does not establish duplicate billing or a billing error. I only report what the records say; whether anything was a mistake beyond that is for the hospital to answer."
     },
@@ -166,41 +182,41 @@
       "n": 20,
       "ask": "What tests were done?",
       "ok": true,
-      "ms": 5,
+      "ms": 9,
       "kind": "answered",
-      "text": "Tests in these records, by sample date: 8 September 2026: Ferritin, TSH, Creatinine (serum), Hemoglobin, LDL cholesterol, HDL cholesterol. 22 October 2026: Ferritin, TSH, Creatinine (serum), Urea nitrogen (BUN), BUN / creatinine ratio, Hemoglobin, LDL cholesterol, HDL cholesterol. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+      "text": "For HLG-P1047: These reports are for 2 people, so I keep their results apart. For Maya Sharma, comparing the latest report with the one before: Ferritin was corrected from 5 to 50. That is a fix to the report, not a change in the body, and I use the corrected value; Ferritin (28 to 50 ng/mL), TSH (3.2 to 6.8 mIU/L), LDL cholesterol (140 to 152 mg/dL) and HDL cholesterol (49 to 54 mg/dL) went up; Hemoglobin (11.8 to 11.1 g/dL) went down; Creatinine (serum) can't be compared because the units changed. Ask about any one test for its full detail. Maya Sharma has only one report here, so there is nothing to compare yet."
     },
     {
       "n": 21,
       "ask": "Was her sugar checked?",
       "ok": true,
       "ms": 5,
-      "kind": "abstained",
-      "text": "Maya Sharma (HLG-P1047)'s records don't include blood sugar tests results. Page 4 shows HbA1c 6.9 %, but that belongs to a different person with the same name, Maya Sharma (HLG-P1048, born 04 Dec 1968), so I haven't used it."
+      "kind": "answered",
+      "text": "For HLG-P1048: For their blood sugar tests: Page 4 prints HbA1c, but the scan is too unclear to read it safely: it looks like “6.9 %”. Please check the original before relying on it.. Some general background: HbA1c reflects your average blood sugar over roughly the past two to three months."
     },
     {
       "n": 22,
       "ask": "What's the HDL?",
-      "ok": true,
-      "ms": 6,
-      "kind": "answered",
-      "text": "Maya Sharma's HDL cholesterol result is 54 mg/dL, from 22 October 2026. That's within this lab's range of 40 to 80. Some general background: HDL is the cholesterol carried in high-density lipoproteins, often called good cholesterol."
+      "ok": false,
+      "ms": 5,
+      "kind": "clarify",
+      "text": "These reports have HDL cholesterol results for more than one person (Maya Sharma (HLG-P1047), Maya Sharma (HLG-P1048, born 04 Dec 1968)). Whose results should I look at?"
     },
     {
       "n": 23,
       "ask": "Which result is the most worrying?",
       "ok": true,
-      "ms": 8,
+      "ms": 10,
       "kind": "answered",
-      "text": "I can't rank how serious each result is; that depends on her history and symptoms, so it's a question for the doctor. Here is what is outside the printed ranges: In Maya Sharma's report, 7 results are printed with a range I can check; 4 are outside the lab's range: TSH 6.8 mIU/L (above the 0.4 to 4.5 range); Creatinine (serum) 99 µmol/L (above the 45 to 90 range); Hemoglobin 11.1 g/dL (below the 12.0 to 16.0 range); and LDL cholesterol 152 mg/dL (above the lab's limit of 130). The other 3 are within range. 1 other result has no printed range, so I haven't judged it. I can't diagnose from a report; their doctor can read these alongside how they feel and their history. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+      "text": "I can't rank how serious each result is; that depends on her history and symptoms, so it's a question for the doctor. Here is what is outside the printed ranges: These reports are for 2 people, so I keep their results apart. In Maya Sharma's report, 7 results are printed with a range I can check; 4 are outside the lab's range: TSH 6.8 mIU/L (above the 0.4 to 4.5 range); Creatinine (serum) 99 µmol/L (above the 45 to 90 range); Hemoglobin 11.1 g/dL (below the 12.0 to 16.0 range); and LDL cholesterol 152 mg/dL (above the lab's limit of 130). The other 3 are within range. 1 other result has no printed range, so I haven't judged it. I can't diagnose from a report; your doctor can read these alongside how you feel and your history. In Maya Sharma's report, 3 results are printed with a range I can check; one is outside the lab's range: Ferritin 8 ng/mL (below the 15 to 150 range). The other 2 are within range. TSH and HbA1c are printed on page 4 but the scan is too unclear to read safely, so check them against the original. I can't diagnose from a report; your doctor can read these alongside how you feel and your history."
     },
     {
       "n": 24,
       "ask": "Can you give me the creatinine in mg/dL?",
-      "ok": true,
+      "ok": false,
       "ms": 6,
-      "kind": "refused",
-      "text": "I don't convert lab units. They use mg/dL and µmol/L. The 22 October 2026 result is 99 µmol/L, as the lab printed it."
+      "kind": "clarify",
+      "text": "These reports have Creatinine results for more than one person (Maya Sharma (HLG-P1047), Maya Sharma (HLG-P1048, born 04 Dec 1968)). Whose results should I look at?"
     },
     {
       "n": 25,
@@ -213,16 +229,16 @@
     {
       "n": 26,
       "ask": "Is the 5 ng/mL ferritin wrong?",
-      "ok": true,
-      "ms": 6,
-      "kind": "answered",
-      "text": "Maya Sharma's Ferritin result is 50 ng/mL, from 22 October 2026. That's within this lab's range of 15 to 150. Some general background: Ferritin shows how much iron your body has stored. The 22 October 2026 result was corrected from 5 to 50, and I'm using the corrected value. (That is HLG-P1047's record. Page 4 is a different person with the same name, HLG-P1048; I left it out.)"
+      "ok": false,
+      "ms": 7,
+      "kind": "clarify",
+      "text": "These reports have Ferritin results for more than one person (Maya Sharma (HLG-P1047), Maya Sharma (HLG-P1048, born 04 Dec 1968)). Whose results should I look at?"
     },
     {
       "n": 27,
       "ask": "Who is Dr. Leena Shah?",
       "ok": true,
-      "ms": 8,
+      "ms": 7,
       "kind": "answered",
       "text": "The discharge summary (p.8, no status) names Dr. Leena Shah, attending physician, 24 Oct 15:10 (signatory). It's the only clinician named as signing; the records don't list everyone who treated her."
     },
@@ -230,7 +246,7 @@
       "n": 28,
       "ask": "What's the encounter number?",
       "ok": true,
-      "ms": 8,
+      "ms": 11,
       "kind": "answered",
       "text": "Encounter / accession: ENC-4271 / LAB-55021 (emergency encounter - intake, p.1). Page 4 is for a different person with the same name (HLG-P1048), so I left it out."
     },
@@ -262,7 +278,7 @@
       "n": 32,
       "ask": "How much was the imaging?",
       "ok": true,
-      "ms": 9,
+      "ms": 10,
       "kind": "answered",
       "text": "The final bill + insurer determination (p.9, final) charges Imaging / diagnostics: 22-23 Oct · USD 610.00. The earlier encounter cost estimate (estimate) had Imaging / diagnostics: USD 660.00; the final bill replaces it."
     },
@@ -270,7 +286,7 @@
       "n": 33,
       "ask": "Was she in the ICU?",
       "ok": true,
-      "ms": 7,
+      "ms": 6,
       "kind": "answered",
       "text": "The records don't mention intensive care. Admitting service: General medicine observation unit (emergency encounter - intake, p.1); Disposition: Discharged from observation on 24 Oct 2026 (discharge summary, p.8)."
     },
@@ -278,7 +294,7 @@
       "n": 34,
       "ask": "thanks, that helps",
       "ok": true,
-      "ms": 2,
+      "ms": 1,
       "kind": "social",
       "text": "You're welcome. Ask me anything else about these records whenever you like."
     }

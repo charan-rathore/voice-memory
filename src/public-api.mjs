@@ -665,10 +665,21 @@ export function createPublicApi({
           /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(data.context)
             ? data.context
             : "";
+        // Explicit current-patient context: honored only when it names an
+        // actual subject of this case's records; anything else selects
+        // nothing, never a wrong person.
+        const patient =
+          typeof data.patient === "string" &&
+          (s.bundle.clinical ?? []).some(
+            (r) => subjectOf(r) === data.patient.trim(),
+          )
+            ? data.patient.trim()
+            : null;
         const shown = await resolve(s, q, ctx, {
           // A visitor's own passages reach the model only on their say-so.
           consent: data.semantic === true,
           ip,
+          patient,
         });
         send(
           res,
@@ -1365,6 +1376,9 @@ export function publicAnswer(shown) {
     start: c.start ?? null,
     end: c.end ?? null,
     status: c.status ?? null,
+    record: c.record ?? null,
+    binding: c.binding ?? null,
+    contextOnly: c.contextOnly ?? null,
     location: c.location
       ? {
           pages: c.location.pages ?? null,
@@ -1453,9 +1467,8 @@ export function publicAnswer(shown) {
       status: shown.status ?? null,
     },
     // Retrieval diagnostics, never the answer (see `retrieval`). Already
-    // bound to source-owned record spans by the answer path (see
-    // bindEvidenceToRecords): an excerpt opens at a real record boundary.
-    evidence: (shown.evidence ?? []).slice(0, 4).map(cite),
+    // Split at known source-owned boundaries, with explicit record metadata.
+    evidence: (shown.evidence ?? []).map(cite),
   };
 }
 

@@ -29,7 +29,6 @@ import {
   valueText,
   canonOf,
   aboutSomeoneElse,
-  hasKinshipRef,
   mixedSubjectRef,
   thirdPerson,
 } from "./explain.mjs";
@@ -239,23 +238,10 @@ const realId = (id) => !/^(doc|name):/.test(id);
  * separate. Only for a clear majority (at least two records and twice as
  * many as everyone else together); different printed names are still asked.
  */
-export function primarySubject(reports) {
-  const count = new Map();
-  for (const r of reports) {
-    const id = subjectOf(r);
-    if (realId(id)) count.set(id, (count.get(id) ?? 0) + 1);
-  }
-  const ranked = [...count].sort((a, b) => b[1] - a[1]);
-  if (ranked.length < 2) return null;
-  const [top, n] = ranked[0];
-  const rest = ranked.slice(1).reduce((a, [, c]) => a + c, 0);
-  if (n < 2 || n < 2 * rest) return null;
-  const nm = nameKey(reports.find((r) => subjectOf(r) === top));
-  if (!nm) return null;
-  const same = ranked
-    .slice(1)
-    .every(([id]) => nameKey(reports.find((r) => subjectOf(r) === id)) === nm);
-  return same ? top : null;
+export function primarySubject(reports, selected = null) {
+  return selected && reports.some((r) => subjectOf(r) === selected)
+    ? selected
+    : null;
 }
 
 /** The question names a patient ID printed in these reports. */
@@ -278,8 +264,14 @@ function pagesOf(id, reports) {
  * When the main person was chosen over a namesake: one sentence naming the
  * other person and where they are, so nothing is silently dropped.
  */
-export function namesakeNote(question, reports, lang, test = null) {
-  const p = primarySubject(reports);
+export function namesakeNote(
+  question,
+  reports,
+  lang,
+  test = null,
+  selected = null,
+) {
+  const p = primarySubject(reports, selected);
   if (!p || explicitIds(question, reports).length) return "";
   const others = [...new Set(reports.map(subjectOf))].filter(
     (id) =>
@@ -308,7 +300,7 @@ export function namesakeNote(question, reports, lang, test = null) {
 }
 
 /** Subjects with this test, narrowed to the one the question names, if any. */
-export function subjectsFor(question, reports, all = reports) {
+export function subjectsFor(question, reports, all = reports, selected = null) {
   let ids = [...new Set(reports.map(subjectOf))];
   const explicit = explicitIds(question, reports);
   if (explicit.length) return explicit;
@@ -324,13 +316,13 @@ export function subjectsFor(question, reports, all = reports) {
   });
   if (named.length) ids = named;
   if (ids.length > 1) {
-    const p = primarySubject(all);
-    // The record-count majority breaks a same-name tie only when the
-    // question gives no subject context of its own. A kinship reference
-    // ("my mother's HbA1c") names someone the record counts know nothing
-    // about: picking the majority there would answer for the wrong person,
-    // so leave every candidate in and let the caller be asked which one.
-    if (p && ids.includes(p) && !hasKinshipRef(question)) return [p];
+    // A multi-patient question is narrowed ONLY by explicit, validated
+    // context: a patient id the caller selected (API/UI), checked against
+    // the actual subjects. Record counts never break the tie - a count is
+    // not identity, and a kinship reference ("my mother's HbA1c") names
+    // someone counts know nothing about. Without valid explicit context
+    // every candidate stays in and the caller is asked which person.
+    if (selected && ids.includes(selected)) return [selected];
   }
   return ids;
 }
@@ -412,7 +404,7 @@ function authorityConflictAnswer(used, lang = "en") {
   };
 }
 
-export function clinicalTurn(question, reports) {
+export function clinicalTurn(question, reports, selected = null) {
   if (!reports?.length) return null;
   let hit = findTest(question, reports);
   if (!hit) return null;
@@ -422,7 +414,7 @@ export function clinicalTurn(question, reports) {
   // "creatinine" matched a namesake's "Creatinine" row exactly while the
   // main person's report prints "Creatinine (serum)": the same test.
   {
-    const main = primarySubject(reports);
+    const main = primarySubject(reports, selected);
     const canon = canonOf(hit.test);
     if (
       main &&
@@ -446,7 +438,7 @@ export function clinicalTurn(question, reports) {
   );
   const intent = CHANGE_RE.test(question) ? "COMPARE" : "LOOKUP";
   const base = { field: null, intent, lang, test: nameOf(hit) };
-  const main0 = primarySubject(reports);
+  const main0 = primarySubject(reports, selected);
   const namesakeOnly = (other) => {
     const o = withTest
       .filter((r) => subjectOf(r) === other)
@@ -471,9 +463,19 @@ export function clinicalTurn(question, reports) {
   // The question names a person whose reports don't have this test: say so.
   // Never fall back to someone else's value (that was SYN-0003's "ferritin"
   // being answered with SYN-0001's 50 ng/mL).
-  const namedAll = subjectsFor(question, reports).filter(
+  const namedAll = subjectsFor(question, reports, reports, selected).filter(
     (id) => !/^(doc|name):/.test(id) || reports.length > 1,
   );
+  if (namedAll.length > 1)
+    return {
+      ...base,
+      spoken: t.which(
+        nameOf(hit),
+        namedAll.map((id) => subjectLabel(id, reports)),
+      ),
+      verdict: "AMBIGUOUS_PATIENT",
+      used: [],
+    };
   const allIds = new Set(reports.map(subjectOf));
   if (namedAll.length && namedAll.length < allIds.size) {
     const haveIt = new Set(withTest.map(subjectOf));
@@ -501,7 +503,7 @@ export function clinicalTurn(question, reports) {
       };
     }
   }
-  const patients = subjectsFor(question, withTest, reports);
+  const patients = subjectsFor(question, withTest, reports, selected);
   // Only a namesake has this test ("Maya's HbA1c" where the HbA1c is on a
   // misfiled page of a different Maya Sharma): never their value as hers.
   if (
@@ -1234,16 +1236,15 @@ const DOCTOR_RE =
 // "What should I ask the doctor about her report?": the "I" is the asker,
 // not the subject - strip the asking scaffolding before judging whose
 // report the question is about.
-const thirdPersonAsk = (q) =>
-  aboutSomeoneElse(
-    String(q ?? "")
-      .replace(
-        /\b(?:what|whom|kya|क्या)\s+(?:should|shall|can|could)\s+i\s+(?:ask|tell|discuss|mention|bring up|raise)\b/gi,
-        "",
-      )
-      .replace(/\bwhat should i\b/gi, "")
-      .replace(/\bi\s+(?:ask|tell|discuss|mention|raise)\b/gi, ""),
-  );
+const doctorSubjectText = (q) =>
+  String(q ?? "")
+    .replace(
+      /\b(?:what|whom|kya|क्या)\s+(?:should|shall|can|could)\s+i\s+(?:ask|tell|discuss|mention|bring up|raise)\b/gi,
+      "",
+    )
+    .replace(/\bwhat should i\b/gi, "")
+    .replace(/\bi\s+(?:ask|tell|discuss|mention|raise)\b/gi, "");
+const thirdPersonAsk = (q) => aboutSomeoneElse(doctorSubjectText(q));
 
 const DOCTOR_SAY = {
   en: {
@@ -1273,7 +1274,9 @@ const DOCTOR_SAY = {
     head: (who) =>
       `${who ? `${who} की रिपोर्ट के बारे में ` : ""}डॉक्टर से पूछने लायक सवाल, हर एक इन रिपोर्ट्स की किसी लाइन से: `,
     flagged: (item, third) =>
-      `${item}: ${third == null ? "इसका" : third ? "उनके" : "मेरे"} लिए इसका क्या मतलब है?`,
+      third == null
+        ? `${item}: इसका क्या मतलब है?`
+        : `${item}: ${third ? "उनके" : "मेरे"} लिए इसका क्या मतलब है?`,
     corrected: (x) =>
       `${x.test} को संशोधित रिपोर्ट में ${x.from ? `${x.from} से ${x.to} ` : ""}सुधारा गया: हमें कौन-सा मान मानना चाहिए?`,
     unclear: (t, p) =>
@@ -1296,7 +1299,9 @@ const DOCTOR_SAY = {
     head: (who) =>
       `${who ? `${who} ki report ke baare mein ` : ""}doctor se poochne layak sawaal, har ek in reports ki kisi line se: `,
     flagged: (item, third) =>
-      `${item}: ${third == null ? "iska" : third ? "unke" : "mere"} liye iska kya matlab hai?`,
+      third == null
+        ? `${item}: iska kya matlab hai?`
+        : `${item}: ${third ? "unke" : "mere"} liye iska kya matlab hai?`,
     corrected: (x) =>
       `${x.test} ko amended report mein ${x.from ? `${x.from} se ${x.to} ` : ""}sudhara gaya: kaunsa value maanna chahiye?`,
     unclear: (t, p) =>
@@ -1317,9 +1322,13 @@ const DOCTOR_SAY = {
   },
 };
 
-export function doctorQuestions(question, reports, { tail = true } = {}) {
+export function doctorQuestions(
+  question,
+  reports,
+  { tail = true, selected = null } = {},
+) {
   if (!reports?.length || !DOCTOR_RE.test(question)) return null;
-  const ids = subjectsFor(question, reports);
+  const ids = subjectsFor(question, reports, reports, selected);
   const lang = detectLang(question);
   const D = DOCTOR_SAY[lang] ?? DOCTOR_SAY.en;
   if (ids.length > 1) {
@@ -1346,7 +1355,9 @@ export function doctorQuestions(question, reports, { tail = true } = {}) {
   const ch = changesFor(pid, own);
   // "my mother's and my results": both a relative and the caller are in
   // scope, so no single pronoun is right - neutral phrasing, never "me".
-  const third = mixedSubjectRef(question) ? null : thirdPersonAsk(question);
+  const third = mixedSubjectRef(doctorSubjectText(question))
+    ? null
+    : thirdPersonAsk(question);
   const qs = [
     ...ch.corrected.map((x) => D.corrected(x)),
     ...flagged
@@ -2002,8 +2013,12 @@ function howFar(t, question) {
   return lead ? { ...t, spoken: `${embed}${lead} ${t.spoken}` } : t;
 }
 
-export function clinicalAnswer(question, reports) {
-  return namedPatient(question, reports, clinicalAnswer0(question, reports));
+export function clinicalAnswer(question, reports, selected = null) {
+  return namedPatient(
+    question,
+    reports,
+    clinicalAnswer0(question, reports, selected),
+  );
 }
 
 /**
@@ -2068,8 +2083,8 @@ function namedPatient(question, reports, out) {
   return { ...out, spoken, patient: pid };
 }
 
-function clinicalAnswer0(question, reports) {
-  const out = answerFor(question, reports);
+function clinicalAnswer0(question, reports, selected = null) {
+  const out = answerFor(question, reports, selected);
   // "What is his TSH?" after "I uploaded my dad's report": the results are
   // not the caller's, so the English answer says "The TSH result", never
   // "Your TSH result".
@@ -2093,8 +2108,8 @@ function clinicalAnswer0(question, reports) {
   return out;
 }
 
-function answerFor(question, reports) {
-  const out = answerFor0(question, reports);
+function answerFor(question, reports, selected = null) {
+  const out = answerFor0(question, reports, selected);
   // The main person was chosen over a namesake: say so, once.
   if (
     out?.spoken &&
@@ -2105,6 +2120,7 @@ function answerFor(question, reports) {
       reports,
       out.lang ?? detectLang(question),
       out.test ?? null,
+      selected,
     );
     if (note) return { ...out, spoken: out.spoken + note };
   }
@@ -2128,25 +2144,34 @@ const MONEY_RE =
 const ENCOUNTER_RE =
   /\b(encounter|accession|file reference|patient id|mrn|date of birth|dob|icu|ward|doctor treated|which doctor|see the doctor|discharg\w*|admi(t|tted|ssion)|why was (she|he|they|i)|reason for|signed|signature|prescri\w*|medicines?|medications?|tablets?|drugs?|appointment|follow-?up|draft|unsigned|which (records|documents|reports|pages)|happened)\b/i;
 
-function answerFor0(question, reports) {
+function answerFor0(question, reports, selected = null) {
   if (!reports?.length) return null;
-  const t = clinicalTurn(question, reports);
+  // A validated selected patient scopes the summary-style paths (dates,
+  // test lists, group and overview answers) to that person's records.
+  // Single-test lookups keep the full set: subjectsFor applies the same
+  // selection, and the namesake abstention must still see the other
+  // person's record to say why it was not used.
+  const scope =
+    selected && reports.some((r) => subjectOf(r) === selected)
+      ? reports.filter((r) => subjectOf(r) === selected)
+      : reports;
+  const t = clinicalTurn(question, reports, selected);
   if (t) return howFar(t, question);
   if (MONEY_RE.test(question) || ENCOUNTER_RE.test(question)) return null;
   const lang = detectLang(question);
-  if (DATE_ASK_RE.test(question)) return reportDates(reports, lang);
+  if (DATE_ASK_RE.test(question)) return reportDates(scope, lang);
   // "What should I ask the doctor about my mother's and my results?" is an
   // ask-the-doctor question, not a lookup of a test called "mother's and
   // my": it must be settled before the unmatched-test clarification.
-  const doctor = doctorQuestions(question, reports);
+  const doctor = doctorQuestions(question, reports, { selected });
   if (doctor) return doctor;
   // A test-shaped question whose test none of these reports holds ("what is
   // my heritage level"): say which tests ARE here and ask, instead of a
   // generic overview or summary that answers a different question.
-  const unmatched = unmatchedTestCandidate(question, reports);
+  const unmatched = unmatchedTestCandidate(question, scope);
   if (unmatched) {
     const names = [
-      ...new Set(reports.flatMap((r) => r.observations.map((o) => o.test))),
+      ...new Set(scope.flatMap((r) => r.observations.map((o) => o.test))),
     ];
     return {
       spoken: {
@@ -2198,7 +2223,7 @@ function answerFor0(question, reports) {
   // "Which result is the most worrying?": no ranking of seriousness; the
   // results outside their ranges, and who can rank them.
   if (RANK_RE.test(question)) {
-    const sum = reportSummary(question, reports);
+    const sum = reportSummary(question, scope);
     if (sum?.spoken)
       return {
         ...sum,
@@ -2212,10 +2237,41 @@ function answerFor0(question, reports) {
       };
   }
   const change = CHANGE_RE.test(question) || WORSE_RE.test(question);
-  const g = findGroup(question, reports);
+  let g = findGroup(question, scope);
+  if (!g && selected && scope !== reports) {
+    // The selected person has no test in this group, but a same-name
+    // namesake does: disclose that, never silently report "no result"
+    // while a stranger's matching record sits in the same case.
+    const gf = findGroup(question, reports);
+    if (gf) {
+      const other = reports.find(
+        (r) =>
+          subjectOf(r) !== selected &&
+          r.observations?.some((o) => gf.keys.includes(o.key)),
+      );
+      if (other) {
+        const hit = other.observations.find((o) => gf.keys.includes(o.key));
+        const test = nameOf(hit);
+        const selL = subjectLabel(selected, reports);
+        const othL = subjectLabel(subjectOf(other), reports);
+        const pg = hit.source?.page;
+        return {
+          spoken: {
+            en: `${selL}'s records don't include a ${test} result. ${pg ? `Page ${pg} shows` : "There is"} ${test} on a record belonging to a different person with the same name, ${othL}, so I haven't used it.`,
+            hi: `${selL} के रिकॉर्ड में ${test} का कोई नतीजा नहीं है। ${pg ? `पेज ${pg} पर` : "एक जगह"} ${test} उसी नाम के दूसरे व्यक्ति ${othL} के रिकॉर्ड में है, इसलिए मैंने उसे नहीं लिया।`,
+            hinglish: `${selL} ke records mein ${test} ka koi result nahi hai. ${pg ? `Page ${pg} par` : "Ek jagah"} ${test} same naam ke doosre insaan ${othL} ke record mein hai, isliye maine use nahi liya.`,
+          }[lang],
+          verdict: "NOT_IN_REPORT",
+          field: null,
+          lang,
+          used: [],
+        };
+      }
+    }
+  }
   // "Is her thyroid getting worse?": each test of the group, compared over
   // time with the same rules as a single test (units, corrections).
-  if (g && change && multiReport(question, reports)) {
+  if (g && change && multiReport(question, scope)) {
     const names = [
       ...new Set(
         reports.flatMap((r) =>
@@ -2227,7 +2283,7 @@ function answerFor0(question, reports) {
     ];
     const parts = [];
     for (const n of names) {
-      const t = clinicalTurn(`How has ${n} changed?`, reports);
+      const t = clinicalTurn(`How has ${n} changed?`, scope);
       if (
         t?.spoken &&
         !["AMBIGUOUS_PATIENT", "NOT_IN_REPORT"].includes(t.verdict)
@@ -2253,13 +2309,13 @@ function answerFor0(question, reports) {
   if (g && !(change && multiReport(question, reports)))
     return groupAnswer(
       question,
-      reports,
+      scope,
       g.keys,
       g.id ? GROUP_LABEL[lang][g.id] : g.label,
     );
-  if (SUMMARY_RE.test(question) && !(change && multiReport(question, reports)))
-    return reportSummary(question, reports);
-  return clinicalOverview(question, reports) ?? notInReport(question, reports);
+  if (SUMMARY_RE.test(question) && !(change && multiReport(question, scope)))
+    return reportSummary(question, scope);
+  return clinicalOverview(question, scope) ?? notInReport(question, scope);
 }
 
 /** When each report's sample was collected and when it was reported, as printed. */
@@ -2364,12 +2420,13 @@ const multiReport = (question, reports) => {
  * summary: corrections first, then results outside their printed ranges.
  * English only; null when there are no lab results.
  */
-export function labDigest(reports) {
+export function labDigest(reports, selected = null) {
   if (!reports?.length) return null;
   const ids = [...new Set(reports.map(subjectOf))].filter(
     (id) => !/^(doc|name):/.test(id),
   );
-  const pid = primarySubject(reports) ?? (ids.length === 1 ? ids[0] : null);
+  const pid =
+    primarySubject(reports, selected) ?? (ids.length === 1 ? ids[0] : null);
   if (!pid) return null;
   const own = reports.filter((r) => subjectOf(r) === pid);
   const keys = [

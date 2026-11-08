@@ -361,7 +361,7 @@ test("unambiguous numeric dates compare semantically, not textually", () => {
   assert.equal(dobRelation("03/07/1965", "07/03/1965"), "undecidable");
   assert.equal(dobRelation("01/12/1980", "1980-12-01"), "undecidable");
   assert.equal(dobRelation("03/07/1965", "1980-01-12"), "conflict");
-  assert.equal(dobRelation("03/07/1965", "03/07/1965"), "same");
+  assert.equal(dobRelation("03/07/1965", "03/07/1965"), "undecidable");
 });
 
 test("numeric DOBs that cannot be shown to match still abstain", async () => {
@@ -378,13 +378,15 @@ test("numeric DOBs that cannot be shown to match still abstain", async () => {
   ]);
   separate(b);
   assert.ok(
-    b.clinical.every((r) => r.meta.patient?.idConflictKind === "dob-undecidable"),
+    b.clinical.every(
+      (r) => r.meta.patient?.idConflictKind === "dob-undecidable",
+    ),
   );
   // the printed strings survive for review
-  assert.deepEqual(
-    b.clinical.map((r) => r.meta.dob).sort(),
-    ["03/07/1965", "07/03/1965"],
-  );
+  assert.deepEqual(b.clinical.map((r) => r.meta.dob).sort(), [
+    "03/07/1965",
+    "07/03/1965",
+  ]);
   const a = ask2("Has Asha's TSH changed?", b.clinical).spoken;
   assert.match(a, /more than one person/);
   assert.doesNotMatch(a, /went from|higher than before|rose|dropped/i);
@@ -456,4 +458,11 @@ test("unparseable but different printed DOBs abstain, not merge", async () => {
   const a = ask2("Has Asha's TSH changed?", b.clinical).spoken;
   assert.match(a, /more than one person/);
   assert.doesNotMatch(a, /went from|higher than before|rose|dropped/i);
+});
+
+test("DOB validation precedes raw equality and accepts uppercase ordinals", () => {
+  assert.equal(dobRelation("2020-02-30", "2020-02-30"), "undecidable");
+  assert.equal(dobRelation("01/02/80", "01/02/80"), "undecidable");
+  assert.equal(dobRelation("12TH Jan 1980", "1980-01-12"), "same");
+  assert.equal(dobRelation("03/07/1965", "04/08/1965"), "undecidable");
 });

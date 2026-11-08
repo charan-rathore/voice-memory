@@ -4910,3 +4910,34 @@ html:not(.voice-on) .voice-off {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Retrieval context must not read as answer support. */
+.cite-owner,
+.cite-context {
+  display: block;
+  grid-column: 2 / -1;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+}
+.cite-context {
+  font-weight: 600;
+  color: #865521;
+}
+.cite {
+  grid-template-columns: 22px minmax(0, 1fr);
+}
+.cite .cite-n {
+  grid-column: 1;
+  grid-row: 1;
+}
+.cite .cite-doc,
+.cite .cite-owner,
+.cite .cite-context,
+.cite .cite-q {
+  grid-column: 2;
+  min-width: 0;
+}
+.cite-context {
+  color: #f2cc85;
+}
