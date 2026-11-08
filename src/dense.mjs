@@ -57,11 +57,10 @@ let ingestDepth = 0;
 // Preserve the existing 360 MiB admission estimate. Native probes exceeded
 // this estimate: it is NOT a preventive hard-limit safety guarantee. Raising
 // the default would change retrieval availability and needs separate approval.
-// Headroom needed before loading: fp32 measured near 360 MB; 8-bit weights
-// are a quarter the size (runtime overhead remains), so 160 MB by default.
-const MODEL_MB = Number(
-  process.env.VM_DENSE_MODEL_MB || (DTYPE === "fp32" ? 360 : 160),
-);
+// The admission estimate stays at 360 MiB for every precision: 8-bit
+// weights should need far less, but that is not yet measured on the host,
+// and a lower estimate would loosen this guard without evidence.
+const MODEL_MB = Number(process.env.VM_DENSE_MODEL_MB || 360);
 const PRESSURE = 0.9;
 export function memoryLimitBytes() {
   return denseMemoryBudget().limitBytes;
