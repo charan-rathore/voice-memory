@@ -99,3 +99,9 @@ Typed HTTP and fake voice transport both avoid the old value in this fixture. Th
 The opt-in shared voice boundary now renders a direct nonclinical no-lead result through the same existing final-answer contract as typed, rather than return to a second voice fallback. The current-invoice development fixture now requires exact typed/streamed abstention text equality and retains the old-value prohibition and historical-access positive. Shared voice turns also retain the evidence feed timestamp; an original feed assertion caught its absence during this migration and was kept unchanged.
 
 This only closes one no-lead rendering discrepancy. Clinical/mixed/compound and broad-deal orchestration remains separate where previously scoped, raw voice normalization remains unqualified, and whole-question semantic equality is not established by the local fixture.
+
+## Early direct nonclinical factual boundary
+
+With the existing opt-in switch, direct nonclinical interrogatives now call the common resolver before voice-only retrieval/renderers choose a factual result. When common resolution returns a result, the separate voice retrieval, brief, record-fact and paraphrase fallbacks are skipped, then that one result is rendered. An empty common raw result cannot keep the previous turn as a draft source. A null common result retains the existing fallback. A new adapter spy requires exactly one common call and zero separate retrieval calls, and fails on the previous late-only checkpoint.
+
+Speech repair/history still happens before this boundary, with raw bytes preserved separately. Clinical, mixed/compound, broad-deal fallbacks and non-interrogative commands remain an incomplete migration; this checkpoint does not qualify their canonical parity or the common resolver's legacy semantics. No provider consent, public flag or workflow setting changed.

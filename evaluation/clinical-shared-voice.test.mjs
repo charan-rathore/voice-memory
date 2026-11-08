@@ -279,3 +279,53 @@ test("actual local voice contract keeps original utterance in its opaque plan se
     else process.env.VM_SHARED_VOICE_REASONING = previous;
   }
 });
+
+test("direct nonclinical factual question resolves before separate voice retrieval can choose facts", async () => {
+  const { importBundle } = await import("../dist/engine.mjs");
+  const { createVoiceAdapter } = await import("../src/voice-adapter.mjs");
+  const bundle = importBundle([
+    {
+      title: "Synthetic sensor memo",
+      text: "The test sensor was calibrated on 12 July. The source does not name the technician.",
+    },
+  ]);
+  let reads = 0,
+    resolutions = 0;
+  const adapter = createVoiceAdapter({
+    retrieval: {
+      actualMode: "keyword",
+      embeddingModel: null,
+      retrieve: async () => {
+        reads++;
+        throw Error("separate factual path must not run");
+      },
+    },
+  });
+  adapter.setAnswerResolver(async () => {
+    resolutions++;
+    return {
+      lead: {
+        text: "Common source result.",
+        verdict: "UNKNOWN",
+        citations: [],
+      },
+    };
+  });
+  const token = adapter.bind(bundle);
+  const response = await adapter.handle(
+    new Request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: { authorization: "Bearer " + token },
+      body: JSON.stringify({
+        stream: true,
+        messages: [
+          { role: "user", content: "When was the test sensor calibrated?" },
+        ],
+      }),
+    }),
+  );
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /Common source result/);
+  assert.equal(resolutions, 1);
+  assert.equal(reads, 0);
+});

@@ -33,7 +33,7 @@ function vocabFor(bundle) {
   if (!v) vocabCache.set(bundle, (v = vocabularyOf(bundle.clinical ?? [])));
   return v;
 }
-import { extractiveSpoken } from "./spoken-extract.mjs";
+import { extractiveSpoken, isQuestion } from "./spoken-extract.mjs";
 import {
   clinicalOverview,
   clinicalAnswer,
@@ -815,7 +815,41 @@ export function createVoiceAdapter({
                 citations: [],
               }
             : null);
-        if (ownerBlocked) {
+        // Direct nonclinical factual questions reach the common resolver
+        // before voice-specific retrieval/renderers choose any fact. Speech
+        // repair/history remain above; specialist orchestration stays below.
+        let earlyUnified = null;
+        if (
+          resolveAnswer &&
+          !bundle.clinical?.length &&
+          !mixedTurn &&
+          !secondQ &&
+          !social &&
+          !ownerBlocked &&
+          !adviceKind(transcript) &&
+          isQuestion(transcript)
+        ) {
+          earlyUnified = await resolveAnswer({
+            question: asked,
+            originalQuestion: askedRaw,
+            exactSchemaOnly: false,
+            bundle,
+            caseId,
+            call: callTag,
+          });
+          if (req.signal.aborted) {
+            releaseBusy();
+            return new Response(null, { status: 499 });
+          }
+          if (streaming && !current()) {
+            releaseBusy();
+            return Response.json({ error: "Superseded turn" }, { status: 409 });
+          }
+        }
+        if (earlyUnified) {
+          // Render once at the shared boundary below. Do not execute a
+          // second factual fallback or populate draft state from it.
+        } else if (ownerBlocked) {
           spoken = ownerBlocked.spoken;
           grant.last = {
             refused: true,
@@ -1081,7 +1115,7 @@ export function createVoiceAdapter({
           );
         // The second half of a compound question, from the same deterministic
         // renderers (clinical first, then the claim graph).
-        if (!ownerBlocked && !social && secondQ) {
+        if (!earlyUnified && !ownerBlocked && !social && secondQ) {
           let second = null;
           try {
             const secondResult = answer(secondQ, bundle);
@@ -1119,6 +1153,7 @@ export function createVoiceAdapter({
         // records' facts even when a lab answer was found.
         let briefed = false;
         if (
+          !earlyUnified &&
           !turn?.result?.requestedChecked &&
           !social &&
           !mixedTurn &&
@@ -1152,6 +1187,7 @@ export function createVoiceAdapter({
           }
         }
         if (
+          !earlyUnified &&
           !briefed &&
           !turn?.result?.requestedChecked &&
           !social &&
@@ -1180,6 +1216,7 @@ export function createVoiceAdapter({
           }
         }
         if (
+          !earlyUnified &&
           !social &&
           !mixedTurn &&
           !turn?.result?.requestedChecked &&
@@ -1229,7 +1266,7 @@ export function createVoiceAdapter({
           /\b(chang\w*|happen\w*|exactly|summary|summari[sz]e|status|update|overview|badl\w*)\b|बदल|क्या\s+हुआ/i.test(
             transcript,
           );
-        if (!social && deal && broadDeal && refusal(spoken)) {
+        if (!earlyUnified && !social && deal && broadDeal && refusal(spoken)) {
           const parts = ["What happened to the fee?", "What's still open?"]
             .map((q) => {
               try {
@@ -1243,6 +1280,7 @@ export function createVoiceAdapter({
         }
         // "my result" without a test name: ask which, don't abstain.
         if (
+          !earlyUnified &&
           !social &&
           !deal &&
           refusal(spoken) &&
@@ -1251,13 +1289,14 @@ export function createVoiceAdapter({
         )
           spoken = clarifyLab(lang);
         // A cut-off fragment gets a helpful prompt, not a flat abstention.
-        if (refusal(spoken) && isFragment(transcript))
+        if (!earlyUnified && refusal(spoken) && isFragment(transcript))
           spoken = fragmentReply(lang) ?? FRAGMENT_REPLY;
         // The page has one demo case open and the caller asked about the other
         // one: point to it instead of a bare "I don't see that". No facts from
         // the case that is not on screen are spoken.
         let pointed = false;
         if (
+          !earlyUnified &&
           !social &&
           !mixedTurn &&
           (refusal(spoken) ||
@@ -1296,6 +1335,7 @@ export function createVoiceAdapter({
         // already rendered in the caller's language; deal templates are
         // rendered here, with record quotes kept verbatim.
         if (
+          !earlyUnified &&
           isHindi(lang) &&
           !clinicalHit &&
           !social &&
@@ -1320,14 +1360,16 @@ export function createVoiceAdapter({
           // the common resolver after channel history/repair. A split cannot
           // drop one of its caller-owned field requirements.
           const exactSchemaOnly = !!(mixedTurn || secondQ);
-          const unified = await resolveAnswer({
-            question: exactSchemaOnly ? transcript : asked,
-            originalQuestion: askedRaw,
-            exactSchemaOnly,
-            bundle,
-            caseId,
-            call: callTag,
-          });
+          const unified =
+            earlyUnified ??
+            (await resolveAnswer({
+              question: exactSchemaOnly ? transcript : asked,
+              originalQuestion: askedRaw,
+              exactSchemaOnly,
+              bundle,
+              caseId,
+              call: callTag,
+            }));
           if (req.signal.aborted) return new Response(null, { status: 499 });
           if (streaming && !current())
             return Response.json({ error: "Superseded turn" }, { status: 409 });
@@ -1347,6 +1389,16 @@ export function createVoiceAdapter({
               throw Error("Common answer evidence contract mismatch");
             spoken = isHindi(lang) ? toHindi(lead.text) : lead.text;
             if (bundle.clinical?.length) spoken = thirdPerson(spoken);
+            if (earlyUnified) {
+              // Never retain a previous turn as this answer's draft source.
+              grant.last = unified.raw ?? {
+                refused: true,
+                unresolved: true,
+                evidence: [],
+                spoken,
+              };
+              grant.lastField = lead.field ?? null;
+            }
             turn = {
               result: unified.raw ?? null,
               spokenTurn: {
