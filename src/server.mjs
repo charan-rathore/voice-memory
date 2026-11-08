@@ -1021,6 +1021,27 @@ export function createLocalServer({
         ) ||
         /\b(?:patients?|people|persons?)\s+count\b/i.test(original)
       ) {
+        // The plain corpus count cannot answer a filtered, temporal or
+        // multi-part count request. Preserve those conditions explicitly.
+        const totalCount =
+          /^\s*(?:how many\s+(?:distinct\s+)?(?:patients?|people|persons?|subjects?)(?:\s+are there)?(?:\s+(?:are|do we have))?(?:\s+in\s+(?:these|the|my|our|this)\s+(?:records?|documents?|reports?|files?))?|(?:patient|patients|people|person|persons)\s+count)\s*[?.!]*\s*$/i.test(
+            original,
+          );
+        if (!totalCount)
+          return {
+            raw: null,
+            shown: {
+              lead: {
+                text: "That question includes a condition or another part. I cannot use the total record-identity count as its answer. Please ask for the total identities, or specify the condition for a source-checked count.",
+                verdict: "CLARIFY",
+                field: null,
+                citations: [],
+              },
+              evidence: [],
+              visual: null,
+              semantic: { steps: ["conditional_count_not_replaced_by_total"] },
+            },
+          };
         const ids = [...new Set(identities.map(subjectOf))];
         const records = (bundle.sourceRecords ?? []).filter(
           (r) => r.meta?.patient?.id || r.meta?.patient?.name,
@@ -1371,7 +1392,13 @@ export function createLocalServer({
           consent,
           ip: opts.ip,
           validate,
-        });
+        }).catch(() => null);
+        shown.lead = {
+          text: "I could not establish a complete, source-supported answer to that question. Please narrow it or inspect the source passages.",
+          verdict: "UNKNOWN",
+          field: null,
+          citations: [],
+        };
         if (documentLead) {
           const restored = documentLead.citations.map(restore);
           if (restored.every(Boolean))

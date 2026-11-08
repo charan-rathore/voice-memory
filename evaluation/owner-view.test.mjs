@@ -325,6 +325,20 @@ test("patient count is an explicit source-identity count, never a retrieved draf
       assert.doesNotMatch(a.final.text, /may leave|23 October/);
       assert.equal(a.final.citations.length, 2);
     }
+    for (const question of [
+      "How many patients have high ferritin?",
+      "How many patients were discharged in October?",
+      "How many patients are there and when were they discharged?",
+    ]) {
+      const a = await fetch(base + "/ask", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ case: ws.id, question }),
+      }).then((r) => r.json());
+      assert.equal(a.final.kind, "clarify", question);
+      assert.doesNotMatch(a.final.text, /2 record identities/);
+      assert.deepEqual(a.final.citations, []);
+    }
   } finally {
     await new Promise((r) => server.close(r));
   }
