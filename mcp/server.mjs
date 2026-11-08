@@ -31,6 +31,11 @@ import { realpathSync } from "node:fs";
 import { basename, isAbsolute, sep, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
+import {
+  PUBLIC_TOOLS,
+  lookupTestCode,
+  testEducation,
+} from "./public-health.mjs";
 
 const BASE = (
   process.env.VM_API_BASE || "https://voice-memory-beige.vercel.app/api/public"
@@ -141,6 +146,7 @@ const TOOLS = [
     },
     annotations: { readOnlyHint: true },
   },
+  ...PUBLIC_TOOLS,
 ];
 
 async function api(path, opts = {}, ctx = {}) {
@@ -280,6 +286,10 @@ async function call(name, args = {}, ctx = {}) {
       });
       return shapeAnswer(ans);
     }
+    case "lookup_test_code":
+      return lookupTestCode(args.name, ctx);
+    case "test_education":
+      return testEducation(args.loinc, { ...ctx, language: args.language });
     case "create_workspace":
       return a("/workspace", { method: "POST" });
     case "upload_document": {

@@ -72,6 +72,8 @@ test("MCP: handshake, tool list, and a cited answer from the engine", async () =
         "create_workspace",
         "add_document_text",
         "workspace_status",
+        "lookup_test_code",
+        "test_education",
       ],
     );
     const ans = await c.rpc("tools/call", {
