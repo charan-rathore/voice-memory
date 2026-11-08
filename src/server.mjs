@@ -1535,21 +1535,35 @@ export function createLocalServer({
     value.shown.question = immutableRequest.originalQuestion;
     value.shown.questionPlan =
       value.shown.sourceQuestionPlan ?? immutableRequest;
+    // All candidate paths share this final source-currentness boundary, not
+    // just schema-certified answers. Async retrieval/interpretation can finish
+    // after upload/removal rebuilt this same workspace ID. Never return old
+    // leads, related evidence, charts, closest lines or raw draft material.
     if (
-      value.shown.sourceQuestionPlan &&
-      (s.bundle !== bundle ||
+      s.bundle !== bundle ||
+      answerGenerations.get(bundle) !== immutableRequest.sourceGeneration ||
+      (value.shown.sourceQuestionPlan &&
         value.shown.sourceQuestionPlan.originalQuestion !== question)
     ) {
-      value.shown.lead = {
-        text: "The source scope changed before this answer was ready. Ask again against the current documents.",
-        verdict: "UNKNOWN",
-        citations: [],
-        field: null,
-      };
-      value.shown.admission = {
-        status: "unresolved",
-        userReady: false,
-        reason: "stale_or_wrong_request",
+      value.raw = null;
+      value.shown = {
+        question,
+        questionPlan: immutableRequest,
+        lead: {
+          text: "The source scope changed before this answer was ready. Ask again against the current documents.",
+          verdict: "UNKNOWN",
+          citations: [],
+          field: null,
+        },
+        evidence: [],
+        visual: null,
+        closest: null,
+        admission: {
+          status: "unresolved",
+          userReady: false,
+          reason: "stale_or_wrong_request",
+        },
+        semantic: { steps: ["source_changed_before_response"] },
       };
     }
     return { ...cached, json: JSON.stringify(value) };
