@@ -1,0 +1,12 @@
+{
+  "source": "https://openrouter.ai/api/v1/key",
+  "before": 0.53979758,
+  "after": 0.58088978,
+  "delta": 0.04109220000000002,
+  "remaining": 4.41911022,
+  "lifetimeCap": 5,
+  "limitReset": null,
+  "calls": 7,
+  "outstandingRequests": 0,
+  "note": "Provider aggregate delta, no claim of exclusive account activity. No top-ups, demo key, deployment or public enablement."
+}

@@ -14,7 +14,7 @@
 const O = {
   value: {
     en: [
-      "Here's what your report says.",
+      "Here's what the report says.",
       "Okay, I found it.",
       "Got it. Here's the number.",
     ],

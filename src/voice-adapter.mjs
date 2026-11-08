@@ -41,7 +41,7 @@ import {
   findTest,
   DATE_ASK_RE,
 } from "../clinical/answer.mjs";
-import { aliasesFor, nameOf } from "../clinical/explain.mjs";
+import { aliasesFor, nameOf, thirdPerson } from "../clinical/explain.mjs";
 import {
   voiceQuestions,
   isFragment,
@@ -1288,6 +1288,7 @@ export function createVoiceAdapter({
           turn?.spokenTurn?.intent !== "ADVICE"
         )
           spoken = toHindi(spoken);
+        if (!social && bundle.clinical?.length) spoken = thirdPerson(spoken);
         releaseBusy();
         // Answer first, nothing repeated: a general explanation already spoken
         // earlier in THIS call ("Some general background: ferritin shows...")

@@ -285,3 +285,47 @@ test("opaque underscore and dot IDs survive exact selection, concurrent person c
     await new Promise((r) => server.close(r));
   }
 });
+
+test("patient count is an explicit source-identity count, never a retrieved draft-plan sentence", async () => {
+  process.env.VM_COUNTERS_ALLOW_FILE = "on";
+  const server = createLocalServer({ port: 0 });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${server.address().port}/api/public`;
+  try {
+    const ws = await fetch(base + "/workspace", { method: "POST" }).then((r) =>
+      r.json(),
+    );
+    for (const id of ["MY-101", "MY-202"])
+      await fetch(`${base}/workspace/${ws.id}/upload`, {
+        method: "POST",
+        headers: { "x-file-name": id + ".txt" },
+        body: `Patient: Maya Sharma, ID ${id}\nDraft plan: patient may leave on 23 October 2026. This is not a final discharge notice.`,
+      });
+    let st;
+    for (let i = 0; i < 300; i++) {
+      st = await fetch(`${base}/workspace/${ws.id}`).then((r) => r.json());
+      if (
+        st.documents.length === 2 &&
+        st.documents.every((d) => d.status === "ready")
+      )
+        break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    for (const question of [
+      "how many patients are there",
+      "how many people are in these records?",
+    ]) {
+      const a = await fetch(base + "/ask", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ case: ws.id, question }),
+      }).then((r) => r.json());
+      assert.match(a.final.text, /2 record identities/);
+      assert.match(a.final.text, /not a proven count of physical people/);
+      assert.doesNotMatch(a.final.text, /may leave|23 October/);
+      assert.equal(a.final.citations.length, 2);
+    }
+  } finally {
+    await new Promise((r) => server.close(r));
+  }
+});

@@ -97,6 +97,7 @@ import { createStore, snapshotOf, restoreInto } from "../memory/store.mjs";
 import { createAnswerCache } from "./cache.mjs";
 import { documentScope, evidencePermission } from "./document-scope.mjs";
 import { ownerView, originalCitation } from "./owner-view.mjs";
+import { readDocumentQuestion } from "./semantic/document.mjs";
 const evidenceWithinOwner = (bundle, owner, ev) => {
   if (!owner) return true;
   const scope = documentScope({
@@ -945,7 +946,8 @@ export function createLocalServer({
         opts.patient ?? null,
       ]) +
         denseCacheSuffix(bundle) +
-        mode,
+        mode +
+        (process.env.VM_DOCUMENT_REASONING === "on" ? ":doc1" : ":doc0"),
       question,
       ctx,
       detectLang(question),
@@ -1013,6 +1015,40 @@ export function createLocalServer({
             evidence: [],
           },
         };
+      if (
+        /\bhow many\s+(?:distinct\s+)?(?:patients?|people|persons?|subjects?)\b/i.test(
+          original,
+        ) ||
+        /\b(?:patients?|people|persons?)\s+count\b/i.test(original)
+      ) {
+        const ids = [...new Set(identities.map(subjectOf))];
+        const records = (bundle.sourceRecords ?? []).filter(
+          (r) => r.meta?.patient?.id || r.meta?.patient?.name,
+        );
+        const evs = records
+          .map((r) => {
+            const src = bundle.sources.find((s) => s.id === r.sourceId);
+            return src ? citeSpan(src, r.span) : null;
+          })
+          .filter(Boolean);
+        return {
+          raw: null,
+          shown: {
+            lead: {
+              text: `I can distinguish ${ids.length} record ${ids.length === 1 ? "identity" : "identities"} in these documents${ids.length ? ": " + ids.join(", ") : ""}. This counts source-bound identities, not a proven count of physical people. Name-only records stay separate; unidentified material is not assigned to a person.`,
+              verdict: "IDENTITY_COUNT",
+              field: null,
+              citations: decorateResult(
+                { question: original, evidence: evs },
+                s,
+              ).evidence,
+            },
+            evidence: [],
+            visual: null,
+            semantic: { steps: ["source_identity_count"] },
+          },
+        };
+      }
       if (decision.multiple) {
         // Answer every explicitly requested owner from their own records.
         // No retrieval fallback may replace a missing person's block with
@@ -1222,32 +1258,45 @@ export function createLocalServer({
           evidenceWithinOwner(bundle, opts.patient, c),
         );
       const validate = (ev) => !!restore(ev);
-      const sem = raw?.requestedChecked
+      const documentEnabled =
+        process.env.VM_DOCUMENT_REASONING === "on" &&
+        consent &&
+        gemini.enabled();
+      const sem = documentEnabled
         ? {
             lead: shown.lead,
             trace: {
-              intent: "LOOKUP",
+              intent: "DOCUMENT",
               lang,
-              steps: ["requested_scope_preserved"],
+              steps: ["whole_context_read_and_independent_audit"],
             },
           }
-        : await semanticRescue({
-            question: original,
-            bundle: semanticBundle,
-            lead: shown.lead,
-            raw,
-            ctx,
-            validate,
-            gemini,
-            consent,
-            ip: opts.ip,
-            rerun: async (q) =>
-              (await deterministicAnswer(s, q, ctx, opts.patient ?? null)).shown
-                .lead ?? null,
-          }).catch(() => ({
-            lead: shown.lead,
-            trace: { steps: ["semantic_error"] },
-          }));
+        : raw?.requestedChecked
+          ? {
+              lead: shown.lead,
+              trace: {
+                intent: "LOOKUP",
+                lang,
+                steps: ["requested_scope_preserved"],
+              },
+            }
+          : await semanticRescue({
+              question: original,
+              bundle: semanticBundle,
+              lead: shown.lead,
+              raw,
+              ctx,
+              validate,
+              gemini,
+              consent,
+              ip: opts.ip,
+              rerun: async (q) =>
+                (await deterministicAnswer(s, q, ctx, opts.patient ?? null))
+                  .shown.lead ?? null,
+            }).catch(() => ({
+              lead: shown.lead,
+              trace: { steps: ["semantic_error"] },
+            }));
       if (sem.lead?.citations?.length) {
         const restored = sem.lead.citations.map(restore);
         sem.lead = restored.some((c) => !c)
@@ -1314,6 +1363,33 @@ export function createLocalServer({
           s,
         ).evidence;
       }
+      if (documentEnabled) {
+        const documentLead = await readDocumentQuestion({
+          question: original,
+          bundle: semanticBundle,
+          gemini,
+          consent,
+          ip: opts.ip,
+          validate,
+        });
+        if (documentLead) {
+          const restored = documentLead.citations.map(restore);
+          if (restored.every(Boolean))
+            shown.lead = {
+              ...documentLead,
+              citations: decorateResult(
+                { question: original, evidence: restored },
+                s,
+              ).evidence,
+            };
+        } else
+          shown.lead = {
+            text: "I could not establish a complete, source-supported answer to that question. Please narrow it or inspect the source passages.",
+            verdict: "UNKNOWN",
+            field: null,
+            citations: [],
+          };
+      }
       shown.semantic = sem.trace;
       // A Hindi or Hinglish visitor with nothing supported hears that in
       // their own language, not a silent English fallback.
@@ -1322,6 +1398,8 @@ export function createLocalServer({
       // The picture of the answer: ranges, series, corrections, units,
       // drawn from the same typed rows the sentence came from.
       shown.visual = visualFor(original, bundle, shown.lead, opts.patient);
+      if (opts.patient && shown.lead?.text)
+        shown.lead.text = thirdPerson(shown.lead.text);
       if (shown.lead) delete shown.lead.used;
       return { raw, shown };
     });
