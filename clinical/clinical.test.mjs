@@ -226,18 +226,23 @@ test("questions about something that isn't a test are left to the document engin
   assert.equal(clinicalTurn("Who prepared this report?", reports), null);
 });
 
-test("overview: one patient answers, several patients ask whose", async () => {
+test("overview: one patient answers, several patients are kept apart", async () => {
   const a09 = await report("a-2026-09.pdf");
   const a10 = await report("a-2026-10-amended.pdf");
   const c10 = await report("c-2026-10.pdf");
   // A genuine single-patient overview still answers.
   const solo = clinicalAnswer("how am i doing", [a09, a10]);
   assert.equal(solo?.verdict, "OVERVIEW");
-  // A second patient in the set makes an unnamed overview a question back,
-  // never a silent pick of the patient holding more reports.
+  // A second patient in the set: never a silent pick of the patient holding
+  // more reports. Each person is answered separately under their own label,
+  // and a first-person question ends by asking which one is the caller.
   const multi = clinicalAnswer("how am i doing", [a09, a10, c10]);
-  assert.equal(multi?.verdict, "AMBIGUOUS_PATIENT");
-  assert.match(multi?.spoken, /more than one person/);
+  assert.equal(multi?.verdict, "OVERVIEW");
+  assert.deepEqual(multi?.subjects, ["SYN-0001", "SYN-0003"]);
+  assert.match(multi?.spoken, /for 2 people, so I keep their results apart/);
+  assert.match(multi?.spoken, /For SYN-0001,/);
+  assert.match(multi?.spoken, /SYN-0003 has only one report/);
+  assert.match(multi?.spoken, /which of these is you/);
   // Naming the patient resolves it.
   const named = clinicalAnswer("what are SYN-0001's blood levels", [
     a09,

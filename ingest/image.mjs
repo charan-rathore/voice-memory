@@ -59,7 +59,9 @@ export async function parseImage(buf, kind, { waitForOcr = null } = {}) {
   if (blocks.length && mean < OCR_REVIEW_CONFIDENCE)
     warnings.push({
       code: "ocr_low_confidence",
-      message: `This image was read with ${Math.round(mean)}% average OCR confidence. Review the text before relying on it.`,
+      page: 1,
+      confidence: Math.round(mean),
+      message: `This image was read with ${Math.round(mean)}% OCR confidence. Check its numbers against the original.`,
     });
   return {
     blocks,

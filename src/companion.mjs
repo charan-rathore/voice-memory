@@ -66,6 +66,7 @@ const KIND = {
   QUOTED: "found",
   CONFIRMED: "status",
   NOT_COMPARABLE: "refuse",
+  UNCLEAR: "refuse",
   AMBIGUOUS_PATIENT: "clarify",
   CLARIFY: "clarify",
   PROPOSED: "status",

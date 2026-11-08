@@ -1,0 +1,20 @@
+# Hermes Agent: add Voice Memory as an MCP tool server.
+# Copy the block you want into ~/.hermes/config.yaml.
+
+mcp_servers:
+  # Local (stdio): runs mcp/server.mjs from this repo. Uploads stay off
+  # unless VM_MCP_UPLOAD_ROOTS names the folders it may read.
+  voice-memory:
+    command: node
+    args: ["/path/to/voice-memory/mcp/server.mjs"]
+    env:
+      VM_API_BASE: "https://voice-memory-beige.vercel.app/api/public"
+      # VM_MCP_UPLOAD_ROOTS: "/home/me/reports"
+
+  # Or remote (Streamable HTTP): nothing to clone. Upload and text-import
+  # tools are not offered over this transport.
+  # voice-memory:
+  #   url: "https://voice-memory-beige.vercel.app/api/public/mcp"
+  #   tools:
+  #     include: [list_cases, ask_records, create_workspace, workspace_status,
+  #               lookup_test_code, test_education]

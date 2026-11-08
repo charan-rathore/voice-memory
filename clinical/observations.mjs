@@ -28,7 +28,8 @@ import {
   isMaskedIdentity,
 } from "./lab-lines.mjs";
 import { locate } from "../ingest/canonical.mjs";
-import { canonOf } from "./explain.mjs";
+import { OCR_REVIEW_CONFIDENCE } from "../ingest/errors.mjs";
+import { canonOf, ocrFixName } from "./explain.mjs";
 
 export const MONTHS = {
   january: 1,
@@ -231,9 +232,27 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
         }
     });
     if (col.test === undefined || col.result === undefined) continue; // not a results table
-    for (const row of doc.elements.filter(
+    const rowsOf = doc.elements.filter(
       (e) => e.parent === t.id && e.type === "table-row",
-    )) {
+    );
+    // A header OCR garbled ("Reference rang@lag") still leaves columns whose
+    // cells say what they are. Only for columns the header did not name,
+    // and only when most of the column agrees.
+    const taken = new Set(Object.values(col));
+    const RANGE_CELL = /^(?:[<>≤≥]\s*\d[\d.,]*|\d[\d.,]*\s*[-–]\s*\d[\d.,]*)$/;
+    for (let i = 0; i < header.cells.length; i++) {
+      if (taken.has(i)) continue;
+      const cells = rowsOf
+        .map((r) => (r.cells[i] ?? "").trim())
+        .filter(Boolean);
+      if (cells.length < 2) continue;
+      const share = (re) =>
+        cells.filter((c) => re.test(c)).length / cells.length;
+      if (col.range === undefined && share(RANGE_CELL) >= 0.6) col.range = i;
+      else if (col.flag === undefined && share(/^(H|L|HH|LL|\*)$/) >= 0.6)
+        col.flag = i;
+    }
+    for (const row of rowsOf) {
       const cell = (k) =>
         col[k] === undefined ? null : (row.cells[col[k]] ?? "").trim() || null;
       const test = cell("test");
@@ -330,6 +349,7 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
       },
     });
   }
+  markUnreadable(observations);
   // A row an overlay-scale stamp crosses is suspected-covered: whatever
   // sits under the stamp (value, unit or range) comes from the embedded
   // text layer alone and cannot be confirmed from the page. Conservative
@@ -468,11 +488,25 @@ export function seriesFor(reports, key, patientId) {
             a.report.meta.reported ?? "",
           ),
       );
-      const [current, ...older] = list;
+      const [selected, ...older] = list;
+      const rank = STATUS_RANK[selected.report.meta.status] ?? 0;
+      const peers = list.filter(
+        (o) => (STATUS_RANK[o.report.meta.status] ?? 0) === rank,
+      );
+      const distinct = new Set(
+        peers.map((o) => JSON.stringify([o.raw, o.unit, o.comparator, o.qual])),
+      );
+      const conflicts = distinct.size > 1 ? peers : [];
+      const current = conflicts.length
+        ? { ...selected, authorityConflict: true }
+        : selected;
       return {
         date,
         current,
-        superseded: older.filter((o) => o.raw !== current.raw),
+        conflicts,
+        superseded: conflicts.length
+          ? []
+          : older.filter((o) => o.raw !== current.raw),
       };
     });
 }
@@ -487,6 +521,13 @@ function interval(o) {
 
 /** @returns {{comparable: boolean, reason?: string, direction?: "higher"|"lower"|"same"|"undetermined", rangeChanged?: boolean}} */
 export function compare(prev, curr) {
+  if (
+    prev.unreadable ||
+    curr.unreadable ||
+    prev.authorityConflict ||
+    curr.authorityConflict
+  )
+    return { comparable: false, reason: "source_uncertain" };
   if (prev.key !== curr.key) return { comparable: false, reason: "test" };
   if (!prev.unit || !curr.unit)
     return { comparable: false, reason: "missing_unit" };
@@ -528,38 +569,60 @@ export function compare(prev, curr) {
  * a draft note can never join another record's results.
  */
 export function packetSegments(doc) {
-  if ((doc.pages?.length ?? 0) < 2 || !doc.elements?.length) return null;
+  if (!doc.elements?.length) return null;
   const span = new Map();
   for (const e of doc.elements) {
-    if (e.page == null || typeof e.start !== "number") continue;
+    if (e.page == null || !Number.isInteger(e.start)) continue;
     const r = span.get(e.page) ?? [Infinity, -1];
     span.set(e.page, [Math.min(r[0], e.start), Math.max(r[1], e.end)]);
   }
-  const pages = [...span.keys()].sort((a, b) => a - b);
-  const heads = pages.map((n) => {
+  const records = [];
+  for (const n of [...span.keys()].sort((a, b) => a - b)) {
     const [a, b] = span.get(n);
-    const m = reportMeta(doc.text.slice(a, b));
-    const id = m.patient?.id ?? null;
-    const own = !!id && !!(m.collected || m.reported || m.status !== "unknown");
-    return {
-      n,
-      own,
-      key: own ? [id, m.collected, m.reported, m.status].join("|") : null,
-    };
-  });
-  if (new Set(heads.filter((h) => h.own).map((h) => h.key)).size < 2)
-    return null;
-  const segs = [];
-  for (const h of heads) {
-    const last = segs[segs.length - 1];
-    if (h.own && last?.key === h.key) last.pages.push(h.n);
-    else segs.push({ key: h.key, pages: [h.n] });
+    const pageText = doc.text.slice(a, b);
+    // Explicit patient headers delimit independent records even on one page.
+    // This is a bounded textual boundary, not a general visual-layout claim.
+    const headers = [
+      ...pageText.matchAll(/^Patient:[^\n]*\bID\b[^\n]*$/gim),
+    ].map((m) => a + m.index);
+    const starts = [
+      a,
+      ...headers.slice(1).map((at) => {
+        const prior = doc.elements
+          .filter((e) => e.page === n && e.type === "heading" && e.end <= at)
+          .at(-1);
+        return prior && prior.start > headers[headers.indexOf(at) - 1]
+          ? prior.start
+          : at;
+      }),
+    ];
+    for (let i = 0; i < starts.length; i++) {
+      const start = starts[i],
+        end = starts[i + 1] ?? b;
+      const m = reportMeta(doc.text.slice(start, end));
+      const id = m.patient?.id;
+      const own =
+        !!id && !!(m.collected || m.reported || m.status !== "unknown");
+      records.push({
+        start,
+        end,
+        pages: [n],
+        key: own ? [id, m.collected, m.reported, m.status].join("|") : null,
+      });
+    }
   }
-  return segs.map((s, i) => {
-    const a = span.get(s.pages[0])[0];
-    const b = span.get(s.pages[s.pages.length - 1])[1];
-    return { index: i + 1, pages: s.pages, start: a, end: b };
-  });
+  if (!records.some((r) => r.key)) return null;
+  const segs = [];
+  for (const r of records) {
+    const last = segs.at(-1);
+    // Only explicitly repeated ownership allows continuation across pages.
+    if (r.key && last?.key === r.key && !last.pages.includes(r.pages[0])) {
+      last.end = r.end;
+      last.pages.push(...r.pages);
+    } else segs.push({ ...r });
+  }
+  if (segs.length < 2) return null;
+  return segs.map(({ key, ...seg }, i) => ({ ...seg, index: i + 1 }));
 }
 
 /**
@@ -676,4 +739,43 @@ export function extractSegment(doc, seg) {
     pages: (doc.pages ?? []).filter((p) => inside.has(p.number)),
   };
   return extractReport(part, { metaText: text.slice(seg.start, seg.end) });
+}
+
+// Units laboratories print. A scanned row whose unit is not one of these
+// ("miv/t", "ng/mb") was misread somewhere along the row.
+const LAB_UNIT =
+  /^(?:%|fl|pg|[mµunp]?g\/(?:d?l|ml|l)|[mµunp]?mol\/l|m?eq\/l|[mµ]?i?u\/(?:m?l|l)|[mµu]iu\/(?:m?l|l)|iu\/(?:m?l|l)|u\/l|10[\^*]\d+\/[µu]?l|10[\^*]\d+\/mm3|lakhs?\/(?:cumm|µl|ul)|cells\/(?:µl|ul|cumm)|\/cumm|\/hpf|mm\/h(?:r|our)?|mm(?:hg)?|s(?:ec(?:onds?)?)?|ratio|index|ml\/min(?:\/1\.73\s*m2)?|kg\/m2|g\/24\s*h(?:rs?)?|mg\/24\s*h(?:rs?)?|ng\/ml\/h(?:r)?|copies\/ml|titre|titer|mosm\/kg)$/i;
+const OCR_ROW = (o) =>
+  o.source?.method === "ocr" ||
+  (o.source?.method === "lab-lines" && o.source?.confidence != null);
+
+/**
+ * OCR uncertainty is evidence about the reading, never about whether a
+ * measured result is clinically plausible. Preserve the raw value and
+ * withhold weak readings; a reference range cannot supply missing digits.
+ */
+export function markUnreadable(observations) {
+  for (const o of observations) {
+    if (OCR_ROW(o)) {
+      // "HbAlc" -> "HbA1c": the printed name as the lab meant it; the raw
+      // OCR reading is kept for provenance.
+      const fixed = ocrFixName(o.test);
+      if (fixed !== o.test) {
+        o.testRaw = o.test;
+        o.test = fixed;
+      }
+    }
+    if (!OCR_ROW(o) || o.qual || o.value == null) continue;
+    const page = o.source?.page ?? null;
+    const confidence = o.source?.confidence ?? null;
+    if (confidence == null || confidence < OCR_REVIEW_CONFIDENCE)
+      o.unreadable = { reason: "confidence", page, confidence, maybe: null };
+    if (
+      !o.unreadable &&
+      o.unit &&
+      !LAB_UNIT.test(String(o.unit).replace(/\s+/g, ""))
+    )
+      o.unreadable = { reason: "unit", page, confidence, maybe: null };
+  }
+  return observations;
 }

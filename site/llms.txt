@@ -18,7 +18,7 @@ Use it when you need an answer about a document that must not guess: it refuses 
 
 ## How to use the answer
 
-- Repeat `lead.text` and its citations as given. The sentence is what the evidence gate checked; rewording it can reintroduce the errors it avoids.
+- Repeat `final.text` (equal to `lead.text` whenever there is a lead) and its citations as given. `final.kind` says whether it is an answer, a clarifying question, a refusal or an abstention; `retrieval` is diagnostics only. The sentence is what the evidence gate checked; rewording it can reintroduce the errors it avoids.
 - Only state a number when the verdict is LATEST or COMPARED. For NOT_COMPARABLE, AMBIGUOUS_PATIENT, PROPOSED, OPEN, NO-RECORD and UNKNOWN, report the verdict instead of a value.
 - It is a research prototype, not a diagnostic or clinically validated product.
 

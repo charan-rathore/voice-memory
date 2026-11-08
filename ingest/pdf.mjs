@@ -122,6 +122,13 @@ function toLines(group) {
     l.x0 = Math.min(...l.items.map((i) => i.x0));
     l.x1 = Math.max(...l.items.map((i) => i.x1));
     l.text = l.cells.map((c) => c.text).join(" ");
+    // Words from OCR carry a confidence; a line is as trustworthy as its
+    // weakest word. Text-layer lines have none.
+    const confs = l.items.filter((i) => i.conf != null).map((i) => i.conf);
+    if (confs.length) {
+      l.ocr = true;
+      l.conf = Math.round(Math.min(...confs));
+    }
   }
   return lines
     .filter((l) => l.cells.length)
@@ -355,20 +362,38 @@ export async function parsePdf(
   }
 
   const ocrWarnings = [];
+  // the OCR engine's own page confidence: the one number the progress view,
+  // the page warning and the answer all quote for a scanned page
+  const pageConf = new Map();
   const finish = (final) => {
     const blocks = assemble(pageLines, pages, ocrBlocks);
     const ws = [...warnings, ...ocrWarnings];
-    const ocrConfs = blocks
-      .filter((b) => b.method === "ocr")
-      .map((b) => b.confidence);
-    const meanOcr = ocrConfs.length
-      ? ocrConfs.reduce((a, b) => a + b, 0) / ocrConfs.length
-      : null;
-    if (meanOcr !== null && meanOcr < OCR_REVIEW_CONFIDENCE)
-      ws.push({
-        code: "ocr_low_confidence",
-        message: `Text on the scanned pages was read with ${Math.round(meanOcr)}% average OCR confidence. Review it before relying on numbers.`,
-      });
+    // One warning per weak scanned page, naming the page: a blurry page 3
+    // must not cast doubt on the digital pages 1 and 2, and answers quote
+    // the page's own confidence beside values read from it.
+    const byPage = new Map();
+    for (const b of blocks)
+      if (b.method === "ocr" && b.confidence != null)
+        (byPage.get(b.page) ?? byPage.set(b.page, []).get(b.page)).push(
+          b.confidence,
+        );
+    for (const [page, cs] of [...byPage].sort((a, b) => a[0] - b[0])) {
+      const mean =
+        pageConf.get(page) ??
+        Math.round(cs.reduce((a, b) => a + b, 0) / cs.length);
+      const info = pages.find((pg) => pg.number === page);
+      if (info) info.ocrConfidence = mean;
+      if (mean < OCR_REVIEW_CONFIDENCE)
+        ws.push({
+          code: "ocr_low_confidence",
+          page,
+          confidence: mean,
+          message:
+            pages.length > 1
+              ? `Page ${page} is a scan read with ${mean}% OCR confidence. Check its numbers against the original; the other pages are not affected.`
+              : `This scan was read with ${mean}% OCR confidence. Check its numbers against the original.`,
+        });
+    }
     if (!final)
       for (const s of scans)
         ws.push({
@@ -390,7 +415,7 @@ export async function parsePdf(
       warnings: ws,
       parser: {
         name: PDF_PARSER,
-        ocr: ocrConfs.length ? OCR_ENGINE : null,
+        ocr: byPage.size ? OCR_ENGINE : null,
       },
     };
   };
@@ -407,11 +432,13 @@ export async function parsePdf(
     await waitForOcr();
   }
   for (const { n, page, vp, info } of scans) {
+    const [vx0] = page.view;
     delete info.ocrPending;
     if (ocrBudget > 0) {
       onEvent({ k: "ocr-start", n });
       const images = await extractImages(page, pdfjs.OPS);
       const blocks = [];
+      const words = [];
       let uncertainCount = 0;
       for (const { obj, ctm } of images) {
         const png = imageToPng(obj);
@@ -435,6 +462,57 @@ export async function parsePdf(
             ctm[1] * u + ctm[3] * v + ctm[5],
           ];
         };
+        // A photographed page is rarely straight: over a page width a 1.6°
+        // tilt moves a row's last cell 40 px off its first, onto another
+        // line. Estimate the tilt from OCR's own lines (each is a straight
+        // run of words) and straighten word positions before layout.
+        const slopes = [];
+        for (const p of res.paragraphs)
+          for (const l of p.lines) {
+            const ws = l.words ?? [];
+            if (ws.length < 3) continue;
+            const a = ws[0].bbox,
+              b = ws[ws.length - 1].bbox;
+            const dx = (b.x0 + b.x1) / 2 - (a.x0 + a.x1) / 2;
+            if (dx > 200)
+              slopes.push(((b.y0 + b.y1) / 2 - (a.y0 + a.y1) / 2) / dx);
+          }
+        slopes.sort((a, b) => a - b);
+        const tilt = slopes.length ? slopes[slopes.length >> 1] : 0;
+        const straight = (bb) => {
+          const dy = tilt * ((bb.x0 + bb.x1) / 2);
+          return { x0: bb.x0, x1: bb.x1, y0: bb.y0 - dy, y1: bb.y1 - dy };
+        };
+        // Positioned words, in PDF user space, for the layout engine.
+        for (const p of res.paragraphs)
+          for (const l of p.lines) {
+            if (!l.words?.length) continue;
+            // Height from the tallest word (a tilted line's own box is taller
+            // than its text); baseline from the straightened words.
+            const hs = l.words.map((wd) => wd.bbox.y1 - wd.bbox.y0);
+            const hPx = hs.sort((a, b) => a - b)[hs.length >> 1];
+            const [, h0] = toUser(0, 0);
+            const [, h1] = toUser(0, hPx);
+            // A word box spans roughly ascender to baseline (about 0.9 em).
+            const size = Math.max(4, Math.abs(h1 - h0) / 0.9);
+            const bottoms = l.words
+              .map((wd) => straight(wd.bbox).y1)
+              .sort((a, b) => a - b);
+            const [, bottom] = toUser(0, bottoms[bottoms.length >> 1]);
+            const base = bottom + 0.05 * size;
+            for (const wd of l.words) {
+              const [a] = toUser(wd.bbox.x0, wd.bbox.y1);
+              const [c] = toUser(wd.bbox.x1, wd.bbox.y0);
+              words.push({
+                str: fixLigatures(wd.text),
+                x0: Math.min(a, c) - vx0,
+                x1: Math.max(a, c) - vx0,
+                y: base,
+                size,
+                conf: wd.confidence,
+              });
+            }
+          }
         for (const p of res.paragraphs) {
           const [ux0, uy0] = toUser(p.bbox.x0, p.bbox.y1);
           const [ux1, uy1] = toUser(p.bbox.x1, p.bbox.y0);
@@ -479,7 +557,30 @@ export async function parsePdf(
       }
       if (blocks.length) {
         info.textSource = "ocr";
-        ocrBlocks.set(n, blocks);
+        if (words.length) {
+          // Same reading order, rows and tables as a digital page. (Columns a
+          // scanner split into separate blocks come back together by row.)
+          const { groups, columns } = readingGroups(words, vp.width);
+          info.columns = columns;
+          const lines = [];
+          groups.forEach((g, gi) => {
+            for (const l of toLines(g)) {
+              l.group = gi;
+              l.page = n;
+              l.vp = vp;
+              l.pageHeight = page.view[3] - page.view[1];
+              l.bbox = viewBox(
+                vp,
+                l.x0 + vx0,
+                l.y - 0.22 * l.size,
+                l.x1 + vx0,
+                l.y + 0.78 * l.size,
+              );
+              lines.push(l);
+            }
+          });
+          pageLines[n - 1] = lines;
+        } else ocrBlocks.set(n, blocks);
       }
       // Kept on the page record itself so a cached parse can re-stamp the
       // same per-page facts (the reading view's page tiles read them).
@@ -489,6 +590,7 @@ export async function parsePdf(
           )
         : null;
       info.ocrUncertain = uncertainCount;
+      if (info.ocrConfidence != null) pageConf.set(n, info.ocrConfidence);
       onEvent({
         k: "ocr-done",
         n,
@@ -516,22 +618,32 @@ export async function parsePdf(
 
 /** Reading-order blocks from text-layer lines plus any OCR'd pages. */
 function assemble(pageLines, pages, ocrBlocks) {
+  // Document statistics (furniture, font sizes) come from the text layer
+  // only, so the text pages read the same before and after the scans are
+  // OCR'd; a scan-only document uses its OCR lines.
+  const textLines = pageLines.flat().filter((l) => !l.ocr);
+  const statLines = textLines.length ? textLines : pageLines.flat();
   // Page furniture: margin lines whose digit-normalized text repeats on 2+ pages.
   const furniture = new Set();
   if (pages.length > 1) {
     const seen = new Map();
-    for (const lines of pageLines)
-      for (const l of lines) {
-        const inMargin = l.y < l.pageHeight * 0.08 || l.y > l.pageHeight * 0.92;
-        if (!inMargin) continue;
-        const k = furnitureKey(l.text);
-        seen.set(k, (seen.get(k) ?? new Set()).add(l.page));
-      }
+    for (const l of statLines) {
+      const inMargin = l.y < l.pageHeight * 0.08 || l.y > l.pageHeight * 0.92;
+      if (
+        !inMargin ||
+        /\b(patient|subject|collected|reported|report status|accession|mrn|uhid)\b/i.test(
+          l.text,
+        )
+      )
+        continue;
+      const k = furnitureKey(l.text);
+      seen.set(k, (seen.get(k) ?? new Set()).add(l.page));
+    }
     for (const [k, ps] of seen) if (ps.size >= 2) furniture.add(k);
   }
 
   // Document-wide font statistics for heading detection.
-  const allLines = pageLines.flat();
+  const allLines = statLines;
   const body = median(
     allLines.flatMap((l) => Array(Math.max(1, l.text.length)).fill(l.size)),
   );
@@ -542,8 +654,13 @@ function assemble(pageLines, pages, ocrBlocks) {
         .map((l) => Math.round(l.size)),
     ),
   ].sort((a, b) => b - a);
+  // A size the text layer never used (an OCR'd heading) ranks among the
+  // known sizes instead of falling off the scale.
   const levelOf = (size) =>
-    Math.min(4, headingSizes.indexOf(Math.round(size)) + 1);
+    Math.min(
+      4,
+      Math.max(1, headingSizes.filter((h) => h > Math.round(size)).length + 1),
+    );
 
   const blocks = [];
   for (let p = 0; p < pageLines.length; p++) {
@@ -551,6 +668,19 @@ function assemble(pageLines, pages, ocrBlocks) {
       blocks.push(...ocrBlocks.get(p + 1));
       continue;
     }
+    // Scanned pages are laid out from OCR words like any other page; their
+    // blocks say so, with the weakest word's confidence.
+    const how = (...ls) =>
+      ls.some((l) => l.ocr)
+        ? {
+            method: "ocr",
+            confidence: Math.min(...ls.map((l) => l.conf ?? 100)),
+          }
+        : { method: "pdf-text" };
+    const srcLine = (l) =>
+      l.ocr
+        ? { rawText: l.text, bbox: l.bbox, group: l.group, confidence: l.conf }
+        : { rawText: l.text, bbox: l.bbox, group: l.group };
     const lines = pageLines[p];
     const runs = gridRuns(lines, body);
     let para = null;
@@ -567,12 +697,10 @@ function assemble(pageLines, pages, ocrBlocks) {
           blocks.push({
             type: "paragraph",
             text: r.line.text,
-            sourceLines: [
-              { rawText: r.line.text, bbox: r.line.bbox, group: r.line.group },
-            ],
+            sourceLines: [srcLine(r.line)],
             page: r.line.page,
             bbox: r.line.bbox,
-            method: "pdf-text",
+            ...how(r.line),
           });
       table = null;
     };
@@ -593,10 +721,10 @@ function assemble(pageLines, pages, ocrBlocks) {
         blocks.push({
           type: "overlay",
           text: l.text,
-          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
+          sourceLines: [srcLine(l)],
           page: l.page,
           bbox: l.bbox,
-          method: "pdf-text",
+          ...how(l),
         });
         prev = null;
         continue;
@@ -611,10 +739,10 @@ function assemble(pageLines, pages, ocrBlocks) {
         blocks.push({
           type: "furniture",
           text: l.text,
-          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
+          sourceLines: [srcLine(l)],
           page: l.page,
           bbox: l.bbox,
-          method: "pdf-text",
+          ...how(l),
         });
         prev = null;
         continue;
@@ -653,29 +781,30 @@ function assemble(pageLines, pages, ocrBlocks) {
           type: "heading",
           level: levelOf(l.size),
           text: l.text,
-          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
+          sourceLines: [srcLine(l)],
           page: l.page,
           bbox: l.bbox,
-          method: "pdf-text",
+          ...how(l),
         });
       } else if (!para || gapBreak || sizeBreak) {
         flushPara();
         para = {
           type: "paragraph",
           text: l.text,
-          sourceLines: [{ rawText: l.text, bbox: l.bbox, group: l.group }],
+          sourceLines: [srcLine(l)],
           page: l.page,
           bbox: [...l.bbox],
           size: l.size,
-          method: "pdf-text",
+          ...how(l),
         };
       } else {
         const joinHyphen = /[a-z]-$/.test(para.text) && /^[a-z]/.test(l.text);
-        para.sourceLines.push({
-          rawText: l.text,
-          bbox: l.bbox,
-          group: l.group,
-        });
+        para.sourceLines.push(srcLine(l));
+        if (l.ocr)
+          Object.assign(para, {
+            method: "ocr",
+            confidence: Math.min(para.confidence ?? 100, l.conf),
+          });
         para.text = joinHyphen
           ? para.text.slice(0, -1) + l.text
           : para.text + " " + l.text;
@@ -775,18 +904,26 @@ function finalizeTable(table) {
           best = i;
       cells[best] = cells[best] ? cells[best] + " " + c.text : c.text;
     }
-    return { cells, bbox: line.bbox };
+    return line.ocr
+      ? { cells, bbox: line.bbox, confidence: line.conf }
+      : { cells, bbox: line.bbox };
   });
+  const ocr = table.rows.some(({ line }) => line.ocr);
   const first = table.rows[0].line;
   const last = table.rows[table.rows.length - 1].line;
   return {
     type: "table",
     rows,
-    sourceLines: table.rows.map(({ line }) => ({
-      rawText: line.text,
-      bbox: line.bbox,
-      group: line.group,
-    })),
+    sourceLines: table.rows.map(({ line }) =>
+      line.ocr
+        ? {
+            rawText: line.text,
+            bbox: line.bbox,
+            group: line.group,
+            confidence: line.conf,
+          }
+        : { rawText: line.text, bbox: line.bbox, group: line.group },
+    ),
     page: first.page,
     bbox: [
       Math.min(...rows.map((r) => r.bbox[0])),
@@ -794,6 +931,13 @@ function finalizeTable(table) {
       Math.max(...rows.map((r) => r.bbox[2])),
       last.bbox[3],
     ],
-    method: "pdf-text",
+    ...(ocr
+      ? {
+          method: "ocr",
+          confidence: Math.min(
+            ...table.rows.map(({ line }) => line.conf ?? 100),
+          ),
+        }
+      : { method: "pdf-text" }),
   };
 }

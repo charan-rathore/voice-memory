@@ -18,6 +18,11 @@
 //
 // Rate limits are per client address and global; voice minting has its own
 // tighter caps because each call spends the operator's Bolna credits.
+import { finalAnswer } from "./answer-contract.mjs";
+import {
+  dictionaryOf,
+  vocabularyOf as recordVocabulary,
+} from "./transcript-fix.mjs";
 import { createHash, randomBytes } from "node:crypto";
 import path from "node:path";
 import { createCallCounters } from "./public-call-counters.mjs";
@@ -547,6 +552,29 @@ export function createPublicApi({
             true
           );
         send(res, 200, workspaces.create());
+        return true;
+      }
+      // The documents' own vocabulary (test names, aliases, patient ids), one
+      // term per line: paste into a dictation app's custom dictionary
+      // (OpenWhispr feeds it to its speech model as hints) so these words
+      // are transcribed right. Same list the voice path repairs against.
+      const dict =
+        req.method === "GET" &&
+        (/^\/workspace\/(w_[0-9a-f]{32})\/dictionary$/.exec(path) ??
+          (path === "/dictionary" ? [null, null] : null));
+      if (dict) {
+        const bundle = dict[1]
+          ? workspaces?.get(dict[1])?.bundle
+          : caseOf(url.searchParams.get("case"))?.bundle;
+        if (!bundle)
+          return (send(res, 404, { error: "Nothing indexed here yet." }), true);
+        const body =
+          dictionaryOf(recordVocabulary(bundle.clinical ?? [])) + "\n";
+        res.writeHead(200, {
+          "content-type": "text/plain; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        res.end(body);
         return true;
       }
       const wsm = /^\/workspace\/(w_[0-9a-f]{32})(\/upload)?$/.exec(path);
@@ -1329,6 +1357,7 @@ export function createPublicApi({
 
 /** The visitor-facing slice of an answer: no internals, every quote located. */
 export function publicAnswer(shown) {
+  const final = finalAnswer(shown);
   const cite = (c) => ({
     documentId: c.documentId ?? null,
     title: c.title ?? c.sourceTitle ?? null,
@@ -1405,8 +1434,24 @@ export function publicAnswer(shown) {
           steps: shown.semantic.steps ?? [],
         }
       : null,
-    answer: shown.answer ?? shown.text ?? null,
-    status: shown.status ?? null,
+    // The one answer (src/answer-contract.mjs): the lead when there is one,
+    // else the cited passage, else an honest abstention. `answer` is the
+    // same text, kept for existing clients.
+    final: {
+      text: final.text,
+      verdict: final.verdict,
+      kind: final.kind,
+      from: final.from,
+      citations: final.citations.map(cite),
+    },
+    answer: final.text,
+    status: final.kind,
+    // What retrieval alone found underneath the answer: diagnostics, never
+    // to be shown or spoken in place of `final`.
+    retrieval: {
+      text: shown.answer ?? shown.text ?? null,
+      status: shown.status ?? null,
+    },
     evidence: (shown.evidence ?? []).slice(0, 4).map(cite),
   };
 }

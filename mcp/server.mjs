@@ -31,6 +31,11 @@ import { realpathSync } from "node:fs";
 import { basename, isAbsolute, sep, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
+import {
+  PUBLIC_TOOLS,
+  lookupTestCode,
+  testEducation,
+} from "./public-health.mjs";
 
 const BASE = (
   process.env.VM_API_BASE || "https://voice-memory-beige.vercel.app/api/public"
@@ -141,6 +146,7 @@ const TOOLS = [
     },
     annotations: { readOnlyHint: true },
   },
+  ...PUBLIC_TOOLS,
 ];
 
 async function api(path, opts = {}, ctx = {}) {
@@ -169,8 +175,8 @@ async function api(path, opts = {}, ctx = {}) {
 export function shapeAnswer(a) {
   const lead = a.lead ?? null;
   return {
-    verdict: lead?.verdict ?? "UNKNOWN",
-    answer: lead?.text ?? a.answer ?? null,
+    verdict: a.final?.verdict ?? lead?.verdict ?? "UNKNOWN",
+    answer: a.final?.text ?? lead?.text ?? a.answer ?? null,
     citations: (lead?.citations?.length ? lead.citations : (a.evidence ?? []))
       .slice(0, 4)
       .map((c) => ({ document: c.title, quote: c.quote, status: c.status })),
@@ -280,6 +286,10 @@ async function call(name, args = {}, ctx = {}) {
       });
       return shapeAnswer(ans);
     }
+    case "lookup_test_code":
+      return lookupTestCode(args.name, ctx);
+    case "test_education":
+      return testEducation(args.loinc, { ...ctx, language: args.language });
     case "create_workspace":
       return a("/workspace", { method: "POST" });
     case "upload_document": {

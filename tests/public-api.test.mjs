@@ -63,17 +63,25 @@ test("a known test these reports lack still says not-in-report", async () => {
   assert.equal(body.lead.verdict, "NOT_IN_REPORT");
 });
 
-test("an unnamed overview asks whose reports, never a silent patient pick", async () => {
+// Never a silent patient pick: an unnamed overview over two people answers
+// for each of them separately, each under their own label, and a
+// first-person question ends by asking which one is the caller.
+test("an unnamed overview keeps each person apart, never a silent patient pick", async () => {
   const { status, body } = await ask("health", "how am i doing");
   assert.equal(status, 200);
-  assert.equal(body.lead.verdict, "AMBIGUOUS_PATIENT");
-  assert.match(body.lead.text, /more than one person/);
+  assert.equal(body.lead.verdict, "OVERVIEW");
+  assert.match(body.lead.text, /for 2 people, so I keep their results apart/);
+  assert.match(body.lead.text, /For SYN-0001,/);
+  assert.match(body.lead.text, /SYN-0003/);
+  assert.match(body.lead.text, /which of these is you/);
 });
 
-test("a generic 'my blood levels' phrasing also asks whose", async () => {
+test("a generic 'my blood levels' phrasing also keeps each person apart", async () => {
   const { status, body } = await ask("health", "what are my blood levels");
   assert.equal(status, 200);
-  assert.equal(body.lead.verdict, "AMBIGUOUS_PATIENT");
+  assert.notEqual(body.lead.verdict, "LATEST");
+  assert.match(body.lead.text, /for 2 people/);
+  assert.match(body.lead.text, /which of these is you/);
 });
 
 test("an overview naming the patient still answers for that patient", async () => {
@@ -609,16 +617,22 @@ test("bring-your-own answers complete wrapped sentences and keep one supporting 
     "What is the menu deadline and what fee applies if it changes after that?",
   );
   assert.equal(a.status, 200);
-  // The excerpt must complete the wrapped sentence: the deadline AND the fee,
-  // not a cut-off "...incur a".
-  assert.match(a.body.answer, /27 March 2027/);
-  assert.match(a.body.answer, /Rs 18,000/);
-  assert.doesNotMatch(a.body.answer, /incur a\n\[Source/);
+  // The retrieved excerpt must complete the wrapped sentence: the deadline
+  // AND the fee, not a cut-off "...incur a".
+  const excerpt = a.body.retrieval.text;
+  assert.match(excerpt, /27 March 2027/);
+  assert.match(excerpt, /Rs 18,000/);
+  assert.doesNotMatch(excerpt, /incur a\n\[Source/);
   // The clipped duplicate line must not appear beside the completed passage.
-  const occurrences = a.body.answer.split("27 March 2027").length - 1;
+  const occurrences = excerpt.split("27 March 2027").length - 1;
   assert.ok(occurrences <= 2, `deadline repeated ${occurrences} times`);
   // Continuation must not swallow the following unrelated block.
-  assert.doesNotMatch(a.body.answer.split("[Source 1]")[0], /Allergens/);
+  assert.doesNotMatch(excerpt.split("[Source 1]")[0], /Allergens/);
+  // The one shown answer quotes that excerpt, not the whole document.
+  assert.match(a.body.final.text, /27 March 2027/);
+  assert.match(a.body.final.text, /Rs 18,000/);
+  assert.doesNotMatch(a.body.final.text, /Allergens/);
+  assert.equal(a.body.answer, a.body.final.text);
 });
 
 // ---- Public-call counters: visitor allowance, ceilings, cutoff, fail-closed

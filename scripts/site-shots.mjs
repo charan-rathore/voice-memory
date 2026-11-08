@@ -6,6 +6,7 @@
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
+import { checkExplainer } from "../tests/explainer-ui-check.mjs";
 
 const out = process.argv[2] || ".shots";
 mkdirSync(out, { recursive: true });
@@ -125,6 +126,8 @@ try {
     await page.screenshot({ path: `${out}/${name}-full.png`, fullPage: true });
     await page.close();
   }
+  // the test explainer: taps, units, bounds and phone fit
+  errors.push(...(await checkExplainer(browser)));
 } finally {
   await browser.close();
   dev.kill();

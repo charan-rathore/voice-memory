@@ -186,6 +186,9 @@ function withLabContext(question, reports, prevField) {
   if (
     !prevField ||
     DATE_ASK_RE.test(question) ||
+    /\b(?:any|all|which|what) (?:of (?:the |my )?)?(?:results|values|tests)\b|\b(?:whole|entire) report\b/i.test(
+      question,
+    ) ||
     (!LAB_FOLLOWUP_RE.test(question) && !BARE_ID_RE.test(question))
   )
     return question;

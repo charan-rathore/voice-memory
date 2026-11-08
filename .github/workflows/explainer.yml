@@ -44,7 +44,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set +e
-          manim -qm --disable_caching docs/explainer/units.py Units > render.log 2>&1
+          manim -qm --disable_caching docs/explainer/units.py Units > render.log 2>&1 &&
+            manim -qm --disable_caching docs/explainer/tests.py Ferritin Hemoglobin TSH Creatinine HbA1c LDL >> render.log 2>&1
           code=$?
           set -e
           if [ $code -ne 0 ]; then
@@ -58,10 +59,14 @@ jobs:
           mkdir -p docs/media
           cp media/videos/units/720p30/Units.mp4 docs/media/units.mp4
           ffmpeg -y -loglevel error -i docs/media/units.mp4 -vf "fps=15,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=48[p];[b][p]paletteuse" docs/media/units.gif
+          for s in Ferritin Hemoglobin TSH Creatinine HbA1c LDL; do
+            n=$(echo "$s" | tr '[:upper:]' '[:lower:]')
+            cp "media/videos/tests/720p30/$s.mp4" "docs/media/test-$n.mp4"
+          done
           ls -la docs/media
       - name: Commit the rendered clip
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/media/units.mp4 docs/media/units.gif
+          git add docs/media/units.mp4 docs/media/units.gif docs/media/test-*.mp4
           git diff --cached --quiet || (git commit -m "Render units explainer (Manim)" && git push)

@@ -39,7 +39,7 @@ export const isHindi = (lang) => lang === "hi" || lang === "hinglish";
 
 // ------------------------------------------------------------ social turns
 const DOMAIN =
-  /\b(ferritin|creatin\w*|creatine|tsh|thyroid|h(a)?emoglobin|hba1c|sugar|urea|iron|kidney|syn|report\w*|result\w*|test\w*|lab|value|level|fee\w*|price|cost|deadline|date|contract|agreement|sign\w*|payment\w*|split|northstar|meridian|kapoor|proposal|revision|approv\w*|finance|scope|region\w*|pilot|steering|committee|open|decided|deal)\b|फेरिटिन|क्रिएटिनिन|थायरॉइड|रिपोर्ट|नतीजा|नतीजे|फीस|अनुबंध|कॉन्ट्रैक्ट|भुगतान|समय\s*सीमा|डेडलाइन|मंज़ूर|हस्ताक्षर/i;
+  /\b(ferritin|creatin\w*|creatine|tsh|thyroid|h(a)?emoglobin|hba1c|sugar|urea|iron|kidney|syn|report\w*|result\w*|test\w*|lab|value|level|doctor|dr|physician|clinician|daktar|abnormal\w*|range|fee\w*|price|cost|deadline|date|contract|agreement|sign\w*|payment\w*|split|northstar|meridian|kapoor|proposal|revision|approv\w*|finance|scope|region\w*|pilot|steering|committee|open|decided|deal)\b|फेरिटिन|क्रिएटिनिन|थायरॉइड|रिपोर्ट|डॉक्टर|डाक्टर|रेंज|नतीजा|नतीजे|फीस|अनुबंध|कॉन्ट्रैक्ट|भुगतान|समय\s*सीमा|डेडलाइन|मंज़ूर|हस्ताक्षर/i;
 
 const R = {
   hear: /\b(can|could|are|r|do)\s+(you|u)\b[^.?]{0,24}\b(hear|listen)|\bhear\s+me\b|\bam\s+i\s+audible\b|\bis\s+(this|it)\s+working\b|\btesting\b|\bmic\s+check\b|sun\s*(pa\s*)?rah[ei]|sunai\s+de|aawaz|awaaz|आवाज़|सुन\s*(पा\s*)?रह/i,

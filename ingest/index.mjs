@@ -15,6 +15,9 @@
 import { Worker } from "node:worker_threads";
 import { detectFormat, safeFilename } from "./detect.mjs";
 import { IngestError, LIMITS } from "./errors.mjs";
+import { lease } from "./pool.mjs";
+
+const POOLED = process.env.VM_PARSE_POOL !== "off";
 
 export { locate } from "./canonical.mjs";
 
@@ -55,7 +58,9 @@ export async function ingestFile(
     onPartial = () => {},
     timeoutMs = LIMITS.parseTimeoutMs,
     terminationTimeoutMs = 5000,
-    workerFactory = (url, options) => new Worker(url, options),
+    // Warm pooled threads by default (ingest/pool.mjs); VM_PARSE_POOL=off
+    // starts one fresh thread per file, as before.
+    workerFactory = POOLED ? lease : (url, options) => new Worker(url, options),
   } = {},
 ) {
   const name = safeFilename(filename);

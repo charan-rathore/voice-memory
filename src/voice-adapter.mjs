@@ -21,6 +21,16 @@ import {
 } from "./dense.mjs";
 import { spokenTurn, historyField } from "./spoken.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
+import { repairRecordTerms, vocabularyOf } from "./transcript-fix.mjs";
+
+// One vocabulary per indexed bundle (rebuilt when the bundle changes).
+const vocabCache = new WeakMap();
+function vocabFor(bundle) {
+  if (!bundle) return { terms: [], ids: [] };
+  let v = vocabCache.get(bundle);
+  if (!v) vocabCache.set(bundle, (v = vocabularyOf(bundle.clinical ?? [])));
+  return v;
+}
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import {
   clinicalOverview,
@@ -469,7 +479,15 @@ export function createVoiceAdapter({
       // the caller settled on is read, here and in the history the engine sees
       let busyTaken = false;
       try {
-        const transcript = selfRepair(askedRaw);
+        // Names the recogniser cannot know ("creating in", "tea s h", "s y n
+        // zero zero zero one") are repaired from these documents' own
+        // vocabulary first; numbers are never touched (transcript-fix.mjs).
+        const repaired = repairRecordTerms(
+          selfRepair(askedRaw),
+          vocabFor(bundle),
+        );
+        const heardFixes = repaired.fixes;
+        const transcript = repaired.text;
         if (transcript !== askedRaw) {
           const at = data.messages.map((m) => m?.role).lastIndexOf("user");
           data = {
@@ -1337,6 +1355,8 @@ export function createVoiceAdapter({
           start(controller) {
             logTurn({
               transcript,
+              heard: askedRaw,
+              heardFixes,
               normalized: asked ?? null,
               firstByteAt: Date.now(),
               spoken,
@@ -1346,6 +1366,10 @@ export function createVoiceAdapter({
             try {
               onTurn?.(token, {
                 question: transcript,
+                // what the recogniser heard and how names were understood,
+                // so the page can show "heard ... understood as ..."
+                heard: heardFixes.length ? askedRaw : null,
+                heardFixes,
                 // what was actually spoken (both halves, in the caller's
                 // language), so the page shows the same words; plus any page
                 // action the turn asks for (show the upload panel)

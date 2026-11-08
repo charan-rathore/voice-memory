@@ -14,6 +14,7 @@
 //     name, or reassurance about health.
 
 import { MORE_GLOSSARY, MORE_SOURCES } from "./glossary-more.mjs";
+import { OCR_REVIEW_CONFIDENCE } from "../ingest/errors.mjs";
 
 // Whether a question is about someone other than the caller ("his TSH",
 // "my father's report", "does he have"), so answers and declines never
@@ -212,6 +213,25 @@ for (const [key, g] of Object.entries(GLOSSARY))
   }
 ALIAS_INDEX.sort((a, b) => b.w.length - a.w.length || b.len - a.len);
 const memo = new Map();
+/**
+ * The printed name with OCR letter/digit confusions fixed, only where the
+ * fixed token is part of a known test name ("HbAlc" -> "HbA1c").
+ */
+export function ocrFixName(name) {
+  const fold = (x) => x.replace(/[il|]/g, "1").replace(/o/g, "0");
+  const known = new Map();
+  for (const a of ALIAS_INDEX)
+    for (const x of a.w) if (/\d/.test(x)) known.set(fold(x), x);
+  return String(name).replace(/[A-Za-z0-9|]+/g, (tok) => {
+    const k = known.get(fold(tok.toLowerCase()));
+    if (!k || tok.toLowerCase() === k) return tok;
+    // keep the printed capitalisation, swap only the confused characters
+    return [...tok]
+      .map((ch, i) => (/[il|o]/i.test(ch) && /\d/.test(k[i] ?? "") ? k[i] : ch))
+      .join("");
+  });
+}
+
 export function canonOf(name) {
   if (memo.has(name)) return memo.get(name);
   const w = words(name);
@@ -228,6 +248,24 @@ export function canonOf(name) {
     if (extra.every((x) => own.has(x))) {
       key = a.key;
       break;
+    }
+  }
+  // OCR confuses l/I with 1 and o with 0 ("HbAlc"). Retry with those
+  // folded, but only against names that contain a digit (HbA1c, B12, D3,
+  // T4), so an ordinary word can never be bent into a test name.
+  if (!key) {
+    const fold = (x) => x.replace(/[il|]/g, "1").replace(/o/g, "0");
+    const folded = new Set(w.map(fold));
+    for (const a of ALIAS_INDEX) {
+      if (!a.w.some((x) => /\d/.test(x))) continue;
+      if (!a.w.every((x) => folded.has(fold(x)))) continue;
+      const extra = w.filter(
+        (x) => !a.w.some((y) => fold(y) === fold(x)) && !GENERIC.has(x),
+      );
+      if (!extra.length) {
+        key = a.key;
+        break;
+      }
     }
   }
   memo.set(name, key);
@@ -425,6 +463,8 @@ export function span(r, lang = "en") {
  * @returns {"within"|"below"|"above"|"qual_differs"|"unknown"}
  */
 export function position(o) {
+  // A scanned value the reader could not vouch for is never judged.
+  if (o.unreadable) return "unknown";
   if (o.qual) {
     if (!o.ref?.expected) return "unknown";
     return sameQual(o.qual, o.ref.expected) ? "within" : "qual_differs";
@@ -494,7 +534,11 @@ const T = {
       `One thing to check: the report's ${o.flag} flag doesn't match its own range, so it's worth confirming with the lab.`,
     obscured: (o, date) =>
       `The report's embedded text reads ${o.raw} for ${nameOf(o)}, from ${date}. An overlaid stamp or watermark crosses that row, so the value may not be what is visibly printed; I can't confirm it from the page, and I won't judge it against the printed range.`,
+    unreadable: (o) =>
+      `Page ${o.unreadable.page ?? "?"} prints ${o.test}, but the scan is too unclear to read it safely: it looks like “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}”${o.unreadable.reason === "unit" ? ", and I could not verify the unit" : ""}. Please check the original before relying on it.`,
     stampNote: `One caveat: this copy carries an overlaid stamp, so some printed cells may not be readable on the page itself; it's worth confirming against the original report.`,
+    scanNote: (page, c) =>
+      `I read this from a scanned page${page ? ` (page ${page})` : ""} with ${c}% OCR confidence, so please check the number against the original.`,
   },
   hi: {
     value: (o, date) =>
@@ -503,7 +547,11 @@ const T = {
       `रिपोर्ट के एम्बेडेड टेक्स्ट में ${nameOf(o)} का नतीजा ${valueText(o, "hi")} लिखा है, ${date} से।`,
     obscured: (o, date) =>
       `रिपोर्ट के एम्बेडेड टेक्स्ट में ${date} की ${nameOf(o)} जांच का नतीजा ${o.raw} लिखा है। उस पंक्ति पर स्टैम्प या वॉटरमार्क आ रहा है, इसलिए मैं पेज पर छपे नतीजे की पुष्टि नहीं कर सकती, और इसे रेंज से भी नहीं तौलूँगी।`,
+    unreadable: (o) =>
+      `पेज ${o.unreadable.page ?? "?"} पर ${o.test} छपा है, पर स्कैन इतना साफ़ नहीं कि इसे भरोसे से पढ़ा जा सके: यह “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}” जैसा दिखता है${""}। इस पर भरोसा करने से पहले मूल रिपोर्ट देख लें।`,
     stampNote: `एक बात: इस कॉपी पर स्टैम्प लगी है, इसलिए कुछ छपे हुए सेल पेज पर पढ़े नहीं जा सकते; मूल रिपोर्ट से जाँच लेना ठीक रहेगा।`,
+    scanNote: (page, c) =>
+      `यह मान मैंने स्कैन किए गए पेज${page ? ` (पेज ${page})` : ""} से ${c}% OCR भरोसे के साथ पढ़ा है, इसलिए मूल रिपोर्ट से संख्या जाँच लें।`,
     notInPeriod: (test, period) =>
       `इन रिपोर्ट्स में ${period} का कोई ${test} नतीजा नहीं है। जो नतीजे हैं वे स्क्रीन पर हैं।`,
     within: (r) => `यह इस लैब की सीमा (${span(r, "hi")}) के अंदर है।`,
@@ -556,7 +604,11 @@ const T = {
       `Report ke embedded text mein ${nameOf(o)} ka result ${valueText(o, "hinglish")} likha hai, ${date} se.`,
     obscured: (o, date) =>
       `Report ke embedded text mein ${date} ka ${nameOf(o)} result ${o.raw} likha hai. Us row par stamp ya watermark aa raha hai, isliye main page par chhape result ki confirm nahi kar sakti, aur ise range se bhi nahi tolungi.`,
+    unreadable: (o) =>
+      `Page ${o.unreadable.page ?? "?"} par ${o.test} chhapa hai, par scan itna saaf nahi ki ise bharose se padha ja sake: yeh “${o.raw}${o.unitRaw ? " " + o.unitRaw : ""}” jaisa dikhta hai${""}. Is par bharosa karne se pehle original dekh lijiye.`,
     stampNote: `Ek baat: is copy par overlaid stamp hai, isliye kuch printed cells page par padhe nahi ja sakte; original report se confirm kar lena.`,
+    scanNote: (page, c) =>
+      `Yeh value maine scanned page${page ? ` (page ${page})` : ""} se ${c}% OCR confidence ke saath padhi hai, isliye original se number check kar lijiye.`,
     notInPeriod: (test, period) =>
       `In reports mein ${period} ka koi ${test} result nahi hai. Jo results hain wo screen par hain.`,
     within: (r) => `Yeh is lab ki range (${span(r, "hinglish")}) ke andar hai.`,
@@ -625,6 +677,9 @@ export function explainOne(o, date, lang) {
   // Suspected stamp/watermark cover: provenance and uncertainty first,
   // no range judgement, no unit assertion.
   if (o.suspectObscured) return t.obscured(o, sayDate(date, lang));
+  // A scanned value that looks misread: say what the page seems to show and
+  // why it is doubtful, never state it as the result.
+  if (o.unreadable) return t.unreadable(o);
   const pos = position(o);
   if (o.qual) {
     const parts = [
@@ -646,6 +701,11 @@ export function explainOne(o, date, lang) {
       ? t.valueEmbedded(o, sayDate(date, lang))
       : t.value(o, sayDate(date, lang)),
   ];
+  // A value read from a weak scan says so, with its page and confidence,
+  // right after the number. Values from clean pages stay unqualified.
+  const sc = o.source?.confidence;
+  if (sc != null && sc < OCR_REVIEW_CONFIDENCE)
+    parts.push(t.scanNote(o.source.page ?? null, Math.round(sc)));
   if (CRITICAL_FLAG.test(o.flag ?? "")) {
     parts.push(t.critical);
     if (pos === "unknown" && o.rangeRaw) parts.push(t.unjudged(o.rangeRaw));
@@ -664,6 +724,8 @@ export function explainOne(o, date, lang) {
 export function explainChange(prev, curr, da, db, direction, lang, amended) {
   // A comparison against a stamp-covered row is unqualified data: fall
   // back to the provenance-qualified reading of the newer row.
+  if (prev.unreadable || curr.unreadable)
+    return T[lang ?? "en"].unreadable(curr.unreadable ? curr : prev);
   if (prev.suspectObscured || curr.suspectObscured)
     return T[lang ?? "en"].obscured(
       curr.suspectObscured ? curr : prev,

@@ -279,6 +279,23 @@ function anchorEntry(series, anchor) {
   return inMonth[inMonth.length - 1] ?? null;
 }
 
+function authorityConflictAnswer(used, lang = "en") {
+  const spoken = {
+    en: "These reports give conflicting values with equal report authority. I cannot identify a correction or choose a result from upload order. Please check the original reports with the lab.",
+    hi: "इन रिपोर्ट्स में समान दर्जे के अलग नतीजे हैं। अपलोड के क्रम से मैं सुधार या सही नतीजा नहीं चुन सकती। कृपया लैब से मूल रिपोर्ट की जाँच करें।",
+    hinglish:
+      "In reports mein barabar authority ke alag results hain. Upload order se correction ya sahi result nahi chun sakti. Lab se original reports check kijiye.",
+  }[lang];
+  return {
+    spoken,
+    verdict: "NOT_COMPARABLE",
+    field: null,
+    intent: "LOOKUP",
+    lang,
+    used,
+  };
+}
+
 export function clinicalTurn(question, reports) {
   if (!reports?.length) return null;
   const hit = findTest(question, reports);
@@ -345,6 +362,8 @@ export function clinicalTurn(question, reports) {
     };
   const series = seriesFor(withTest, hit.key, patients[0]);
   if (!series.length) return null;
+  const uncertain = series.flatMap((entry) => entry.conflicts ?? []);
+  if (uncertain.length) return authorityConflictAnswer(uncertain, lang);
   const latest = series[series.length - 1];
   const amended = latest.superseded.length
     ? { from: latest.superseded[0].raw, to: latest.current.raw }
@@ -443,7 +462,7 @@ export function clinicalTurn(question, reports) {
       return {
         ...base,
         spoken,
-        verdict: "VALUE",
+        verdict: o.unreadable ? "UNCLEAR" : "VALUE",
         used: [o, ...entry.superseded],
       };
     }
@@ -457,7 +476,7 @@ export function clinicalTurn(question, reports) {
     return {
       ...base,
       spoken,
-      verdict: single ? "SINGLE" : "LATEST",
+      verdict: o.unreadable ? "UNCLEAR" : single ? "SINGLE" : "LATEST",
       used: [o, ...latest.superseded],
     };
   }
@@ -747,7 +766,7 @@ function reportsOf(bundle, entries, extract) {
 }
 
 const OVERVIEW_RE =
-  /\b(results?|reports?|post|tests?|labs?|blood|levels?|values?|numbers?|gone up|go up|went up|changed?|since|mean|means|meaning|explain|summary|summari[sz]e|overview|how am i|everything|critical|important|serious|concerning|abnormal|flagged|gambhir|zaroori)\b|रिपोर्ट|क्रिटिकल|ज़रूरी|जरूरी|गंभीर|सब\s+ठीक/i;
+  /\b(results?|reports?|post|tests?|labs?|blood|levels?|values?|numbers?|gone up|go up|went up|changed?|since|mean|means|meaning|explain|summary|summari[sz]e|overview|how am i|everything|critical|important|serious|concerning|abnormal|flagged|gambhir|zaroori|badl\w*|badal\w*)\b|रिपोर्ट|क्रिटिकल|ज़रूरी|जरूरी|गंभीर|सब\s+ठीक|बदल/i;
 
 /**
  * A question about a patient's results as a whole ("what does SYN-0001's
@@ -759,21 +778,26 @@ export function clinicalOverview(question, reports) {
   if (!reports?.length || !OVERVIEW_RE.test(question)) return null;
   const ids = [...new Set(reports.map(subjectOf))];
   const upper = question.toUpperCase();
+  const lang = detectLang(question);
   let pid = ids.find((id) => !/^(doc|name):/.test(id) && upper.includes(id));
   if (!pid) {
-    // More than one person in the reports and the question names neither:
-    // ask whose - never silently pick the one who happens to hold more
-    // reports, or the overview could narrate the wrong person's health.
-    if (ids.length > 1) {
-      const lang = detectLang(question);
-      return {
-        spoken: SAY[lang].which(ids.map((id) => subjectLabel(id, reports))),
-        verdict: "AMBIGUOUS_PATIENT",
-        field: null,
-        lang,
-        used: [],
-      };
-    }
+    // More than one person and the question names neither: never silently
+    // pick one. Answer for each person separately, each under their own
+    // label, so no value is ever attributed to the wrong person.
+    if (ids.length > 1)
+      return (
+        eachSubject(question, reports, (q, own) => {
+          const id = subjectOf(own[0]);
+          const named = `${q} for ${id}`;
+          return clinicalOverview(named, own) ?? oneReportNote(id, own, lang);
+        }) ?? {
+          spoken: SAY[lang].which(ids.map((id) => subjectLabel(id, reports))),
+          verdict: "AMBIGUOUS_PATIENT",
+          field: null,
+          lang,
+          used: [],
+        }
+      );
     const multi = ids.filter(
       (id) => reports.filter((r) => subjectOf(r) === id).length > 1,
     );
@@ -782,16 +806,51 @@ export function clinicalOverview(question, reports) {
     pid = ids[0];
   }
   const own = reports.filter((r) => subjectOf(r) === pid);
+  const ch = changesFor(pid, own);
+  if (
+    !ch.corrected.length &&
+    !ch.up.length &&
+    !ch.down.length &&
+    !ch.notComparable.length
+  )
+    return null;
+  const O = OVERVIEW_SAY[lang] ?? OVERVIEW_SAY.en;
+  const parts = [];
+  if (ch.corrected.length) parts.push(O.corrected(ch.corrected));
+  if (ch.up.length) parts.push(O.up(ch.up));
+  if (ch.down.length) parts.push(O.down(ch.down));
+  if (ch.same.length) parts.push(O.same(ch.same));
+  if (ch.notComparable.length)
+    parts.push(O.notComparable(ch.notComparable.map((x) => x.test)));
+  return {
+    spoken: O.head(subjectLabel(pid, reports)) + parts.join("; ") + O.tail,
+    verdict: "OVERVIEW",
+    field: null,
+    intent: "COMPARE",
+    lang,
+    used: [...new Set(ch.used)],
+  };
+}
+
+/**
+ * Per test, the latest report against the one before, for one person:
+ * which values were corrected (a fix to the report, not a change in the
+ * body), which went up or down, and which cannot be compared. Built from
+ * the same comparison the single-test answer gives, so the two never differ.
+ */
+export function changesFor(pid, own) {
   const tests = [];
   for (const r of own)
     for (const o of r.observations)
       if (!tests.some((t) => t.key === o.key)) tests.push(o);
-  const corrected = [],
-    up = [],
-    down = [],
-    same = [],
-    notComparable = [];
-  const used = [];
+  const out = {
+    corrected: [],
+    up: [],
+    down: [],
+    same: [],
+    notComparable: [],
+    used: [],
+  };
   for (const o of tests) {
     const t = clinicalTurn(
       `Did ${o.test} change since the last report for ${pid}?`,
@@ -800,16 +859,18 @@ export function clinicalOverview(question, reports) {
     if (!t) continue;
     if (/corrected from/i.test(t.spoken)) {
       const m = /corrected from ([^ ]+) to ([^ ,.]+)/i.exec(t.spoken);
-      corrected.push(
-        m
-          ? `${o.test} was corrected from ${m[1]} to ${m[2]}`
-          : `${o.test} was corrected`,
-      );
-      used.push(...(t.used ?? []));
+      out.corrected.push({
+        test: o.test,
+        from: m?.[1] ?? null,
+        to: m?.[2] ?? null,
+        unit: o.unit ?? null,
+        used: t.used ?? [],
+      });
+      out.used.push(...(t.used ?? []));
     }
     if (t.verdict === "NOT_COMPARABLE") {
-      notComparable.push(o.test);
-      used.push(...(t.used ?? []));
+      out.notComparable.push({ test: o.test, used: t.used ?? [] });
+      out.used.push(...(t.used ?? []));
     } else if (t.verdict === "COMPARED") {
       const d =
         t.direction ??
@@ -818,38 +879,263 @@ export function clinicalOverview(question, reports) {
           : /lower/i.test(t.spoken)
             ? "lower"
             : "same");
-      (d === "higher" ? up : d === "lower" ? down : same).push(o.test);
+      (d === "higher" ? out.up : d === "lower" ? out.down : out.same).push(
+        o.test,
+      );
     }
   }
-  if (!corrected.length && !up.length && !down.length && !notComparable.length)
-    return null;
-  const list = (a) =>
-    a.length > 1 ? a.slice(0, -1).join(", ") + " and " + a.at(-1) : a[0];
-  const parts = [
-    `For ${subjectLabel(pid, reports)}, comparing the latest report with the one before`,
-  ];
-  if (corrected.length)
-    parts.push(
-      `one correction matters first: ${list(corrected)}, and I use the corrected value`,
-    );
-  if (up.length) parts.push(`${list(up)} went up`);
-  if (down.length) parts.push(`${list(down)} went down`);
-  if (same.length) parts.push(`${list(same)} stayed about the same`);
-  if (notComparable.length)
-    parts.push(
-      `${list(notComparable)} can't be compared because the units changed`,
-    );
+  return out;
+}
+
+const listOf = (a, and) =>
+  a.length > 1 ? a.slice(0, -1).join(", ") + ` ${and} ` + a.at(-1) : a[0];
+const OVERVIEW_SAY = {
+  en: {
+    head: (who) =>
+      `For ${who}, comparing the latest report with the one before: `,
+    corrected: (c) =>
+      `${listOf(
+        c.map((x) =>
+          x.from
+            ? `${x.test} was corrected from ${x.from} to ${x.to}`
+            : `${x.test} was corrected`,
+        ),
+        "and",
+      )}. That is a fix to the report, not a change in the body, and I use the corrected value`,
+    up: (a) => `${listOf(a, "and")} went up`,
+    down: (a) => `${listOf(a, "and")} went down`,
+    same: (a) => `${listOf(a, "and")} stayed about the same`,
+    notComparable: (a) =>
+      `${listOf(a, "and")} can't be compared because the units changed`,
+    tail: ". Ask about any one test for the numbers.",
+    one: (who) =>
+      `${who} has only one report here, so there is nothing to compare yet.`,
+  },
+  hi: {
+    head: (who) => `${who} के लिए, ताज़ा रिपोर्ट की पिछली रिपोर्ट से तुलना: `,
+    corrected: (c) =>
+      `${listOf(
+        c.map((x) =>
+          x.from
+            ? `${x.test} को ${x.from} से ${x.to} में सुधारा गया`
+            : `${x.test} को सुधारा गया`,
+        ),
+        "और",
+      )}। यह रिपोर्ट का सुधार है, शरीर में बदलाव नहीं, और मैं सुधरा हुआ मान लेती हूँ`,
+    up: (a) => `${listOf(a, "और")} बढ़ा`,
+    down: (a) => `${listOf(a, "और")} घटा`,
+    same: (a) => `${listOf(a, "और")} लगभग वैसा ही रहा`,
+    notComparable: (a) =>
+      `${listOf(a, "और")} की तुलना नहीं हो सकती क्योंकि यूनिट बदल गई`,
+    tail: "। संख्याओं के लिए किसी एक जांच के बारे में पूछिए।",
+    one: (who) =>
+      `${who} की यहाँ सिर्फ़ एक रिपोर्ट है, इसलिए अभी तुलना करने को कुछ नहीं है।`,
+  },
+  hinglish: {
+    head: (who) => `${who} ke liye, latest report ki pichhli report se tulna: `,
+    corrected: (c) =>
+      `${listOf(
+        c.map((x) =>
+          x.from
+            ? `${x.test} ko ${x.from} se ${x.to} mein sudhara gaya`
+            : `${x.test} ko sudhara gaya`,
+        ),
+        "aur",
+      )}. Yeh report ka sudhaar hai, body mein badlav nahi, aur main sudhara hua value leti hoon`,
+    up: (a) => `${listOf(a, "aur")} badha`,
+    down: (a) => `${listOf(a, "aur")} ghata`,
+    same: (a) => `${listOf(a, "aur")} lagbhag waisa hi raha`,
+    notComparable: (a) =>
+      `${listOf(a, "aur")} ki tulna nahi ho sakti kyunki unit badal gayi`,
+    tail: ". Numbers ke liye kisi ek test ke baare mein poochiye.",
+    one: (who) =>
+      `${who} ki yahan sirf ek report hai, isliye abhi tulna karne ko kuch nahi hai.`,
+  },
+};
+
+function oneReportNote(pid, own, lang) {
+  const O = OVERVIEW_SAY[lang] ?? OVERVIEW_SAY.en;
   return {
-    spoken:
-      parts[0] +
-      ": " +
-      parts.slice(1).join("; ") +
-      ". Ask about any one test for the numbers.",
+    spoken: O.one(subjectLabel(pid, own)),
     verdict: "OVERVIEW",
     field: null,
     intent: "COMPARE",
-    lang: "en",
-    used: [...new Set(used)],
+    lang,
+    used: [],
+  };
+}
+
+// First person ("my", "mera", "मेरा"): after a per-person answer, ask which
+// one is the caller rather than assume.
+const FIRST_PERSON_RE =
+  /\b(my|mine|me|i|mera|meri|mere|mujhe|main)\b|मेरा|मेरी|मेरे|मुझे|मैं/i;
+const EACH_SAY = {
+  en: {
+    head: (n) =>
+      `These reports are for ${n} people, so I keep their results apart. `,
+    which: " Tell me which of these is you, and I'll stay on that report.",
+  },
+  hi: {
+    head: (n) =>
+      `ये रिपोर्ट्स ${n} लोगों की हैं, इसलिए मैं उनके नतीजे अलग-अलग रखती हूँ। `,
+    which: " बताइए इनमें से आप कौन हैं, फिर मैं उसी रिपोर्ट पर रहूँगी।",
+  },
+  hinglish: {
+    head: (n) =>
+      `Yeh reports ${n} logon ki hain, isliye main unke results alag rakhti hoon. `,
+    which:
+      " Bataiye inmein se aap kaun hain, phir main usi report par rahungi.",
+  },
+};
+
+/**
+ * A whole-report question when the reports hold several people and the
+ * question names none: answer for each person, separately and labelled.
+ * Null when there is one person, or too many to read out.
+ */
+export function eachSubject(question, reports, fn) {
+  const ids = subjectsFor(question, reports);
+  if (ids.length < 2 || ids.length > 4) return null;
+  const lang = detectLang(question);
+  const parts = [];
+  for (const id of ids) {
+    const own = reports.filter((r) => subjectOf(r) === id);
+    const a = own.length ? fn(question, own) : null;
+    if (a?.spoken) parts.push({ id, ...a });
+  }
+  if (!parts.length) return null;
+  const E = EACH_SAY[lang] ?? EACH_SAY.en;
+  const verdicts = parts.map((p) => p.verdict);
+  return {
+    spoken: (
+      E.head(ids.length) +
+      parts.map((p) => p.spoken).join(" ") +
+      (FIRST_PERSON_RE.test(question) ? E.which : "")
+    )
+      .replace(/\s+/g, " ")
+      .trim(),
+    verdict: verdicts.includes("FLAGGED") ? "FLAGGED" : verdicts[0],
+    field: null,
+    intent: parts[0].intent ?? "SUMMARY",
+    lang,
+    subjects: parts.map((p) => p.id),
+    used: parts.flatMap((p) => p.used ?? []),
+  };
+}
+
+// "What should I ask my doctor?": questions to bring, each built from a line
+// in these reports. Questions, never advice or a diagnosis.
+const DOCTOR_RE =
+  /\b(?:ask|tell|discuss|mention|bring up|raise|questions? for)\b[^?.]{0,30}\b(?:doctor|dr|physician|clinician|gp)\b|\bdoctor se\b[^?.]{0,25}\b(?:kya|kaun|puch|pooch|baat)\w*|(?:डॉक्टर|डाक्टर) से[^?।]{0,25}(?:क्या|कौन|पूछ|बात)/i;
+const DOCTOR_SAY = {
+  en: {
+    head: (who) =>
+      `Questions you could bring to your doctor${who ? ` about ${who}'s report` : ""}, each from a line in these reports: `,
+    flagged: (item) => `${item}: what does that mean for me?`,
+    corrected: (x) =>
+      `${x.test} was corrected${x.from ? ` from ${x.from} to ${x.to}` : ""} in an amended report: which value should we go by?`,
+    unclear: (t, p) =>
+      `${t}${p ? ` on page ${p}` : ""} was too unclear to read on the scan: what is the exact value?`,
+    units: (t) =>
+      `${t} was printed in different units in two reports: has it actually changed?`,
+    noRange: (n) =>
+      `${n} result${n === 1 ? " has" : "s have"} no printed range: should any of them be looked at?`,
+    none: (who) =>
+      `${who ? `For ${who}, n` : "N"}othing here is outside the lab's printed ranges and nothing was corrected, so a good question is what these results mean for you, given your history.`,
+    tail: " These are questions to ask, not a diagnosis.",
+  },
+  hi: {
+    head: (who) =>
+      `${who ? `${who} की रिपोर्ट के बारे में ` : ""}डॉक्टर से पूछने लायक सवाल, हर एक इन रिपोर्ट्स की किसी लाइन से: `,
+    flagged: (item) => `${item}: मेरे लिए इसका क्या मतलब है?`,
+    corrected: (x) =>
+      `${x.test} को संशोधित रिपोर्ट में ${x.from ? `${x.from} से ${x.to} ` : ""}सुधारा गया: हमें कौन-सा मान मानना चाहिए?`,
+    unclear: (t, p) =>
+      `${t}${p ? ` (पेज ${p})` : ""} स्कैन पर साफ़ नहीं पढ़ा गया: इसका सही मान क्या है?`,
+    units: (t) =>
+      `${t} दो रिपोर्ट्स में अलग यूनिट में छपा: क्या सच में बदला है?`,
+    noRange: (n) =>
+      `${n} नतीजों की सीमा नहीं छपी: क्या इनमें से किसी को देखना चाहिए?`,
+    none: (who) =>
+      `${who ? `${who} के लिए: ` : ""}यहाँ कुछ भी लैब की छपी सीमा से बाहर नहीं है और कुछ सुधारा नहीं गया, इसलिए एक अच्छा सवाल है कि आपके इतिहास को देखते हुए इन नतीजों का आपके लिए क्या मतलब है।`,
+    tail: " ये पूछने के सवाल हैं, निदान नहीं।",
+  },
+  hinglish: {
+    head: (who) =>
+      `${who ? `${who} ki report ke baare mein ` : ""}doctor se poochne layak sawaal, har ek in reports ki kisi line se: `,
+    flagged: (item) => `${item}: mere liye iska kya matlab hai?`,
+    corrected: (x) =>
+      `${x.test} ko amended report mein ${x.from ? `${x.from} se ${x.to} ` : ""}sudhara gaya: kaunsa value maanna chahiye?`,
+    unclear: (t, p) =>
+      `${t}${p ? ` (page ${p})` : ""} scan par saaf nahi padha gaya: iska sahi value kya hai?`,
+    units: (t) =>
+      `${t} do reports mein alag unit mein chhapa: kya sach mein badla hai?`,
+    noRange: (n) =>
+      `${n} results ki range nahi chhapi: kya inmein se kisi ko dekhna chahiye?`,
+    none: (who) =>
+      `${who ? `${who} ke liye: ` : ""}Yahan kuch bhi lab ki range se bahar nahi hai aur kuch sudhara nahi gaya, isliye accha sawaal hai ki aapki history dekhte hue in results ka aapke liye kya matlab hai.`,
+    tail: " Yeh poochne ke sawaal hain, diagnosis nahi.",
+  },
+};
+
+export function doctorQuestions(question, reports, { tail = true } = {}) {
+  if (!reports?.length || !DOCTOR_RE.test(question)) return null;
+  const ids = subjectsFor(question, reports);
+  const lang = detectLang(question);
+  const D = DOCTOR_SAY[lang] ?? DOCTOR_SAY.en;
+  if (ids.length > 1) {
+    // one disclaimer for the whole answer, not one per person
+    const all = eachSubject(question, reports, (q, own) =>
+      doctorQuestions(`${q} ${subjectOf(own[0])}`, own, { tail: false }),
+    );
+    return all ? { ...all, spoken: (all.spoken + D.tail).trim() } : null;
+  }
+  const S = SAY[lang] ?? SAY.en;
+  const pid = ids[0];
+  const own = reports.filter((r) => subjectOf(r) === pid);
+  const obs = latestFor(own, pid);
+  if (obs.some((o) => o.authorityConflict))
+    return authorityConflictAnswer(
+      obs.flatMap((o) => o.conflicts ?? []),
+      lang,
+    );
+  if (!obs.length) return null;
+  const flagged = obs.filter((o) => SEVERITY[position(o)] != null);
+  const unjudged = obs.filter(
+    (o) => position(o) === "unknown" && !o.ref?.adultOnly,
+  ).length;
+  const ch = changesFor(pid, own);
+  const qs = [
+    ...ch.corrected.map((x) => D.corrected(x)),
+    ...flagged
+      .slice(0, 3)
+      .map((o) =>
+        D.flagged(o.qual ? S.qual(o) : S.item(o, S[position(o)], rangeOf(o))),
+      ),
+    ...ch.notComparable.map((x) => D.units(x.test)),
+    ...obs
+      .filter((o) => o.unreadable)
+      .map((o) => D.unclear(o.test, o.unreadable.page)),
+    ...(unjudged ? [D.noRange(unjudged)] : []),
+  ].slice(0, 5);
+  const lab = pid.startsWith("doc:") ? null : subjectLabel(pid, own);
+  const end = tail ? D.tail : "";
+  const spoken = qs.length
+    ? D.head(lab) + qs.map((q, i) => `${i + 1}) ${q}`).join(" ") + end
+    : D.none(lab) + end;
+  return {
+    spoken: spoken.replace(/\s+/g, " ").trim(),
+    verdict: "OVERVIEW",
+    field: null,
+    intent: "ASK_DOCTOR",
+    lang,
+    used: [
+      ...new Set([
+        ...ch.corrected.flatMap((x) => x.used),
+        ...flagged.slice(0, 3),
+        ...ch.notComparable.flatMap((x) => x.used),
+      ]),
+    ].slice(0, 12),
   };
 }
 
@@ -859,7 +1145,7 @@ export function clinicalOverview(question, reports) {
 // printed ranges, qualitative results against the lab's expected result, no
 // outside thresholds and no diagnosis.
 const SUMMARY_RE =
-  /\b(summar\w*|overview|overall|abnormal\w*|out of (the )?range|outside|flag\w*|wrong|concern\w*|critical|serious|problem\w*|issues?|normal|okay|ok|fine|healthy|suggest\w*|indicat\w*|interpret\w*|explain\w*|findings?|symptoms?|highlights?|anything|everything|all (my|the) (results|values|tests)|what does (this|the|my) (report|test|result)|what('s| is) (this|the|my) report|kya (dikha|bata|keh)\w*|sab theek|theek hai|gadbad|kharab|dikkat|kuch galat|matlab)\b|सब ठीक|ठीक है|सामान्य|नॉर्मल|गड़बड़|खराब|समस्या|दिक्कत|क्या दिखा|क्या बता|मतलब|सारांश|कुछ गलत|असामान्य/i;
+  /\b(summar\w*|overview|overall|abnormal\w*|out of (the )?range|out-of-range|outside|(?:high|low)(?: or | and |\/)(?:high|low)|elevated|unusual|high|low|range se bahar|bahar|upar neeche|zyada ya kam|flag\w*|wrong|concern\w*|critical|serious|problem\w*|issues?|normal|okay|ok|fine|healthy|suggest\w*|indicat\w*|interpret\w*|explain\w*|findings?|symptoms?|highlights?|anything|everything|all (my|the) (results|values|tests)|what does (this|the|my) (report|test|result)|what('s| is) (this|the|my) report|kya (dikha|bata|keh)\w*|sab theek|theek hai|gadbad|kharab|dikkat|kuch galat|matlab)\b|सब ठीक|ठीक है|सामान्य|नॉर्मल|गड़बड़|खराब|समस्या|दिक्कत|क्या दिखा|क्या बता|मतलब|सारांश|कुछ गलत|असामान्य|रेंज से बाहर|सीमा से बाहर|बाहर|ज़्यादा या कम|ज्यादा या कम/i;
 const SYMPTOM_RE = /\b(symptoms?|lakshan)\b|लक्षण/i;
 
 /** The latest value of every test this subject has, one per test. */
@@ -878,6 +1164,7 @@ function latestFor(reports, pid, keys = null) {
           ...last.current,
           date: last.date,
           superseded: last.superseded,
+          conflicts: last.conflicts ?? [],
         });
     }
   return out;
@@ -900,7 +1187,12 @@ const SAY = {
       k === 1
         ? `one is outside the lab's range: `
         : `${k} are outside the lab's range: `,
-    allIn: (n) => `all ${n} are within the lab's printed ranges.`,
+    allIn: (n) =>
+      n === 2
+        ? "both are within the lab's printed ranges."
+        : n === 1
+          ? "it is within the lab's printed range."
+          : `all ${n} are within the lab's printed ranges.`,
     rest: (m) => `The other ${m} ${m === 1 ? "is" : "are"} within range.`,
     more: (m) => ` and ${m} more, all listed on screen`,
     qualOnly: (a) => `${a}.`,
@@ -1150,10 +1442,16 @@ export function groupAnswer(question, reports, keys, label = null) {
   const who = oneSubject(question, withAny, lang);
   if (who.ask) return who.ask;
   const obs = latestFor(withAny, who.pid, keys);
+  if (obs.some((o) => o.authorityConflict))
+    return authorityConflictAnswer(
+      obs.flatMap((o) => o.conflicts ?? []),
+      lang,
+    );
   if (!obs.length) return null;
   const items = obs.map((o) => {
     const pos = position(o);
     const r = rangeOf(o);
+    if (o.unreadable) return explainOne(o, o.date, lang);
     if (o.qual) return S.gQual(o);
     if (pos === "unknown" || !r) return o.rangeRaw ? S.gRaw(o) : S.gNoRange(o);
     if (pos === "within") return S.gWithin(o, r);
@@ -1189,9 +1487,14 @@ export function reportSummary(question, reports) {
   const lang = detectLang(question);
   const S = SAY[lang];
   const who = oneSubject(question, reports, lang);
-  if (who.ask) return who.ask;
+  if (who.ask) return eachSubject(question, reports, reportSummary) ?? who.ask;
   const own = reports.filter((r) => subjectOf(r) === who.pid);
   const obs = latestFor(own, who.pid);
+  if (obs.some((o) => o.authorityConflict))
+    return authorityConflictAnswer(
+      obs.flatMap((o) => o.conflicts ?? []),
+      lang,
+    );
   if (!obs.length) return null;
   const judged = obs.filter((o) => position(o) !== "unknown");
   const flagged = judged
@@ -1213,7 +1516,14 @@ export function reportSummary(question, reports) {
     S.who(label) +
     S.count(judged.length) +
     (lang === "en" ? "; " : lang === "hi" ? "; " : "; ");
-  if (!flagged.length) spoken += S.allIn(judged.length);
+  if (!judged.length)
+    spoken += {
+      en: "I cannot judge any result against a verified printed range. ",
+      hi: "मैं किसी नतीजे को सत्यापित छपी सीमा से नहीं तौल सकती। ",
+      hinglish:
+        "Kisi result ko verified printed range se compare nahi kar sakti. ",
+    }[lang];
+  else if (!flagged.length) spoken += S.allIn(judged.length);
   else {
     spoken +=
       S.out(flagged.length) +
@@ -1223,11 +1533,23 @@ export function reportSummary(question, reports) {
     if (judged.length > flagged.length)
       spoken += S.rest(judged.length - flagged.length);
   }
-  const unjudged = obs.length - judged.length - adultOnly;
+  // Scanned values too unclear to read are named, with their page, and
+  // never counted as "no printed range".
+  const unclear = obs.filter((o) => o.unreadable);
+  const unjudged = obs.length - judged.length - adultOnly - unclear.length;
   const qualified = obs.filter(
-    (o) => o.rangeRaw && position(o) === "unknown" && !o.ref?.adultOnly,
+    (o) =>
+      o.rangeRaw &&
+      !o.unreadable &&
+      position(o) === "unknown" &&
+      !o.ref?.adultOnly,
   ).length;
   if (child && adultOnly) spoken += S.child(child.meta.patient.age, adultOnly);
+  if (unclear.length)
+    spoken += (UNCLEAR_SAY[lang] ?? UNCLEAR_SAY.en)(
+      unclear.map((o) => o.test),
+      [...new Set(unclear.map((o) => o.unreadable.page).filter(Boolean))],
+    );
   if (unjudged - qualified > 0) spoken += S.noRange(unjudged - qualified);
   if (qualified > 0) spoken += S.qualified(qualified);
   if (critical) spoken += S.critical(critical);
@@ -1242,6 +1564,15 @@ export function reportSummary(question, reports) {
     used: (flagged.length ? flagged : obs).slice(0, 8),
   };
 }
+
+const UNCLEAR_SAY = {
+  en: (tests, pages) =>
+    ` ${tests.join(" and ")} ${tests.length === 1 ? "is" : "are"} printed${pages.length ? ` on page ${pages.join(" and ")}` : ""} but the scan is too unclear to read safely, so check ${tests.length === 1 ? "it" : "them"} against the original.`,
+  hi: (tests, pages) =>
+    ` ${tests.join(" और ")}${pages.length ? ` पेज ${pages.join(" और ")} पर` : ""} छपे हैं पर स्कैन इतना साफ़ नहीं कि भरोसे से पढ़ा जा सके, इसलिए मूल रिपोर्ट से जाँच लें।`,
+  hinglish: (tests, pages) =>
+    ` ${tests.join(" aur ")}${pages.length ? ` page ${pages.join(" aur ")} par` : ""} chhape hain par scan itna saaf nahi ki bharose se padha ja sake, isliye original se check kar lijiye.`,
+};
 
 /** A body system or report section the question names ("liver", "dengue profile"). */
 function findGroup(question, reports) {
@@ -1314,6 +1645,12 @@ function findGroup(question, reports) {
  * overview requests ("how am I doing", "summarize my results") carry no
  * test-shaped candidate and are untouched.
  */
+// Words that describe results rather than name a test. A candidate made of
+// them is a summary question ("what are the abnormal results?"), never a
+// lookup of a test called "abnormal".
+const QUALIFIER_RE =
+  /^(?:(?:abnormal|unusual|odd|high|low|higher|lower|elevated|raised|bad|worrying|concerning|flagged|important|key|main|normal|changed|different|wrong|critical|serious|other|all|any|out of range|outside|out-of-range|off|borderline|latest|recent)\b[\s,/-]*(?:or|and|\/)?[\s]*)+$/i;
+
 const TEST_SHAPED_RE =
   /\b(?:my|the)\s+([a-z][a-z' -]{1,28}?)\s+(?:level|levels|result|results|reading|readings|value|values|count|counts)\b/i;
 const GENERIC_MEASURE = new Set([
@@ -1343,6 +1680,8 @@ function unmatchedTestCandidate(question, reports) {
   if (!m) return null;
   const cand = m[1].trim().replace(/\s+/g, " ").toLowerCase();
   if (!cand || GENERIC_MEASURE.has(cand)) return null;
+  // "the abnormal results", "my high values": a qualifier, not a test name.
+  if (QUALIFIER_RE.test(cand)) return null;
   if (findTest(question, reports) || findTest(cand, reports)) return null;
   return cand;
 }
@@ -1493,6 +1832,8 @@ function answerFor(question, reports) {
       g.keys,
       g.id ? GROUP_LABEL[lang][g.id] : g.label,
     );
+  const doctor = doctorQuestions(question, reports);
+  if (doctor) return doctor;
   if (SUMMARY_RE.test(question) && !(change && multiReport(question, reports)))
     return reportSummary(question, reports);
   return clinicalOverview(question, reports) ?? notInReport(question, reports);

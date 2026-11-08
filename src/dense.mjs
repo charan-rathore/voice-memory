@@ -4,9 +4,14 @@ import { createModelLifetime } from "./model-lifetime.mjs";
  * Dense retrieval stage (Phase 3 hybrid) - local embeddings, no paid API.
  *
  * Model: Xenova/bge-small-en-v1.5 (MIT), ONNX via Transformers v3.
- * The installed runtime defaults this legacy quantized:true option to fp32.
- * Model precision is unchanged. Pressure retirement can change retrieval
- * availability, answer coverage and latency by falling back to keywords.
+ * Precision: Transformers v3 ignores the legacy `quantized: true` option and
+ * loaded fp32 (about 400 MB resident measured on the 512 MB host, which is
+ * why every upload had to unload and reload it). It now loads the 8-bit
+ * weights through the supported `dtype` option (VM_DENSE_DTYPE, default
+ * "q8"; "fp32" restores the old behaviour). Embeddings are tagged with the
+ * precision, so vectors of different precisions are never compared.
+ * Pressure retirement can change retrieval availability, answer coverage
+ * and latency by falling back to keywords.
  * Native load/inference can exceed steady-state RSS after a promise resolves.
  *
  * Fail-closed, never blocks the request path:
@@ -19,7 +24,10 @@ import { createModelLifetime } from "./model-lifetime.mjs";
  *
  * VM_DENSE=off disables the stage entirely (no download, no memory).
  */
-const MODEL_ID = process.env.VM_DENSE_MODEL || "Xenova/bge-small-en-v1.5";
+const BASE_MODEL = process.env.VM_DENSE_MODEL || "Xenova/bge-small-en-v1.5";
+const DTYPE = process.env.VM_DENSE_DTYPE || "q8";
+// The tag stored on every embedding: model and precision.
+const MODEL_ID = DTYPE === "fp32" ? BASE_MODEL : `${BASE_MODEL}@${DTYPE}`;
 const state = { pipe: null, loading: null, retiring: null, failed: null };
 const lifetime = createModelLifetime();
 let modelGeneration = 0;
@@ -49,6 +57,9 @@ let ingestDepth = 0;
 // Preserve the existing 360 MiB admission estimate. Native probes exceeded
 // this estimate: it is NOT a preventive hard-limit safety guarantee. Raising
 // the default would change retrieval availability and needs separate approval.
+// The admission estimate stays at 360 MiB for every precision: 8-bit
+// weights should need far less, but that is not yet measured on the host,
+// and a lower estimate would loosen this guard without evidence.
 const MODEL_MB = Number(process.env.VM_DENSE_MODEL_MB || 360);
 const PRESSURE = 0.9;
 export function memoryLimitBytes() {
@@ -108,8 +119,8 @@ function ensureLoading() {
       try {
         const { pipeline, env } = await import("@huggingface/transformers");
         env.cacheDir = process.env.VM_DENSE_CACHE || ".cache/models";
-        const pipe = await pipeline("feature-extraction", MODEL_ID, {
-          quantized: true,
+        const pipe = await pipeline("feature-extraction", BASE_MODEL, {
+          dtype: DTYPE,
         });
         // A parser may have started while the model was loading. Never
         // resurrect a stale pipeline after the ingestion pause.

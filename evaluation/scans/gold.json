@@ -1,0 +1,86 @@
+{
+  "patient": "SYN-0007",
+  "pages": {
+    "1": {
+      "title": "Synthetic Diagnostics - Lipid & Kidney Panel",
+      "dates": "Collected: 2 November 2026  Reported: 3 November 2026",
+      "rows": [
+        [
+          "Creatinine",
+          "1.1",
+          "mg/dL",
+          "0.7-1.3",
+          ""
+        ],
+        [
+          "Urea",
+          "31",
+          "mg/dL",
+          "7-20",
+          "H"
+        ],
+        [
+          "LDL Cholesterol",
+          "162",
+          "mg/dL",
+          "0-100",
+          "H"
+        ]
+      ]
+    },
+    "2": {
+      "title": "Synthetic Diagnostics - Haematology",
+      "dates": "Collected: 2 November 2026  Reported: 3 November 2026",
+      "rows": [
+        [
+          "Hemoglobin",
+          "11.4",
+          "g/dL",
+          "12.0-15.5",
+          "L"
+        ],
+        [
+          "Ferritin",
+          "18",
+          "ng/mL",
+          "15-150",
+          ""
+        ],
+        [
+          "Platelets",
+          "245",
+          "10^3/uL",
+          "150-450",
+          ""
+        ]
+      ]
+    },
+    "3": {
+      "title": "Synthetic Diagnostics - Endocrine",
+      "dates": "Collected: 2 November 2026  Reported: 3 November 2026",
+      "rows": [
+        [
+          "TSH",
+          "6.8",
+          "mIU/L",
+          "0.40-4.00",
+          "H"
+        ],
+        [
+          "HbA1c",
+          "5.9",
+          "%",
+          "4.0-5.6",
+          "H"
+        ],
+        [
+          "Vitamin D",
+          "17",
+          "ng/mL",
+          "30-100",
+          "L"
+        ]
+      ]
+    }
+  }
+}

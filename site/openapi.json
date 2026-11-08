@@ -654,17 +654,38 @@
               }
             }
           },
+          "final": {
+            "type": "object",
+            "description": "The one answer to show or speak: the lead when there is one, else the cited passage, else an abstention. Typed, spoken and charted answers all derive from it.",
+            "properties": {
+              "text": { "type": "string" },
+              "verdict": { "type": "string" },
+              "kind": {
+                "type": "string",
+                "enum": ["answered", "clarify", "refused", "abstained", "social", "quoted"]
+              },
+              "from": { "type": "string", "enum": ["lead", "evidence", "none"] },
+              "citations": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/Citation" }
+              }
+            }
+          },
           "answer": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"],
+            "description": "Same text as final.text (kept for existing clients)."
           },
           "status": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"],
+            "description": "Same as final.kind."
+          },
+          "retrieval": {
+            "type": "object",
+            "description": "Diagnostics: what retrieval alone found. Never show or speak it in place of final.",
+            "properties": {
+              "text": { "type": ["string", "null"] },
+              "status": { "type": ["string", "null"] }
+            }
           },
           "evidence": {
             "type": "array",

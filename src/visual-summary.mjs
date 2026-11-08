@@ -66,7 +66,23 @@ export function insightOf(series, o, r, pos) {
             : null,
         direction: c.direction,
       };
-    } else out.notCompared = !c.comparable ? c.reason : "bound"; // "<0.05" is a bound, not a value
+    } else if (
+      c.comparable &&
+      (c.direction === "higher" || c.direction === "lower")
+    )
+      // "<0.05" then 0.30: the direction is certain (the same one the spoken
+      // answer gives), the size of the change is not, so no number is shown.
+      out.change = {
+        from: prev.raw,
+        to: o.raw,
+        fromDate: series[series.length - 2].date,
+        toDate: series[series.length - 1].date,
+        abs: null,
+        pct: null,
+        direction: c.direction,
+        bounded: true,
+      };
+    else out.notCompared = !c.comparable ? c.reason : "bound"; // "<0.05" vs 0.03: direction unknown
   }
   if (r && Number.isFinite(o.value) && !o.comparator) {
     const d = places(o.raw);
@@ -87,7 +103,11 @@ export function insightOf(series, o, r, pos) {
 }
 
 function testCard(reports, key, sid) {
-  const series = seriesFor(reports, key, sid);
+  const allSeries = seriesFor(reports, key, sid);
+  // A visual number carries the same authority as a spoken number.
+  const safe = (s) => !s.current.unreadable && !s.conflicts?.length;
+  if (allSeries.length && !safe(allSeries.at(-1))) return null;
+  const series = allSeries.filter(safe);
   if (!series.length) return null;
   const last = series[series.length - 1];
   const o = last.current;
@@ -278,9 +298,11 @@ export function caseVisual(bundle, lang = "en") {
   // The person with the most reports first: that is whose story it is.
   const subjects = ids
     .map((id) => subjectBlock(reports, id))
+    .filter((s) => s.tests.length)
     .sort(
       (a, b) => b.reports.length - a.reports.length || ranged(b) - ranged(a),
     );
+  if (!subjects.length) return null;
   return {
     kind: "labs",
     lang,
@@ -299,6 +321,7 @@ export function visualFor(question, bundle, lead) {
     const sid = subjectOf(used[0].report);
     const keys = [...new Set(used.map((o) => o.key))];
     const block = subjectBlock(reports, sid, keys);
+    if (!block.tests.length) return null;
     return { kind: "labs", focus: "answer", lang, subjects: [block] };
   }
   if (["OVERVIEW", "FLAGGED", "SUMMARY"].includes(lead.verdict)) {

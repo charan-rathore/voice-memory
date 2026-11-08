@@ -360,7 +360,10 @@
     const hs = t.history ?? [];
     const reportsN = new Set(hs.map((h) => h.title).filter(Boolean)).size + hs.reduce((n, h) => n + h.superseded.length, 0);
     const tiles = [];
-    if (ins.change) {
+    if (ins.change?.bounded) {
+      const c = ins.change;
+      tiles.push(`<div class="dd-tile ${c.direction}"><span>${esc(w.since(shortDate(c.fromDate, lang)))}</span><b class="txt">${esc(X(lang)[c.direction] ?? c.direction)}</b><em>${esc(`${c.from} → ${c.to}`)}</em></div>`);
+    } else if (ins.change) {
       const c = ins.change;
       const ratio = c.pct != null && Math.abs(c.pct) >= 300 ? w.times(fmt(c.to / c.from)) : c.pct != null ? `${signed(c.pct)}%` : "";
       tiles.push(`<div class="dd-tile ${c.direction}"><span>${esc(w.since(shortDate(c.fromDate, lang)))}</span><b>${esc(signed(c.abs))}${t.unit ? ` <small>${esc(t.unit)}</small>` : ""}</b><em>${esc(`${c.from} → ${c.to}`)}${ratio ? ` · ${esc(ratio)}` : ""}</em></div>`);
@@ -1120,7 +1123,10 @@
   function numberLineScene(t, items, range, unit, lang, w, opts = {}) {
     const m = axisModel(items, range);
     if (!m) return "";
-    const L0 = 40, L1 = 540, AX = opts.compact ? 64 : 110, TOPB = opts.compact ? 26 : 50, BOTB = opts.compact ? 98 : 150;
+    // A phone gets a narrower canvas (not a smaller copy of the wide one),
+    // so its labels stay readable at the width it is actually shown.
+    const VW = opts.narrow ? 340 : 580;
+    const L0 = 40, L1 = VW - 40, AX = opts.compact ? 64 : 110, TOPB = opts.compact ? 26 : 50, BOTB = opts.compact ? 98 : 150;
     const H = opts.compact ? 132 : 200;
     const X = (v) => L0 + ((m.f(v) - m.lo) / (m.hi - m.lo || 1)) * (L1 - L0);
     let ticks = [];
@@ -1143,6 +1149,8 @@
       : "";
     const pts = items.filter((h) => Number.isFinite(h.value)).map((h) => ({ h, x: X(h.value) }));
     let prevDateX = -999, lvl = 0;
+    // value labels of readings that sit close together are lifted apart
+    const lift = pts.map((p, i) => (i < pts.length - 1 && Math.abs(pts[i + 1].x - p.x) < 34 ? 18 : 0));
     const dots = pts
       .map((p, i) => {
         const last = i === pts.length - 1;
@@ -1151,10 +1159,13 @@
         prevDateX = p.x;
         const dl = opts.compact ? "" : `<text class="m-date m-write" x="${n1(p.x)}" y="${BOTB + 18 + lvl * 15}" text-anchor="middle" style="--d:${1000 + i * 180}ms">${esc(shortDate(p.h.date, lang))}</text>`;
         const bound = p.h.comparator ? `<path class="m-bound" d="M${n1(p.x - 9)} ${AX} h-14 m5 -4 l-5 4 l5 4"/>` : "";
-        return `<g class="m-pt st-${esc(p.h.status)}${last ? " now" : ""}" ${last ? "data-focus" : ""} tabindex="0" role="button" ${p.h.title ? `data-doc="${esc(p.h.title)}"` : ""} style="--d:${950 + i * 180}ms" aria-label="${esc(`${p.h.raw}${unit ? " " + unit : ""}, ${shortDate(p.h.date, lang)}, ${p.h.status}`)}">
+        // where this reading sits against its own report's printed range
+        const rr = p.h.range && Number.isFinite(p.h.range.lowN) ? p.h.range : hasR ? range : null;
+        const pc = !rr || !Number.isFinite(rr.lowN) || !Number.isFinite(rr.highN) ? "p-none" : p.h.value < rr.lowN || p.h.value > rr.highN || (p.h.comparator === "<" && p.h.value <= rr.lowN) ? "p-out" : "p-in";
+        return `<g class="m-pt ${pc} st-${esc(p.h.status)}${last ? " now" : ""}" ${last ? "data-focus" : ""} tabindex="0" role="button" ${p.h.title ? `data-doc="${esc(p.h.title)}"` : ""} style="--d:${950 + i * 180}ms" aria-label="${esc(`${p.h.raw}${unit ? " " + unit : ""}, ${shortDate(p.h.date, lang)}, ${p.h.status}`)}">
           ${last ? `<circle class="m-flash" cx="${n1(p.x)}" cy="${AX}" r="7"/>` : ""}
           <circle class="m-c" cx="${n1(p.x)}" cy="${AX}" r="${last ? 7.5 : 6}"/>${bound}
-          <text class="m-v" x="${n1(p.x)}" y="${AX - 15}" text-anchor="middle">${esc(p.h.raw)}</text>${dl}
+          <text class="m-v" x="${n1(p.x)}" y="${AX - 15 - lift[i]}" text-anchor="middle">${esc(p.h.raw)}</text>${dl}
         </g>`;
       })
       .join("");
@@ -1174,11 +1185,11 @@
         const c = t.insight.change;
         const peak = AX - (opts.compact ? 40 : 58);
         move = `<path class="m-arc m-create" pathLength="1" d="M${n1(a.x)} ${AX - 10} Q${n1((a.x + b.x) / 2)} ${peak} ${n1(b.x)} ${AX - 10}" style="--d:1350ms" marker-end="url(#m-tip)"/>
-          <text class="m-delta m-write" x="${n1((a.x + b.x) / 2)}" y="${peak + 18}" text-anchor="middle" style="--d:1600ms">${esc(signed(c.abs))}${c.pct != null && Math.abs(c.pct) < 300 ? ` (${esc(signed(c.pct))}%)` : ""}</text>`;
+          <text class="m-delta m-write" x="${n1((a.x + b.x) / 2)}" y="${peak + 18}" text-anchor="middle" style="--d:1600ms">${c.bounded ? esc(X(lang)[c.direction] ?? c.direction) : `${esc(signed(c.abs))}${c.pct != null && Math.abs(c.pct) < 300 ? ` (${esc(signed(c.pct))}%)` : ""}`}</text>`;
       }
     }
     const scale = m.log ? `<text class="m-scale" x="${L1}" y="${H - 4}" text-anchor="end">log scale</text>` : "";
-    return `<svg class="m-nl" viewBox="0 0 580 ${H}" role="img" tabindex="0" data-lo="${m.lo}" data-hi="${m.hi}" data-log="${m.log ? 1 : 0}" data-l0="${L0}" data-l1="${L1}" data-ax="${AX}" data-unit="${esc(unit ?? "")}" ${hasR ? `data-rlo="${range.lowN}" data-rhi="${range.highN}"` : ""} aria-label="${esc(`${t.name}: ${items.map((h) => h.raw).join(", ")}`)}">
+    return `<svg class="m-nl" viewBox="0 0 ${VW} ${H}" role="img" tabindex="0" data-lo="${m.lo}" data-hi="${m.hi}" data-log="${m.log ? 1 : 0}" data-l0="${L0}" data-l1="${L1}" data-ax="${AX}" data-unit="${esc(unit ?? "")}" ${hasR ? `data-rlo="${range.lowN}" data-rhi="${range.highN}"` : ""} aria-label="${esc(`${t.name}: ${items.map((h) => h.raw).join(", ")}`)}">
       <defs><marker id="m-tip" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L8 5 L0 9" class="m-tipp"/></marker></defs>
       ${band}<line class="m-axis m-create" pathLength="1" x1="${L0 - 14}" y1="${AX}" x2="${L1 + 14}" y2="${AX}" style="--d:0ms"/>${tk}
       ${fixes}${move}${dots}${scale}
@@ -1186,8 +1197,272 @@
     </svg>`;
   }
 
+  // ------------------------------------------------------------ explainer
+  // One test, for someone who has never read a lab report: what it is, why
+  // it is measured, what this report says, where the value sits against the
+  // lab's own printed range, what changed, and what cannot be concluded.
+  // Colour never works alone: every state also has a shape and a word.
+  //   inside the printed range  green  ●
+  //   outside it                coral  ▲ / ▼  (outside is not "danger")
+  //   preliminary / uncertain   amber  ◆
+  //   no range / missing        grey   ○
+  // General background is kept apart from the report and names its source.
+  // It has not been reviewed by a clinician yet, and says so.
+  const MEDLINE = "https://medlineplus.gov/lab-tests/";
+  const PRIMER = {
+    ferritin: {
+      src: MEDLINE + "ferritin-blood-test/",
+      en: ["iron storage", "Your body keeps spare iron in storage, like a pantry. Ferritin is the protein that holds it, so the amount in blood gives a rough idea of how full the pantry is.", "It is measured to check whether the body's iron stores are low or high."],
+      hi: ["आयरन का भंडार", "शरीर अतिरिक्त आयरन को एक भंडार में रखता है, जैसे रसोई की अलमारी। फेरिटिन वह प्रोटीन है जो इसे रखता है, इसलिए खून में इसकी मात्रा से अंदाज़ा मिलता है कि भंडार कितना भरा है।", "यह जांच बताती है कि शरीर का आयरन भंडार कम है या ज़्यादा।"],
+      hinglish: ["iron ka bhandaar", "Body extra iron ko ek store mein rakhti hai, jaise kitchen ki almari. Ferritin woh protein hai jo use rakhta hai, isliye blood mein iski matra se andaaza milta hai ki store kitna bhara hai.", "Yeh test batata hai ki body ka iron store kam hai ya zyada."],
+    },
+    hemoglobin: {
+      src: MEDLINE + "hemoglobin-test/",
+      en: ["oxygen carrier", "Red blood cells are like delivery vans. Hemoglobin is the cargo space inside them that carries oxygen from your lungs to the rest of your body.", "It is measured to see how well your blood can carry oxygen."],
+      hi: ["ऑक्सीजन ले जाने वाला", "लाल रक्त कोशिकाएं डिलीवरी गाड़ियों जैसी हैं। हीमोग्लोबिन उनके अंदर की वह जगह है जो फेफड़ों से पूरे शरीर तक ऑक्सीजन ले जाती है।", "यह जांच बताती है कि खून कितनी अच्छी तरह ऑक्सीजन ले जा सकता है।"],
+      hinglish: ["oxygen carrier", "Red blood cells delivery vans jaise hain. Hemoglobin unke andar ki woh jagah hai jo lungs se poori body tak oxygen le jaati hai.", "Yeh test batata hai ki blood kitni achhi tarah oxygen le ja sakta hai."],
+    },
+    tsh: {
+      src: MEDLINE + "tsh-thyroid-stimulating-hormone-test/",
+      en: ["thyroid-stimulating hormone", "Think of a thermostat. A gland in the brain sends TSH to tell the thyroid in your neck how much thyroid hormone to make, more or less like turning a dial.", "It is measured to check how the thyroid is working."],
+      hi: ["थायरॉइड को संकेत देने वाला हार्मोन", "थर्मोस्टैट की तरह सोचिए। दिमाग की एक ग्रंथि TSH भेजकर गले के थायरॉइड को बताती है कि कितना हार्मोन बनाना है, जैसे कोई डायल घुमाना।", "यह जांच बताती है कि थायरॉइड कैसे काम कर रहा है।"],
+      hinglish: ["thyroid ko signal dene wala hormone", "Thermostat ki tarah sochiye. Dimaag ki ek gland TSH bhej kar gale ke thyroid ko batati hai ki kitna hormone banana hai, jaise dial ghumana.", "Yeh test batata hai ki thyroid kaise kaam kar raha hai."],
+    },
+    creatinine: {
+      src: MEDLINE + "creatinine-test/",
+      en: ["muscle waste the kidneys clear", "Working muscles make a little waste called creatinine every day. The kidneys filter it out of the blood, like a sieve, so the level left in blood reflects how that filtering is going.", "It is measured to check how well the kidneys are filtering."],
+      hi: ["मांसपेशियों का कचरा जिसे किडनी साफ़ करती है", "काम करती मांसपेशियां रोज़ थोड़ा कचरा बनाती हैं जिसे क्रिएटिनिन कहते हैं। किडनी इसे छलनी की तरह खून से छानती है, इसलिए खून में बची मात्रा बताती है कि छनाई कैसी चल रही है।", "यह जांच बताती है कि किडनी कितनी अच्छी तरह छान रही है।"],
+      hinglish: ["muscle ka waste jo kidney saaf karti hai", "Kaam karti muscles roz thoda waste banati hain jise creatinine kehte hain. Kidney ise chhalni ki tarah blood se chhaanti hai, isliye blood mein bachi matra batati hai ki filtering kaisi chal rahi hai.", "Yeh test batata hai ki kidney kitni achhi tarah filter kar rahi hai."],
+    },
+    hba1c: {
+      src: MEDLINE + "hemoglobin-a1c-hba1c-test/",
+      en: ["3-month blood sugar average", "Sugar in the blood slowly sticks to red blood cells, like dust settling on a shelf. HbA1c measures how much has stuck, which reflects your average blood sugar over roughly the past three months.", "It is measured to look at blood sugar over time, not on a single day."],
+      hi: ["3 महीने का औसत ब्लड शुगर", "खून की शुगर धीरे-धीरे लाल रक्त कोशिकाओं पर चिपकती है, जैसे शेल्फ़ पर धूल जमती है। HbA1c मापता है कि कितनी चिपकी है, जो पिछले लगभग तीन महीनों की औसत शुगर दिखाता है।", "यह जांच किसी एक दिन की नहीं, समय के साथ शुगर की तस्वीर देती है।"],
+      hinglish: ["3 mahine ka average blood sugar", "Blood ki sugar dheere-dheere red blood cells par chipakti hai, jaise shelf par dhool jamti hai. HbA1c naapta hai ki kitni chipki hai, jo pichhle lagbhag teen mahino ki average sugar dikhata hai.", "Yeh test ek din ki nahi, samay ke saath sugar ki tasveer deta hai."],
+    },
+    ldl: {
+      src: "https://medlineplus.gov/ldlthebadcholesterol.html",
+      en: ["cholesterol carried by LDL", "Cholesterol travels in the blood inside tiny carriers, like parcels in delivery vans. LDL is one kind of van; this number is how much cholesterol the LDL vans are carrying.", "It is measured to help judge heart and blood vessel health."],
+      hi: ["LDL द्वारा ले जाया गया कोलेस्ट्रॉल", "कोलेस्ट्रॉल खून में छोटे वाहकों में चलता है, जैसे गाड़ियों में पार्सल। LDL एक तरह की गाड़ी है; यह संख्या बताती है कि LDL गाड़ियां कितना कोलेस्ट्रॉल ले जा रही हैं।", "यह जांच दिल और नसों की सेहत को समझने में मदद करती है।"],
+      hinglish: ["LDL ke saath chalne wala cholesterol", "Cholesterol blood mein chhote carriers mein chalta hai, jaise vans mein parcel. LDL ek tarah ki van hai; yeh number batata hai ki LDL vans kitna cholesterol le ja rahi hain.", "Yeh test dil aur naso ki sehat samajhne mein madad karta hai."],
+    },
+    urea: {
+      src: MEDLINE + "bun-blood-urea-nitrogen/",
+      en: ["protein waste the kidneys clear", "When the body breaks down protein it makes a waste called urea. The kidneys remove it, so the blood level is one clue to how they are working.", "It is measured, often with creatinine, to check kidney function."],
+      hi: ["प्रोटीन का कचरा जिसे किडनी साफ़ करती है", "जब शरीर प्रोटीन तोड़ता है तो यूरिया नाम का कचरा बनता है। किडनी इसे निकालती है, इसलिए खून में इसकी मात्रा किडनी के काम का एक संकेत है।", "यह जांच, अक्सर क्रिएटिनिन के साथ, किडनी का काम देखने के लिए होती है।"],
+      hinglish: ["protein ka waste jo kidney saaf karti hai", "Jab body protein todti hai to urea naam ka waste banta hai. Kidney ise nikaalti hai, isliye blood mein iski matra kidney ke kaam ka ek sanket hai.", "Yeh test, aksar creatinine ke saath, kidney ka kaam dekhne ke liye hota hai."],
+    },
+  };
+  const primerKey = (t) => {
+    const k = `${t.key ?? ""} ${t.name ?? ""}`.toLowerCase();
+    if (/ferritin/.test(k)) return "ferritin";
+    if (/a1c|glycated|glycosylated/.test(k)) return "hba1c";
+    if (/h(a)?emoglobin|\bhb\b|\bhgb\b/.test(k)) return "hemoglobin";
+    if (/\btsh\b|thyroid.stimulating/.test(k)) return "tsh";
+    if (/creatinine/.test(k)) return "creatinine";
+    if (/\bldl\b/.test(k)) return "ldl";
+    if (/\burea\b|\bbun\b/.test(k)) return "urea";
+    return null;
+  };
+  const EX = {
+    en: {
+      steps: ["What is it?", "Why is it measured?", "What your report says", "Where it sits", "What changed", "What this can't tell you"],
+      general: "General background, not from your report",
+      source: "Source: MedlinePlus",
+      unreviewed: "Not yet reviewed by a clinician",
+      noPrimer: "This report prints this test, but I don't have a plain-language explanation for it yet.",
+      state: { in: "Inside the lab's printed range", above: "Above the lab's printed range", below: "Below the lab's printed range", unsure: "Not settled yet", none: "No printed range to read it against", qual: "Differs from what the lab expects" },
+      prelim: "Preliminary report: this value may still change.",
+      openRow: "Open the line in the report",
+      where: {
+        in: (v, r) => `${v} is inside the range this lab printed (${r}).`,
+        below: (v, r, by) => `${v} is ${by} below the bottom of the range this lab printed (${r}).`,
+        above: (v, r, by) => `${v} is ${by} above the top of the range this lab printed (${r}).`,
+        none: (v) => `${v} has no printed range in this report, so I don't judge it.`,
+        outside: "Outside the printed range is a reason to ask your doctor, not by itself a sign of danger. Ranges differ between labs.",
+      },
+      legend: [["in", "inside"], ["out", "outside"], ["unsure", "not settled"], ["none", "no range"]],
+      one: "Only one reading so far, so there is nothing to compare yet.",
+      higher: "higher", lower: "lower", same: "about the same",
+      moved: (dir, d, from, to, u) => `${dir === "same" ? "About the same as" : dir === "higher" ? "Higher than" : "Lower than"} on ${d}: ${from} → ${to}${u ? " " + u : ""}.`,
+      bounded: (dir, d, from) => `${dir === "higher" ? "Higher" : "Lower"} than on ${d}. That result was printed as “${from}”, a limit rather than an exact number, so the size of the change can't be worked out.`,
+      units: (d1, u1, d2, u2) => `Not compared: the ${d1} result is in ${u1} and the ${d2} result in ${u2}. The same amount reads as a different number in different units.`,
+      boundNc: (d) => `Not compared: the ${d} result is a limit (like “<0.05”), so it isn't clear which way it moved.`,
+      fix: (d, from, to) => `Report correction (${d}): first printed as ${from}, then corrected to ${to}. That is a fix to the paper, not a change in your body.`,
+      was: (raw) => `was ${raw}`,
+      cant: {
+        always: "Whether this matters for you. That depends on your history, symptoms and medicines; your doctor can say.",
+        diagnosis: "A diagnosis. A value outside the printed range is not one by itself.",
+        units: (n) => `Whether ${n} went up or down between these reports, because the units changed.`,
+        bounded: "The exact size of the change, because one value is a limit, not a number.",
+        corrected: (from) => `Anything from the first printed value (${from}); it was replaced.`,
+        prelim: "The final value, because this report is still preliminary.",
+      },
+    },
+    hi: {
+      steps: ["यह क्या है?", "यह क्यों मापा जाता है?", "आपकी रिपोर्ट क्या कहती है", "यह कहां है", "क्या बदला", "इससे क्या पता नहीं चलता"],
+      general: "सामान्य जानकारी, आपकी रिपोर्ट से नहीं",
+      source: "स्रोत: MedlinePlus",
+      unreviewed: "अभी किसी डॉक्टर ने इसकी समीक्षा नहीं की है",
+      noPrimer: "रिपोर्ट में यह जांच छपी है, पर मेरे पास अभी इसकी आसान व्याख्या नहीं है।",
+      state: { in: "लैब की छपी सीमा के अंदर", above: "लैब की छपी सीमा से ज़्यादा", below: "लैब की छपी सीमा से कम", unsure: "अभी तय नहीं", none: "मिलाने के लिए कोई सीमा नहीं छपी", qual: "लैब की उम्मीद से अलग" },
+      prelim: "प्रारंभिक रिपोर्ट: यह मान अभी बदल सकता है।",
+      openRow: "रिपोर्ट में यह लाइन खोलें",
+      where: {
+        in: (v, r) => `${v} इस लैब की छपी सीमा (${r}) के अंदर है।`,
+        below: (v, r, by) => `${v} इस लैब की छपी सीमा (${r}) के निचले छोर से ${by} कम है।`,
+        above: (v, r, by) => `${v} इस लैब की छपी सीमा (${r}) के ऊपरी छोर से ${by} ज़्यादा है।`,
+        none: (v) => `${v} के लिए इस रिपोर्ट में कोई सीमा नहीं छपी, इसलिए मैं इसे नहीं आंकती।`,
+        outside: "छपी सीमा से बाहर होना डॉक्टर से पूछने की वजह है, अपने आप में ख़तरे का संकेत नहीं। अलग लैब की सीमाएं अलग होती हैं।",
+      },
+      legend: [["in", "अंदर"], ["out", "बाहर"], ["unsure", "तय नहीं"], ["none", "सीमा नहीं"]],
+      one: "अभी सिर्फ़ एक नतीजा है, इसलिए तुलना करने को कुछ नहीं।",
+      higher: "ज़्यादा", lower: "कम", same: "लगभग वैसा ही",
+      moved: (dir, d, from, to, u) => `${d} की तुलना में ${dir === "same" ? "लगभग वैसा ही" : dir === "higher" ? "ज़्यादा" : "कम"}: ${from} → ${to}${u ? " " + u : ""}।`,
+      bounded: (dir, d, from) => `${d} की तुलना में ${dir === "higher" ? "ज़्यादा" : "कम"}। वह नतीजा “${from}” छपा था, जो सटीक संख्या नहीं बल्कि एक सीमा है, इसलिए बदलाव कितना हुआ यह नहीं निकाला जा सकता।`,
+      units: (d1, u1, d2, u2) => `तुलना नहीं: ${d1} का नतीजा ${u1} में और ${d2} का ${u2} में है। अलग यूनिट में एक ही मात्रा अलग संख्या दिखती है।`,
+      boundNc: (d) => `तुलना नहीं: ${d} का नतीजा एक सीमा है (जैसे “<0.05”), इसलिए साफ़ नहीं कि यह किस ओर गया।`,
+      fix: (d, from, to) => `रिपोर्ट में सुधार (${d}): पहले ${from} छपा, फिर ${to} में सुधारा गया। यह काग़ज़ का सुधार है, शरीर में बदलाव नहीं।`,
+      was: (raw) => `पहले ${raw}`,
+      cant: {
+        always: "आपके लिए इसका क्या मतलब है। यह आपके इतिहास, लक्षणों और दवाओं पर निर्भर है; यह आपके डॉक्टर बता सकते हैं।",
+        diagnosis: "कोई निदान। छपी सीमा से बाहर का मान अपने आप में निदान नहीं है।",
+        units: (n) => `${n} इन रिपोर्ट्स के बीच बढ़ा या घटा, क्योंकि यूनिट बदल गई।`,
+        bounded: "बदलाव का सटीक आकार, क्योंकि एक मान संख्या नहीं बल्कि सीमा है।",
+        corrected: (from) => `पहले छपे मान (${from}) से कुछ भी; उसे बदल दिया गया।`,
+        prelim: "अंतिम मान, क्योंकि यह रिपोर्ट अभी प्रारंभिक है।",
+      },
+    },
+    hinglish: {
+      steps: ["Yeh kya hai?", "Yeh kyun naapa jaata hai?", "Aapki report kya kehti hai", "Yeh kahan hai", "Kya badla", "Isse kya pata nahi chalta"],
+      general: "General jaankari, aapki report se nahi",
+      source: "Source: MedlinePlus",
+      unreviewed: "Abhi kisi doctor ne iska review nahi kiya hai",
+      noPrimer: "Report mein yeh test chhapa hai, par mere paas abhi iski aasaan explanation nahi hai.",
+      state: { in: "Lab ki printed range ke andar", above: "Lab ki printed range se zyada", below: "Lab ki printed range se kam", unsure: "Abhi tay nahi", none: "Milane ke liye koi range nahi chhapi", qual: "Lab ki ummeed se alag" },
+      prelim: "Preliminary report: yeh value abhi badal sakti hai.",
+      openRow: "Report mein yeh line kholiye",
+      where: {
+        in: (v, r) => `${v} is lab ki printed range (${r}) ke andar hai.`,
+        below: (v, r, by) => `${v} is lab ki printed range (${r}) ke neeche ke sire se ${by} kam hai.`,
+        above: (v, r, by) => `${v} is lab ki printed range (${r}) ke upar ke sire se ${by} zyada hai.`,
+        none: (v) => `${v} ke liye is report mein koi range nahi chhapi, isliye main ise nahi aankti.`,
+        outside: "Printed range se bahar hona doctor se poochne ki wajah hai, apne aap mein khatre ka sanket nahi. Alag labs ki ranges alag hoti hain.",
+      },
+      legend: [["in", "andar"], ["out", "bahar"], ["unsure", "tay nahi"], ["none", "range nahi"]],
+      one: "Abhi sirf ek reading hai, isliye tulna karne ko kuch nahi.",
+      higher: "zyada", lower: "kam", same: "lagbhag waisa hi",
+      moved: (dir, d, from, to, u) => `${d} ke mukable ${dir === "same" ? "lagbhag waisa hi" : dir === "higher" ? "zyada" : "kam"}: ${from} → ${to}${u ? " " + u : ""}.`,
+      bounded: (dir, d, from) => `${d} ke mukable ${dir === "higher" ? "zyada" : "kam"}. Woh result “${from}” chhapa tha, jo exact number nahi balki ek limit hai, isliye badlav kitna hua yeh nahi nikal sakta.`,
+      units: (d1, u1, d2, u2) => `Tulna nahi: ${d1} ka result ${u1} mein aur ${d2} ka ${u2} mein hai. Alag unit mein ek hi matra alag number dikhti hai.`,
+      boundNc: (d) => `Tulna nahi: ${d} ka result ek limit hai (jaise “<0.05”), isliye saaf nahi ki yeh kis taraf gaya.`,
+      fix: (d, from, to) => `Report mein sudhaar (${d}): pehle ${from} chhapa, phir ${to} mein sudhara gaya. Yeh kaagaz ka sudhaar hai, body mein badlav nahi.`,
+      was: (raw) => `pehle ${raw}`,
+      cant: {
+        always: "Aapke liye iska kya matlab hai. Yeh aapki history, symptoms aur dawaon par depend karta hai; yeh aapke doctor bata sakte hain.",
+        diagnosis: "Koi diagnosis. Printed range se bahar ki value apne aap mein diagnosis nahi hai.",
+        units: (n) => `${n} in reports ke beech badha ya ghata, kyunki unit badal gayi.`,
+        bounded: "Badlav ka exact size, kyunki ek value number nahi balki limit hai.",
+        corrected: (from) => `Pehle chhapi value (${from}) se kuch bhi; use badal diya gaya.`,
+        prelim: "Final value, kyunki yeh report abhi preliminary hai.",
+      },
+    },
+  };
+  const X = (lang) => EX[lang] ?? EX.en;
+  const GLYPH = { in: "●", above: "▲", below: "▼", unsure: "◆", none: "○", qual: "◆" };
+  /** in | above | below | unsure | none | qual, for the latest reading. */
+  function stateOf(t) {
+    const L = t.latest ?? {};
+    if (L.status === "preliminary") return "unsure";
+    if (L.position === "within") return "in";
+    if (L.position === "above" || L.position === "below") return L.position;
+    if (L.position === "qual_differs") return "qual";
+    return "none";
+  }
+  const toneOf = (s) => (s === "above" || s === "below" ? "out" : s === "qual" ? "unsure" : s);
+  const rangeText = (r, unit) => (r ? `${r.low ?? r.lowN}–${r.high ?? r.highN}${unit ? " " + unit : ""}` : "");
+  function changeSentences(t, lang) {
+    const x = X(lang);
+    const hs = t.history ?? [];
+    const out = [];
+    if (t.corrected) out.push({ tone: "unsure", text: x.fix(shortDate(t.corrected.date, lang), t.corrected.from, t.corrected.to) });
+    if (hs.length < 2) {
+      if (!t.corrected) out.push({ tone: "none", text: x.one });
+      return out;
+    }
+    const a = hs[hs.length - 2], b = hs[hs.length - 1];
+    const c = t.insight?.change;
+    if (t.unitChanged) out.push({ tone: "unsure", text: x.units(shortDate(a.date, lang), a.unit, shortDate(b.date, lang), b.unit) });
+    else if (c?.bounded) out.push({ tone: "none", text: x.bounded(c.direction, shortDate(c.fromDate, lang), c.from) });
+    else if (c) out.push({ tone: "none", text: x.moved(c.direction ?? "same", shortDate(c.fromDate, lang), c.from, c.to, t.unit) });
+    else if (t.insight?.notCompared === "bound") out.push({ tone: "unsure", text: x.boundNc(shortDate(a.comparator ? a.date : b.date, lang)) });
+    return out;
+  }
+  function cantList(t, lang) {
+    const x = X(lang).cant;
+    const s = stateOf(t);
+    const out = [x.always];
+    if (s === "above" || s === "below" || s === "qual") out.push(x.diagnosis);
+    if (t.unitChanged) out.push(x.units(t.name));
+    if (t.insight?.change?.bounded) out.push(x.bounded);
+    if (t.corrected) out.push(x.corrected(t.corrected.from));
+    if (s === "unsure") out.push(x.prelim);
+    return out;
+  }
+  function explainTest(t, lang, chart) {
+    const w = W(lang), x = X(lang), rw = R(lang);
+    const pk = primerKey(t);
+    const p = pk ? PRIMER[pk][lang] ?? PRIMER[pk].en : null;
+    const L = t.latest ?? {};
+    const s = stateOf(t), tone = toneOf(s);
+    const v = `${L.raw}${t.unit ? " " + t.unit : ""}`;
+    const r = L.range && Number.isFinite(L.range.lowN) && Number.isFinite(L.range.highN) ? L.range : null;
+    const pos = L.position;
+    const by = t.insight?.distance ? `${fmt(t.insight.distance.by)}${t.unit ? " " + t.unit : ""}` : "";
+    const whereLine =
+      pos === "within" && r ? x.where.in(v, rangeText(r, t.unit))
+        : pos === "below" && r ? x.where.below(v, rangeText(r, t.unit), by)
+          : pos === "above" && r ? x.where.above(v, rangeText(r, t.unit), by)
+            : x.where.none(v);
+    const step = (i, body, cls = "") => `<li class="ex-step ${cls}"><h4 class="ex-k"><span class="ex-n" aria-hidden="true">${i + 1}</span>${esc(x.steps[i])}</h4>${body}</li>`;
+    const src = L.title ?? (t.history ?? []).at(-1)?.title ?? "";
+    const statusChip = (st) => `<span class="ex-chip ${st === "preliminary" ? "unsure" : "plain"}">${st === "preliminary" ? "◆ " : ""}${esc(w["st_" + st] ?? st)}</span>`;
+    const readings = (t.history ?? [])
+      .map((h) => `<li><button type="button" class="ex-row" data-doc="${esc(h.title ?? "")}"${h.title ? "" : " disabled"}><span class="ex-d">${esc(shortDate(h.date, lang))}</span><b>${esc(h.raw)}${h.unit ? ` <small>${esc(h.unit)}</small>` : ""}</b>${statusChip(h.status)}${(h.superseded ?? []).map((g) => `<s class="ex-was">${esc(x.was(g.raw))}</s>`).join("")}<span class="ex-go" aria-hidden="true">↗</span></button></li>`)
+      .join("");
+    const changes = changeSentences(t, lang)
+      .map((c) => `<p class="ex-say t-${c.tone}">${esc(c.text)}</p>`)
+      .join("");
+    const legend = `<ul class="ex-legend" aria-hidden="true">${x.legend.map(([k, label]) => `<li class="t-${k}"><i>${k === "out" ? "▲▼" : GLYPH[k]}</i>${esc(label)}</li>`).join("")}</ul>`;
+    return `<header class="ex-h">
+        <h3 class="st-title"><span class="m-tw">${esc(t.name)}</span>${p ? `<span class="ex-full">${esc(p[0])}</span>` : ""}</h3>
+        <p class="ex-state t-${tone}"><i aria-hidden="true">${GLYPH[s]}</i><span>${esc(x.state[s])}</span><b>${esc(v)}</b><span class="ex-date">${esc(shortDate(L.date, lang))}</span></p>
+      </header>
+      <ol class="ex-steps">
+        ${p ? `<li class="ex-step ex-learn"><div class="ex-pair"><div><h4 class="ex-k"><span class="ex-n" aria-hidden="true">1</span>${esc(x.steps[0])}</h4><p>${esc(p[1])}</p></div><div><h4 class="ex-k"><span class="ex-n" aria-hidden="true">2</span>${esc(x.steps[1])}</h4><p>${esc(p[2])}</p></div></div><p class="ex-src">${esc(x.general)} · <a href="${esc(PRIMER[pk].src)}" target="_blank" rel="noopener">${esc(x.source)}</a> · ${esc(x.unreviewed)}</p></li>` : step(0, `<p>${esc(x.noPrimer)}</p>`)}
+        ${step(2, `<div class="ex-report"><b class="ex-big">${esc(L.raw)}</b>${t.unit ? `<span class="ex-u">${esc(t.unit)}</span>` : ""}<span class="ex-d">${esc(shortDate(L.date, lang))}</span>${L.status ? statusChip(L.status) : ""}${src ? `<button type="button" class="ex-open" data-doc="${esc(src)}">${esc(x.openRow)} ↗</button>` : ""}</div>${L.status === "preliminary" ? `<p class="ex-say t-unsure">${esc(x.prelim)}</p>` : ""}`)}
+        ${step(3, `<div class="st-chart ex-chart">${chart}</div>${legend}<p class="ex-say t-${tone}">${esc(whereLine)}</p>${tone === "out" ? `<p class="ex-note">${esc(x.where.outside)}</p>` : ""}`)}
+        ${step(4, `${changes}<ol class="ex-rows">${readings}</ol>`)}
+        ${step(5, `<ul class="ex-cant">${cantList(t, lang).map((c) => `<li>${esc(c)}</li>`).join("")}</ul>`)}
+      </ol>
+      <div class="ex-asks">${asksFor(t, lang).map((q) => `<button type="button" class="dd-ask" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>
+      <p class="st-tip">${esc(rw.trackerHint)}</p>`;
+  }
+  function asksFor(t, lang) {
+    const w = W(lang);
+    const hs = t.history ?? [];
+    const asks = [];
+    if (/below|above/.test(t.latest.position)) asks.push(w.askWhy(t.name));
+    if (t.corrected) asks.push(w.askCorr(t.name));
+    if (t.unitChanged) asks.push(w.askUnits(t.name));
+    if (hs.length > 1 && !t.unitChanged) asks.push(w.askChange(t.name));
+    asks.push(w.askWhat(t.name));
+    return asks.slice(0, 3);
+  }
+
   function sceneTest(t, lang) {
     const w = W(lang), rw = R(lang);
+    const narrow = matchMedia("(max-width: 560px)").matches;
     const hs = t.history ?? [];
     const units = [...new Set(hs.map((h) => h.unit ?? t.unit ?? ""))];
     let chart;
@@ -1197,16 +1472,11 @@
         .map((items, i) => {
           const last = items.at(-1);
           const range = i === segs.length - 1 ? t.latest.range : last?.range ? { lowN: last.range.lowN, highN: last.range.highN } : null;
-          return `<div class="m-seg"><p class="m-unit">${esc(units[i])}</p>${numberLineScene(t, items, range, units[i], lang, w, { compact: true, noMove: true })}</div>`;
+          return `<div class="m-seg"><p class="m-unit">${esc(units[i])}</p>${numberLineScene(t, items, range, units[i], lang, w, { compact: true, noMove: true, narrow })}</div>`;
         })
         .join(`<p class="m-neq" aria-label="${esc(w.nc.unit)}"><b>≠</b><span>${esc(w.nc.unit)}</span></p>`);
-    } else chart = numberLineScene(t, hs.length ? hs : [t.latest], t.latest.range, t.unit, lang, w);
-    return {
-      label: t.name,
-      html: `<header class="st-h"><h3 class="st-title"><span class="m-tw">${esc(t.name)}</span></h3><p class="st-sub">${esc(posWord(t.latest.position, w))} · ${esc(t.latest.raw)}${t.unit ? " " + esc(t.unit) : ""} · ${esc(shortDate(t.latest.date, lang))}</p></header>
-        <div class="st-chart">${chart}</div><p class="st-tip">${esc(rw.trackerHint)}</p>
-        <div class="st-drill">${drill(t, lang)}</div>`,
-    };
+    } else chart = numberLineScene(t, hs.length ? hs : [t.latest], t.latest.range, t.unit, lang, w, { narrow });
+    return { label: t.name, html: `<div class="st-h ex">${explainTest(t, lang, chart)}</div>` };
   }
 
   function sceneRegion(subject, key, lang) {
