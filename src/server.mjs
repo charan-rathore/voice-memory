@@ -923,6 +923,9 @@ export function createLocalServer({
   let nextAnswerGeneration = 0;
   async function resolveAnswer(s, question, ctx, opts = {}) {
     const bundle = s.bundle;
+    // Only the server's voice adapter can supply a distinct raw utterance.
+    // A repaired/history-enriched retrieval candidate is not request identity.
+    const requestOriginal = opts.originalQuestion ?? question;
     if (!answerGenerations.has(bundle))
       answerGenerations.set(bundle, ++nextAnswerGeneration);
     // May this document set's passages go to the model? Fictional demo
@@ -947,13 +950,23 @@ export function createLocalServer({
       decision = { ...decision, patient: null };
     opts = { ...opts, patient: decision.patient ?? null };
     const immutableRequest = questionPlan({
-      originalQuestion: question,
+      originalQuestion: requestOriginal,
       selectedOwners: opts.patient ? [opts.patient] : [],
       sourceGeneration: answerGenerations.get(bundle),
+      normalizationCandidates:
+        question === requestOriginal
+          ? []
+          : [
+              {
+                text: question,
+                purpose: "legacy_voice_retrieval_candidate",
+                semanticPreservationVerified: false,
+              },
+            ],
     });
 
     const schemaPlanKey =
-      exactFieldPlan(question, bundle, immutableRequest.sourceGeneration)
+      exactFieldPlan(requestOriginal, bundle, immutableRequest.sourceGeneration)
         ?.key ?? null;
     // Retrieval mode is part of the key: a keyword or partial-warm
     // answer cached while the embedder was cold or warming must not
@@ -963,6 +976,7 @@ export function createLocalServer({
         bundle.scope,
         answerGenerations.get(bundle),
         opts.patient ?? null,
+        requestOriginal === question ? null : requestOriginal,
         schemaPlanKey,
       ]) +
         denseCacheSuffix(bundle) +
@@ -1230,7 +1244,7 @@ export function createLocalServer({
           },
         };
       const exactFields = await resolveExactFields({
-        question: original,
+        question: requestOriginal,
         bundle,
         sourceGeneration: immutableRequest.sourceGeneration,
         isCurrent: () =>
@@ -1543,11 +1557,11 @@ export function createLocalServer({
       s.bundle !== bundle ||
       answerGenerations.get(bundle) !== immutableRequest.sourceGeneration ||
       (value.shown.sourceQuestionPlan &&
-        value.shown.sourceQuestionPlan.originalQuestion !== question)
+        value.shown.sourceQuestionPlan.originalQuestion !== requestOriginal)
     ) {
       value.raw = null;
       value.shown = {
-        question,
+        question: requestOriginal,
         questionPlan: immutableRequest,
         lead: {
           text: "The source scope changed before this answer was ready. Ask again against the current documents.",
@@ -2410,6 +2424,7 @@ export function createLocalServer({
   if (process.env.VM_SHARED_VOICE_REASONING === "on") {
     const sharedVoiceAnswer = async ({
       question,
+      originalQuestion = question,
       bundle,
       exactSchemaOnly = false,
     }) => {
@@ -2421,12 +2436,14 @@ export function createLocalServer({
       ];
       const sourceSession = candidates.find((s) => s?.bundle === bundle);
       if (!sourceSession) return null;
-      if (exactSchemaOnly && !exactFieldPlan(question, bundle, 0)) return null;
+      if (exactSchemaOnly && !exactFieldPlan(originalQuestion, bundle, 0))
+        return null;
       // Voice has no trusted per-turn document-provider consent yet. A typed
       // checkbox or a caller's system/history content cannot authorize egress.
       // Explicitly prevent model calls even for synthetic source sessions.
       const result = await resolveAnswer(sourceSession, question, "", {
         noModel: true,
+        originalQuestion,
       });
       const value = JSON.parse(result.json);
       if (sourceSession.bundle !== bundle)

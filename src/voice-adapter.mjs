@@ -1322,6 +1322,7 @@ export function createVoiceAdapter({
           const exactSchemaOnly = !!(mixedTurn || secondQ);
           const unified = await resolveAnswer({
             question: exactSchemaOnly ? transcript : asked,
+            originalQuestion: askedRaw,
             exactSchemaOnly,
             bundle,
             caseId,

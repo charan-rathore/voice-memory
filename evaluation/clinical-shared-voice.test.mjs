@@ -136,20 +136,29 @@ test("a clinical hit does not bypass the common resolver and its request retains
     };
   });
   const token = adapter.bind(bundle);
+  const original = "What is SYN-0001's ferriting result?";
   const response = await adapter.handle(
     new Request("http://localhost/v1/chat/completions", {
       method: "POST",
       headers: { authorization: "Bearer " + token },
       body: JSON.stringify({
         stream: true,
-        messages: [
-          { role: "user", content: "What is SYN-0001's ferritin result?" },
-        ],
+        messages: [{ role: "user", content: original }],
       }),
     }),
   );
   assert.match(await response.text(), /Shared boundary exercised/);
   assert.equal(captured.bundle, bundle);
+  assert.equal(
+    captured.originalQuestion,
+    original,
+    "raw utterance precedes repairs and history",
+  );
+  assert.notEqual(
+    captured.question,
+    original,
+    "repair is a distinct candidate",
+  );
   assert.equal(
     captured.exactSchemaOnly,
     false,
@@ -157,4 +166,116 @@ test("a clinical hit does not bypass the common resolver and its request retains
   );
   assert.match(captured.question, /SYN-0001/);
   assert.match(captured.question, /ferritin/i);
+});
+
+test("actual local voice contract keeps original utterance in its opaque plan separately from repaired retrieval", async () => {
+  const { readFileSync } = await import("node:fs");
+  const previous = process.env.VM_SHARED_VOICE_REASONING;
+  process.env.VM_SHARED_VOICE_REASONING = "on";
+  const server = createLocalServer({
+    port: 0,
+    gemini: { enabled: () => false, searchEnabled: () => false },
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const session = await fetch(base + "/api/session");
+    const cookie = session.headers.get("set-cookie").split(";")[0];
+    const csrf = (await session.json()).csrf;
+    const headers = { cookie, origin: base, "X-CSRF-Token": csrf };
+    const post = (path, data) =>
+      fetch(base + "/api/" + path, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify(data),
+      });
+    const file = "a-2026-10-amended.pdf";
+    const upload = await fetch(base + "/api/upload", {
+      method: "POST",
+      headers: { ...headers, "x-file-name": file },
+      body: readFileSync(
+        new URL("../clinical/fixtures/files/" + file, import.meta.url),
+      ),
+    });
+    assert.equal(upload.status, 202);
+    let ready = false;
+    for (let i = 0; i < 300; i++) {
+      const lib = await fetch(base + "/api/library", {
+        headers: { cookie },
+      }).then((r) => r.json());
+      if (lib.indexed === 1) {
+        ready = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.ok(ready);
+    assert.equal((await post("voice/start", {})).status, 200);
+    const original = "What is SYN-0001's ferriting result?";
+    const response = await post("voice/turn", {
+      stream: true,
+      messages: [{ role: "user", content: original }],
+    });
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /50/);
+    const { turn } = await fetch(base + "/api/voice/last", {
+      headers: { cookie },
+    }).then((r) => r.json());
+    const plan = turn.spokenTurn.questionPlan;
+    assert.equal(plan.originalQuestion, original);
+    assert.equal(plan.requirements[0].protectedText, original);
+    assert.equal(plan.coverageEstablished, false);
+    assert.equal(plan.semanticQualification, "unresolved");
+    assert.equal(plan.normalizationCandidates.length, 1);
+    assert.match(plan.normalizationCandidates[0].text, /Ferritin/i);
+    assert.notEqual(plan.normalizationCandidates[0].text, original);
+    assert.equal(
+      plan.normalizationCandidates[0].semanticPreservationVerified,
+      false,
+    );
+    // A fully consumed grammar for the repaired tail cannot certify the
+    // caller's larger original utterance. It stays opaque, not exact-fields.
+    assert.equal(
+      (
+        await post("import", {
+          documents: [
+            {
+              title: "Synthetic custody table",
+              text: "| Field | Value |\n| --- | --- |\n| custody | escrow |\n| reserve | 27 units |",
+            },
+          ],
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await post("voice/start", {})).status, 200);
+    const compoundOriginal = "What is reserve? No, what is custody?";
+    const repaired = await post("voice/turn", {
+      stream: true,
+      messages: [{ role: "user", content: compoundOriginal }],
+    });
+    assert.equal(repaired.status, 200);
+    await repaired.text();
+    const replay = await fetch(base + "/api/voice/last", {
+      headers: { cookie },
+    }).then((r) => r.json());
+    assert.equal(
+      replay.turn.spokenTurn.questionPlan.originalQuestion,
+      compoundOriginal,
+    );
+    assert.equal(
+      replay.turn.spokenTurn.questionPlan.coverageEstablished,
+      false,
+    );
+    assert.equal(
+      replay.turn.spokenTurn.admission,
+      null,
+      "repaired exact-table tail is not a certificate for raw request",
+    );
+  } finally {
+    server.closeAllConnections();
+    await new Promise((r) => server.close(r));
+    if (previous === undefined) delete process.env.VM_SHARED_VOICE_REASONING;
+    else process.env.VM_SHARED_VOICE_REASONING = previous;
+  }
 });
