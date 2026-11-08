@@ -258,6 +258,7 @@
   // ------------------------------------------------------------ verdicts
   const VERDICT = {
     LATEST: ["v-latest", "Latest value"],
+    UNCLEAR: ["v-warn", "Unclear scan - check source"],
     VALUE: ["v-latest", "From the named report"],
     COMPARED: ["v-ok", "Compared"],
     SINGLE: ["v-latest", "Only one result"],

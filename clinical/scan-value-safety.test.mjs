@@ -63,3 +63,24 @@ test("every numeric gold row on the mixed scan is exact or explicitly withheld, 
       );
     }
 });
+
+test("unreadable lookup is labelled unclear, never a confirmed latest value", async () => {
+  const { clinicalAnswer } = await import("./answer.mjs");
+  const r = {
+    meta: { patient: { id: "RX-1" }, collected: "2026-11-05", status: "final" },
+    observations: [
+      {
+        test: "HbA1c",
+        canon: "hba1c",
+        key: "hba1c",
+        raw: "59",
+        value: 59,
+        unit: "%",
+        unreadable: { reason: "confidence", page: 3 },
+        source: {},
+      },
+    ],
+  };
+  const a = clinicalAnswer("What is HbA1c for RX-1?", [r]);
+  assert.equal(a.verdict, "UNCLEAR");
+});

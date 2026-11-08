@@ -462,7 +462,7 @@ export function clinicalTurn(question, reports) {
       return {
         ...base,
         spoken,
-        verdict: "VALUE",
+        verdict: o.unreadable ? "UNCLEAR" : "VALUE",
         used: [o, ...entry.superseded],
       };
     }
@@ -476,7 +476,7 @@ export function clinicalTurn(question, reports) {
     return {
       ...base,
       spoken,
-      verdict: single ? "SINGLE" : "LATEST",
+      verdict: o.unreadable ? "UNCLEAR" : single ? "SINGLE" : "LATEST",
       used: [o, ...latest.superseded],
     };
   }
