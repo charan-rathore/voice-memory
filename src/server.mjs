@@ -1,3 +1,4 @@
+import { finalAnswer } from "./answer-contract.mjs";
 import {
   briefAnswer,
   briefIntent,
@@ -2448,10 +2449,24 @@ export function createLocalServer({
       const value = JSON.parse(result.json);
       if (sourceSession.bundle !== bundle)
         throw Error("Voice source changed during shared answer");
-      // Specialized voice conversation renderers retain clinical history,
-      // language, mixed-domain and broad-deal orchestration. A missing lead
-      // cannot replace their already validated fallback with an empty turn.
-      if (!value.shown?.lead?.text) return null;
+      // Direct nonclinical abstentions use the same final contract as typed,
+      // not a separate voice fallback. Clinical/mixed orchestration is still
+      // migrating and keeps its existing renderer when no lead is available.
+      if (!value.shown?.lead?.text) {
+        if (bundle.clinical?.length || sourceSession === caseSessions.deal)
+          return null;
+        const final = finalAnswer(value.shown);
+        return {
+          ...value.shown,
+          lead: {
+            text: final.text,
+            verdict: final.verdict,
+            citations: final.citations,
+            field: null,
+          },
+          raw: value.raw,
+        };
+      }
       if (
         sourceSession === caseSessions.deal &&
         value.shown.lead.verdict === "UNKNOWN" &&

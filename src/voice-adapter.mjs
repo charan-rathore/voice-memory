@@ -1350,6 +1350,7 @@ export function createVoiceAdapter({
             turn = {
               result: unified.raw ?? null,
               spokenTurn: {
+                at: Date.now(),
                 intent: lead.intent ?? "SHARED",
                 questionPlan: unified.questionPlan ?? null,
                 admission: unified.admission ?? null,

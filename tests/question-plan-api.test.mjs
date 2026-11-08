@@ -237,9 +237,10 @@ test("current invoice request cannot promote an explicitly original superseded p
       .map((m) => JSON.parse(m[1]).choices?.[0]?.delta?.content ?? "")
       .join("");
     assert.doesNotMatch(spoken, /900/);
-    assert.match(
+    assert.equal(
       spoken,
-      /excerpts rather than a synthesized answer|not established an answer/,
+      a.final.text,
+      "direct nonclinical abstention uses the typed final contract",
     );
     // Historical access still works: the guard must not delete the past.
     const old = await fetch(base + "/ask", {

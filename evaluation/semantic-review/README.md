@@ -93,3 +93,9 @@ A fresh exposed model-off HTTP probe found a wrong-version answer: a prose invoi
 A shared negative compatibility check now excludes explicitly historical-only wording from that sentence selector and the generic extractive selector when the question explicitly asks current/latest/now/today. It does not infer a replacement amount or adjudicate a prose amendment chain. The reproduction now abstains rather than promote the old value. A historical request still returns the original $900, and existing recorded-invoice positives and full regression expectations are retained. This is a bounded lexical veto, not qualified temporal understanding; other producers and implicit historical/current relationships still need semantic certificates.
 
 Typed HTTP and fake voice transport both avoid the old value in this fixture. Their abstention wording still differs because the shared voice resolver falls back to legacy voice wording when there is no lead. That remains an open canonical-path defect, not a parity pass. No frozen case or actual provider was used.
+
+## Direct nonclinical abstention parity
+
+The opt-in shared voice boundary now renders a direct nonclinical no-lead result through the same existing final-answer contract as typed, rather than return to a second voice fallback. The current-invoice development fixture now requires exact typed/streamed abstention text equality and retains the old-value prohibition and historical-access positive. Shared voice turns also retain the evidence feed timestamp; an original feed assertion caught its absence during this migration and was kept unchanged.
+
+This only closes one no-lead rendering discrepancy. Clinical/mixed/compound and broad-deal orchestration remains separate where previously scoped, raw voice normalization remains unqualified, and whole-question semantic equality is not established by the local fixture.
