@@ -1,5 +1,6 @@
 import { briefAnswer, briefIntent } from "./record-brief.mjs";
 import { labDigest } from "../clinical/answer.mjs";
+import { subjectOf } from "../clinical/observations.mjs";
 import { unboundOwnerTurn } from "./requested-owner.mjs";
 import { identifierRequest, explicitRecordRequest } from "../dist/engine.mjs";
 /** OpenAI-compatible streaming contract for a future Bolna custom LLM.
@@ -1160,9 +1161,19 @@ export function createVoiceAdapter({
         ) {
           const b = (() => {
             try {
+              // Reuse the shared source-bound identity decision. Never let
+              // the brief layer choose a majority record or pool lab digests.
               return briefAnswer(asked, bundle, citeSpan, {
-                labs: labDigest(bundle.clinical ?? []),
-                reports: bundle.clinical ?? [],
+                patient: identityDecision.patient ?? null,
+                labs: labDigest(
+                  bundle.clinical ?? [],
+                  identityDecision.patient ?? null,
+                ),
+                reports: (bundle.clinical ?? []).filter(
+                  (r) =>
+                    !identityDecision.patient ||
+                    subjectOf(r) === identityDecision.patient,
+                ),
                 namedTest:
                   !!findTest(asked, bundle.clinical ?? []) ||
                   !!findTest(grant?.lastField ?? "", bundle.clinical ?? []),
