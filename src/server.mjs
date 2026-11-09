@@ -5,6 +5,7 @@ import {
   eventQuestionPlan,
   eventRemainderPlan,
   eventSourceFacts,
+  candidateUsesEventAssertion,
   resolveExplicitEventRemainder,
 } from "./event-admission.mjs";
 import {
@@ -1549,6 +1550,53 @@ export function createLocalServer({
         ctx,
         opts.patient ?? null,
       );
+      if (
+        !(bundle.clinical ?? []).length &&
+        !(bundle.sourceRecords ?? []).some((r) => r.meta?.patient) &&
+        candidateUsesEventAssertion(shown.lead, bundle)
+      ) {
+        // No question-form exemption: a legacy candidate quoting an event is
+        // still not a relation certificate. Earlier independent operations
+        // already had their chance; unknown context cannot self-certify here.
+        const evidence = [
+          ...(shown.lead?.citations ?? []),
+          ...(shown.evidence ?? []),
+        ];
+        return {
+          raw: null,
+          shown: {
+            question: requestOriginal,
+            sourceQuestionPlan: immutableRequest,
+            lead: {
+              text: "I found source assertions related to this request, but could not independently verify that they answer the whole question. Inspect them as related evidence, not an answer.",
+              verdict: "UNKNOWN",
+              field: null,
+              citations: [],
+            },
+            evidence,
+            visual: null,
+            closest: null,
+            admission: {
+              questionPlanKey: immutableRequest.key,
+              sourceGeneration: immutableRequest.sourceGeneration,
+              status: "unresolved",
+              userReady: false,
+              complete: false,
+              reason: "event_candidate_requirement_not_admitted",
+              outcomes: immutableRequest.requirements.map((r) => ({
+                requirementId: r.id,
+                status: "not_established",
+                claims: [],
+              })),
+            },
+            semantic: {
+              intent: "UNVERIFIED_EVENT_CANDIDATE",
+              lang,
+              steps: ["event_quote_is_not_independent_relation_admission"],
+            },
+          },
+        };
+      }
       if (raw?.requestedCoverage === "coordination_unresolved") {
         // requestedChecked certifies neither decomposition nor whole-question
         // completeness. Keep every byte of the unresolved caller requirement.

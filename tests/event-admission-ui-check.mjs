@@ -196,13 +196,33 @@ try {
     .locator("#answer")
     .screenshot({ path: "/downloads/voice-memory-event-recipient-mobile.png" });
   await page.locator("#files").setInputFiles({
+    name: "Context.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      "Unknown surrounding context. This heading cannot certify an event relation.",
+    ),
+  });
+  await page.locator("#upl-list li", { hasText: "Ready" }).nth(1).waitFor();
+  await ask("Who did Priya sign the commercial scope for?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Answer not established",
+  );
+  assert.match(
+    await page.locator("#answer").innerText(),
+    /related evidence, not an answer/,
+  );
+  await page.locator("#answer").screenshot({
+    path: "/downloads/voice-memory-event-candidate-unresolved-mobile.png",
+  });
+  await page.locator("#files").setInputFiles({
     name: "Purchase.txt",
     mimeType: "text/plain",
     buffer: Buffer.from(
       "# PURCHASE ORDER PO-55120\n\nAPPROVED / SIGNED\nApproved by: Priya Nair, Head of Procurement Approval date: 03 Nov 2026",
     ),
   });
-  await page.locator("#upl-list li", { hasText: "Ready" }).nth(1).waitFor();
+  await page.locator("#upl-list li", { hasText: "Ready" }).nth(2).waitFor();
   await ask("Who approved the purchase order?");
   assert.equal(
     await page.locator("#answer .verdict-chip").innerText(),

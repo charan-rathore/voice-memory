@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   eventQuestionPlan,
+  candidateUsesEventAssertion,
   eventRemainderPlan,
   resolveExplicitEventRemainder,
   eventSourceFacts,
@@ -712,4 +713,50 @@ test("recipient completion binds payer action amount and positive polarity witho
     }).ok,
     false,
   );
+});
+
+test("rejection-only event candidate provenance requires real source spans and does not certify incomplete source context", () => {
+  const text =
+    "Payment ledger\nArjun paid $1,500 to Nimbus.\nOther unknown context.";
+  const b = bundle(text);
+  const start = text.indexOf("Arjun"),
+    quote = "Arjun paid $1,500 to Nimbus.";
+  const citation = { sourceId: "s", start, end: start + quote.length, quote };
+  assert.equal(eventSourceFacts(b).complete, false);
+  assert.equal(candidateUsesEventAssertion({ citations: [citation] }, b), true);
+  assert.equal(
+    candidateUsesEventAssertion(
+      { citations: [{ ...citation, quote: "Arjun paid $5,000 to Nimbus." }] },
+      b,
+    ),
+    false,
+  );
+  assert.equal(
+    candidateUsesEventAssertion(
+      { citations: [{ ...citation, sourceId: "different" }] },
+      b,
+    ),
+    false,
+  );
+  assert.equal(
+    candidateUsesEventAssertion(
+      {
+        citations: [
+          { sourceId: "s", start: 0, end: 14, quote: "Payment ledger" },
+        ],
+      },
+      b,
+    ),
+    false,
+  );
+  assert.equal(
+    candidateUsesEventAssertion(
+      {
+        citations: [{ sourceId: "s", start: 0, end: text.length, quote: text }],
+      },
+      b,
+    ),
+    true,
+  );
+  assert.equal(candidateUsesEventAssertion(null, b), false);
 });

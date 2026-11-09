@@ -227,6 +227,32 @@ export function eventSourceFacts(bundle) {
   }
   return { complete: facts.length > 0, facts };
 }
+// Rejection-only provenance. Finding a parsed assertion inside a larger
+// source does not establish complete context or permit affirmative admission.
+export function candidateUsesEventAssertion(lead, bundle) {
+  if (!lead?.citations?.length) return false;
+  for (const source of bundle.sources ?? []) {
+    const cites = lead.citations.filter(
+      (c) =>
+        c.sourceId === source.id &&
+        Number.isInteger(c.start) &&
+        Number.isInteger(c.end) &&
+        source.text.slice(c.start, c.end) === c.quote,
+    );
+    if (!cites.length) continue;
+    let offset = 0;
+    for (const line of source.text.split("\n")) {
+      const start = offset;
+      offset += line.length + 1;
+      if (
+        parseAssertion(line) &&
+        cites.some((c) => c.start < start + line.length && c.end > start)
+      )
+        return true;
+    }
+  }
+  return false;
+}
 const relationKey = ({ polarity, ...rest }) => JSON.stringify(rest);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const ambiguousCase = (facts, slots) =>
