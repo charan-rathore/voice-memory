@@ -89,6 +89,21 @@ try {
   await answer.screenshot({
     path: "/downloads/voice-memory-clinical-unresolved-tail-mobile.png",
   });
+  await ask("What is ferritin for SYN-0001 and SYN-0003?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Partial answer",
+  );
+  assert.match(
+    await page.locator("#answer").innerText(),
+    /SYN-0003.*could not find/s,
+  );
+  await page.locator("#answer").screenshot({
+    path: "/downloads/voice-memory-multi-owner-partial-mobile.png",
+  });
+  await ask("What is TSH for SYN-0001 and SYN-0003?");
+  assert.match(await page.locator("#answer").innerText(), /0.30/);
+  assert.match(await page.locator("#answer").innerText(), /2.10/);
   console.log(
     "PASS explicit single-ID multi-test coverage; positive Ferritin/TSH, missing Sodium partial;320px screenshots. No providers.",
   );

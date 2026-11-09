@@ -1120,6 +1120,7 @@ export function createLocalServer({
         // No retrieval fallback may replace a missing person's block with
         // a different person's facts or silently omit that person.
         const parts = [],
+          ownerOutcomes = [],
           citations = [],
           used = [];
         for (const id of decision.candidates) {
@@ -1151,6 +1152,15 @@ export function createLocalServer({
               }) ?? bundleFactAnswer(original, own, citeSpan);
           if (a?.citations?.some((c) => !evidenceWithinOwner(bundle, id, c)))
             a = null;
+          // A source-owned block is still not an independent clinical proof.
+          // But a missing block must never count as whole-request success.
+          const supportedBlock = !!a?.spoken && (a.citations ?? []).length > 0;
+          if (!supportedBlock) a = null;
+          ownerOutcomes.push({
+            owner: id,
+            status: supportedBlock ? "answered" : "not_established",
+            operation: "existing-owner-scoped-source-lookup",
+          });
           const nm = identityReportsFor(bundle).find((r) => subjectOf(r) === id)
             ?.meta?.patient?.name;
           parts.push(
@@ -1169,7 +1179,11 @@ export function createLocalServer({
         );
         const lead = {
           text: parts.join(" "),
-          verdict: citations.length ? "QUOTED" : "NOT_IN_REPORT",
+          verdict: ownerOutcomes.every((o) => o.status === "answered")
+            ? "QUOTED"
+            : ownerOutcomes.some((o) => o.status === "answered")
+              ? "PARTIAL_DOCUMENT"
+              : "NOT_IN_REPORT",
           field: null,
           citations: decorateResult({ evidence: bound, question: original }, s)
             .evidence,
@@ -1183,6 +1197,18 @@ export function createLocalServer({
             lead,
             evidence: [],
             visual,
+            requirementCoverage: {
+              questionPlanKey: immutableRequest.key,
+              complete: ownerOutcomes.every((o) => o.status === "answered"),
+              status: ownerOutcomes.every((o) => o.status === "answered")
+                ? "owner_blocks_covered"
+                : ownerOutcomes.some((o) => o.status === "answered")
+                  ? "partial"
+                  : "unresolved",
+              scope: "owner-block-coverage-only",
+              semanticAdmissionVerified: false,
+              outcomes: ownerOutcomes,
+            },
             semantic: {
               intent: "MULTI_SUBJECT",
               lang,
