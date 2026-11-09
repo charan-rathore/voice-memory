@@ -25,6 +25,7 @@ delete process.env.VM_GEMINI;
 let calls = 0;
 let fixtureDecomposition = true;
 let partialFixture = false;
+let rejectedAudit = false;
 const gemini = {
   model: "fake/local-only",
   enabled: () => true,
@@ -64,7 +65,7 @@ const gemini = {
       question: requestPlan.originalQuestion,
       questionPlanKey: requestPlan.key,
       scopeKey: requestPlan.scopeKey,
-      complete: true,
+      complete: !rejectedAudit,
       relevant: true,
       supported: true,
       items: statements.map((_, index) => ({
@@ -348,6 +349,31 @@ try {
   await answer.screenshot({
     path: "/downloads/voice-memory-partial-document-mobile.png",
   });
+  rejectedAudit = true;
+  await ask("What is the retention window, and was the policy approved?");
+  assert.match(await answer.innerText(), /could not establish/);
+  assert.match(
+    await answer.innerText(),
+    /Cloud reading could not verify this answer/,
+  );
+  assert.doesNotMatch(
+    await answer.innerText(),
+    /Computed from these documents|Cloud answer · inspect the sources/,
+  );
+  assert.equal(await answer.locator("[data-listen]").count(), 0);
+  await answer.evaluate(async (el) => {
+    await Promise.all(
+      el
+        .getAnimations({ subtree: true })
+        .map((a) => a.finished.catch(() => {})),
+    );
+  });
+  await answer.screenshot({
+    path: "/downloads/voice-memory-rejected-cloud-footer-mobile.png",
+  });
+  console.log(
+    "PASS rejected cloud audit is not labeled computed or source-verified; mobile screenshot captured.",
+  );
   console.log(
     "PASS mixed document outcomes remain partial with known fact and unresolved requirement; mobile screenshot captured.",
   );

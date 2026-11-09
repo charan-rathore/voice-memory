@@ -180,8 +180,6 @@
     }
   }
 
-  // Once connected, re-check the gate only when the visitor returns. The
-  // initial connect loop owns cold-start retries; this never starts a call.
   let voiceStatusPending = false;
   document.addEventListener("visibilitychange", async () => {
     if (document.hidden || !state.live || voiceStatusPending) return;
@@ -1027,7 +1025,6 @@
     }
     const reading =
       caseId === "own" ? (readerConsent?.request() ?? { semantic: false }) : {};
-    // Cloud checks need longer than lookup; askSeq still blocks stale delivery.
     return api(
       "/ask",
       {
@@ -1113,7 +1110,6 @@
     renderThread();
   }
 
-  // The motion module listens for these (sound, print and stamp effects).
   const emit = (name, detail) =>
     document.dispatchEvent(new CustomEvent(name, { detail }));
   function renderAnswer(r, { via, source, question, caseId }) {
@@ -1183,11 +1179,15 @@
               ? "Spoken by Bolna from this exact sentence"
               : lead?.origin === "document-unqualified-question"
                 ? "Question interpretation unresolved · no model reading. Voice is not enabled for this answer."
-                : cloudAnswer
-                  ? "Cloud answer · inspect the sources. Voice is not enabled for this answer."
-                  : caseId === "own"
-                    ? "Computed from these documents · inspect the cited sources"
-                    : "Computed live · same sentence a call would speak"
+                : (r.semantic?.steps ?? []).includes(
+                      "document_reasoning_unavailable",
+                    )
+                  ? "Cloud reading could not verify this answer. Voice is off."
+                  : cloudAnswer
+                    ? "Cloud answer · inspect the sources. Voice is not enabled for this answer."
+                    : caseId === "own"
+                      ? "Computed from these documents · inspect the cited sources"
+                      : "Computed live · same sentence a call would speak"
         }</span>
       </div>
       ${r.final?.relatedEvidence?.length ? '<p class="a-understood">Related evidence, not an answer</p>' : ""}
