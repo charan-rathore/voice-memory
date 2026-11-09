@@ -1518,3 +1518,69 @@ test("unselected first-person analyte requests clarify identity before retrieval
     assert.ok(body.evidence.every((e) => e.contextOnly));
   }
 });
+
+test("synthetic conflicting approved fees clarify without rewriting the supported conflict", async () => {
+  const server = createLocalServer({
+    port: 0,
+    gemini: { enabled: () => false, searchEnabled: () => false },
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const root = `http://127.0.0.1:${server.address().port}/api/public`;
+  try {
+    const ws = await fetch(root + "/workspace", { method: "POST" }).then((r) =>
+      r.json(),
+    );
+    for (const [name, text] of [
+      ["approved-a.txt", "The client approved the engagement fee of $30,000."],
+      ["approved-b.txt", "The client approved the engagement fee of $45,000."],
+    ]) {
+      const upload = await fetch(`${root}/workspace/${ws.id}/upload`, {
+        method: "POST",
+        headers: { "x-file-name": name },
+        body: text,
+      });
+      assert.equal(upload.status, 202);
+    }
+    let state;
+    for (let i = 0; i < 200; i++) {
+      state = await fetch(`${root}/workspace/${ws.id}`).then((r) => r.json());
+      if (state.ready && state.documents?.length === 2) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.ok(state.ready);
+    assert.equal(state.documents.length, 2);
+    const response = await fetch(root + "/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        case: ws.id,
+        question: "What is the engagement fee?",
+        semantic: false,
+      }),
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.lead.verdict, "AMBIGUOUS");
+    assert.equal(
+      body.lead.text,
+      "The approved records conflict: $30,000 versus $45,000. I can't pick one without knowing which you mean.",
+    );
+    assert.equal(body.final.kind, "clarify");
+    assert.equal(body.status, "clarify");
+    assert.equal(body.answer, body.lead.text);
+    assert.equal(body.final.text, body.lead.text);
+    assert.deepEqual(body.final.citations, body.lead.citations);
+    assert.equal(
+      new Set(body.final.citations.map((c) => c.documentId)).size,
+      2,
+    );
+    for (const c of body.final.citations) {
+      assert.equal(c.status, "approved");
+      assert.match(c.quote, /approved the engagement fee/);
+      assert.ok(c.documentId);
+    }
+  } finally {
+    server.closeAllConnections();
+    await new Promise((r) => server.close(r));
+  }
+});

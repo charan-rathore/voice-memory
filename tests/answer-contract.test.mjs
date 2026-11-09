@@ -34,6 +34,9 @@ test("a lead is the answer, whatever retrieval said underneath", () => {
 test("clarifying questions and refusals are labelled as such", () => {
   for (const [verdict, kind] of [
     ["AMBIGUOUS_PATIENT", "clarify"],
+    ["AMBIGUOUS", "clarify"],
+    ["OPEN", "answered"],
+    ["NO-RECORD", "answered"],
     ["CLARIFY", "clarify"],
     ["NOT_COMPARABLE", "refused"],
     ["DECLINE_ADVICE", "refused"],
@@ -78,4 +81,19 @@ test("explicit abstention keeps retrieval context labelled related, never as ans
   assert.deepEqual(result.citations, []);
   assert.deepEqual(result.relatedEvidence, evidence);
   assert.match(result.text, /coverage remains unresolved/);
+});
+
+test("ambiguous conflict preserves lead and citations across public contract fields", () => {
+  const lead = {
+    text: "The approved records conflict: $30,000 versus $45,000. I can't pick one without knowing which you mean.",
+    verdict: "AMBIGUOUS",
+    citations: [cite],
+  };
+  const p = publicAnswer({ lead, evidence: [cite] });
+  assert.equal(p.final.kind, "clarify");
+  assert.equal(p.status, "clarify");
+  assert.equal(p.answer, lead.text);
+  assert.equal(p.final.text, lead.text);
+  assert.deepEqual(p.final.citations, p.lead.citations);
+  assert.equal(p.final.citations[0].quote, cite.quote);
 });

@@ -15,6 +15,7 @@ const KIND = {
   PARTIAL_DOCUMENT: "partial",
   SOURCE_OUTLINE: "partial",
   AMBIGUOUS_PATIENT: "clarify",
+  AMBIGUOUS: "clarify",
   CLARIFY: "clarify",
   NOT_COMPARABLE: "refused",
   UNBOUND_OWNER: "refused",
