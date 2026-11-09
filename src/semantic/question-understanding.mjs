@@ -37,17 +37,17 @@ export async function understandDocumentQuestion({
   isCurrent = () => true,
 }) {
   if (!gemini?.questionRequirements || !isCurrent()) return null;
-  const first = sourceExactRequirements(
-    question,
-    await gemini.questionRequirements(question, { ip, pass: "proposal" }),
-  );
-  if (!first || !isCurrent()) return null;
-  // Deliberately do not send the first proposal into the second call.
-  const second = sourceExactRequirements(
-    question,
-    await gemini.questionRequirements(question, { ip, pass: "reconstruction" }),
-  );
+  // Two blind reconstructions. Neither sees the other, so they run
+  // concurrently (one round trip, not two); both must still partition the
+  // unchanged question identically.
+  const [proposal, reconstruction] = await Promise.all([
+    gemini.questionRequirements(question, { ip, pass: "proposal" }),
+    gemini.questionRequirements(question, { ip, pass: "reconstruction" }),
+  ]);
+  const first = sourceExactRequirements(question, proposal);
+  const second = sourceExactRequirements(question, reconstruction);
   if (
+    !first ||
     !second ||
     !isCurrent() ||
     JSON.stringify(first) !== JSON.stringify(second)

@@ -89,15 +89,20 @@ test("disagreement, omission, absent interpreter, or source change stays unresol
     await understandDocumentQuestion({ question, gemini: {} }),
     null,
   );
+  // Reviewed update (docs/qualification/whole-question-coverage-2026-11-09.md):
+  // the two blind passes now start together. The protected property is that
+  // no provider call STARTS after the sources changed, and that a change
+  // during the calls still discards their result.
   let current = true,
-    calls = 0;
+    startedAfterChange = 0;
   assert.equal(
     await understandDocumentQuestion({
       question,
       isCurrent: () => current,
       gemini: {
         questionRequirements: async () => {
-          calls++;
+          if (!current) startedAfterChange++;
+          await Promise.resolve();
           current = false;
           return proposal();
         },
@@ -105,7 +110,22 @@ test("disagreement, omission, absent interpreter, or source change stays unresol
     }),
     null,
   );
-  assert.equal(calls, 1, "changed sources prevent the next provider call");
+  assert.equal(
+    startedAfterChange,
+    0,
+    "changed sources prevent any later provider call",
+  );
+  current = false;
+  let calls = 0;
+  assert.equal(
+    await understandDocumentQuestion({
+      question,
+      isCurrent: () => current,
+      gemini: { questionRequirements: async () => (calls++, proposal()) },
+    }),
+    null,
+  );
+  assert.equal(calls, 0, "no call at all once sources already changed");
 });
 
 test("unicode, punctuation and whitespace positions are derived from source, not provider offsets", () => {
