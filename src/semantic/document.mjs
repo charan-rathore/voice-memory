@@ -90,6 +90,7 @@ export async function readDocumentQuestion({
   // of their distinct claims only when immutable request/outcome identities
   // agree. Every retained claim still faces the exact source and owner gate
   // below, followed by the separate full-document entailment audit.
+  const primaryPlan = plan;
   let independentPlan = null;
   if (
     decomposition.provenance === "source-exact-blind-model-reconstruction-v1"
@@ -122,7 +123,9 @@ export async function readDocumentQuestion({
         requirementId: part.id,
         request: part.text,
         status: part.status,
-        text: "I could not establish this requirement from the supplied evidence.",
+        text: plan.disputes?.some((d) => d.requirementId === part.id)
+          ? "The reading checks disagreed on this part, so I have not established an answer to it."
+          : "I could not establish this requirement from the supplied evidence.",
         evidence: [],
       });
       continue;
@@ -199,6 +202,8 @@ export async function readDocumentQuestion({
     ip,
     documents,
     independentPlan,
+    primaryPlan,
+    disputes: plan.disputes ?? [],
   });
   // Model audit is fallible. Fail closed on missing/partial judgments, preserve
   // this limitation in evaluation; do not call it a mathematical proof.
@@ -245,7 +250,7 @@ export async function readDocumentQuestion({
 
 // Structural reconciliation does not certify meaning. It prevents one source
 // read from silently discarding an alternative found by the other. Conflicting
-// outcomes fail closed; contradictory affirmative claims remain visible to the
+// outcomes stay unresolved per requirement; contradictory claims remain for the
 // final audit rather than being selected by majority or first-match order.
 export function reconcileDocumentProposals(primary, independent) {
   if (
@@ -256,15 +261,26 @@ export function reconcileDocumentProposals(primary, independent) {
   )
     return null;
   const merged = structuredClone(primary);
+  merged.disputes = [];
   for (const r of merged.requirements) {
     const other = independent.requirements.find((x) => x.id === r.id);
     if (
       !other ||
       other.text !== r.text ||
-      other.status !== r.status ||
       JSON.stringify(other.owners) !== JSON.stringify(r.owners)
     )
       return null;
+    if (other.status !== r.status) {
+      merged.disputes.push({
+        requirementId: r.id,
+        primaryStatus: r.status,
+        independentStatus: other.status,
+      });
+      r.status = "clarify";
+      r.claims = [];
+      r.reason = "Independent reading outcomes disagree.";
+      continue;
+    }
     if (r.status !== "answered") continue;
     // Choose an existing, source-supported wording only when its evidence
     // contains all support used by the other read. This is source coverage,

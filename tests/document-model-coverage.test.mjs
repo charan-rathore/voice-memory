@@ -151,7 +151,6 @@ test("self-certified true flags cannot replace missing/rejected blind claim judg
   for (const options of [
     { absentCoverageItem: true },
     { rejectCoverage: true },
-    { mismatch: true },
   ])
     assert.equal((await run(options)).result, null);
 });
@@ -197,5 +196,56 @@ test("an answered absence claim and blind not-established outcome cannot be sile
   const reconstruction = structuredClone(original);
   reconstruction.requirements[0].status = "not_established";
   reconstruction.requirements[0].claims = [];
-  assert.equal(reconcileDocumentProposals(original, reconstruction), null);
+  const disputed = reconcileDocumentProposals(original, reconstruction);
+  assert.equal(disputed.requirements[0].status, "clarify");
+  assert.deepEqual(disputed.requirements[0].claims, []);
+  assert.deepEqual(disputed.disputes[0], {
+    requirementId: "r-budget",
+    primaryStatus: "answered",
+    independentStatus: "not_established",
+  });
+  assert.equal(
+    original.requirements[0].status,
+    "answered",
+    "original proposal remains unchanged for audit",
+  );
+});
+
+test("a single status disagreement stays unresolved without erasing separately agreed requirements", async () => {
+  const { result, audits, seenIndependent } = await run({ mismatch: true });
+  assert.ok(result);
+  assert.equal(result.verdict, "CLARIFY");
+  assert.equal(result.outcomes[0].status, "clarify");
+  assert.equal(result.outcomes[1].status, "not_established");
+  assert.match(result.text, /reading checks disagreed/);
+  assert.doesNotMatch(result.text, /Funding permits|waiver also permits/);
+  assert.deepEqual(result.citations, []);
+  assert.equal(audits, 1, "uncertainty also faces full-source audit");
+  assert.equal(seenIndependent.requirements[0].status, "not_established");
+});
+
+test("every differing outcome pair remains non-affirmative and keeps original proposals unchanged", () => {
+  const statuses = ["answered", "not_established", "clarify"];
+  for (const left of statuses)
+    for (const right of statuses) {
+      if (left === right) continue;
+      const primary = {
+        requirements: [
+          {
+            id: "r1",
+            text: "What is established?",
+            owners: [],
+            status: left,
+            claims: [{ text: "Candidate fact", evidence: [] }],
+          },
+        ],
+      };
+      const independent = structuredClone(primary);
+      independent.requirements[0].status = right;
+      const result = reconcileDocumentProposals(primary, independent);
+      assert.equal(result.requirements[0].status, "clarify");
+      assert.deepEqual(result.requirements[0].claims, []);
+      assert.equal(primary.requirements[0].status, left);
+      assert.equal(independent.requirements[0].status, right);
+    }
 });

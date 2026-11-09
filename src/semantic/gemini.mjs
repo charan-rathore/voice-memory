@@ -540,6 +540,11 @@ export function createGemini({
         plan,
         statements,
         independentPlan: opts.independentPlan ?? null,
+        primaryPlan: opts.primaryPlan ?? null,
+        disputes: opts.disputes ?? [],
+        disputeInstructions: (opts.disputes ?? []).length
+          ? "The server has marked ONLY outcome-status disagreements as unresolved. It asserts neither original claim for those requirements. Check both originals against the full sources. An unresolved dispute may be an honest partial outcome, not an absence claim. For each independent claim in a disputed requirement, accept only if the shown uncertainty safely represents non-resolution without endorsing either disputed fact. Still reject if any affirmative claim leaks through or an unrelated requirement is dropped. Do not demand a disputed affirmative claim be repeated as fact. Every agreed affirmative requirement still needs complete coverage and entailment."
+          : null,
         coverageInstructions: opts.independentPlan
           ? "Also compare the proposed answer against EVERY independently reconstructed claim/outcome in independentPlan. Reject if a distinct alternative, condition or exception in that reconstruction is absent or contradicted in the proposed statements. Exact overlapping source support is not semantic coverage. Add coverageItems: [{requirementId,claimIndex:zero-based claim index (null for a non-answered requirement),accept:boolean,reason:string}]. Return exactly one item per independent claim, or one for a non-answered requirement. Never approve a missing alternative merely because the proposal quotes the same paragraph."
           : null,

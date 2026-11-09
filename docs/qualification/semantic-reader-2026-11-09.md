@@ -43,3 +43,9 @@ Checked9November2026. OpenRouter prices vary by endpoint and are not a route gua
 - https://www.archives.gov/founding-docs/constitution-transcript
 
 The public provider catalogue listed conservative Gemini ceilings of$0.825/M input and$4.125/M output; tested Google routes billed$0.75/$3.75. No public budget/key renewal, private-upload disclosure, or release authority was expanded.
+
+## Offline partial-answer follow-up
+
+The frozen actual Gemini budget-status disagreement now has a per-requirement non-resolution path in private development. Disputed requirements are explicitly unresolved with no affirmative claim/evidence; independently agreed requirements retain their source-supported candidates. Both original readings and the dispute metadata go to the final audit, which still requires complete per-statement and independent-claim judgments. Nothing relabels an uncertain budget as absent.
+
+Actual saved-provider content plus a scripted final audit replayed through upload/consent/answer UI: both bill-becomes-law alternatives and adjournment exception appeared with exact citations, while the budget part was labeled not established because the reading checks disagreed. This is an offline behavior regression, not a fresh provider/audit success or semantic qualification. The original frozen paid-run disagreement remains unchanged in the test fixture. The all-DeepSeek correlated missing-alternative failure remains unresolved.
