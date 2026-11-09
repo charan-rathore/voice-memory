@@ -2357,8 +2357,7 @@
             { lead: t.lead, evidence: [] },
             { via: "call", source: "live", question: t.question, caseId },
           );
-          // One truthful state per answered turn, no timers: the agent is
-          // asking for a detail (an uncited question) or has answered.
+          // One truthful state per answered turn, no timers.
           const asks =
             !(t.lead?.citations?.length > 0) && /\?\s*$/.test(t.lead?.text ?? "");
           callState(
