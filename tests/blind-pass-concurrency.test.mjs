@@ -7,8 +7,12 @@ import { importBundle } from "../dist/engine.mjs";
 import { understandDocumentQuestion } from "../src/semantic/question-understanding.mjs";
 import { readDocumentQuestion } from "../src/semantic/document.mjs";
 
-const QUESTION = "Who owns the security review, and what is the retention window?";
-const PARTS = ["Who owns the security review,", "and what is the retention window?"];
+const QUESTION =
+  "Who owns the security review, and what is the retention window?";
+const PARTS = [
+  "Who owns the security review,",
+  "and what is the retention window?",
+];
 const TEXT = "Maya owns the security review. The retention window is 17 days.";
 
 // Resolves each call only after its sibling call has also started.
@@ -21,7 +25,10 @@ function rendezvous(n = 2, timeoutMs = 2000) {
     await Promise.race([
       all,
       new Promise((_, reject) =>
-        setTimeout(() => reject(Error("blind passes ran sequentially")), timeoutMs),
+        setTimeout(
+          () => reject(Error("blind passes ran sequentially")),
+          timeoutMs,
+        ),
       ),
     ]);
   };
@@ -62,7 +69,10 @@ test("blind document reads run concurrently; the audit still gates the answer", 
   const meet = rendezvous();
   const read = async (plan, docs) => {
     await meet();
-    const quotes = ["Maya owns the security review.", "The retention window is 17 days."];
+    const quotes = [
+      "Maya owns the security review.",
+      "The retention window is 17 days.",
+    ];
     return {
       question: plan.originalQuestion,
       questionPlanKey: plan.key,
@@ -75,7 +85,9 @@ test("blind document reads run concurrently; the audit still gates the answer", 
         claims: [
           {
             statement: quotes[i],
-            evidence: [{ document: 0, sourceId: docs[0].sourceId, quote: quotes[i] }],
+            evidence: [
+              { document: 0, sourceId: docs[0].sourceId, quote: quotes[i] },
+            ],
           },
         ],
       })),
@@ -83,7 +95,10 @@ test("blind document reads run concurrently; the audit still gates the answer", 
   };
   const gemini = {
     enabled: () => true,
-    questionRequirements: async (question) => ({ question, requirements: PARTS }),
+    questionRequirements: async (question) => ({
+      question,
+      requirements: PARTS,
+    }),
     documentRead: read,
     documentCoverage: read,
     documentAudit: async (plan, merged, statements, opts) => ({
@@ -93,13 +108,24 @@ test("blind document reads run concurrently; the audit still gates the answer", 
       complete: true,
       relevant: true,
       supported: true,
-      items: statements.map((s, index) => ({ index, requirementId: s.requirementId, accept: true })),
+      items: statements.map((s, index) => ({
+        index,
+        requirementId: s.requirementId,
+        accept: true,
+      })),
       coverageItems: opts.independentPlan.requirements.flatMap((r) =>
-        r.claims.map((_, i) => ({ requirementId: r.id, claimIndex: i, accept: true })),
+        r.claims.map((_, i) => ({
+          requirementId: r.id,
+          claimIndex: i,
+          accept: true,
+        })),
       ),
     }),
   };
-  const decomposition = await understandDocumentQuestion({ question: QUESTION, gemini });
+  const decomposition = await understandDocumentQuestion({
+    question: QUESTION,
+    gemini,
+  });
   const answer = await readDocumentQuestion({
     question: QUESTION,
     bundle,
@@ -116,7 +142,10 @@ test("blind document reads run concurrently; the audit still gates the answer", 
     bundle,
     gemini: {
       ...gemini,
-      documentAudit: async (...a) => ({ ...(await gemini.documentAudit(...a)), complete: false }),
+      documentAudit: async (...a) => ({
+        ...(await gemini.documentAudit(...a)),
+        complete: false,
+      }),
     },
     consent: true,
     decomposition,

@@ -25,7 +25,8 @@ async function withServer(opts, fn) {
   };
   process.env.VM_BYO_VOICE = "on";
   process.env.VM_COUNTERS_ALLOW_FILE = "on";
-  if (opts.wholeQuestion) process.env.VM_WHOLE_QUESTION_COVERAGE = opts.wholeQuestion;
+  if (opts.wholeQuestion)
+    process.env.VM_WHOLE_QUESTION_COVERAGE = opts.wholeQuestion;
   else delete process.env.VM_WHOLE_QUESTION_COVERAGE;
   const server = createLocalServer({ port: 0, gemini: opts.gemini });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -69,8 +70,14 @@ async function withServer(opts, fn) {
       .apiKey;
     const r = await fetch(base + "/llm/v1/chat/completions", {
       method: "POST",
-      headers: { authorization: "Bearer " + key, "content-type": "application/json" },
-      body: JSON.stringify({ stream: true, messages: [{ role: "user", content: question }] }),
+      headers: {
+        authorization: "Bearer " + key,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        stream: true,
+        messages: [{ role: "user", content: question }],
+      }),
     });
     assert.equal(r.status, 200);
     return [...(await r.text()).matchAll(/^data: (.+)$/gm)]
@@ -99,14 +106,22 @@ const disabled = { enabled: () => false, searchEnabled: () => false };
 function assertHonest(body, label) {
   const kind = body.final.kind;
   const certified =
-    !!body.requirementCoverage || body.questionPlan?.coverageEstablished === true;
+    !!body.requirementCoverage ||
+    body.questionPlan?.coverageEstablished === true;
   assert.ok(body.wholeQuestion, `${label}: coverage provenance present`);
   if (ASSERTING.has(kind) && !certified) {
     assert.equal(body.final.complete, false, `${label}: never complete`);
     assert.equal(body.wholeQuestion.state, "unverified", label);
     assert.equal(body.wholeQuestion.unaddressedPartsNamed, false, label);
-    assert.ok(body.final.text.includes(NOTICE), `${label}: discloses on screen`);
-    assert.doesNotMatch(body.final.text, /Not established from these documents/, label);
+    assert.ok(
+      body.final.text.includes(NOTICE),
+      `${label}: discloses on screen`,
+    );
+    assert.doesNotMatch(
+      body.final.text,
+      /Not established from these documents/,
+      label,
+    );
   }
   if (!ASSERTING.has(kind))
     assert.equal(body.wholeQuestion.state, "not_applicable", label);
@@ -127,7 +142,11 @@ test("ORIGINAL FAILURE (provider disabled): compounds carry unverified coverage 
       assert.equal(b.wholeQuestion.state, "unverified");
       assert.equal(b.wholeQuestion.source, "opaque-plan");
       assert.ok(b.final.text.endsWith(NOTICE));
-      assert.doesNotMatch(b.final.text, /lunar|retention/i, "no guessed remainder");
+      assert.doesNotMatch(
+        b.final.text,
+        /lunar|retention/i,
+        "no guessed remainder",
+      );
       assertHonest(b, q);
       // The call says the same thing (same lead, same disclosure).
       const spoken = await say(ws, q);
@@ -141,7 +160,11 @@ test("ORIGINAL FAILURE (provider disabled): compounds carry unverified coverage 
     const single = await ask(ws, "What is the retention window?");
     assert.equal(single.final.kind, "answered", "single answers still answer");
     assert.match(single.final.text, /17 days/);
-    assert.equal(single.status, "answered", "status value unchanged (additive)");
+    assert.equal(
+      single.status,
+      "answered",
+      "status value unchanged (additive)",
+    );
     assertHonest(single, "single");
   }));
 
@@ -173,7 +196,10 @@ test("ADVERSARIAL (provider disabled, unfamiliar documents): no response over-cl
       assertHonest(b, q);
       if (ASSERTING.has(b.final.kind)) {
         const spoken = await say(ws, q);
-        assert.ok(spoken.includes(NOTICE), `voice discloses for: ${q} -> ${spoken}`);
+        assert.ok(
+          spoken.includes(NOTICE),
+          `voice discloses for: ${q} -> ${spoken}`,
+        );
       }
     }
   }));
@@ -242,7 +268,11 @@ function scriptedProvider(c, calls) {
         })),
         coverageItems: opts.independentPlan.requirements.flatMap((r) =>
           r.status === "answered"
-            ? r.claims.map((_, i) => ({ requirementId: r.id, claimIndex: i, accept: true }))
+            ? r.claims.map((_, i) => ({
+                requirementId: r.id,
+                claimIndex: i,
+                accept: true,
+              }))
             : [{ requirementId: r.id, claimIndex: null, accept: true }],
         ),
       };
@@ -258,7 +288,11 @@ for (const [name, c] of Object.entries(scripted.cases))
       async ({ upload, ask }) => {
         const ws = await upload(scripted.fileName, scripted.document);
         const b = await ask(ws, c.question, true);
-        assert.equal(b.wholeQuestion.state, c.expect, JSON.stringify(b.wholeQuestion));
+        assert.equal(
+          b.wholeQuestion.state,
+          c.expect,
+          JSON.stringify(b.wholeQuestion),
+        );
         if (c.expect === "established") {
           assert.equal(b.final.complete, true);
           assert.equal(b.final.verdict, "DOCUMENT_ANSWER");
@@ -271,20 +305,30 @@ for (const [name, c] of Object.entries(scripted.cases))
           assert.match(b.final.text, /17 days/);
           assert.ok(!b.final.text.includes(NOTICE));
           for (const cite of b.final.citations)
-            assert.ok(scripted.document.includes(cite.quote), "exact source quote");
+            assert.ok(
+              scripted.document.includes(cite.quote),
+              "exact source quote",
+            );
         } else if (c.expect === "incomplete") {
           assert.equal(b.final.complete, false);
           assert.equal(b.final.verdict, "PARTIAL_DOCUMENT");
           assert.equal(b.final.kind, "partial");
           for (const span of c.unestablished)
-            assert.ok(b.final.text.includes(span.trim()), "names the exact span");
+            assert.ok(
+              b.final.text.includes(span.trim()),
+              "names the exact span",
+            );
           assert.match(b.final.text, /Maya/);
         } else {
           // Either proof missing: honest unverified, deterministic lead kept.
           assertHonest(b, name);
           assert.equal(b.final.complete, false);
           assert.equal(b.requirementCoverage, null);
-          assert.doesNotMatch(b.final.text, /30 days/, "unproven claim never shown");
+          assert.doesNotMatch(
+            b.final.text,
+            /30 days/,
+            "unproven claim never shown",
+          );
         }
         if (name === "reconstructionDisagrees")
           assert.ok(!calls.includes("documentRead"), "no document disclosure");
@@ -325,7 +369,10 @@ test("QUALIFIED PATH (actual saved provider content): real disagreement stays in
     ),
   );
   const text = readFileSync(
-    new URL("./fixtures/document-disagreement/constitution-transcript.txt", import.meta.url),
+    new URL(
+      "./fixtures/document-disagreement/constitution-transcript.txt",
+      import.meta.url,
+    ),
     "utf8",
   );
   const rebind = (original, plan, docs) => {
@@ -334,7 +381,8 @@ test("QUALIFIED PATH (actual saved provider content): real disagreement stays in
     value.scopeKey = plan.scopeKey;
     for (const r of value.requirements)
       for (const cl of r.claims ?? [])
-        for (const ref of cl.evidence ?? []) ref.sourceId = docs[ref.document].sourceId;
+        for (const ref of cl.evidence ?? [])
+          ref.sourceId = docs[ref.document].sourceId;
     return value;
   };
   const gemini = {
@@ -353,10 +401,18 @@ test("QUALIFIED PATH (actual saved provider content): real disagreement stays in
       complete: true,
       relevant: true,
       supported: true,
-      items: statements.map((s, index) => ({ index, requirementId: s.requirementId, accept: true })),
+      items: statements.map((s, index) => ({
+        index,
+        requirementId: s.requirementId,
+        accept: true,
+      })),
       coverageItems: opts.independentPlan.requirements.flatMap((r) =>
         r.status === "answered"
-          ? r.claims.map((_, i) => ({ requirementId: r.id, claimIndex: i, accept: true }))
+          ? r.claims.map((_, i) => ({
+              requirementId: r.id,
+              claimIndex: i,
+              accept: true,
+            }))
           : [{ requirementId: r.id, claimIndex: null, accept: true }],
       ),
     }),

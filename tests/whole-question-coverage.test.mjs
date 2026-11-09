@@ -36,7 +36,11 @@ test("opaque plan + asserting answer = unverified, and the remainder is never na
     assert.equal(c.source, "opaque-plan");
     assert.equal(c.unaddressedPartsNamed, false);
     assert.deepEqual(c.requirements, []);
-    assert.equal(c.originalQuestion, undefined, "request identity stays in questionPlan");
+    assert.equal(
+      c.originalQuestion,
+      undefined,
+      "request identity stays in questionPlan",
+    );
   }
 });
 
@@ -137,8 +141,14 @@ test("qualified document coverage requires BOTH plan qualification and per-requi
   for (const bad of [
     { ...good, requestPlan: { ...requestPlan, coverageEstablished: false } },
     { ...good, outcomes: good.outcomes.slice(0, 1) },
-    { ...good, outcomes: [...good.outcomes, { requirementId: "z", status: "answered" }] },
-    { ...good, outcomes: [{ requirementId: "a", status: "maybe" }, good.outcomes[1]] },
+    {
+      ...good,
+      outcomes: [...good.outcomes, { requirementId: "z", status: "answered" }],
+    },
+    {
+      ...good,
+      outcomes: [{ requirementId: "a", status: "maybe" }, good.outcomes[1]],
+    },
     { ...good, origin: "document-unqualified-question" },
     null,
   ])
@@ -174,6 +184,9 @@ test("reconcile appends one localized disclosure, idempotently, and the contract
 });
 
 test("typed failures, not crashes, on malformed input", () => {
-  assert.throws(() => wholeQuestionCoverage(null, "answered"), CoverageInputError);
+  assert.throws(
+    () => wholeQuestionCoverage(null, "answered"),
+    CoverageInputError,
+  );
   assert.throws(() => wholeQuestionCoverage({}, undefined), CoverageInputError);
 });

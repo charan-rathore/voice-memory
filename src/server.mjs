@@ -2087,7 +2087,9 @@ export function createLocalServer({
             text:
               missing &&
               !coverage.outcomes.every(
-                (o) => o.status === "answered" || qualified.text.includes(o.text.trim()),
+                (o) =>
+                  o.status === "answered" ||
+                  qualified.text.includes(o.text.trim()),
               )
                 ? `${qualified.text.trim()} ${missing}`
                 : qualified.text,
@@ -2097,7 +2099,9 @@ export function createLocalServer({
             ).evidence,
           };
           shown.requirementCoverage = coverage;
-          (sem.trace.steps ??= []).push("whole_question_qualified_per_requirement");
+          (sem.trace.steps ??= []).push(
+            "whole_question_qualified_per_requirement",
+          );
         } else
           (sem.trace.steps ??= []).push(
             qualified?.origin === "document-unqualified-question"

@@ -48,7 +48,8 @@ export class CoverageInputError extends Error {
 const NOTICE = {
   en: "I haven't verified that this covers every part of the question.",
   hi: "मैंने यह नहीं जाँचा है कि इससे सवाल के हर हिस्से का जवाब मिलता है।",
-  hinglish: "Maine check nahi kiya ki isse sawaal ke har hisse ka jawab milta hai.",
+  hinglish:
+    "Maine check nahi kiya ki isse sawaal ke har hisse ka jawab milta hai.",
 };
 
 /** The one disclosure sentence for unverified whole-question coverage. */
@@ -101,7 +102,10 @@ export function wholeQuestionCoverage(shown, kind) {
       requirements: [],
       unaddressedPartsNamed: false,
     });
-  if (shown.requirementCoverage && typeof shown.requirementCoverage === "object")
+  if (
+    shown.requirementCoverage &&
+    typeof shown.requirementCoverage === "object"
+  )
     return freeze({
       ...base,
       ...certifiedFromRequirementCoverage(shown.requirementCoverage, plan),

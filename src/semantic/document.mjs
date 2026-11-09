@@ -85,7 +85,8 @@ export async function readDocumentQuestion({
   const blind =
     decomposition.provenance === "source-exact-blind-model-reconstruction-v1";
   if (blind && !gemini.documentCoverage) return null;
-  let plan, independentPlan = null;
+  let plan,
+    independentPlan = null;
   try {
     const [primaryRaw, independentRaw] = await Promise.all([
       gemini.documentRead(requestPlan, documents, { ip }),
