@@ -1027,9 +1027,7 @@
     }
     const reading =
       caseId === "own" ? (readerConsent?.request() ?? { semantic: false }) : {};
-    // Cloud reading now includes multiple bounded checks. The old 20-second
-    // lookup timeout could abandon a valid answer while paid work continued.
-    // Consent/source change handling and askSeq still prevent stale delivery.
+    // Cloud checks need longer than lookup; askSeq still blocks stale delivery.
     return api(
       "/ask",
       {

@@ -161,3 +161,41 @@ test("source replacement during blind reconstruction prevents any next audit dis
   assert.equal(result, null);
   assert.equal(audits, 0);
 });
+
+// Actual final Gemini browser run: an unsupported budget-absence assertion
+// was labeled answered, while the blind read correctly said not_established.
+// Do not reconcile this discrepancy by relabeling it as a safe answer.
+test("an answered absence claim and blind not-established outcome cannot be silently reconciled", async () => {
+  const { reconcileDocumentProposals } = await import(
+    "../src/semantic/document.mjs"
+  );
+  const original = {
+    question: "Does the document give a current budget?",
+    questionPlanKey: "immutable",
+    scopeKey: "same-source",
+    requirements: [
+      {
+        id: "r-budget",
+        text: "Does the document give a current budget?",
+        owners: [],
+        status: "answered",
+        claims: [
+          {
+            statement: "It gives no budget.",
+            evidence: [
+              {
+                document: 0,
+                sourceId: "source",
+                quote: "Money may be drawn only under appropriations.",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const reconstruction = structuredClone(original);
+  reconstruction.requirements[0].status = "not_established";
+  reconstruction.requirements[0].claims = [];
+  assert.equal(reconcileDocumentProposals(original, reconstruction), null);
+});
