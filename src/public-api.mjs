@@ -1494,7 +1494,13 @@ export function publicAnswer(shown) {
       from: final.from,
       citations: final.citations.map(cite),
       relatedEvidence: (final.relatedEvidence ?? []).map(cite),
+      // Whole-question coverage provenance (whole-question-coverage.mjs).
+      // `complete` is true only when every requirement of a qualified
+      // request has an established outcome. Never inferred from wording.
+      complete: final.complete ?? null,
+      coverage: final.coverage ?? null,
     },
+    wholeQuestion: shown.wholeQuestion ?? null,
     answer: final.text,
     status: final.kind,
     // What retrieval alone found underneath the answer: diagnostics, never

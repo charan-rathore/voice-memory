@@ -117,6 +117,11 @@ import { questionPlan } from "./question-plan.mjs";
 import { createDecomposition } from "./question-decomposition.mjs";
 import { understandDocumentQuestion } from "./semantic/question-understanding.mjs";
 import {
+  documentRequirementCoverage,
+  reconcileWholeQuestion,
+  unestablishedNotice,
+} from "./whole-question-coverage.mjs";
+import {
   resolveExactFields,
   exactFieldPlan,
 } from "./exact-field-admission.mjs";
@@ -2019,8 +2024,12 @@ export function createLocalServer({
           s,
         ).evidence;
       }
-      if (documentEnabled) {
-        const documentLead = await readDocumentQuestion({
+      // One source-exact qualified reader for both the opt-in document mode
+      // and the standard-path whole-question check below. It reuses the
+      // blind decomposition, document scope, exact-span validation and the
+      // separate audit; there is no second trust path.
+      const readQualified = async () =>
+        readDocumentQuestion({
           question: original,
           decomposition: resolveDocumentDecomposition
             ? createDecomposition({
@@ -2046,6 +2055,58 @@ export function createLocalServer({
           ip: opts.ip,
           validate,
         }).catch(() => null);
+      // Tier 2 (whole-question answering): when the provider is enabled and
+      // the visitor consented, a general answer is replaced by per-requirement
+      // answers ONLY if the decomposition qualifies and every requirement
+      // carries a source-proven outcome. Otherwise the deterministic lead
+      // stays, with unverified coverage disclosed at the final boundary.
+      // Eligible: a general answer, or a general abstention/evidence-only
+      // result. Clarifications, refusals, advice declines and certified
+      // schema decisions keep their own outcome.
+      const generalLead =
+        !shown.requirementCoverage &&
+        !shown.sourceQuestionPlan &&
+        ["answered", "abstained"].includes(finalAnswer(shown).kind);
+      if (
+        !documentEnabled &&
+        !raw?.requestedChecked &&
+        generalLead &&
+        consent &&
+        gemini.enabled() &&
+        gemini.documentRead &&
+        gemini.documentAudit &&
+        process.env.VM_WHOLE_QUESTION_COVERAGE !== "off"
+      ) {
+        const qualified = await readQualified();
+        const coverage = documentRequirementCoverage(qualified);
+        const restored = coverage ? qualified.citations.map(restore) : [];
+        if (coverage && restored.length && restored.every(Boolean)) {
+          const missing = unestablishedNotice(coverage);
+          shown.lead = {
+            ...qualified,
+            text:
+              missing &&
+              !coverage.outcomes.every(
+                (o) => o.status === "answered" || qualified.text.includes(o.text.trim()),
+              )
+                ? `${qualified.text.trim()} ${missing}`
+                : qualified.text,
+            citations: decorateResult(
+              { question: original, evidence: restored },
+              s,
+            ).evidence,
+          };
+          shown.requirementCoverage = coverage;
+          (sem.trace.steps ??= []).push("whole_question_qualified_per_requirement");
+        } else
+          (sem.trace.steps ??= []).push(
+            qualified?.origin === "document-unqualified-question"
+              ? "whole_question_decomposition_not_qualified"
+              : "whole_question_reading_unavailable",
+          );
+      }
+      if (documentEnabled) {
+        const documentLead = await readQualified();
         shown.lead = {
           text: "I could not establish a complete, source-supported answer to that question. Please narrow it or inspect the source passages.",
           verdict: "UNKNOWN",
@@ -2061,6 +2122,9 @@ export function createLocalServer({
         ];
         if (documentLead) {
           const restored = documentLead.citations.map(restore);
+          const coverage = documentRequirementCoverage(documentLead);
+          if (restored.every(Boolean) && coverage)
+            shown.requirementCoverage = coverage;
           if (restored.every(Boolean))
             shown.lead = {
               ...documentLead,
@@ -2127,6 +2191,16 @@ export function createLocalServer({
         semantic: { steps: ["source_changed_before_response"] },
       };
     }
+    // Whole-question coverage (whole-question-coverage.mjs): every answer
+    // leaves with its coverage provenance, and an answer whose plan records
+    // unverified whole coverage discloses that in the same words on screen,
+    // on the call and to agents. Applied after the cache, so it is never
+    // stale and never stored.
+    reconcileWholeQuestion(
+      value.shown,
+      finalAnswer(value.shown).kind,
+      langOfText(requestOriginal),
+    );
     return { ...cached, json: JSON.stringify(value) };
   }
   // The deterministic chain (claim graph, clinical answers, sections, form

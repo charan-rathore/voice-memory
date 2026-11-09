@@ -37,9 +37,27 @@ export const ABSTAIN_TEXT =
  * The single answer for a resolved question.
  * @param {{lead?: any, evidence?: any[]}} shown
  * @returns {{text: string, verdict: string, kind: FinalKind,
- *   citations: any[], relatedEvidence?: any[], from: "lead"|"evidence"|"none"}}
+ *   citations: any[], relatedEvidence?: any[], from: "lead"|"evidence"|"none",
+ *   coverage?: any, complete?: boolean}}
+ *
+ * `coverage` and `complete` are additive (whole-question-coverage.mjs). They
+ * do not change what `kind` means: an "answered" kind says the lead asserts
+ * a source-backed answer; `complete` says whether it was ESTABLISHED to
+ * cover the whole question. `complete: false` with coverage state
+ * "unverified" means coverage was not checked, not that an answer is wrong.
  */
 export function finalAnswer(shown) {
+  const result = finalAnswerCore(shown);
+  if (shown?.wholeQuestion)
+    return {
+      ...result,
+      coverage: shown.wholeQuestion,
+      complete: shown.wholeQuestion.complete === true,
+    };
+  return result;
+}
+
+function finalAnswerCore(shown) {
   const lead = shown?.lead ?? null;
   if (lead?.text) {
     const verdict = lead.verdict ?? "UNKNOWN";
