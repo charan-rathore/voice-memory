@@ -234,7 +234,11 @@ test("first load stays inside its weight budget (3D graph, call library and film
   // moved out of snapshot.js into snapshot-answers.js, loaded only when the
   // live engine could not answer; snapshot.js keeps the case metadata the
   // first paint needs. Same cold-boot behavior, ~47 KB off the first load.
-  assert.ok(bytes < 530_000, `first load is ${bytes} bytes`);
+  // 530 KB -> 531 KB (2026-11-10): the whole-question coverage strip
+  // (server-recorded coverage on every answer card) plus rejection-aware
+  // upload states that stop cold-start retries on quota/request rejections.
+  // Measured combined head: 530,136 bytes.
+  assert.ok(bytes < 531_000, `first load is ${bytes} bytes`);
 });
 
 test("the motion bundle is built from the committed sources", async () => {
