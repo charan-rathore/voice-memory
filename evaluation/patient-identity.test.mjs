@@ -150,7 +150,10 @@ test("a verified patient ID still links an amended report to its preliminary", a
 // Only a printed patient identifier links reports. A shared printed name or
 // a shared lab/accession number never does; a patient ID contradicted by the
 // reports themselves (sex, impossible ages) does not either.
-import { markIdentityConflicts } from "../clinical/observations.mjs";
+import {
+  dobRelation,
+  markIdentityConflicts,
+} from "../clinical/observations.mjs";
 import { clinicalAnswer as ask2 } from "../clinical/answer.mjs";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -305,4 +308,355 @@ test("verified patient ID across visits: amendment linked; 'latest' only for the
     label({ id: "obs:x:tsh", status: "current" }),
     "reported reading",
   );
+});
+
+// Same patient ID with two confidently different printed birth dates is an
+// identity conflict (RED before dobKey: the reports merged and a bare trend
+// question drew one person's change across two people). Equivalent dates in
+// different unambiguous formats never split; all-numeric dates are too
+// ambiguous to prove either a conflict or a match.
+test("a shared patient ID contradicted by printed DOBs does not link or trend", async () => {
+  const b = await loadSet([
+    reportOn(
+      "Patient: Asha Rao, ID AR-100\nDOB: 12 Jan 1980    Gender : Female",
+      "7.80",
+    ),
+    reportOn(
+      "Patient: Asha Rao, ID AR-100\nDOB: 03 Jul 1965    Gender : Female",
+      "1.20",
+      "20/3/2025",
+    ),
+  ]);
+  separate(b);
+  const a = ask2("Has Asha's TSH changed?", b.clinical).spoken;
+  assert.match(a, /more than one person/);
+  assert.doesNotMatch(a, /went from|higher than before|rose|dropped/i);
+});
+
+test("the same DOB in ISO and alphabetic formats stays one person", async () => {
+  const b = await loadSet([
+    reportOn(
+      "Patient: Asha Rao, ID AR-101\nDOB: 12 Jan 1980    Gender : Female",
+      "7.80",
+    ),
+    reportOn(
+      "Patient: Asha Rao, ID AR-101\nDOB: 1980-01-12    Gender : Female",
+      "1.20",
+      "20/3/2025",
+    ),
+  ]);
+  const ids = new Set(b.clinical.map((r) => subjectOf(r)));
+  assert.deepEqual([...ids], ["AR-101"]);
+  assert.ok(b.clinical.every((r) => !r.meta.patient?.idConflict));
+});
+
+// Printed DOB semantics under one patient ID: unambiguous formats compare
+// semantically; genuinely ambiguous ones (03/07: 3 July or 7 March) never
+// prove a match - reports whose printed birth dates cannot be shown to
+// agree stay apart and abstain, with the kind recorded for review.
+test("unambiguous numeric dates compare semantically, not textually", () => {
+  assert.equal(dobRelation("15/03/1965", "03/15/1965"), "same"); // d/m vs m/d
+  assert.equal(dobRelation("20/03/1965", "03/15/1965"), "conflict");
+  assert.equal(dobRelation("12 Jan 1980", "1980-01-12"), "same");
+  assert.equal(dobRelation("03/07/1965", "07/03/1965"), "undecidable");
+  assert.equal(dobRelation("01/12/1980", "1980-12-01"), "undecidable");
+  assert.equal(dobRelation("03/07/1965", "1980-01-12"), "conflict");
+  assert.equal(dobRelation("03/07/1965", "03/07/1965"), "undecidable");
+});
+
+test("numeric DOBs that cannot be shown to match still abstain", async () => {
+  const b = await loadSet([
+    reportOn(
+      "Patient: Asha Rao, ID AR-102\nDOB: 03/07/1965    Gender : Female",
+      "7.80",
+    ),
+    reportOn(
+      "Patient: Asha Rao, ID AR-102\nDOB: 07/03/1965    Gender : Female",
+      "1.20",
+      "20/3/2025",
+    ),
+  ]);
+  separate(b);
+  assert.ok(
+    b.clinical.every(
+      (r) => r.meta.patient?.idConflictKind === "dob-undecidable",
+    ),
+  );
+  // the printed strings survive for review
+  assert.deepEqual(b.clinical.map((r) => r.meta.dob).sort(), [
+    "03/07/1965",
+    "07/03/1965",
+  ]);
+  const a = ask2("Has Asha's TSH changed?", b.clinical).spoken;
+  assert.match(a, /more than one person/);
+  assert.doesNotMatch(a, /went from|higher than before|rose|dropped/i);
+});
+
+test("an ambiguous numeric DOB against an ISO date abstains too", async () => {
+  const b = await loadSet([
+    reportOn(
+      "Patient: Asha Rao, ID AR-103\nDOB: 01/12/1980    Gender : Female",
+      "7.80",
+    ),
+    reportOn(
+      "Patient: Asha Rao, ID AR-103\nDOB: 1980-12-01    Gender : Female",
+      "1.20",
+      "20/3/2025",
+    ),
+  ]);
+  separate(b);
+  const a = ask2("Has Asha's TSH changed?", b.clinical).spoken;
+  assert.match(a, /more than one person/);
+  assert.doesNotMatch(a, /went from|higher than before|rose|dropped/i);
+});
+
+test("resolvable numeric formats naming the same day stay one person", async () => {
+  const b = await loadSet([
+    reportOn(
+      "Patient: Asha Rao, ID AR-104\nDOB: 15/03/1965    Gender : Female",
+      "7.80",
+    ),
+    reportOn(
+      "Patient: Asha Rao, ID AR-104\nDOB: 03/15/1965    Gender : Female",
+      "1.20",
+      "20/3/2025",
+    ),
+  ]);
+  assert.ok(b.clinical.every((r) => !r.meta.patient?.idConflict));
+  assert.deepEqual(
+    [...new Set(b.clinical.map((r) => subjectOf(r)))],
+    ["AR-104"],
+  );
+});
+
+// Sol round 2: two different printed DOB strings that neither parser can
+// reconcile ("Jan 12, 1980" style, ordinals, 2-digit years) are
+// undecidable - the reports stay apart and abstain, never silently merge.
+test("unparseable but different printed DOBs abstain, not merge", async () => {
+  // month-first and ordinal forms parse unambiguously now
+  assert.equal(dobRelation("Jan 12, 1980", "1980-01-12"), "same");
+  assert.equal(dobRelation("Jan 12, 1980", "03 Jul 1965"), "conflict");
+  assert.equal(dobRelation("12th Jan 1980", "1980-01-12"), "same");
+  // still-unparseable different strings abstain instead of merging
+  assert.equal(dobRelation("01/02/80", "1980-02-01"), "undecidable");
+  // invalid calendar dates never establish identity either
+  assert.equal(dobRelation("2020-02-30", "30 Feb 2020"), "undecidable");
+  assert.equal(dobRelation("1980-00-00", "1980-01-12"), "undecidable");
+  assert.equal(dobRelation("29/02/2024", "2024-02-29"), "same"); // real leap day
+  const b = await loadSet([
+    reportOn(
+      "Patient: Asha Rao, ID AR-105\nDOB: Jan 12, 1980    Gender : Female",
+      "7.80",
+    ),
+    reportOn(
+      "Patient: Asha Rao, ID AR-105\nDOB: 03 Jul 1965    Gender : Female",
+      "1.20",
+      "20/3/2025",
+    ),
+  ]);
+  separate(b);
+  const a = ask2("Has Asha's TSH changed?", b.clinical).spoken;
+  assert.match(a, /more than one person/);
+  assert.doesNotMatch(a, /went from|higher than before|rose|dropped/i);
+});
+
+test("DOB validation precedes raw equality and accepts uppercase ordinals", () => {
+  assert.equal(dobRelation("2020-02-30", "2020-02-30"), "undecidable");
+  assert.equal(dobRelation("01/02/80", "01/02/80"), "undecidable");
+  assert.equal(dobRelation("12TH Jan 1980", "1980-01-12"), "same");
+  assert.equal(dobRelation("Jan 1ST, 1980", "1980-01-01"), "same");
+  assert.equal(dobRelation("03/07/1965", "04/08/1965"), "undecidable");
+});
+
+test("text-month invalid dates never establish identity, even identical", () => {
+  for (const d of [
+    "30 Feb 2020",
+    "31 Apr 1980",
+    "29 Feb 2023",
+    "30th February 2020",
+  ])
+    assert.equal(dobRelation(d, d), "undecidable", d);
+});
+
+test("a named person overrides stale selection for summaries and sample dates", async () => {
+  const b = await loadSet([
+    report(
+      "Patient: Alice Smith, ID AL-101\nDOB: 12 Jan 1980 Gender: Female",
+      "7.8",
+    ),
+    report(
+      "Patient: Bob Jones, ID BJ-202\nDOB: 12 Jan 1980 Gender: Female",
+      "1.2",
+    ),
+  ]);
+  for (const q of [
+    "Summarise Bob Jones's results",
+    "Summarize Bob's results",
+    "What are Bob Jones's thyroid results?",
+  ]) {
+    const a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.doesNotMatch(a.spoken, /7\.8/, q);
+    assert.ok(
+      a.used.every((o) => subjectOf(o.report) === "BJ-202"),
+      q,
+    );
+  }
+});
+
+test("kinship cannot map an old selected person, including summaries and dates", async () => {
+  const b = await loadSet([
+    report(
+      "Patient: Alice Smith, ID AL-101\nDOB: 12 Jan 1980 Gender: Female",
+      "7.8",
+    ),
+    report(
+      "Patient: Bob Jones, ID BJ-202\nDOB: 12 Jan 1980 Gender: Female",
+      "1.2",
+    ),
+  ]);
+  for (const q of [
+    "Summarise my mother's results",
+    "What is my mother's TSH?",
+    "When was my mother's sample collected?",
+  ]) {
+    const a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.equal(a.verdict, "AMBIGUOUS_PATIENT", q);
+    assert.deepEqual(a.used, []);
+  }
+  for (const q of [
+    "Summarise Alice Smith and Bob Jones's results",
+    "Summarise AL-101 and BJ-202",
+  ]) {
+    const a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.ok(
+      a.used.some((o) => subjectOf(o.report) === "BJ-202"),
+      q,
+    );
+  }
+});
+
+test("mixed doctor prompts without flags do not assign a relative-only pronoun", async () => {
+  const b = await loadSet([
+    report(
+      "Patient: Alice Smith, ID AL-101\nDOB: 12 Jan 1980 Gender: Female",
+      "1.8",
+    ),
+  ]);
+  for (const q of [
+    "What should I ask the doctor about my mother's and my HbA1c results?",
+    "What should I ask the doctor about my mother's HbA1c and mine?",
+    "meri maa aur mera sugar result doctor se kya poochun?",
+    "मेरी माँ और मेरी HbA1c रिपोर्ट डॉक्टर से क्या पूछूं?",
+  ]) {
+    const a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.equal(a.intent, "ASK_DOCTOR", q);
+    assert.doesNotMatch(
+      a.spoken,
+      /for them|their history|for you|your history|उनकी|उनके|आपकी|unke|aapki/,
+      q,
+    );
+  }
+});
+
+test("every report-date parser rejects impossible calendar dates", async () => {
+  const { genericMeta } = await import("../clinical/lab-lines.mjs");
+  for (const d of [
+    "2026-02-30",
+    "30 Feb 2026",
+    "31 Apr 2026",
+    "30/02/2026",
+    "02/30/2026",
+  ]) {
+    const m = genericMeta(
+      `Patient ID: TEST-123\nCollected: ${d}\nReported: ${d}`,
+    );
+    assert.equal(m.collected, null, d);
+    assert.equal(m.reported, null, d);
+  }
+});
+
+test("mixed full-name, shorthand and ID references preserve every requested person", async () => {
+  const b = await loadSet([
+    report("Patient: Alice Smith, ID AL-101", "7.8"),
+    report("Patient: Bob Jones, ID BJ-202", "1.2"),
+  ]);
+  for (const q of [
+    "Summarise Bob Jones's and Alice's results",
+    "Summarise AL-101 and Bob Jones's results",
+    "Summarise Alice's and BJ-202's results",
+  ]) {
+    const a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.deepEqual(
+      new Set(a.used.map((o) => subjectOf(o.report))),
+      new Set(["AL-101", "BJ-202"]),
+      q,
+    );
+  }
+  for (const who of [
+    "aunt",
+    "uncle",
+    "cousin",
+    "niece",
+    "nephew",
+    "partner",
+    "chachi",
+    "bua",
+  ]) {
+    const q = `What is my ${who}'s TSH?`,
+      a = clinicalAnswer(q, b.clinical, "AL-101");
+    assert.equal(a.verdict, "AMBIGUOUS_PATIENT", q);
+    assert.deepEqual(a.used, []);
+  }
+  for (const q of [
+    "What should I ask the doctor about my uncle's report?",
+    "mere chacha ki report doctor se kya poochun?",
+    "मेरी मौसी की रिपोर्ट डॉक्टर से क्या पूछूं?",
+  ]) {
+    const a = clinicalAnswer(q, [b.clinical[0]]);
+    assert.equal(a.intent, "ASK_DOCTOR", q);
+    assert.doesNotMatch(a.spoken, /for me|मेरे लिए|mere liye/, q);
+  }
+});
+
+test("shared identity decision does not choose the sole matching test or a count-majority person", async () => {
+  const { patientDecision } = await import("../clinical/answer.mjs");
+  const b = await loadSet([
+    report("Patient: Same Person, ID SP-101", "7.8"),
+    report("Patient: Same Person, ID SP-202", "1.2"),
+  ]);
+  for (const q of [
+    "Was her sugar checked?",
+    "When was she discharged?",
+    "What's her patient ID?",
+    "What should I ask her doctor?",
+    "Summarise her records for me",
+  ]) {
+    assert.equal(patientDecision(q, b.clinical, "SP-999").clarify, true, q);
+    assert.equal(patientDecision(q, b.clinical, "SP-202").patient, "SP-202", q);
+  }
+  assert.equal(
+    patientDecision("What is SP-202's TSH?", b.clinical, "SP-101").patient,
+    "SP-202",
+  );
+});
+
+test("calendar validation holds through synthetic, plain, table and stacked date layouts", async () => {
+  for (const layout of [
+    "Patient: Layout Person, ID LP-101\nCollected: 30 Feb 2026\nReported: 31 Apr 2026",
+    "Patient ID: LP-101\nCollected: 30/02/2026\nReported: 31/04/2026",
+    "| Patient ID | Collected | Reported |\n| --- | --- | --- |\n| LP-101 | 30 Feb 2026 | 31 Apr 2026 |",
+    "PATIENT NAME PATIENT ID\nLayout Person LP-101\nSAMPLE COLLECTED REPORT ISSUED\n30 Feb 2026 09:00 31 Apr 2026 10:00",
+  ]) {
+    const r = await ingestFile(
+      Buffer.from(
+        layout +
+          "\nTest Name    Results    Units    Bio. Ref. Interval\nTSH    1.2    mIU/L    0.4 - 4.0\n",
+      ),
+      "invalid-layout.txt",
+    );
+    assert.ok(r.ok);
+    const m = extractReport(r.doc).meta;
+    assert.equal(m.collected, null, layout);
+    assert.equal(m.reported, null, layout);
+  }
 });

@@ -1,0 +1,147 @@
+{
+  "description": "Frozen actual Gemini final content from development public-source trial9November2026. No inference is made during replay. Scripted audit tests plumbing only, not model accuracy. Original actual trial safely abstained before audit on status disagreement.",
+  "source_url": "https://www.archives.gov/founding-docs/constitution-transcript",
+  "question": "According to Article I Section 7, when can a bill become law without the President signing it, and what exception can prevent that outcome? Does the text give a number for the year 2026 federal budget?",
+  "interpretation": {
+    "question": "According to Article I Section 7, when can a bill become law without the President signing it, and what exception can prevent that outcome? Does the text give a number for the year 2026 federal budget?",
+    "requirements": [
+      "According to Article I Section 7, when can a bill become law without the President signing it,",
+      "and what exception can prevent that outcome?",
+      "Does the text give a number for the year 2026 federal budget?"
+    ]
+  },
+  "primary": {
+    "question": "According to Article I Section 7, when can a bill become law without the President signing it, and what exception can prevent that outcome? Does the text give a number for the year 2026 federal budget?",
+    "questionPlanKey": "aad31d10cb77524378b6de33754bf33e47f4b46801d0d4d7ec31ccf2edc2d71f",
+    "scopeKey": "a29d57e8612483e2722d78a75f7bc06cadb81eb55480dd2733f8c059c6af3e9e",
+    "requirements": [
+      {
+        "id": "r-00dc471488290c78",
+        "text": "According to Article I Section 7, when can a bill become law without the President signing it,",
+        "owners": [],
+        "status": "answered",
+        "claims": [
+          {
+            "statement": "According to Article I, Section 7, a bill can become a law without the President's signature if, after the President returns it with objections, two-thirds of both the originating House and the other House approve and pass it upon reconsideration.",
+            "evidence": [
+              {
+                "document": 0,
+                "sourceId": "9272fb5148fabb1383f509df4ac2620a0f9789be2df820f0c33ad4a96311b6fa",
+                "quote": "If after such Reconsideration two thirds of that House shall agree to pass the Bill, it shall be sent, together with the Objections, to the other House, by which it shall likewise be reconsidered, and if approved by two thirds of that House, it shall become a Law."
+              }
+            ]
+          },
+          {
+            "statement": "Additionally, a bill becomes a law in like manner as if the President had signed it if it is not returned by the President within ten days (Sundays excepted) after being presented.",
+            "evidence": [
+              {
+                "document": 0,
+                "sourceId": "9272fb5148fabb1383f509df4ac2620a0f9789be2df820f0c33ad4a96311b6fa",
+                "quote": "If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it,"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "r-00a73e3cd2f8fcdb",
+        "text": " and what exception can prevent that outcome?",
+        "owners": [],
+        "status": "answered",
+        "claims": [
+          {
+            "statement": "The exception that prevents an unreturned bill from becoming a law is if Congress, by their adjournment, prevents its return.",
+            "evidence": [
+              {
+                "document": 0,
+                "sourceId": "9272fb5148fabb1383f509df4ac2620a0f9789be2df820f0c33ad4a96311b6fa",
+                "quote": "unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "r-ab7427878f68d8a3",
+        "text": " Does the text give a number for the year 2026 federal budget?",
+        "owners": [],
+        "status": "answered",
+        "claims": [
+          {
+            "statement": "The text does not mention or provide any figure for the year 2026 federal budget.",
+            "evidence": [
+              {
+                "document": 0,
+                "sourceId": "9272fb5148fabb1383f509df4ac2620a0f9789be2df820f0c33ad4a96311b6fa",
+                "quote": "No Money shall be drawn from the Treasury, but in Consequence of Appropriations made by Law; and a regular Statement and Account of the Receipts and Expenditures of all public Money shall be published from time to time."
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "blind": {
+    "question": "According to Article I Section 7, when can a bill become law without the President signing it, and what exception can prevent that outcome? Does the text give a number for the year 2026 federal budget?",
+    "questionPlanKey": "aad31d10cb77524378b6de33754bf33e47f4b46801d0d4d7ec31ccf2edc2d71f",
+    "scopeKey": "a29d57e8612483e2722d78a75f7bc06cadb81eb55480dd2733f8c059c6af3e9e",
+    "requirements": [
+      {
+        "id": "r-00dc471488290c78",
+        "text": "According to Article I Section 7, when can a bill become law without the President signing it,",
+        "owners": [],
+        "status": "answered",
+        "reason": "",
+        "claims": [
+          {
+            "statement": "A bill can become law without the President signing it if, after the President returns it with objections, two thirds of the originating House and subsequently two thirds of the other House agree to pass it.",
+            "evidence": [
+              {
+                "document": 0,
+                "sourceId": "9272fb5148fabb1383f509df4ac2620a0f9789be2df820f0c33ad4a96311b6fa",
+                "quote": "If after such Reconsideration two thirds of that House shall agree to pass the Bill, it shall be sent, together with the Objections, to the other House, by which it shall likewise be reconsidered, and if approved by two thirds of that House, it shall become a Law."
+              }
+            ]
+          },
+          {
+            "statement": "Additionally, a bill becomes law without signature if the President does not return it within ten days (Sundays excepted) after it has been presented to him.",
+            "evidence": [
+              {
+                "document": 0,
+                "sourceId": "9272fb5148fabb1383f509df4ac2620a0f9789be2df820f0c33ad4a96311b6fa",
+                "quote": "If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "r-00a73e3cd2f8fcdb",
+        "text": " and what exception can prevent that outcome?",
+        "owners": [],
+        "status": "answered",
+        "reason": "",
+        "claims": [
+          {
+            "statement": "The exception that prevents an unreturned bill from becoming a law is if Congress, by their adjournment, prevents its return.",
+            "evidence": [
+              {
+                "document": 0,
+                "sourceId": "9272fb5148fabb1383f509df4ac2620a0f9789be2df820f0c33ad4a96311b6fa",
+                "quote": "the Same shall be a Law, in like Manner as if he had signed it, unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "r-ab7427878f68d8a3",
+        "text": " Does the text give a number for the year 2026 federal budget?",
+        "owners": [],
+        "status": "not_established",
+        "reason": "The provided text does not mention the year 2026 or a federal budget figure for that year.",
+        "claims": []
+      }
+    ]
+  }
+}

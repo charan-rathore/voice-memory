@@ -694,6 +694,113 @@ const focusTerms = (s) =>
     ).filter((t) => t.length > 1 && !FOCUS_STOP.has(t)),
   );
 
+/** Split diagnostic retrieval spans at known record boundaries.
+ * Never infer ownership from keywords, overlap size, or citation order.
+ * Every intersected record is retained separately; identity metadata is
+ * explicit even when a chunk starts after the record header. A citation
+ * association labels support, not proof that every claim is supported.
+ */
+export function bindEvidenceToRecords(evidence, question, reports, used = []) {
+  if (!Array.isArray(evidence)) return evidence;
+  const bound = evidence.flatMap((ev) => {
+    const records = (reports ?? []).filter(
+      (r) => r.sourceId === ev.sourceId && r.span,
+    );
+    if (
+      !records.length ||
+      !Number.isFinite(ev.start) ||
+      !Number.isFinite(ev.end)
+    )
+      return [{ ...ev, binding: "unsegmented", contextOnly: true }];
+    return records
+      .filter((r) => r.span.start < ev.end && ev.start < r.span.end)
+      .map((r) => {
+        const start = Math.max(ev.start, r.span.start);
+        const end = Math.min(ev.end, r.span.end);
+        const associated = (used ?? []).some(
+          (c) =>
+            c.sourceId === ev.sourceId &&
+            r.span.start <= c.start &&
+            c.end <= r.span.end &&
+            c.start < ev.end &&
+            c.end > ev.start,
+        );
+        return {
+          ...ev,
+          start,
+          end,
+          quote: (ev.quote ?? "").slice(start - ev.start, end - ev.start),
+          // Prior page boxes may cover a different record; do not carry them
+          // onto a narrower quote as if they were an exact location.
+          location: start === ev.start && end === ev.end ? ev.location : null,
+          record: {
+            title: r.title ?? null,
+            patientId: r.meta?.patient?.id ?? null,
+            patientName: r.meta?.patient?.name ?? null,
+            status: r.meta?.status ?? null,
+            start: r.span.start,
+            end: r.span.end,
+          },
+          binding: "record-span",
+          contextOnly: !associated,
+        };
+      });
+  });
+  // Aggregate overlapping retrieval spans per record and support class.
+  // Keep every identity without multiplying overlapping snippets.
+  const groups = new Map();
+  for (const ev of bound) {
+    const key = JSON.stringify([
+      ev.sourceId,
+      ev.record?.start,
+      ev.record?.end,
+      ev.record?.patientId,
+      ev.record?.patientName,
+      ev.contextOnly,
+      ev.binding,
+    ]);
+    const group = groups.get(key) ?? [];
+    group.push(ev);
+    groups.set(key, group);
+  }
+  const out = [];
+  for (const group of groups.values()) {
+    group.sort((a, b) => a.start - b.start || b.end - a.end);
+    let last = null;
+    for (const ev of group) {
+      if (last && Number.isFinite(ev.start) && ev.start <= last.end) {
+        if (ev.end > last.end) {
+          last.quote =
+            (last.quote ?? "") + (ev.quote ?? "").slice(last.end - ev.start);
+          last.end = ev.end;
+          last.location = null;
+        }
+      } else {
+        last = { ...ev };
+        out.push(last);
+      }
+    }
+  }
+  return out;
+}
+
+/** Bind final clinical citations; leave nonclinical citations unchanged. */
+export function bindAnswerCitations(citations, question, records) {
+  const known = new Set((records ?? []).map((r) => r.sourceId));
+  return (citations ?? []).flatMap((c) =>
+    (c.clinical || c.recordOwned) &&
+    known.has(c.sourceId) &&
+    records.some(
+      (r) =>
+        r.sourceId === c.sourceId &&
+        r.span?.start < c.end &&
+        c.start < r.span?.end,
+    )
+      ? bindEvidenceToRecords([c], question, records, citations)
+      : [c],
+  );
+}
+
 /**
  * Within a cited span, the element(s) that actually match the question: a
  * chunk can cover a whole page, but the viewer should land on the line.

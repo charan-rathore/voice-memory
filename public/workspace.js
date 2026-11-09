@@ -485,6 +485,18 @@ function renderCitation(c, i) {
       text.length > 600 ? text.slice(0, 560).trimEnd() + "…" : text,
     );
   }
+  if (c.record)
+    li.append(
+      el(
+        "p",
+        "cite-owner",
+        `Record: ${c.record.patientName ?? "Unidentified"} (${c.record.patientId ?? "no verified ID"})`,
+      ),
+    );
+  if (c.contextOnly)
+    li.append(
+      el("p", "cite-context", "Context only - not evidence for this answer"),
+    );
   li.append(head, quote);
   // A span widened past the claim's own sentence proves the source, not a
   // pinpoint line; say so instead of presenting the quote as pinpoint.

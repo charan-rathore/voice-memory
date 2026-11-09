@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ingestFile } from "../ingest/index.mjs";
 import { extractReport } from "./observations.mjs";
-import { clinicalAnswer, changesFor } from "./answer.mjs";
+import { clinicalAnswer, changesFor, subjectsFor } from "./answer.mjs";
 import { socialTurn } from "../src/conversation.mjs";
 
 const cache = new Map();
@@ -181,4 +181,124 @@ test("what should I ask my doctor: questions from cited lines, no advice", async
 test("ordinary help questions still get the help reply", () => {
   for (const q of ["what can I ask?", "how can you help", "what should I ask"])
     assert.equal(socialTurn(q, { lang: "en" })?.intent, "HELP", q);
+});
+
+// Asking about someone else's report must not put the caller in the
+// questions: third-person references with no first-person possessive get
+// "for them", not "for me".
+test("doctor questions for someone else's report speak about them, not me", async () => {
+  const a = clinicalAnswer(
+    "What should I ask the doctor about her report?",
+    await one(),
+  );
+  assert.equal(a?.intent, "ASK_DOCTOR");
+  assert.match(a.spoken, /for them\?/);
+  assert.doesNotMatch(a.spoken, /for me\?/);
+  const b = clinicalAnswer("What should I ask my doctor?", await one());
+  assert.match(b.spoken, /for me\?/);
+});
+
+// "my mother's and my results" names both a relative and the caller: no
+// single pronoun is right, so the suggested questions stay neutral -
+// never "for me" (drops the mother) and never "for them" (drops the caller).
+test("mixed caller + kinship doctor questions stay pronoun-neutral", async () => {
+  const a = clinicalAnswer(
+    "What should I ask the doctor about my mother's and my results?",
+    await one(),
+  );
+  assert.equal(a?.intent, "ASK_DOCTOR");
+  assert.match(a.spoken, /what does that mean\?/);
+  assert.doesNotMatch(a.spoken, /for (me|them)\?/);
+  assert.match(a.spoken, /not a diagnosis/);
+  // pure third-person and pure first-person phrasing is unchanged
+  const b = clinicalAnswer(
+    "What should I ask the doctor about her report?",
+    await one(),
+  );
+  assert.match(b.spoken, /for them\?/);
+  const c = clinicalAnswer("What should I ask my doctor?", await one());
+  assert.match(c.spoken, /for me\?/);
+});
+
+// Multi-patient questions narrow ONLY on explicit, validated context.
+// Record counts never break a same-name tie ("what is my HbA1c?" with two
+// Maya Sharmas stays ambiguous and asks which person); a kinship reference
+// ("my mother's HbA1c") names someone counts know nothing about; a selected
+// patient id the caller passed (API/UI) is honored only when it is an
+// actual subject - an unknown or stale id selects nothing.
+test("explicit context, not counts, resolves a same-name tie", () => {
+  const rep = (id, n) => ({
+    sourceId: `${id}-${n}`,
+    title: `${id}-${n}.pdf`,
+    meta: { patient: { id, name: "Maya Sharma" } },
+    observations: [],
+  });
+  const reports = [
+    rep("HLG-P1047", 1),
+    rep("HLG-P1047", 2),
+    rep("HLG-P1047", 3),
+    rep("HLG-P1048", 1),
+  ];
+  const both = ["HLG-P1047", "HLG-P1048"];
+  // no context: counts do not decide, every candidate stays in
+  assert.deepEqual(subjectsFor("what is my hba1c?", reports).sort(), both);
+  assert.deepEqual(subjectsFor("my mother's hba1c?", reports).sort(), both);
+  assert.deepEqual(subjectsFor("mere papa ka sugar?", reports).sort(), both);
+  // an explicit id in the question always wins
+  assert.deepEqual(subjectsFor("what is HLG-P1048's hba1c?", reports), [
+    "HLG-P1048",
+  ]);
+  // validated explicit context (a selected patient id) wins
+  assert.deepEqual(
+    subjectsFor("what is my hba1c?", reports, reports, "HLG-P1048"),
+    ["HLG-P1048"],
+  );
+  // mismatched context (not a subject here) selects nothing
+  assert.deepEqual(
+    subjectsFor("what is my hba1c?", reports, reports, "HLG-P9999").sort(),
+    both,
+  );
+});
+
+test("Hindi and Hinglish mother spelling variants never speak as the caller", async () => {
+  for (const [q, yes, no] of [
+    [
+      "मेरी मां की रिपोर्ट के बारे में डॉक्टर से क्या पूछूं?",
+      /उनके/,
+      /मेरे लिए/,
+    ],
+    [
+      "मेरी माँ की रिपोर्ट के बारे में डॉक्टर से क्या पूछूं?",
+      /उनके/,
+      /मेरे लिए/,
+    ],
+    ["meri maa ki report doctor se kya poochun?", /unke/, /mere liye/],
+    [
+      "What should I ask the doctor about my grandmother's report?",
+      /for them/,
+      /for me/,
+    ],
+  ]) {
+    const a = clinicalAnswer(q, await one());
+    assert.equal(a?.intent, "ASK_DOCTOR", q);
+    assert.match(a.spoken, yes);
+    assert.doesNotMatch(a.spoken, no);
+  }
+});
+
+test("mixed caller-relative named-measurement doctor prompts stay neutral", async () => {
+  for (const q of [
+    "What should I ask the doctor about my mother's and my HbA1c results?",
+    "What should I ask the doctor about my mother's HbA1c and mine?",
+    "meri maa aur mera sugar result doctor se kya poochun?",
+    "मेरी माँ और मेरी HbA1c रिपोर्ट डॉक्टर से क्या पूछूं?",
+  ]) {
+    const a = clinicalAnswer(q, await one());
+    assert.equal(a?.intent, "ASK_DOCTOR", q);
+    assert.doesNotMatch(
+      a.spoken,
+      /for (me|them)\?|उनके लिए|मेरे लिए|unke liye|mere liye/,
+      q,
+    );
+  }
 });

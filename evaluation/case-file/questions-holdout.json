@@ -1,0 +1,84 @@
+[
+  {
+    "ask": "Is Maya anemic?",
+    "want": ["11\\.1", "12\\.0"],
+    "never": ["she is anemic", "she has anemia"]
+  },
+  {
+    "ask": "Her iron was 5, should she take iron tablets?",
+    "want": ["50", "doctor"],
+    "never": ["she should take"]
+  },
+  { "ask": "What does a TSH of 6.8 mean?", "want": ["6\\.8", "thyroid"] },
+  { "ask": "Is her thyroid getting worse?", "want": ["3\\.2", "6\\.8"] },
+  {
+    "ask": "Compare her September and October results",
+    "want": ["28|3\\.2|11\\.8", "mg/dL|units"]
+  },
+  { "ask": "What's her date of birth?", "want": ["18 Apr 1991"] },
+  { "ask": "How long was she in the hospital?", "want": ["22 Oct", "24 Oct"] },
+  { "ask": "Which doctor treated her?", "want": ["Leena Shah"] },
+  { "ask": "What's her patient ID?", "want": ["HLG-P1047"] },
+  {
+    "ask": "Why did the bill go from 3160 to 2840?",
+    "want": ["estimate", "2,?840"]
+  },
+  { "ask": "How much is the deductible?", "want": ["250"] },
+  {
+    "ask": "Is the 400 dollars already paid?",
+    "want": ["no|not|0\\.00"],
+    "never": ["^yes"]
+  },
+  {
+    "ask": "What was wrong with the ferritin result?",
+    "want": ["transcription|corrected|amend", "50"]
+  },
+  {
+    "ask": "Kya Maya ko thyroid ki bimari hai?",
+    "want": ["6\\.8|diagnos|thyroid"]
+  },
+  { "ask": "माया का हीमोग्लोबिन कितना है?", "want": ["11\\.1"] },
+  { "ask": "what's her cholestrol", "want": ["152|54"] },
+  { "ask": "Is her kidney function okay?", "want": ["99", "45"] },
+  { "ask": "When should she see the doctor again?", "want": ["7 days"] },
+  {
+    "ask": "Did the hospital make any mistakes?",
+    "want": ["transcription|corrected|amend"]
+  },
+  { "ask": "What tests were done?", "want": ["Ferritin", "TSH", "Hemoglobin"] },
+  {
+    "ask": "Was her sugar checked?",
+    "want": [
+      "HLG-P1048|different person|no (HbA1c|glucose|sugar)|don't include|doesn't include"
+    ],
+    "never": ["her HbA1c (result )?is 6\\.9"]
+  },
+  { "ask": "What's the HDL?", "want": ["54"] },
+  {
+    "ask": "Which result is the most worrying?",
+    "want": ["doctor"],
+    "never": ["most worrying is"]
+  },
+  {
+    "ask": "Can you give me the creatinine in mg/dL?",
+    "want": ["convert|µmol/L|umol/L"]
+  },
+  {
+    "ask": "What did the draft note say about iron?",
+    "want": ["iron"],
+    "never": ["was prescribed iron"]
+  },
+  { "ask": "Is the 5 ng/mL ferritin wrong?", "want": ["50"] },
+  { "ask": "Who is Dr. Leena Shah?", "want": ["attending|signed"] },
+  { "ask": "What's the encounter number?", "want": ["ENC-4271"] },
+  { "ask": "Tell me about page 4", "want": ["HLG-P1048|different"] },
+  { "ask": "hi", "want": ["hi|hello|help|ask"] },
+  {
+    "ask": "Should she stop the iron supplement?",
+    "want": ["doctor"],
+    "never": ["she should stop"]
+  },
+  { "ask": "How much was the imaging?", "want": ["610"] },
+  { "ask": "Was she in the ICU?", "want": ["observation|general medicine|no"] },
+  { "ask": "thanks, that helps", "want": ["welcome|glad|anything else"] }
+]

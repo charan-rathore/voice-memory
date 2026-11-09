@@ -103,7 +103,13 @@ test("server: cached answer equals the computed one; upload/import invalidates; 
     });
     assert.equal(first.cache, "miss");
     assert.equal(second.cache, "hit");
-    assert.deepEqual(strip(second), strip(first));
+    assert.equal(first.questionPlan.originalQuestion, "Who owns the review?");
+    assert.equal(second.questionPlan.originalQuestion, "who owns the REVIEW");
+    const cachedCandidate = ({ question, questionPlan, ...rest }) => rest;
+    assert.deepEqual(
+      cachedCandidate(strip(second)),
+      cachedCandidate(strip(first)),
+    );
     // Re-import builds a new index scope: no stale answer survives.
     await a.post("import", {
       documents: [

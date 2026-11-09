@@ -60,9 +60,13 @@ test("record ownership clarification and refusal survive normalized cache replay
       "WHAT WERE MIRA SEN TOTAL CHARGES?",
     ]) {
       const a = await ask(q);
-      assert.match(a.lead.text, /Which patient do you mean/);
+      assert.equal(a.lead.verdict, "AMBIGUOUS_PATIENT");
+      assert.match(a.lead.text, /SYN-281/);
+      assert.match(a.lead.text, /SYN-392/);
       assert.doesNotMatch(a.lead.text, /USD|100|200/);
-      assert.equal(a.lead.citations.length, 2);
+      // Shared preflight provides no answer-support citations for ambiguity.
+      assert.equal(a.lead.citations.length, 0);
+      assert.ok(a.evidence.every((e) => e.contextOnly));
     }
     const a = await ask("What were SYN-999 total charges?");
     assert.equal(a.lead.verdict, "UNBOUND_OWNER");

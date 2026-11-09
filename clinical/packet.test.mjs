@@ -150,6 +150,16 @@ test("asked through a workspace: the amendment wins, the other patient stays sep
           })
         ).json()
       ).lead?.text ?? "";
+    const askP = async (question, patient) =>
+      (
+        await (
+          await fetch(base + "/ask", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ case: ws.id, question, patient }),
+          })
+        ).json()
+      ).lead?.text ?? "";
     const named = await ask("What is TV-P2001's ferritin?");
     assert.match(named, /\b40 ng\/mL/);
     assert.doesNotMatch(named, /result is 4 ng/);
@@ -157,13 +167,92 @@ test("asked through a workspace: the amendment wins, the other patient stays sep
       await ask("What was TV-P2001's ferritin before the correction?"),
       /\b4 ng\/mL[\s\S]*40/,
     );
-    // two people share the printed name: an unnamed question asks whose
+    // two people share the printed name, one of them on a single misfiled
+    // page: without explicit context an unnamed question is ambiguous and
+    // asks whose results; it never answers for a count-picked person.
     const unnamed = await ask("What is my ferritin?");
-    assert.match(
-      unnamed,
-      /TV-P2001[\s\S]*TV-P2002|TV-P2002[\s\S]*TV-P2001|which|whose/i,
-    );
-    assert.doesNotMatch(unnamed, /result is (4|40|90) ng/);
+    assert.match(unnamed, /Whose results should I look at\?/);
+    assert.doesNotMatch(unnamed, /result is \d+ ng/);
+    // with the patient selected on screen (validated explicit context) the
+    // same question answers for them, names the namesake it left out, and
+    // uses the amended value - never the namesake's, never the superseded.
+    const selected = await askP("What is my ferritin?", "TV-P2001");
+    assert.match(selected, /\b40 ng\/mL/);
+    assert.match(selected, /TV-P2001[\s\S]*TV-P2002/);
+    assert.doesNotMatch(selected, /result is (4|90) ng/);
+    // a mismatched selection (not a subject of these records) selects
+    // nothing: the question stays ambiguous.
+    // Both cache request orders and transitions: ownership must survive
+    // replay, not just the text. Same document, distinct patient rows.
+    for (const q of ["What is my ferritin?", "What is the ferritin result?"]) {
+      for (const patient of [
+        "TV-P2002",
+        "TV-P2001",
+        null,
+        "TV-P2001",
+        "TV-P2002",
+        "TV-P9999",
+        null,
+      ]) {
+        const res = await fetch(base + "/ask", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ case: ws.id, question: q, patient }),
+        });
+        const a = await res.json();
+        if (patient === "TV-P2001" || patient === "TV-P2002") {
+          const value = patient === "TV-P2001" ? "40" : "90";
+          assert.match(a.final.text, new RegExp(value + " ng/mL"));
+          assert.match(a.final.text, new RegExp(patient));
+          assert.ok(
+            a.final.citations.some((c) => c.quote.includes(value)),
+            "chosen value cited",
+          );
+          for (const c of a.final.citations) {
+            assert.equal(
+              c.record?.patientId,
+              patient,
+              "visible citation owner",
+            );
+            assert.equal(
+              c.contextOnly,
+              false,
+              "answer support is not diagnostic context",
+            );
+            assert.ok(c.location?.pages?.length, "pinpoint remains located");
+          }
+          assert.ok(
+            !a.final.citations.some((c) =>
+              c.quote.includes(patient === "TV-P2001" ? "90" : "40"),
+            ),
+            "no other patient's value cited",
+          );
+        } else {
+          assert.equal(a.final.verdict, "AMBIGUOUS_PATIENT");
+          assert.deepEqual(a.final.citations, []);
+        }
+      }
+    }
+    for (const [question, patient, context, expected] of [
+      ["What is my ferritin?", null, "person:TV-P2002", "90"],
+      ["What is my ferritin?", null, "person:TV-P2001", "40"],
+      ["What is my ferritin?", null, "person:TV-P9999", null],
+      ["What is TV-P2002's ferritin?", "TV-P2001", "person:TV-P2001", "90"],
+    ]) {
+      const a = await (
+        await fetch(base + "/ask", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ case: ws.id, question, patient, context }),
+        })
+      ).json();
+      if (expected) {
+        assert.match(a.final.text, new RegExp(expected + " ng/mL"));
+        assert.ok(a.final.citations.some((c) => c.quote.includes(expected)));
+      } else assert.equal(a.final.verdict, "AMBIGUOUS_PATIENT");
+    }
+    const mismatched = await askP("What is my ferritin?", "TV-P9999");
+    assert.match(mismatched, /Whose results should I look at\?/);
   } finally {
     await new Promise((r) => srv.close(r));
   }

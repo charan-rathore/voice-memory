@@ -40,7 +40,7 @@ const squash = (s) =>
  * @param {{text:string, restore:(s:string)=>string, evidence:{sourceId,title,hash,start,end,quote}, subject?:string}[]} passages
  * @returns {{accepted: {statement:string, evidence:object}[], rejected: {claim:object, reason:string}[]}}
  */
-export function verifyClaims(claims, passages) {
+export function verifyClaims(claims, passages, { verifyRelation = null } = {}) {
   const accepted = [];
   const rejected = [];
   for (const c of Array.isArray(claims) ? claims : []) {
@@ -107,6 +107,24 @@ export function verifyClaims(claims, passages) {
     const named = [...new Set(statement.match(SUBJECT_RE) ?? [])];
     if (p.subject && named.some((s) => s !== p.subject)) {
       rejected.push({ claim: c, reason: "subject_mismatch" });
+      continue;
+    }
+    // Lexical checks above establish source integrity, not entailment.
+    // Only an independent server-owned relation verifier can admit a claim.
+    // A provider's own subject/polarity/verified fields are never authority.
+    let relation = null;
+    try {
+      relation = verifyRelation?.({
+        statement,
+        quote: exact,
+        claim: c,
+        passage: p,
+      });
+    } catch {
+      relation = null;
+    }
+    if (relation?.ok !== true) {
+      rejected.push({ claim: c, reason: "relation_entailment_unverified" });
       continue;
     }
     const start = p.evidence.start + m.index;

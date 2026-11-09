@@ -1,3 +1,4 @@
+import { validIso } from "./calendar.mjs";
 // Clinical observation model (research prototype, synthetic data only).
 //
 // Deliberately separate from the commercial claim graph: a lab result is not
@@ -78,14 +79,43 @@ const DATE = String.raw`(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})`;
 function isoDate(d, m, y) {
   const mm = MONTHS[m.toLowerCase()];
   if (!mm) return null;
-  return `${y}-${String(mm).padStart(2, "0")}-${String(Number(d)).padStart(2, "0")}`;
+  return validIso(y, mm, d);
+}
+
+const WITHHELD =
+  /^(not released|not reported|not done|pending|to follow|cancelled|canceled|withheld)$/i;
+
+const DOB_LABEL = /^(date of birth|dob|d\.o\.b\.?|birth date)$/i;
+/** Date of birth as printed: "DOB: 04 Dec 1968", or a stacked table header. */
+export function dobOf(full) {
+  const head = full.slice(0, 6000);
+  const inline =
+    /\b(?:DOB|D\.O\.B\.?|Date of birth)\s*[:|]?\s*(\d{1,2}(?:st|nd|rd|th)?[ -](?:[A-Za-z]{3,9})\.?,?[ -]\d{4}|(?:[A-Za-z]{3,9})\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})/i.exec(
+      head,
+    );
+  if (inline) return inline[1];
+  const lines = head.split("\n");
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (!lines[i].startsWith("|")) continue;
+    const cells = lines[i]
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
+    const at = cells.findIndex((c) => DOB_LABEL.test(c));
+    if (at < 0) continue;
+    let j = i + 1;
+    if (/^\|\s*-{3}/.test(lines[j] ?? "")) j++;
+    const v = (lines[j] ?? "").split("|").slice(1, -1)[at]?.trim();
+    if (v && /\d{4}/.test(v)) return v;
+  }
+  return null;
 }
 
 export function reportMeta(full) {
   const text = flatHeader(full.slice(0, 6000)) + full.slice(6000);
   // The synthetic header: "Patient: Test Person A (synthetic), ID SYN-0001".
   const patient =
-    /\b[Pp]atient:\s*([^\n,|]+?)\s*,\s*\bID\b\s*:?\s*([A-Z0-9][A-Z0-9-]{2,})/.exec(
+    /\b[Pp]atient:\s*([^\n,|]+?)\s*,\s*\bID\b\s*:?\s*([A-Z0-9][A-Z0-9_.-]{2,})/i.exec(
       text,
     );
   const collected = new RegExp(`Collected:?\\s*(?:on\\s*)?${DATE}`, "i").exec(
@@ -94,25 +124,51 @@ export function reportMeta(full) {
   const reported = new RegExp(`Reported:?\\s*(?:on\\s*)?${DATE}`, "i").exec(
     text,
   );
-  const status =
-    /Report status\s*:?\s*(final|preliminary|provisional|interim|partial|amended|corrected|revised)/i.exec(
-      text,
-    );
+  // Report authority is a source operation, not keyword retrieval. Require
+  // a complete printed field value or a standalone header label. Prose,
+  // negated mentions and trailing conditions cannot create version authority.
+  const statusWords =
+    "final|preliminary|provisional|interim|partial|amended|corrected|revised";
+  const lines = full
+    .split("\n")
+    .map((l) => l.replace(/^#+\s*/, "").trim())
+    .filter(Boolean);
+  const field = new RegExp(
+    `^Report status\\s*:?[ \t]*(${statusWords})[ \t]*$`,
+    "i",
+  );
+  const inlineField = new RegExp(
+    `^Patient: [^\\n,|]+, ID [A-Z0-9][A-Z0-9_.-]{2,} Collected: ${DATE}(?: Reported: ${DATE})? Report status\\s*:?[ \t]*(${statusWords})[ \t]*$`,
+    "i",
+  );
+  const metadataDate = String.raw`(?:[0-9]{1,2}[/.-][0-9]{1,2}[/.-][0-9]{4}|[0-9]{1,2} [A-Za-z]{3,9} [0-9]{4})(?: [0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?(?:[ ]?(?:AM|PM))?)?`;
+  const datedMetadata = new RegExp(
+    `^Collected\\s*:\\s*${metadataDate}\\s+Reported\\s*:\\s*${metadataDate}\\s+(Report status\\s*:?[ \t]*(?:${statusWords}))[ \t]*$`,
+    "i",
+  );
+  const status = lines
+    .map((l) => {
+      const direct = field.exec(l);
+      if (direct) return direct;
+      const dated = datedMetadata.exec(l);
+      if (dated) return field.exec(dated[1]);
+      if (!inlineField.test(l)) return null;
+      return field.exec(l.slice(l.search(/report status/i)));
+    })
+    .find(Boolean);
   const g = genericMeta(text, full);
-  // No "Report status:" field: a status printed as a capitalised label in
-  // the first header lines ("PRELIMINARY", "AMENDED / FINAL"). Capitals
-  // only and header lines only, so prose ("superseded by the amended
-  // version") never sets a status.
+  // This deliberately small uppercase label schema retains known packet
+  // headings, but does not treat an uppercase word inside a sentence as a label.
   const label =
     status ??
-    /\b(AMENDED|CORRECTED|REVISED|PRELIMINARY|PROVISIONAL|INTERIM|FINAL)\b/.exec(
-      full
-        .split("\n")
-        .map((l) => l.replace(/^#+\s*/, "").trim())
-        .filter(Boolean)
-        .slice(0, 4)
-        .join("\n"),
-    );
+    lines
+      .slice(0, 4)
+      .map((l) =>
+        /^(AMENDED|CORRECTED|REVISED|PRELIMINARY|PROVISIONAL|INTERIM|FINAL)(?:(?:\s*\/\s*|\s+)(?:AMENDED|CORRECTED|REVISED|PRELIMINARY|PROVISIONAL|INTERIM|FINAL|VERSION|REPORT|LAB|RESULT|CHEMISTRY|GENERAL|MEDICINE|AND|HEMATOLOGY))*(?: OF [0-9]{1,2} [A-Z]{3,9} SAMPLE)?$/.exec(
+          l,
+        ),
+      )
+      .find(Boolean);
   const st = label?.[1].toLowerCase();
   return {
     patient: patient
@@ -123,6 +179,7 @@ export function reportMeta(full) {
           age: g.patient?.age ?? null,
         }
       : g.patient,
+    dob: dobOf(full),
     accession: g.accession ?? null,
     collected: collected
       ? isoDate(collected[1], collected[2], collected[3])
@@ -264,9 +321,51 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
         inFlag = fm[1] ?? fm[4];
         raw = fm[2] ?? fm[3];
       }
+      // A test the lab printed without releasing a number ("NOT RELEASED",
+      // "PENDING"): kept, so "what is the ratio?" is answered with what the
+      // report says instead of "not in these reports".
+      if (test && raw == null) {
+        const held = row.cells
+          .map((c) => (c ?? "").trim())
+          .find((c) => WITHHELD.test(c));
+        if (held && !/^(test|analyte)/i.test(test))
+          observations.push({
+            test,
+            key: testKey(test),
+            canon: canonOf(test),
+            raw: held,
+            comparator: null,
+            value: null,
+            notation: "withheld",
+            unit: null,
+            unitRaw: null,
+            range: null,
+            flag: null,
+            flagConflict: false,
+            qual: "not released",
+            notReleased: true,
+            ref: null,
+            section: null,
+            source: {
+              elementId: row.id,
+              start: row.start,
+              end: row.end,
+              page: row.page ?? null,
+              bbox: row.bbox ?? null,
+              method: row.method,
+              confidence: row.confidence ?? null,
+            },
+          });
+        continue;
+      }
       if (!test || raw == null) continue;
       const v = parseValue(raw);
-      const qual = v.value == null ? (parseResult(raw)?.qual ?? null) : null;
+      const withheld = v.value == null && WITHHELD.test(raw);
+      const qual = withheld
+        ? "not released"
+        : v.value == null
+          ? (parseResult(raw)?.qual ?? null)
+          : null;
       // "Primary Sample Type : | Blood" is a label, not a result.
       if (
         v.value == null &&
@@ -291,6 +390,7 @@ export function extractReport(doc, { metaText = doc.text } = {}) {
         flag: cell("flag") ?? inFlag,
         flagConflict: flagConflict(v, cell("range"), cell("flag") ?? inFlag),
         qual,
+        ...(withheld ? { notReleased: true } : {}),
         ref: parseReference(
           cell("range"),
           meta.patient?.sex ?? null,
@@ -411,10 +511,105 @@ const STATUS_RANK = {
  * cannot both be true given the collection dates (more than one year apart
  * after allowing for the time between collections).
  */
+/**
+ * Every date a printed DOB string could mean, as ISO keys. ISO
+ * (2026-01-12) and alphabetic-month (12 Jan 1980) forms are unambiguous:
+ * one interpretation. A numeric date with a 4-digit year is certain when
+ * one number must be the day (15/03/1965), genuinely ambiguous when both
+ * could be (03/07/1965: 3 July or 7 March) - then both interpretations are
+ * returned, never a guess. Anything else (2-digit years, no 4-digit year)
+ * is unparseable: []. Month names parse via the month table, never
+ * Date.parse - its local-midnight result shifts the day under toISOString.
+ */
+/** Calendar-valid ISO key, or null: 2020-02-30 and 1980-00-00 are not dates. */
+
+export function dobInterpretations(raw) {
+  if (!raw) return [];
+  const s = String(raw).trim();
+  const isoFast = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (isoFast) {
+    const k = validIso(isoFast[1], isoFast[2], isoFast[3]);
+    return k ? [k] : [];
+  }
+  const yf = /^(\d{4})[/.](\d{1,2})[/.](\d{1,2})$/.exec(s);
+  if (yf) {
+    const k = validIso(yf[1], yf[2], yf[3]);
+    return k ? [k] : [];
+  }
+  const num = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(s);
+  if (num) {
+    const [, a, b, y] = num;
+    return [...new Set([validIso(y, b, a), validIso(y, a, b)].filter(Boolean))];
+  }
+  if (/^[\d\/.-]+$/.test(s)) return []; // e.g. 2-digit year: century unknown
+  const ord =
+    /^(\d{1,2})(?:st|nd|rd|th)\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})$/i.exec(s);
+  if (ord) {
+    const k = isoDate(ord[1], ord[2], ord[3]);
+    return k ? [k] : [];
+  }
+  const m = new RegExp(`^${DATE}$`).exec(s);
+  if (m) {
+    const k = isoDate(m[1], m[2], m[3]);
+    return k ? [k] : [];
+  }
+  const mf =
+    /^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i.exec(s);
+  if (mf) {
+    const k = isoDate(mf[2], mf[1], mf[3]);
+    return k ? [k] : [];
+  }
+  const y = /^(\d{4})[ -]([A-Za-z]{3,9})\.?[ -](\d{1,2})$/.exec(s);
+  if (y) {
+    const k = isoDate(y[3], y[2], y[1]);
+    return k ? [k] : [];
+  }
+  return [];
+}
+
+/**
+ * A confident date-of-birth key, or null when the printed form has more
+ * than one reading (or none). Equivalent dates in different unambiguous
+ * formats produce the same key, so a format change alone never splits one
+ * person into two.
+ */
+export function dobKey(raw) {
+  const ks = dobInterpretations(raw);
+  return ks.length === 1 ? ks[0] : null;
+}
+
+/**
+ * Do two printed DOB strings describe the same date? "same" only when every
+ * reading of each agrees; "conflict" when no reading of one can match any
+ * reading of the other (one of them certain, so they genuinely disagree);
+ * "undecidable" when the readings overlap without certainly matching (a
+ * genuinely ambiguous format against anything else); "unknown" when either
+ * side never parsed. Undecidable is not a match: two reports that cannot be
+ * shown to share a birth date are not silently combined.
+ */
+export function dobRelation(rawA, rawB) {
+  if (!rawA || !rawB) return "unknown"; // a missing DOB proves nothing either way
+  const ia = dobInterpretations(rawA);
+  const ib = dobInterpretations(rawB);
+  // Two different printed DOB strings neither side can parse are NOT
+  // "unknown": they cannot be shown to match, so combining the reports
+  // would rest on nothing. That is undecidable - abstain, never merge.
+  if (!ia.length || !ib.length) return "undecidable";
+  const overlap = ia.some((x) => ib.includes(x));
+  if (!overlap)
+    return ia.length === 1 || ib.length === 1 ? "conflict" : "undecidable";
+  return ia.length === 1 && ib.length === 1 ? "same" : "undecidable";
+}
+
 export function identityConflict(a, b) {
   const pa = a.meta?.patient ?? {};
   const pb = b.meta?.patient ?? {};
   if (pa.sex && pb.sex && pa.sex !== pb.sex) return true;
+  // One patient ID with two printed birth dates that disagree - certainly
+  // or undecidably - is an identity conflict, the same as two sexes: never
+  // a trend across them. The printed strings stay on meta.dob for review.
+  const rel = dobRelation(a.meta?.dob, b.meta?.dob);
+  if (rel === "conflict" || rel === "undecidable") return true;
   if (pa.age != null && pb.age != null) {
     const da = Date.parse(a.meta?.collected ?? "");
     const db = Date.parse(b.meta?.collected ?? "");
@@ -440,11 +635,25 @@ export function markIdentityConflicts(reports) {
     p.idConflict = reports.some(
       (x) => x !== r && x.meta?.patient?.id === p.id && identityConflict(r, x),
     );
+    // Why, when a printed birth date drove it: "dob" when the dates
+    // certainly disagree, "dob-undecidable" when they cannot be shown to
+    // match. The printed strings themselves stay on meta.dob for review.
+    const rel = reports
+      .filter((x) => x !== r && x.meta?.patient?.id === p.id)
+      .map((x) => dobRelation(r.meta?.dob, x.meta?.dob))
+      .find((r2) => r2 === "conflict" || r2 === "undecidable");
+    p.idConflictKind =
+      rel === "conflict"
+        ? "dob"
+        : rel === "undecidable"
+          ? "dob-undecidable"
+          : undefined;
   }
   return reports;
 }
 
 export function subjectOf(r) {
+  if (r.identityOwner) return r.identityOwner;
   // Identity contract: only a printed PATIENT identifier links reports. A
   // shared printed name (two John Smiths) or lab/accession number never
   // does; such reports stay separate and the answer asks whose they are.
@@ -470,9 +679,21 @@ export function seriesFor(reports, key, patientId) {
     for (const o of r.observations) {
       if (o.key !== key) continue;
       const list = byDate.get(date) ?? [];
-      // the same test twice in one report (percent and absolute count) is
-      // two rows, not a correction: keep the first, as printed
-      if (list.some((x) => x.report === r)) continue;
+      // The legacy first-unit lookup is not a certificate for multi-unit
+      // rows. Preserve it, but inspect every same-test/unit source group for
+      // contradictory values before any first-row coalescing can hide them.
+      const matching = r.observations.filter((x) => x.key === key);
+      const sameUnit = matching.filter((x) => x.unit === o.unit);
+      const valueSignature = (x) =>
+        JSON.stringify([x.raw, x.unit, x.comparator, x.qual]);
+      const unitConflict = new Set(sameUnit.map(valueSignature)).size > 1;
+      if (o.unit !== matching[0].unit && !unitConflict) continue;
+      if (
+        list.some(
+          (x) => x.report === r && valueSignature(x) === valueSignature(o),
+        )
+      )
+        continue;
       list.push({ ...o, report: r });
       byDate.set(date, list);
     }
@@ -496,7 +717,21 @@ export function seriesFor(reports, key, patientId) {
       const distinct = new Set(
         peers.map((o) => JSON.stringify([o.raw, o.unit, o.comparator, o.qual])),
       );
-      const conflicts = distinct.size > 1 ? peers : [];
+      // Collection date and report status cannot link different printed
+      // specimen/order identifiers into a correction. This rejects unsupported
+      // linkage; matching or missing identifiers are not positive proof.
+      const accessions = new Set(
+        list.map((o) => o.report.meta.accession).filter(Boolean),
+      );
+      const accessionConflict = accessions.size > 1;
+      const conflicts = accessionConflict
+        ? list.map((o) => ({
+            ...o,
+            authorityConflictReason: "different_accessions",
+          }))
+        : distinct.size > 1
+          ? peers
+          : [];
       const current = conflicts.length
         ? { ...selected, authorityConflict: true }
         : selected;
@@ -504,9 +739,14 @@ export function seriesFor(reports, key, patientId) {
         date,
         current,
         conflicts,
-        superseded: conflicts.length
-          ? []
-          : older.filter((o) => o.raw !== current.raw),
+        // Higher source rank can select a row, but FINAL versus UNKNOWN
+        // does not establish a correction event. Only printed amendment
+        // authority may populate the correction history used in speech.
+        superseded:
+          conflicts.length ||
+          !["amended", "corrected"].includes(current.report.meta.status)
+            ? []
+            : older.filter((o) => o.raw !== current.raw),
       };
     });
 }

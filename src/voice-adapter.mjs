@@ -1,3 +1,6 @@
+import { briefAnswer, briefIntent } from "./record-brief.mjs";
+import { labDigest } from "../clinical/answer.mjs";
+import { subjectOf } from "../clinical/observations.mjs";
 import { unboundOwnerTurn } from "./requested-owner.mjs";
 import { identifierRequest, explicitRecordRequest } from "../dist/engine.mjs";
 /** OpenAI-compatible streaming contract for a future Bolna custom LLM.
@@ -31,15 +34,17 @@ function vocabFor(bundle) {
   if (!v) vocabCache.set(bundle, (v = vocabularyOf(bundle.clinical ?? [])));
   return v;
 }
-import { extractiveSpoken } from "./spoken-extract.mjs";
+import { extractiveSpoken, isQuestion } from "./spoken-extract.mjs";
 import {
   clinicalOverview,
   clinicalAnswer,
   observationEvidence,
   findTest,
   DATE_ASK_RE,
+  identityReportsFor,
+  patientDecision,
 } from "../clinical/answer.mjs";
-import { aliasesFor, nameOf } from "../clinical/explain.mjs";
+import { aliasesFor, nameOf, thirdPerson } from "../clinical/explain.mjs";
 import {
   voiceQuestions,
   isFragment,
@@ -84,6 +89,7 @@ export function createVoiceAdapter({
   allowClientReplay = true,
 } = {}) {
   let resolveBundle = null;
+  let resolveAnswer = null;
   if (
     !Number.isSafeInteger(ttlMs) ||
     ttlMs < 1 ||
@@ -796,8 +802,54 @@ export function createVoiceAdapter({
           return new Response(null, { status: 499 });
         }
         let spoken, turn;
-        const ownerBlocked = unboundOwnerTurn(transcript, bundle);
-        if (ownerBlocked) {
+        const identityDecision = patientDecision(
+          transcript,
+          identityReportsFor(bundle),
+        );
+        const ownerBlocked =
+          unboundOwnerTurn(transcript, bundle) ??
+          (identityDecision.conflictIdentity
+            ? {
+                intent: "AMBIGUOUS_PATIENT",
+                verdict: "AMBIGUOUS_PATIENT",
+                spoken: identityDecision.spoken,
+                citations: [],
+              }
+            : null);
+        // Direct factual questions reach the common resolver
+        // before voice-specific retrieval/renderers choose any fact. Speech
+        // repair/history remain above; specialist orchestration stays below.
+        let earlyUnified = null;
+        if (
+          resolveAnswer &&
+          !mixedTurn &&
+          !secondQ &&
+          !social &&
+          !ownerBlocked &&
+          !adviceKind(transcript) &&
+          isQuestion(transcript)
+        ) {
+          earlyUnified = await resolveAnswer({
+            question: asked,
+            originalQuestion: askedRaw,
+            exactSchemaOnly: false,
+            bundle,
+            caseId,
+            call: callTag,
+          });
+          if (req.signal.aborted) {
+            releaseBusy();
+            return new Response(null, { status: 499 });
+          }
+          if (streaming && !current()) {
+            releaseBusy();
+            return Response.json({ error: "Superseded turn" }, { status: 409 });
+          }
+        }
+        if (earlyUnified) {
+          // Render once at the shared boundary below. Do not execute a
+          // second factual fallback or populate draft state from it.
+        } else if (ownerBlocked) {
           spoken = ownerBlocked.spoken;
           grant.last = {
             refused: true,
@@ -1063,7 +1115,7 @@ export function createVoiceAdapter({
           );
         // The second half of a compound question, from the same deterministic
         // renderers (clinical first, then the claim graph).
-        if (!ownerBlocked && !social && secondQ) {
+        if (!earlyUnified && !ownerBlocked && !social && secondQ) {
           let second = null;
           try {
             const secondResult = answer(secondQ, bundle);
@@ -1099,7 +1151,54 @@ export function createVoiceAdapter({
         // calibrated paraphrase gate is unambiguous (paraphrase.mjs).
         // A record question ("was iron prescribed?") is answered from the
         // records' facts even when a lab answer was found.
+        let briefed = false;
         if (
+          !earlyUnified &&
+          !turn?.result?.requestedChecked &&
+          !social &&
+          !mixedTurn &&
+          briefIntent(asked)
+        ) {
+          const b = (() => {
+            try {
+              // Reuse the shared source-bound identity decision. Never let
+              // the brief layer choose a majority record or pool lab digests.
+              return briefAnswer(asked, bundle, citeSpan, {
+                patient: identityDecision.patient ?? null,
+                labs: labDigest(
+                  bundle.clinical ?? [],
+                  identityDecision.patient ?? null,
+                ),
+                reports: (bundle.clinical ?? []).filter(
+                  (r) =>
+                    !identityDecision.patient ||
+                    subjectOf(r) === identityDecision.patient,
+                ),
+                namedTest:
+                  !!findTest(asked, bundle.clinical ?? []) ||
+                  !!findTest(grant?.lastField ?? "", bundle.clinical ?? []),
+              });
+            } catch {
+              return null;
+            }
+          })();
+          if (b) {
+            briefed = true;
+            spoken = b.spoken;
+            turn = {
+              ...turn,
+              spokenTurn: {
+                intent: b.intent,
+                verdict: "QUOTED",
+                spoken,
+                citations: b.citations,
+              },
+            };
+          }
+        }
+        if (
+          !earlyUnified &&
+          !briefed &&
           !turn?.result?.requestedChecked &&
           !social &&
           !mixedTurn &&
@@ -1127,6 +1226,7 @@ export function createVoiceAdapter({
           }
         }
         if (
+          !earlyUnified &&
           !social &&
           !mixedTurn &&
           !turn?.result?.requestedChecked &&
@@ -1176,7 +1276,7 @@ export function createVoiceAdapter({
           /\b(chang\w*|happen\w*|exactly|summary|summari[sz]e|status|update|overview|badl\w*)\b|बदल|क्या\s+हुआ/i.test(
             transcript,
           );
-        if (!social && deal && broadDeal && refusal(spoken)) {
+        if (!earlyUnified && !social && deal && broadDeal && refusal(spoken)) {
           const parts = ["What happened to the fee?", "What's still open?"]
             .map((q) => {
               try {
@@ -1190,6 +1290,7 @@ export function createVoiceAdapter({
         }
         // "my result" without a test name: ask which, don't abstain.
         if (
+          !earlyUnified &&
           !social &&
           !deal &&
           refusal(spoken) &&
@@ -1198,16 +1299,20 @@ export function createVoiceAdapter({
         )
           spoken = clarifyLab(lang);
         // A cut-off fragment gets a helpful prompt, not a flat abstention.
-        if (refusal(spoken) && isFragment(transcript))
+        if (!earlyUnified && refusal(spoken) && isFragment(transcript))
           spoken = fragmentReply(lang) ?? FRAGMENT_REPLY;
         // The page has one demo case open and the caller asked about the other
         // one: point to it instead of a bare "I don't see that". No facts from
         // the case that is not on screen are spoken.
         let pointed = false;
         if (
+          (!earlyUnified ||
+            (earlyUnified.lead?.verdict === "UNKNOWN" &&
+              !earlyUnified.lead?.citations?.length)) &&
           !social &&
           !mixedTurn &&
-          (refusal(spoken) ||
+          (earlyUnified ||
+            refusal(spoken) ||
             /^I (don't|do not) see .{1,80} in these documents\.?$/i.test(
               spoken,
             )) &&
@@ -1222,6 +1327,15 @@ export function createVoiceAdapter({
                 : null;
           if (want) {
             pointed = true;
+            if (earlyUnified) {
+              // Navigation has no factual draft source from this or a prior turn.
+              grant.last = {
+                refused: true,
+                evidence: [],
+                requestedChecked: true,
+              };
+              grant.lastField = null;
+            }
             spoken = isHindi(lang)
               ? want === "deal"
                 ? "यह Northstar deal के बारे में है, जो अभी स्क्रीन पर खुला नहीं है। Northstar टैब खोलिए और मुझसे फिर पूछिए।"
@@ -1243,6 +1357,7 @@ export function createVoiceAdapter({
         // already rendered in the caller's language; deal templates are
         // rendered here, with record quotes kept verbatim.
         if (
+          !earlyUnified &&
           isHindi(lang) &&
           !clinicalHit &&
           !social &&
@@ -1251,7 +1366,77 @@ export function createVoiceAdapter({
           turn?.spokenTurn?.intent !== "ADVICE"
         )
           spoken = toHindi(spoken);
+        if (!social && bundle.clinical?.length) spoken = thirdPerson(spoken);
         releaseBusy();
+        // Optional server-owned common answer boundary. Caller messages never
+        // select a provider, grant consent, or supply this resolver. Scope and
+        // cancellation are checked again after the asynchronous result.
+        if (
+          resolveAnswer &&
+          !pointed &&
+          !social &&
+          !ownerBlocked &&
+          !adviceKind(transcript)
+        ) {
+          // Mixed/compound specialist cases stay separate except for the
+          // bounded exact-schema contract. Direct clinical questions now use
+          // the common resolver after channel history/repair. A split cannot
+          // drop one of its caller-owned field requirements.
+          const exactSchemaOnly = !!(mixedTurn || secondQ);
+          const unified =
+            earlyUnified ??
+            (await resolveAnswer({
+              question: exactSchemaOnly ? transcript : asked,
+              originalQuestion: askedRaw,
+              exactSchemaOnly,
+              bundle,
+              caseId,
+              call: callTag,
+            }));
+          if (req.signal.aborted) return new Response(null, { status: 499 });
+          if (streaming && !current())
+            return Response.json({ error: "Superseded turn" }, { status: 409 });
+          if (unified) {
+            const lead = unified.lead;
+            const evs = lead?.citations ?? [];
+            if (
+              !lead?.text ||
+              evs.some((ev) => {
+                try {
+                  return !validateEvidence(ev, bundle);
+                } catch {
+                  return true;
+                }
+              })
+            )
+              throw Error("Common answer evidence contract mismatch");
+            spoken = isHindi(lang) ? toHindi(lead.text) : lead.text;
+            if (bundle.clinical?.length) spoken = thirdPerson(spoken);
+            if (earlyUnified) {
+              // Never retain a previous turn as this answer's draft source.
+              grant.last = unified.raw ?? {
+                refused: true,
+                unresolved: true,
+                evidence: [],
+                spoken,
+              };
+              grant.lastField = lead.field ?? null;
+            }
+            turn = {
+              result: unified.raw ?? null,
+              spokenTurn: {
+                at: Date.now(),
+                intent: lead.intent ?? "SHARED",
+                questionPlan: unified.questionPlan ?? null,
+                admission: unified.admission ?? null,
+                verdict: lead.verdict,
+                field: lead.field ?? null,
+                spoken,
+                citations: evs,
+              },
+            };
+          }
+        }
         // Answer first, nothing repeated: a general explanation already spoken
         // earlier in THIS call ("Some general background: ferritin shows...")
         // is not read out again. Facts are never dropped, only these fixed
@@ -1481,6 +1666,9 @@ export function createVoiceAdapter({
     },
     setBundleResolver(fn) {
       resolveBundle = typeof fn === "function" ? fn : null;
+    },
+    setAnswerResolver(fn) {
+      resolveAnswer = typeof fn === "function" ? fn : null;
     },
     setOnTurn(fn) {
       onTurn = typeof fn === "function" ? fn : null;

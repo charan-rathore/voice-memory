@@ -24,6 +24,17 @@ function requested(question: string): Field | null {
   const m = /\b(units|items|packages|cartons)\b/i.exec(question);
   return m ? (m[1].toLowerCase() as Field) : null;
 }
+// A single-field matcher cannot certify a coordinated whole request. This
+// does not parse conjunctions into requirements or decide whether coordination
+// belongs to a name. Preserve that uncertainty instead of dropping its tail.
+export function requestedCoverage(
+  question: string,
+): "not_applicable" | "single_field_only" | "coordination_unresolved" {
+  if (requested(question) === null) return "not_applicable";
+  return /\b(?:and|or|also|plus)\b|[;&]/i.test(question)
+    ? "coordination_unresolved"
+    : "single_field_only";
+}
 const absent =
   /^(?:not\b|no\b|none\b|unknown\b|unassigned\b|pending\b|tbd\b|n\/?a\b|unavailable\b|not recorded\b)/i;
 const labels: Record<Field, RegExp> = {
@@ -189,6 +200,7 @@ export function requestedSupportSpans(
 ): Array<{ start: number; end: number }> | null {
   const field = requested(question);
   if (field === null) return null;
+  if (requestedCoverage(question) === "coordination_unresolved") return [];
   // A positive labelled fact cannot establish an excluded or negated role.
   // Negative relations are not inferred by this narrow extractive fallback.
   if (/\b(?:not|never|neither|without|except)\b|n['’]t\b/i.test(question))

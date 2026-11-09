@@ -4880,3 +4880,94 @@ html:not(.voice-on) .voice-off {
 .cite-more-doc:hover {
   border-color: var(--ink-3);
 }
+
+/* ---------------------------------------------------------------- the source panel follows the reader
+   The panel used to fill the answer column's full height, so a short
+   panel (a hidden chart, a short document) left a tall empty block beside
+   a long answer. It now stays in view while the answer scrolls, at most
+   one screen tall, and scrolls inside itself. */
+@media (min-width: 1081px) {
+  .desk {
+    overflow: clip;
+  }
+  .viewer {
+    position: sticky;
+    inset: auto;
+    top: 84px;
+    height: calc(100vh - 104px);
+    max-height: 100%;
+  }
+  .viewer-body {
+    min-height: 0;
+  }
+}
+
+/* A citation is a line, not a page: a long span (a scanned page read as
+   one block) shows its first lines; the viewer shows the rest. */
+.cite-q {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Retrieval context must not read as answer support. */
+.cite-owner,
+.cite-context {
+  display: block;
+  grid-column: 2 / -1;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+}
+.cite-context {
+  font-weight: 600;
+  color: #865521;
+}
+.cite {
+  grid-template-columns: 22px minmax(0, 1fr);
+}
+.cite .cite-n {
+  grid-column: 1;
+  grid-row: 1;
+}
+.cite .cite-doc,
+.cite .cite-owner,
+.cite .cite-context,
+.cite .cite-q {
+  grid-column: 2;
+  min-width: 0;
+}
+.cite-context {
+  color: #f2cc85;
+}
+
+/* On small screens the floating navigation must not cover a clinical
+   clarification or its patient chooser while reading the answer. */
+@media (max-width: 700px) {
+  .nav-wrap {
+    position: relative;
+    top: 0;
+  }
+  .nav .nav-chip {
+    position: static;
+    box-shadow: none;
+  }
+}
+
+/* Navigation is in normal flow: it must not overlay source or answer text
+   when a reader scrolls a long clinical answer on any screen size. */
+.nav-wrap {
+  position: relative;
+  top: 0;
+}
+
+/* Verified patient identifiers can be longer than a narrow display. */
+.a-lead,
+.cite-owner {
+  overflow-wrap: anywhere;
+}
+.a-lead .w {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

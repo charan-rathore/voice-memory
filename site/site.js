@@ -1,7 +1,3 @@
-// Voice Memory landing: a live evidence desk on the public, key-free API
-// (/api/public/*, proxied to the engine by vercel.json). While the free host
-// wakes up, answers for the suggested questions come from a saved run of the
-// same engine (snapshot.js) and are labelled as such.
 (() => {
   "use strict";
   document.documentElement.classList.remove("no-js");
@@ -24,6 +20,9 @@
     context: { health: "", deal: "", own: "" },
     ws: null, // visitor workspace id
     wsDocs: [],
+    aiConsent: false,
+    aiConsentScope: null,
+    bundleGeneration: null,
     thread: [],
     current: null,
     docText: {},
@@ -35,6 +34,21 @@
     lang: /^hi\b/i.test(navigator.language || "") ? "hi" : "en",
     visuals: {},
   };
+
+  let readerConsent, readerLoading;
+  const resetReaderConsent = () => readerConsent?.reset();
+  function syncReaderConsent() {
+    if (readerConsent) return readerConsent.sync();
+    if (!state.semantic?.documentReader?.enabled || readerLoading) return;
+    readerLoading = import("./document-consent.mjs")
+      .then(({ createReaderConsent }) => {
+        readerConsent = createReaderConsent(state, $);
+        readerConsent.sync();
+      })
+      .catch(() => {
+        readerLoading = null;
+      });
+  }
 
   function invalidateKeyScope() {
     state.keyScopeSeq++;
@@ -55,12 +69,6 @@
     );
   const note = (t) => ($("#engine-note").textContent = t);
 
-  // ------------------------------------------------------------ API
-  // ------------------------------------------------------------ your own voice keys
-  // A visitor's own Bolna, Sarvam or ElevenLabs keys. They stay in this
-  // browser (this tab, or this device if they choose), are sent to this
-  // server only with the one call or Listen request that needs them, and the
-  // server uses them once and keeps nothing.
   let byoEnabled = false;
   const byo = (() => {
     const K = "vm-byo";
@@ -119,7 +127,6 @@
   })();
   window.VM_BYO = { ttsHeaders: () => byo.ttsHeaders() };
   const listenOn = () => !!state.voiceOut?.enabled || byo.hasTts();
-  // A closed admission gate must never hide the stop control for a live call.
   const callOn = () => !!state.call || !!state.voice?.ready || byo.hasCall();
   const syncVoiceClasses = () => {
     document.documentElement.classList.toggle("voice-on", callOn());
@@ -162,8 +169,6 @@
     }
   }
 
-  // Once connected, re-check the gate only when the visitor returns. The
-  // initial connect loop owns cold-start retries; this never starts a call.
   let voiceStatusPending = false;
   document.addEventListener("visibilitychange", async () => {
     if (document.hidden || !state.live || voiceStatusPending) return;
@@ -172,23 +177,17 @@
       const s = await api("/status", { cache: "no-store" }, 8000);
       if (typeof s?.voice?.ready !== "boolean") return;
       state.voice = s.voice;
+      state.semantic = s.semantic ?? null;
+      syncReaderConsent();
       syncVoiceClasses();
     } catch {
-      // A failed probe is not a gate change: keep the last known UI state.
     } finally {
       voiceStatusPending = false;
     }
   });
 
-  // Capped exponential backoff with full jitter (AWS Architecture Blog,
-  // "Exponential Backoff And Jitter"): wait a random time in [0, min(cap,
-  // base * 2^attempt)], so many visitors arriving during one cold boot spread
-  // their probes out instead of hitting the waking host in lockstep. A
-  // server's Retry-After is honoured as a floor.
   const backoff = (attempt, { base = 1000, cap = 30000, floor = 0 } = {}) =>
     Math.max(floor, Math.random() * Math.min(cap, base * 2 ** attempt));
-  // Hidden tabs don't probe: a forgotten background tab would otherwise keep
-  // the free host awake (and spend its monthly hours) indefinitely.
   const whenVisible = () =>
     document.hidden
       ? new Promise((r) =>
@@ -203,18 +202,15 @@
 
   async function connect() {
     note("Connecting to the live engine…");
-    // Never give up: a cold free-tier boot plus first-ingest can take several
-    // minutes, so keep probing (with backoff) while the page is visible. A
-    // page that stops retrying strands every visitor who arrived early.
     const t0 = Date.now();
     for (let i = 0; ; i++) {
       let floor = 0;
       try {
         const s = await api("/status", {}, 8000);
+        state.semantic = s.semantic ?? null;
+        syncReaderConsent();
         if (s.cases.health && s.cases.deal) {
           const { cases } = await api("/cases");
-          // Demo readiness may arrive after an independent visitor upload.
-          // Merge it without discarding that workspace's ready document set.
           state.cases = {
             ...state.cases,
             ...Object.fromEntries(cases.map((c) => [c.id, c])),
@@ -224,6 +220,7 @@
           if ($("#byo")) $("#byo").hidden = !byoEnabled;
           state.voice = s.voice;
           state.semantic = s.semantic ?? null;
+          syncReaderConsent();
           state.voiceOut = s.voiceOut ?? null;
           syncVoiceClasses();
           note(
@@ -232,8 +229,6 @@
               : "Live engine connected. Every answer is computed now from the fictional records.",
           );
           renderRail();
-          // An opened reader may still be fetching text/PDF pages. Only
-          // refresh the placeholder or grid, never replace that reader.
           if (
             !$("#viewer-body").firstElementChild ||
             $("#viewer-body .viewer-empty, #viewer-body .case-files")
@@ -255,7 +250,6 @@
     }
   }
 
-  // ------------------------------------------------------------ verdicts
   const VERDICT = {
     LATEST: ["v-latest", "Latest value"],
     UNCLEAR: ["v-warn", "Unclear scan - check source"],
@@ -270,7 +264,14 @@
     AGREED: ["v-ok", "Agreed"],
     OPEN: ["v-warn", "Still open"],
     "NO-RECORD": ["v-no", "Not on record"],
-    UNKNOWN: ["v-no", "Not in these documents"],
+    UNKNOWN: ["v-ask", "Answer not established"],
+    SCHEMA_FIELDS: ["v-ok", "Recorded fields"],
+    RECORDED_EVENT: ["v-ok", "Recorded source assertion"],
+    CLINICAL_REQUIREMENTS: ["v-ok", "Requested test results"],
+    PARTIAL_FIELDS: ["v-warn", "Partial answer"],
+    PARTIAL_DOCUMENT: ["v-warn", "Partial answer"],
+    DOCUMENT_ANSWER: ["v-ok", "Cloud answer"],
+    SOURCE_OUTLINE: ["v-warn", "Source headings, not a summary"],
     UNBOUND_OWNER: ["v-ask", "Record identity unresolved"],
     EXPLAINED: ["v-ok", "Explained"],
     NO_REASON: ["v-warn", "No reason recorded"],
@@ -289,7 +290,7 @@
     VERDICT[v] ??
     (v
       ? ["v-ok", v.replace(/[_-]/g, " ").toLowerCase()]
-      : ["v-no", "Not in these documents"]);
+      : ["v-ask", "Answer not established"]);
   const statusOfDoc = (title) => {
     const t = String(title ?? "").toLowerCase();
     if (t.includes("amended")) return "amended";
@@ -308,7 +309,6 @@
       .replace(/^c-2026-10/, "SYN-0003 · Oct")
       .trim();
 
-  // ------------------------------------------------------------ your documents
   const apiCase = (id) => (id === "own" ? state.ws : id);
   const OWN = {
     id: "own",
@@ -325,11 +325,13 @@
     state.ws = sessionStorage.getItem("vm_ws");
   } catch {}
   function discardOwnContext() {
+    resetReaderConsent();
+    state.bundleGeneration = null;
+    syncReaderConsent();
     state.context.own = "";
     state.thread = state.thread.filter((t) => t.caseId !== "own");
     renderThread();
     if (state.case !== "own") return;
-    // Workspace identity changed while an old request may still be in flight.
     state.askSeq++;
     state.current = null;
     state.currentCites = [];
@@ -340,8 +342,6 @@
   }
   let workspacePending = null;
   function ensureWorkspace() {
-    // Concurrent drops share one creation; a temporary read error never
-    // silently splits an existing library into a new workspace.
     if (workspacePending) return workspacePending;
     workspacePending = (async () => {
       if (state.ws) {
@@ -355,8 +355,6 @@
           try {
             sessionStorage.removeItem("vm_ws");
           } catch {}
-          // Keep new drops that have not been sent; completed rows belong
-          // to the expired workspace and cannot remain marked Ready here.
           state.wsDocs = state.wsDocs.filter(
             (d) => String(d.id).startsWith("local:") && !d.serverId,
           );
@@ -382,8 +380,6 @@
     });
     return workspacePending;
   }
-  // One upload over XHR: fetch cannot report upload progress, and the bytes
-  // actually leaving the browser are the first stage the reading view shows.
   function sendFile(id, f, onBytes) {
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
@@ -419,10 +415,8 @@
   async function uploadFiles(list) {
     const files = [...list];
     if (!files.length) return;
+    resetReaderConsent();
     if (state.case !== "own") setCase("own");
-    // Every file shows up the moment it is dropped, with what is really
-    // happening to it: connecting to the engine, then bytes sent, then the
-    // server's own progress. The reading view loads in parallel.
     const dropped = performance.now();
     const local = files.map((f, i) => ({
       id: `local:${dropped}:${i}`,
@@ -442,10 +436,8 @@
     for (const f of files) if (f.size <= 4 * 1048576) state.drops.push(dropped);
     state.wsDocs = [...state.wsDocs, ...local];
     renderUploads();
+    syncReaderConsent();
     readingView();
-    // Uploads must not wait for the demo cases to finish loading: visitor
-    // workspaces are independent of them, so on a cold boot we retry the
-    // workspace create instead of turning the visitor away.
     let id = null;
     for (let attempt = 0; attempt < 8 && !id; attempt++) {
       try {
@@ -474,7 +466,6 @@
         await new Promise((r) => setTimeout(r, 3000));
       }
     }
-    // All files at once: the engine reads them in parallel.
     await Promise.all(
       files.map(async (f, i) => {
         const d = local[i];
@@ -505,14 +496,12 @@
     try {
       const st = await api(`/workspace/${workspaceId}`);
       if (state.ws !== workspaceId) return "stale";
+      state.bundleGeneration = st.bundleGeneration ?? null;
       const failed = state.wsDocs.filter(
         (d) =>
           d.status === "failed" &&
           !st.documents.some((x) => x.title === d.title),
       );
-      // A file still on its way has no server entry yet: keep its local
-      // placeholder; once the server lists it (by id, or by name before the
-      // upload reply has arrived), carry the drop time over.
       const claimed = new Set(
         state.wsDocs.map((d) => d.serverId).filter(Boolean),
       );
@@ -549,8 +538,6 @@
     } catch (e) {
       if (state.ws !== workspaceId) return "stale";
       if (e?.status === 404 || e?.status === 410) {
-        // Confirmed gone (a deploy or the idle sweep cleared it): stop
-        // showing its documents as if they were still answerable.
         invalidateKeyScope();
         state.ws = null;
         try {
@@ -572,23 +559,18 @@
         discardOwnContext();
         outcome = "gone";
       } else {
-        // Transient (network blip, engine waking): keep the workspace and
-        // let polling back off and recover. Chips say so after a few
-        // failures instead of freezing on a stale stage forever.
         state.wsFail = (state.wsFail ?? 0) + 1;
         outcome = "transient";
       }
     }
     if (outcome !== "transient") state.wsFail = 0;
+    syncReaderConsent();
     renderUploads();
     if (state.case === "own") {
       renderRail();
       const ready = (state.cases.own?.documents ?? []).length;
       if (ready !== state.ownReady) {
         state.ownReady = ready;
-        // The Documents pane must follow the upload list: refresh it while
-        // it shows the placeholder or the file grid, never over an open
-        // document.
         if ($("#viewer-body .viewer-empty") || $("#viewer-body .case-files"))
           showEmptyViewer();
         if ($("#answer .overview")) {
@@ -614,8 +596,6 @@
             !["ready", "needs_review", "failed", "expired"].includes(
               d.status,
             ) ||
-            // a settled document's digest arrives with the index rebuild
-            // (only documents the server still holds: not failed or expired)
             (d.digest == null &&
               ["ready", "needs_review"].includes(d.status) &&
               (state.digestPolls[d.id] = (state.digestPolls[d.id] ?? 0) + 1) <
@@ -625,7 +605,6 @@
         pollTimer = setTimeout(pollWorkspace, backoff);
     });
   }
-  // The live reading view loads with the first upload, not the first paint.
   let readingLoad = null;
   const readingView = () =>
     (readingLoad ??= new Promise((resolve, reject) => {
@@ -690,8 +669,6 @@
           try {
             R?.render($("#upl-flow"), state.wsDocs, { drops: state.drops });
           } catch (e) {
-            // A view bug must not take the upload list and polling down
-            // with it: the list above is the truthful fallback.
             console.error("reading view failed", e);
           }
         })
@@ -743,6 +720,7 @@
       $(".ask-go").disabled = false;
     }
     state.case = id;
+    syncReaderConsent();
     syncCallScope();
     $$(".case-tab").forEach((b) =>
       b.setAttribute("aria-selected", String(b.dataset.case === id)),
@@ -968,10 +946,22 @@
   // the free host); visitor workspaces always POST. If the engine predates
   // GET /answer (the site deploys before the engine does), fall back to POST.
   let getAnswers = true;
-  async function askEngine(caseId, question, context) {
+  document.addEventListener("vm:person", (e) => {
+    const id = e.detail?.id;
+    if (!id || !/^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(id)) return;
+    state.person = state.person ?? {};
+    // Displaying the first overview card is not a user identity choice.
+    // Only an explicit person click can scope later unnamed questions.
+    if (e.detail?.initial) return;
+    state.person[state.case] = id;
+    // a new person on screen: the next question starts fresh for them
+    if (!e.detail?.initial) state.context[state.case] = "";
+  });
+  async function askEngine(caseId, question, context, patient = null) {
     if (caseId !== "own" && getAnswers) {
       const qs = new URLSearchParams({ case: caseId, q: question });
       if (context) qs.set("context", context);
+      if (patient) qs.set("patient", patient);
       try {
         return await api("/answer?" + qs);
       } catch (e) {
@@ -979,16 +969,23 @@
         getAnswers = false;
       }
     }
-    return api("/ask", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        case: apiCase(caseId),
-        question,
-        context: context || undefined,
-        semantic: caseId === "own" ? !!state.aiConsent : undefined,
-      }),
-    });
+    const reading =
+      caseId === "own" ? (readerConsent?.request() ?? { semantic: false }) : {};
+    return api(
+      "/ask",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          case: apiCase(caseId),
+          question,
+          context: context || undefined,
+          patient: patient || undefined,
+          ...reading,
+        }),
+      },
+      reading.semantic === true ? 90000 : 20000,
+    );
   }
 
   async function ask(question, { via = "typed", caseId = state.case } = {}) {
@@ -1015,9 +1012,22 @@
         throw Object.assign(new Error("not live"), { offline: true });
       if (caseId === "own" && !state.cases.own?.ready)
         throw new Error("Upload a document first, then ask about it.");
-      result = await askEngine(caseId, question, state.context[caseId]);
+      // The person whose results are on screen is who an unnamed question
+      // is about; a follow-up keeps its own context.
+      const person = state.person?.[caseId];
+      const prev = state.context[caseId] || "";
+      const ctx = prev;
+      result = await askEngine(caseId, question, ctx, person);
     } catch (e) {
       if (stale()) return;
+      if (caseId === "own" && e.status === 409) {
+        resetReaderConsent();
+        refreshWorkspace();
+        syncReaderConsent();
+        $("#answer").innerHTML = `<p class="a-err">${esc(e.message)}</p>`;
+        btn.disabled = false;
+        return;
+      }
       if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
       if (stale()) return;
       const saved =
@@ -1046,7 +1056,6 @@
     renderThread();
   }
 
-  // The motion module listens for these (sound, print and stamp effects).
   const emit = (name, detail) =>
     document.dispatchEvent(new CustomEvent(name, { detail }));
   function renderAnswer(r, { via, source, question, caseId }) {
@@ -1056,29 +1065,25 @@
       emit("vm:answer", { verdict: r.lead?.verdict ?? null, via, source }),
     );
     const lead = r.lead;
+    const cloudAnswer =
+      (r.semantic?.steps ?? []).includes(
+        "whole_context_read_and_independent_audit",
+      ) || /^document-/.test(lead?.origin ?? "");
     const [cls, label] = lead
       ? verdictOf(lead.verdict)
       : (r.evidence ?? []).length
-        ? ["v-ask", "Cited passages"]
+        ? ["v-ask", "Related evidence"]
         : verdictOf(null);
     const ev = r.evidence ?? [];
-    // Without a structured lead (bring-your-own documents), the citation
-    // quote can span the whole document; the retrieved passage in r.answer
-    // names the actual lines the answer rests on, so show that instead.
-    const retrieved = /Relevant source excerpts\n\n([\s\S]*?)\n\[Source 1\]/
+    const retrieved = /Relevant source excerpts\n\n([\s\S]*?)\n\[[^\n]+\]/
       .exec(r.retrieval?.text ?? r.answer ?? "")?.[1]
       ?.trim();
-    // The one answer (src/answer-contract.mjs); the fallback below only
-    // serves saved answers from before `final` existed.
     const text =
       lead?.text ??
       r.final?.text ??
       (ev.length
         ? `From the document: “${prettyQuote(retrieved || ev[0].quote).slice(0, 280)}”${ev.length > 1 ? ` (and ${ev.length - 1} more cited passage${ev.length > 2 ? "s" : ""})` : ""}`
-        : "I don't see a supported answer to that in these documents.");
-    // The companion opener ("Honest answer:") is shown before the answer
-    // as well as spoken, so screen and voice are the same words. Every word
-    // is a span with its index in the spoken text, for karaoke highlighting.
+        : "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.");
     const opener = lead?.opener ?? null;
     let wi = 0;
     const spans = (t, offset) =>
@@ -1094,9 +1099,7 @@
       ? `<span class="a-opener">${spans(opener, 0)}</span> `
       : "";
     const words = spans(text, opener ? opener.split(/\s+/).length * 2 : 0);
-    const cites = lead?.citations?.length
-      ? lead.citations
-      : (r.evidence ?? []).slice(0, 3);
+    const cites = lead?.citations?.length ? lead.citations : (r.evidence ?? []);
     $("#answer").innerHTML = `
       <p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : via === "voice" ? "You said" : "You asked"}</span><q>${esc(question)}</q></p>
       <p class="a-lead"><span class="verdict-chip ${cls}">${esc(label)}</span>${openerHtml}${words}</p>
@@ -1111,7 +1114,7 @@
       <div class="a-visual" id="a-visual"></div>
       <div class="a-tools">
         ${
-          lead?.text && listenOn() && source !== "saved"
+          lead?.text && listenOn() && source !== "saved" && !cloudAnswer
             ? `<button class="tool listen" type="button" data-listen aria-pressed="false"><i class="eq" aria-hidden="true"><b></b><b></b><b></b></i><span>Listen</span></button>`
             : ""
         }
@@ -1120,9 +1123,20 @@
             ? "Saved run of the same engine · live engine waking"
             : via === "call"
               ? "Spoken by Bolna from this exact sentence"
-              : "Computed live · same sentence a call would speak"
+              : lead?.origin === "document-unqualified-question"
+                ? "Question interpretation unresolved · no model reading. Voice is not enabled for this answer."
+                : (r.semantic?.steps ?? []).includes(
+                      "document_reasoning_unavailable",
+                    )
+                  ? "Cloud reading could not verify this answer. Voice is off."
+                  : cloudAnswer
+                    ? "Cloud answer · inspect the sources. Voice is not enabled for this answer."
+                    : caseId === "own"
+                      ? "Computed from these documents · inspect the cited sources"
+                      : "Computed live · same sentence a call would speak"
         }</span>
       </div>
+      ${r.final?.relatedEvidence?.length ? '<p class="a-understood">Related evidence, not an answer</p>' : ""}
       <div class="cites">${cites
         .map((c, i) => {
           // Report status (preliminary / amended) is what a reader needs on a
@@ -1135,10 +1149,16 @@
                 ? `<span>page ${c.location.pages[0]}</span>`
                 : ""
             }</span>
-            <span class="cite-q">${
+            ${c.record ? `<span class="cite-owner">Record: ${esc(c.record.patientName ?? "Unidentified")} (${esc(c.record.patientId ?? "no verified ID")})</span>` : ""}
+            ${c.contextOnly ? `<span class="cite-context">Context only - not evidence for this answer</span>` : ""}
+            <span class="cite-q" ${!lead && retrieved ? 'style="display:block"' : ""}>${
               c.broadCitation
                 ? "Wider passage cited - it supports the source, not a pinpoint line."
-                : esc(prettyQuote(c.quote))
+                : esc(
+                    prettyQuote(
+                      !lead && i === 0 && retrieved ? retrieved : c.quote,
+                    ),
+                  )
             }</span>
           </button>`;
         })
@@ -1153,6 +1173,9 @@
         window.VMVisual.render($("#a-visual"), r.visual, {
           lang: state.currentLang,
           narrateButton: false,
+          unresolved:
+            r.final?.verdict === "AMBIGUOUS_PATIENT" ||
+            lead?.verdict === "AMBIGUOUS_PATIENT",
         });
       });
     else $("#a-visual")?.remove();
@@ -1799,7 +1822,11 @@
           .join("");
       }),
     );
-    const target = $("#viewer-body mark") ?? $("#viewer-body .rd-doc.focus");
+    // the cited line: a text mark, or the box drawn on a rendered PDF page
+    const target =
+      $("#viewer-body mark") ??
+      $("#viewer-body .rd-canvas .box") ??
+      $("#viewer-body .rd-doc.focus");
     if (
       target &&
       $("#viewer-body").scrollHeight > $("#viewer-body").clientHeight
@@ -2841,10 +2868,6 @@
     syncVoiceClasses();
   })();
 
-  // The saved memory graphs live in snapshot-graphs.js, off the first load.
-  // The landing's 3D band reads them from VM_SNAPSHOT.graphs when it nears
-  // the viewport, so fetch them well before that (page idle, or 1600 px out)
-  // and expose them there.
   (() => {
     const cv = $("#graph-mini");
     if (!cv || !window.VM_SNAPSHOT) return;

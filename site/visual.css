@@ -554,6 +554,16 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
 .stage.min .st-body { display: none; }
 /* A folded chart must not stick over source buttons while the viewer scrolls. */
 .desk-right > .stage.min { position: relative; top: auto; grid-template-rows: auto; flex: 0 0 auto; max-height: none; }
+/* A hidden chart folds to its bar; the bar and the source viewer below it
+   then travel with the answer column together, so a short viewer never
+   leaves a tall empty block beside a long answer. */
+@media (min-width: 1081px) {
+  .desk-right > .stage.min { position: sticky; top: 72px; z-index: 3; }
+  .desk.has-stage .desk-right:has(> .stage.min) > .viewer {
+    position: sticky; top: 117px; flex: 0 0 auto;
+    height: calc(100vh - 133px); max-height: none;
+  }
+}
 .st-scene { padding: 16px 18px 18px; display: grid; gap: 10px; animation: st-in 520ms var(--m-smooth) both; }
 .st-scene.leaving { inset: 0 0 auto 0; animation: st-out 240ms var(--m-smooth) forwards; pointer-events: none; }
 @keyframes st-in { from { opacity: 0; transform: translateY(8px) scale(0.99); } }
@@ -808,3 +818,6 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
 .ex-chart .m-ghost circle, .ex-chart .m-ghost line { stroke: var(--ex-unsure); }
 .ex-chart .m-ghost .m-gv, .ex-chart .m-xfer { fill: var(--ex-unsure); }
 .ex-chart .m-arc.fix { stroke: var(--ex-unsure); }
+.ex-means { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.07); font: 13.5px/1.5 var(--sans); color: var(--m-ink2); }
+.ex-means b { display: block; margin-bottom: 2px; font: 600 10.5px var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--m-ink3); }
+.ex-means a { color: var(--m-ink3); font-size: 12px; }

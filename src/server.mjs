@@ -1,3 +1,26 @@
+import { finalAnswer } from "./answer-contract.mjs";
+import {
+  clinicalListPlan,
+  clinicalOwnerTestPlan,
+  exactTestLabel,
+} from "./clinical-requirements.mjs";
+import {
+  resolveExplicitEvents,
+  eventQuestionPlan,
+  eventRemainderPlan,
+  eventSourceFacts,
+  candidateUsesEventAssertion,
+  debtPolarityConflict,
+  resolveExplicitEventRemainder,
+} from "./event-admission.mjs";
+import {
+  briefAnswer,
+  briefIntent,
+  recordViewIntent,
+  suggestQuestions,
+  quotedCorrection,
+} from "./record-brief.mjs";
+import { labDigest } from "../clinical/answer.mjs";
 import { unboundOwnerTurn } from "./requested-owner.mjs";
 import http from "node:http";
 import path from "node:path";
@@ -44,13 +67,18 @@ import { visualFor, caseVisual } from "./visual-summary.mjs";
 import { extractiveSpoken } from "./spoken-extract.mjs";
 import {
   clinicalAnswer,
+  patientDecision,
+  identityReportsFor,
+  recordSubject,
+  absentMeasurement,
   clinicalReportsFor,
+  sourceRecordsFor,
   observationEvidence,
   findTest,
   subjectsFor,
   DATE_ASK_RE,
 } from "../clinical/answer.mjs";
-import { extractReport } from "../clinical/observations.mjs";
+import { extractReport, subjectOf } from "../clinical/observations.mjs";
 import { sectionAnswer, fieldAnswer } from "./doc-sections.mjs";
 import {
   attachRecords,
@@ -59,7 +87,12 @@ import {
 } from "./record-facts.mjs";
 import { cite as citeSpan } from "./spoken-routes.mjs";
 import { attachDigests } from "./index-digest.mjs";
-import { detectLang, aliasesFor, nameOf } from "../clinical/explain.mjs";
+import {
+  detectLang,
+  aliasesFor,
+  nameOf,
+  thirdPerson,
+} from "../clinical/explain.mjs";
 import {
   labVocabulary,
   repairTestNames,
@@ -77,6 +110,36 @@ import { createMemory, recordTurn, liveEpisodes } from "../memory/memory.mjs";
 import { buildGraph } from "../memory/graph.mjs";
 import { createStore, snapshotOf, restoreInto } from "../memory/store.mjs";
 import { createAnswerCache } from "./cache.mjs";
+import { documentScope, evidencePermission } from "./document-scope.mjs";
+import { ownerView, originalCitation } from "./owner-view.mjs";
+import { readDocumentQuestion } from "./semantic/document.mjs";
+import { questionPlan } from "./question-plan.mjs";
+import { createDecomposition } from "./question-decomposition.mjs";
+import { understandDocumentQuestion } from "./semantic/question-understanding.mjs";
+import {
+  resolveExactFields,
+  exactFieldPlan,
+} from "./exact-field-admission.mjs";
+const evidenceWithinOwner = (bundle, owner, ev) => {
+  if (!owner) return true;
+  const scope = documentScope({
+    corpusId: bundle.scope,
+    generation: 0,
+    owners: [owner],
+  });
+  const records = (bundle.sourceRecords ?? []).map((r, i) => ({
+    id: String(i),
+    sourceId: r.sourceId,
+    start: r.span?.start,
+    end: r.span?.end,
+    owner:
+      r.meta?.patient?.id || r.meta?.patient?.name
+        ? subjectOf({ ...r, segment: r.span?.start })
+        : null,
+  }));
+  return evidencePermission(scope, ev, records).allowed;
+};
+
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { createPublicApi, publicAnswer, clientAddress } from "./public-api.mjs";
@@ -100,6 +163,8 @@ import {
   removeEntry,
   publicEntry,
   documentView,
+  bindEvidenceToRecords,
+  bindAnswerCitations,
   decorateResult,
   libraryOf,
   locatorFor,
@@ -182,6 +247,29 @@ const LAB_FOLLOWUP_RE =
 // "SYN-0003" alone, said back after "whose TSH?", answers that question.
 const BARE_ID_RE =
   /^\s*(?:(?:and|for|of|the|patient)\s+)*[A-Za-z]{2,5}[- ]?\d{3,6}(?:'s)?\s*[?.!]?\s*$/i;
+/**
+ * The person in focus (on screen, or the subject of the previous answer):
+ * an unnamed question about several people's records is about them, so
+ * "is hemoglobin low?" answers instead of asking "whose?". A question that
+ * names someone keeps its own subject.
+ */
+function withFocus(question, reports, id) {
+  if (!id) return question;
+  const ids = new Set(reports.map((r) => r.meta?.patient?.id).filter(Boolean));
+  if (ids.size < 2 || !ids.has(id.toUpperCase())) return question;
+  if (/\b[A-Za-z]{2,5}[- ]?[A-Za-z]?\d{3,6}\b/.test(question)) return question;
+  const named = reports.some((r) => {
+    const n = r.meta?.patient?.name?.split(/\s+/)[0];
+    return (
+      n &&
+      n.length > 2 &&
+      !/^(test|person|patient)$/i.test(n) &&
+      new RegExp(`\\b${n.replace(/\W/g, "")}\\b`, "i").test(question)
+    );
+  });
+  if (named) return question;
+  return `${question.replace(/[?.!\s]+$/, "")} for ${id.toUpperCase()}?`;
+}
 function withLabContext(question, reports, prevField) {
   if (
     !prevField ||
@@ -220,7 +308,16 @@ const labField = (c) => {
   const f = `${/^[A-Z]{2,5}-\d{3,6}$/.test(pid ?? "") ? pid + " " : ""}${nameOf(o)}${day}`;
   return /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(f) ? f : null;
 };
-function leadFor(question, result, bundle, prevField) {
+// The site sends "person:<ID>" (plus any follow-up field after a space)
+// when one person's results are on screen. Only that explicit choice
+// focuses an unnamed question; a previous answer alone never picks a person.
+function splitFocus(ctx) {
+  const m = /^person:([^\s]{1,256})(?:\s+(.+))?$/.exec(ctx ?? "");
+  return m ? { focus: m[1], field: m[2] ?? null } : { focus: null, field: ctx };
+}
+
+function leadFor(question, result, bundle, ctx, selectedPatient = null) {
+  const { focus, field: prevField } = splitFocus(ctx);
   try {
     if (result?.requestedChecked) {
       const t = extractiveSpoken(
@@ -241,14 +338,28 @@ function leadFor(question, result, bundle, prevField) {
     // Lab results across reports first (synthetic-data research prototype):
     // typed observations, comparability checks, no clinical judgement.
     if (bundle.clinical?.length) {
+      const originalClinicalQuestion = question;
+      question = withFocus(question, bundle.clinical, focus);
       question = withLabContext(question, bundle.clinical, prevField);
       // What kind of answer would answer this? A "why" gets a reason, a
       // "what is X" a definition, an absent measurement an honest "not here".
-      const il = intentLead(question, bundle, (ev) =>
+      const intentBundle = selectedPatient
+        ? {
+            ...bundle,
+            clinical: bundle.clinical.filter(
+              (r) => subjectOf(r) === selectedPatient,
+            ),
+          }
+        : bundle;
+      const il = intentLead(question, intentBundle, (ev) =>
         validateEvidence(ev, bundle),
       );
       if (il) return il;
-      const c = clinicalAnswer(question, bundle.clinical);
+      const c = clinicalAnswer(
+        withLabContext(originalClinicalQuestion, bundle.clinical, prevField),
+        bundle.clinical,
+        selectedPatient ?? focus,
+      );
       if (c)
         return {
           text: c.spoken,
@@ -447,6 +558,9 @@ export function createLocalServer({
   // Semantic layer, injectable so tests can count provider calls without a
   // network. Default builds from the host's encrypted environment.
   gemini = createGemini(),
+  // Trusted server-side resolver only. No request-body field supplies this.
+  // Default is opaque until an independently qualified parser is available.
+  resolveDocumentDecomposition = null,
 } = {}) {
   // Deployment configuration (all optional; unset = local-only behavior):
   // VM_PUBLIC_HOST / VM_PUBLIC_ORIGIN: the one public hostname/origin the UI
@@ -765,6 +879,7 @@ export function createLocalServer({
     if (bundle) {
       bundle.locateEvidence = locatorFor(s.sourceToEntry);
       bundle.clinical = clinicalReportsFor(bundle, docs, extractReport);
+      bundle.sourceRecords = sourceRecordsFor(bundle, docs);
       attachRecords(bundle, docs);
       attachDigests(bundle, docs, denseStatus());
     }
@@ -824,25 +939,117 @@ export function createLocalServer({
   let nextAnswerGeneration = 0;
   async function resolveAnswer(s, question, ctx, opts = {}) {
     const bundle = s.bundle;
+    // Only the server's voice adapter can supply a distinct raw utterance.
+    // A repaired/history-enriched retrieval candidate is not request identity.
+    const requestOriginal = opts.originalQuestion ?? question;
     if (!answerGenerations.has(bundle))
       answerGenerations.set(bundle, ++nextAnswerGeneration);
     // May this document set's passages go to the model? Fictional demo
     // cases: yes. A visitor's own documents: only with their consent, and
     // only outside VM_SEMANTIC_AUDIENCE=demo trial scope (see scope.mjs).
-    const consent = semanticConsentFor(s.sid, opts.consent);
+    const consent = opts.noModel
+      ? false
+      : semanticConsentFor(s.sid, opts.consent);
     const mode = gemini.enabled() ? (consent ? ":g1" : ":g0") : ":d";
+    const identities = identityReportsFor(bundle);
+    let decision = patientDecision(
+      question,
+      identities,
+      opts.patient ?? splitFocus(ctx).focus,
+    );
+    const directDecision = patientDecision(question, identities, null);
+    if (
+      recordViewIntent(question) &&
+      !directDecision.patient &&
+      !directDecision.clarify
+    )
+      decision = { ...decision, patient: null };
+    opts = { ...opts, patient: decision.patient ?? null };
+    const immutableRequest = questionPlan({
+      originalQuestion: requestOriginal,
+      selectedOwners: opts.patient ? [opts.patient] : [],
+      sourceGeneration: answerGenerations.get(bundle),
+      normalizationCandidates:
+        question === requestOriginal
+          ? []
+          : [
+              {
+                text: question,
+                purpose: "legacy_voice_retrieval_candidate",
+                semanticPreservationVerified: false,
+              },
+            ],
+    });
+
+    const schemaPlanKey =
+      exactFieldPlan(requestOriginal, bundle, immutableRequest.sourceGeneration)
+        ?.key ?? null;
     // Retrieval mode is part of the key: a keyword or partial-warm
     // answer cached while the embedder was cold or warming must not
     // outlive that state (see denseCacheSuffix in dense.mjs).
     const key = answerCache.key(
-      JSON.stringify([bundle.scope, answerGenerations.get(bundle)]) +
+      JSON.stringify([
+        bundle.scope,
+        answerGenerations.get(bundle),
+        opts.patient ?? null,
+        requestOriginal === question ? null : requestOriginal,
+        schemaPlanKey,
+      ]) +
         denseCacheSuffix(bundle) +
-        mode,
+        mode +
+        (process.env.VM_DOCUMENT_REASONING === "on" ? ":doc1" : ":doc0"),
       question,
       ctx,
       detectLang(question),
     );
-    return answerCache.resolve(key, async () => {
+    // A decline still hands over what the records say for that conversation:
+    // a corrected value the asker quoted, and the signed medicine record.
+    const withRecordContext = (lead) => {
+      if (
+        patientDecision(question, identityReportsFor(bundle), opts.patient)
+          .clarify
+      )
+        return lead;
+      if (lead.advice !== "treatment" || langOfText(question) !== "en")
+        return lead;
+      try {
+        const fix = quotedCorrection(
+          question,
+          (bundle.clinical ?? []).filter(
+            (r) => !opts.patient || subjectOf(r) === opts.patient,
+          ),
+        );
+        const med = briefAnswer(
+          "What medicines are recorded?",
+          opts.patient
+            ? {
+                ...bundle,
+                records: (bundle.records ?? []).map((e) => ({
+                  ...e,
+                  records: e.records.filter(
+                    (r) => recordSubject(e, r) === opts.patient,
+                  ),
+                })),
+              }
+            : bundle,
+          citeSpan,
+          { patient: opts.patient },
+        );
+        const medLine = med?.spoken
+          .split(/(?<=\.)\s+/)
+          .slice(0, 2)
+          .join(" ");
+        if (!fix && !medLine) return lead;
+        return {
+          ...lead,
+          text: [lead.text, fix, medLine].filter(Boolean).join(" "),
+          citations: med?.citations ?? [],
+        };
+      } catch {
+        return lead;
+      }
+    };
+    const cached = await answerCache.resolve(key, async () => {
       const original = question;
       const lang = langOfText(original);
       // Treatment, diagnosis or a decision that is the visitor's to make:
@@ -853,11 +1060,386 @@ export function createLocalServer({
         return {
           raw: null,
           shown: {
-            lead: declineLead(advice, lang, original),
+            lead: withRecordContext(declineLead(advice, lang, original)),
             semantic: { intent: "ADVICE", lang, steps: ["decline_advice"] },
             evidence: [],
           },
         };
+      if (
+        /\bhow many\s+(?:distinct\s+)?(?:patients?|people|persons?|subjects?)\b/i.test(
+          original,
+        ) ||
+        /\b(?:patients?|people|persons?)\s+count\b/i.test(original)
+      ) {
+        // The plain corpus count cannot answer a filtered, temporal or
+        // multi-part count request. Preserve those conditions explicitly.
+        const totalCount =
+          /^\s*(?:how many\s+(?:distinct\s+)?(?:patients?|people|persons?|subjects?)(?:\s+are there)?(?:\s+(?:are|do we have))?(?:\s+in\s+(?:these|the|my|our|this)\s+(?:records?|documents?|reports?|files?))?|(?:patient|patients|people|person|persons)\s+count)\s*[?.!]*\s*$/i.test(
+            original,
+          );
+        if (!totalCount)
+          return {
+            raw: null,
+            shown: {
+              lead: {
+                text: "That question includes a condition or another part. I cannot use the total record-identity count as its answer. Please ask for the total identities, or specify the condition for a source-checked count.",
+                verdict: "CLARIFY",
+                field: null,
+                citations: [],
+              },
+              evidence: [],
+              visual: null,
+              semantic: { steps: ["conditional_count_not_replaced_by_total"] },
+            },
+          };
+        const ids = [...new Set(identities.map(subjectOf))];
+        const records = (bundle.sourceRecords ?? []).filter(
+          (r) => r.meta?.patient?.id || r.meta?.patient?.name,
+        );
+        const evs = records
+          .map((r) => {
+            const src = bundle.sources.find((s) => s.id === r.sourceId);
+            return src ? citeSpan(src, r.span) : null;
+          })
+          .filter(Boolean);
+        return {
+          raw: null,
+          shown: {
+            lead: {
+              text: `I can distinguish ${ids.length} record ${ids.length === 1 ? "identity" : "identities"} in these documents${ids.length ? ": " + ids.join(", ") : ""}. This counts source-bound identities, not a proven count of physical people. Name-only records stay separate; unidentified material is not assigned to a person.`,
+              verdict: "IDENTITY_COUNT",
+              field: null,
+              citations: decorateResult(
+                { question: original, evidence: evs },
+                s,
+              ).evidence,
+            },
+            evidence: [],
+            visual: null,
+            semantic: { steps: ["source_identity_count"] },
+          },
+        };
+      }
+      const ownerTests =
+        decision.multiple && (bundle.clinical ?? []).length
+          ? clinicalOwnerTestPlan(
+              requestOriginal,
+              bundle,
+              immutableRequest.sourceGeneration,
+              decision.candidates,
+              identities.map((r) => ({
+                owner: subjectOf(r),
+                name: r.meta?.patient?.name,
+              })),
+            )
+          : null;
+      if (ownerTests) {
+        const outcomes = ownerTests.requirements.map((r) => {
+          const owner = r.slots.targetOwner;
+          const own = (bundle.clinical ?? []).filter(
+            (report) => subjectOf(report) === owner,
+          );
+          const matches = own
+            .flatMap((report) => report.observations ?? [])
+            .filter((o) => exactTestLabel(o.test) === r.slots.object);
+          const answer = matches.length
+            ? clinicalAnswer(
+                `What is ${owner}'s ${r.text} result?`,
+                own,
+                owner,
+                identities,
+              )
+            : null;
+          const used = answer?.used ?? [];
+          const citations = used
+            .map((o) => observationEvidence(o, bundle))
+            .filter(Boolean);
+          const supported =
+            used.length > 0 &&
+            citations.length === used.length &&
+            used.every(
+              (o) =>
+                !o.authorityConflict &&
+                exactTestLabel(o.test) === r.slots.object &&
+                subjectOf(o.report) === owner,
+            ) &&
+            citations.every((c) => evidenceWithinOwner(bundle, owner, c));
+          const name = identities.find((report) => subjectOf(report) === owner)
+            ?.meta?.patient?.name;
+          const ownerLabel = name ? `${name} (${owner})` : owner;
+          return {
+            requirementId: r.id,
+            owner,
+            test: r.slots.object,
+            status: supported ? "answered" : "not_established",
+            text: supported
+              ? `${ownerLabel}, ${r.text}: ${thirdPerson(answer.spoken)}`
+              : `${ownerLabel}, ${r.text}: I could not establish the requested result in this person's records.`,
+            citations: supported ? citations : [],
+          };
+        });
+        const count = outcomes.filter((o) => o.status === "answered").length;
+        return {
+          raw: null,
+          shown: {
+            sourceQuestionPlan: ownerTests,
+            lead: {
+              text: outcomes.map((o) => o.text).join(" "),
+              verdict:
+                count === outcomes.length
+                  ? "CLINICAL_REQUIREMENTS"
+                  : count
+                    ? "PARTIAL_DOCUMENT"
+                    : "UNKNOWN",
+              field: null,
+              citations: decorateResult(
+                {
+                  question: requestOriginal,
+                  evidence: bindAnswerCitations(
+                    outcomes.flatMap((o) =>
+                      o.citations.map((c) => ({ ...c, recordOwned: true })),
+                    ),
+                    requestOriginal,
+                    bundle.sourceRecords ?? bundle.clinical ?? [],
+                    outcomes.flatMap((o) => o.citations),
+                  ),
+                },
+                s,
+              ).evidence,
+              origin: "explicit-owner-test-matrix",
+              limitations: ownerTests.limitations,
+            },
+            evidence: [],
+            visual: null,
+            requirementCoverage: {
+              questionPlanKey: ownerTests.key,
+              complete: count === outcomes.length,
+              status:
+                count === outcomes.length
+                  ? "covered"
+                  : count
+                    ? "partial"
+                    : "unresolved",
+              scope: "owner-test-coverage-only",
+              semanticAdmissionVerified: false,
+              outcomes: outcomes.map(
+                ({ requirementId, owner, test, status }) => ({
+                  requirementId,
+                  owner,
+                  test,
+                  status,
+                  operation: "existing-clinical-source-lookup",
+                }),
+              ),
+            },
+            semantic: {
+              intent: "EXPLICIT_OWNER_TEST_MATRIX",
+              lang,
+              steps: [
+                "caller_owned_owner_test_pairs",
+                "source_owned_exact_test_lookups_not_independent_certificates",
+              ],
+            },
+          },
+        };
+      }
+      if (decision.multiple) {
+        // Answer every explicitly requested owner from their own records.
+        // No retrieval fallback may replace a missing person's block with
+        // a different person's facts or silently omit that person.
+        // A legacy clinical candidate cannot consume an arbitrary multi-owner
+        // request. Only the exact broad inventory form is retained here; exact
+        // test requests were consumed by the owner-test plan above. Related
+        // values cannot erase a date, condition or additional subquestion.
+        const ownerIds = decision.candidates.map((x) =>
+          x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        );
+        const genericInventory = new RegExp(
+          "^What are the results for (" +
+            ownerIds.join("|") +
+            ")(?: and (" +
+            ownerIds.join("|") +
+            "))+\\?$",
+          "i",
+        ).test(requestOriginal);
+        if (
+          !genericInventory &&
+          (bundle.clinical ?? []).length &&
+          decision.candidates.some(
+            (id) =>
+              clinicalAnswer(
+                requestOriginal,
+                (bundle.clinical ?? []).filter((r) => subjectOf(r) === id),
+                id,
+                identities,
+              )?.used?.length,
+          )
+        ) {
+          return {
+            raw: null,
+            shown: {
+              sourceQuestionPlan: immutableRequest,
+              lead: {
+                text: "I could not establish every test, owner and constraint in this complete request. Please ask an explicit test-results question with the printed record IDs. Related clinical values are not a complete answer.",
+                verdict: "UNKNOWN",
+                field: null,
+                citations: [],
+              },
+              evidence: [],
+              visual: null,
+              semantic: {
+                intent: "UNRESOLVED_MULTI_OWNER_CLINICAL_REQUEST",
+                lang,
+                steps: ["unconsumed_request_not_replaced_by_owner_blocks"],
+              },
+            },
+          };
+        }
+        const parts = [],
+          ownerOutcomes = [],
+          citations = [],
+          used = [];
+        for (const id of decision.candidates) {
+          const own = {
+            ...bundle,
+            clinical: (bundle.clinical ?? []).filter(
+              (r) => subjectOf(r) === id,
+            ),
+            records: (bundle.records ?? []).map((e) => ({
+              ...e,
+              records: e.records.filter((r) => recordSubject(e, r) === id),
+            })),
+          };
+          const c = clinicalAnswer(original, own.clinical, id, identities);
+          let a = c?.used?.length
+            ? {
+                spoken: thirdPerson(c.spoken),
+                citations: c.used
+                  .map((o) => observationEvidence(o, bundle))
+                  .filter(Boolean),
+                used: c.used,
+              }
+            : null;
+          if (!a)
+            a =
+              briefAnswer(original, own, citeSpan, {
+                patient: id,
+                reports: own.clinical,
+              }) ?? bundleFactAnswer(original, own, citeSpan);
+          if (a?.citations?.some((c) => !evidenceWithinOwner(bundle, id, c)))
+            a = null;
+          // A source-owned block is still not an independent clinical proof.
+          // But a missing block must never count as whole-request success.
+          const supportedBlock =
+            !!a?.spoken &&
+            (a.citations ?? []).length > 0 &&
+            !(a.used ?? []).some((o) => o.authorityConflict);
+          if (!supportedBlock) a = null;
+          ownerOutcomes.push({
+            owner: id,
+            status: supportedBlock ? "answered" : "not_established",
+            operation: "existing-owner-scoped-source-lookup",
+          });
+          const nm = identityReportsFor(bundle).find((r) => subjectOf(r) === id)
+            ?.meta?.patient?.name;
+          parts.push(
+            `${nm ? nm + " (" + id + ")" : id}: ${a?.spoken ?? { en: "I could not find the requested fact in this person's records.", hinglish: "Is vyakti ke records mein maanga hua result nahi mila.", hi: "इस व्यक्ति के रिकॉर्ड में मांगी गई जानकारी नहीं मिली।" }[lang]}`,
+          );
+          citations.push(
+            ...(a?.citations ?? []).map((c) => ({ ...c, recordOwned: true })),
+          );
+          used.push(...(a?.used ?? []));
+        }
+        const bound = bindAnswerCitations(
+          citations,
+          original,
+          bundle.sourceRecords ?? bundle.clinical ?? [],
+          citations,
+        );
+        const lead = {
+          text: parts.join(" "),
+          verdict: ownerOutcomes.every((o) => o.status === "answered")
+            ? "QUOTED"
+            : ownerOutcomes.some((o) => o.status === "answered")
+              ? "PARTIAL_DOCUMENT"
+              : "NOT_IN_REPORT",
+          field: null,
+          citations: decorateResult({ evidence: bound, question: original }, s)
+            .evidence,
+          used,
+        };
+        const visual = visualFor(original, bundle, lead, decision.candidates);
+        delete lead.used;
+        return {
+          raw: null,
+          shown: {
+            lead,
+            evidence: [],
+            visual,
+            requirementCoverage: {
+              questionPlanKey: immutableRequest.key,
+              complete: ownerOutcomes.every((o) => o.status === "answered"),
+              status: ownerOutcomes.every((o) => o.status === "answered")
+                ? "owner_blocks_covered"
+                : ownerOutcomes.some((o) => o.status === "answered")
+                  ? "partial"
+                  : "unresolved",
+              scope: "owner-block-coverage-only",
+              semanticAdmissionVerified: false,
+              outcomes: ownerOutcomes,
+            },
+            semantic: {
+              intent: "MULTI_SUBJECT",
+              lang,
+              steps: ["explicit_owners_separately_scoped"],
+            },
+          },
+        };
+      }
+      if (decision.clarify) {
+        const absent = absentMeasurement(original, bundle.clinical ?? []);
+        if (absent)
+          return {
+            raw: null,
+            shown: {
+              lead: {
+                text: absent.spoken,
+                verdict: absent.verdict,
+                field: null,
+                citations: [],
+              },
+              evidence: [],
+              semantic: {
+                intent: "ABSENT_MEASUREMENT",
+                lang,
+                steps: ["absent_for_every_candidate"],
+              },
+            },
+          };
+        const { raw, shown } = await deterministicAnswer(
+          s,
+          question,
+          ctx,
+          null,
+        );
+        shown.lead = {
+          text: decision.spoken,
+          verdict: "AMBIGUOUS_PATIENT",
+          field: null,
+          citations: [],
+        };
+        shown.evidence = (shown.evidence ?? []).map((ev) => ({
+          ...ev,
+          contextOnly: true,
+        }));
+        shown.visual = visualFor(original, bundle, shown.lead, opts.patient);
+        shown.semantic = {
+          intent: "IDENTITY",
+          lang,
+          steps: ["shared_identity_preflight"],
+        };
+        return { raw, shown };
+      }
       const unbound = unboundOwnerTurn(selfRepair(original), bundle);
       if (unbound)
         return {
@@ -877,46 +1459,624 @@ export function createLocalServer({
             },
           },
         };
-      const { raw, shown } = await deterministicAnswer(s, question, ctx);
+      const clinicalRequirements = clinicalListPlan(
+        requestOriginal,
+        bundle,
+        immutableRequest.sourceGeneration,
+        opts.patient,
+      );
+      if (clinicalRequirements && (bundle.clinical ?? []).length) {
+        const own = (bundle.clinical ?? []).filter(
+          (r) => subjectOf(r) === opts.patient,
+        );
+        const outcomes = clinicalRequirements.requirements.map((r) => {
+          if (r.semanticState === "opaque-unresolved-tail")
+            return {
+              requirementId: r.id,
+              status: "not_established",
+              text: `${r.text} I have not established this remaining requirement.`,
+              citations: [],
+            };
+          const matches = own
+            .flatMap((report) => report.observations ?? [])
+            .filter((o) => exactTestLabel(o.test) === r.slots.object);
+          // No alias can replace a requested exact test label in this grammar.
+          if (!matches.length)
+            return {
+              requirementId: r.id,
+              status: "not_established",
+              text: `${r.text}: I could not establish the requested result for ${opts.patient}.`,
+              citations: [],
+            };
+          const answer = clinicalAnswer(
+            `What is ${opts.patient}'s ${r.text} result?`,
+            own,
+            opts.patient,
+            identities,
+          );
+          const used = answer?.used ?? [];
+          const citations = used
+            .map((o) => observationEvidence(o, bundle))
+            .filter(Boolean);
+          const supported =
+            used.length > 0 &&
+            citations.length === used.length &&
+            used.every(
+              (o) =>
+                !o.authorityConflict &&
+                exactTestLabel(o.test) === r.slots.object &&
+                subjectOf(o.report) === opts.patient,
+            ) &&
+            citations.every((c) =>
+              evidenceWithinOwner(bundle, opts.patient, c),
+            );
+          return {
+            requirementId: r.id,
+            status: supported ? "answered" : "not_established",
+            text: supported
+              ? `${r.text}: ${thirdPerson(answer.spoken)}`
+              : `${r.text}: I could not establish a source-checked result for ${opts.patient}.`,
+            citations: supported ? citations : [],
+          };
+        });
+        const count = outcomes.filter((o) => o.status === "answered").length;
+        return {
+          raw: null,
+          shown: {
+            lead: {
+              text: outcomes.map((o) => o.text).join(" "),
+              verdict:
+                count === outcomes.length
+                  ? "CLINICAL_REQUIREMENTS"
+                  : count
+                    ? "PARTIAL_DOCUMENT"
+                    : "UNKNOWN",
+              field: null,
+              citations: decorateResult(
+                {
+                  question: requestOriginal,
+                  evidence: outcomes.flatMap((o) => o.citations),
+                },
+                s,
+              ).evidence,
+              origin: "explicit-clinical-requirements",
+              limitations: clinicalRequirements.limitations,
+            },
+            sourceQuestionPlan: clinicalRequirements,
+            evidence: [],
+            visual: null,
+            requirementCoverage: {
+              questionPlanKey: clinicalRequirements.key,
+              complete: count === outcomes.length,
+              status:
+                count === outcomes.length
+                  ? "covered"
+                  : count
+                    ? "partial"
+                    : "unresolved",
+              semanticAdmissionVerified: false,
+              outcomes: outcomes.map(({ requirementId, status }) => ({
+                requirementId,
+                status,
+                operation: "existing-clinical-source-lookup",
+              })),
+            },
+            semantic: {
+              intent: "EXPLICIT_CLINICAL_REQUIREMENTS",
+              lang,
+              steps: [
+                "caller_owned_test_requirements",
+                "separately_scoped_clinical_lookups_not_independent_certificates",
+              ],
+            },
+          },
+        };
+      }
+      const exactFields = await resolveExactFields({
+        question: requestOriginal,
+        bundle,
+        sourceGeneration: immutableRequest.sourceGeneration,
+        isCurrent: () =>
+          s.bundle === bundle &&
+          answerGenerations.get(bundle) === immutableRequest.sourceGeneration,
+      });
+      if (exactFields) {
+        const { plan, admission } = exactFields;
+        const claims = admission.outcomes.flatMap((o) => o.claims ?? []);
+        const unresolved = admission.outcomes
+          .filter((o) => o.status !== "answered")
+          .map(
+            (o) => plan.requirements.find((r) => r.id === o.requirementId).text,
+          );
+        return {
+          raw: null,
+          shown: {
+            lead: {
+              text: [
+                ...claims.map((c) => c.text),
+                ...(unresolved.length
+                  ? [
+                      `I found conflicting table values for: ${unresolved.join(", ")}. Which source should I use?`,
+                    ]
+                  : []),
+                "These are recorded table values, not a finding that surrounding conditions were met.",
+              ].join(" "),
+              verdict: admission.complete
+                ? "SCHEMA_FIELDS"
+                : claims.length
+                  ? "PARTIAL_FIELDS"
+                  : "CLARIFY",
+              field: null,
+              citations: decorateResult(
+                {
+                  question: original,
+                  evidence: claims.flatMap((c) => c.citations),
+                },
+                s,
+              ).evidence,
+              origin: "source-field-certificate",
+              limitations: plan.limitations,
+            },
+            sourceQuestionPlan: plan,
+            admission,
+            evidence: [],
+            semantic: {
+              intent: "EXACT_SCHEMA_FIELDS",
+              lang,
+              steps: [
+                "source_schema_requirement_coverage",
+                "reconstructed_field_certificates",
+              ],
+            },
+          },
+        };
+      }
+      const eventArgs = {
+        question: requestOriginal,
+        bundle,
+        sourceGeneration: immutableRequest.sourceGeneration,
+        isCurrent: () =>
+          s.bundle === bundle &&
+          answerGenerations.get(bundle) === immutableRequest.sourceGeneration,
+      };
+      const events =
+        (await resolveExplicitEvents(eventArgs)) ??
+        (await resolveExplicitEventRemainder(eventArgs));
+      if (events) {
+        const { plan, admission } = events;
+        const parts = admission.outcomes.map((o) => {
+          const r = plan.requirements.find((r) => r.id === o.requirementId);
+          return o.status === "answered"
+            ? `${plan.requirements.length > 1 ? r.text + " " : ""}${o.claims.map((c) => c.text).join(" ")}`
+            : `${r.text} ${o.status === "clarify" ? "The source assertions conflict; I could not settle this requirement." : "I could not establish this requirement from these documents."}`;
+        });
+        return {
+          raw: null,
+          shown: {
+            lead: {
+              text: parts.join(" "),
+              verdict: admission.complete
+                ? admission.outcomes.every((o) =>
+                    o.claims.every(
+                      (c) => c.operation === "recorded-role-field",
+                    ),
+                  )
+                  ? "SCHEMA_FIELDS"
+                  : "RECORDED_EVENT"
+                : admission.userReady
+                  ? "PARTIAL_DOCUMENT"
+                  : admission.status === "clarify"
+                    ? "CLARIFY"
+                    : "UNKNOWN",
+              field: null,
+              citations: decorateResult(
+                {
+                  question: requestOriginal,
+                  evidence: admission.outcomes.flatMap((o) =>
+                    o.claims.flatMap((c) => c.citations),
+                  ),
+                },
+                s,
+              ).evidence,
+              origin: "source-event-certificate",
+              limitations: plan.limitations,
+            },
+            sourceQuestionPlan: plan,
+            ...(events.requirementCoverage
+              ? { requirementCoverage: events.requirementCoverage }
+              : { admission }),
+            evidence: [],
+            semantic: {
+              intent: events.requirementCoverage
+                ? "EXPLICIT_EVENT_PREFIX_UNRESOLVED_REMAINDER"
+                : "EXPLICIT_EVENT_REQUIREMENTS",
+              lang,
+              steps: [
+                "caller_owned_event_slots",
+                "independent_source_relation_reconstruction",
+              ],
+            },
+          },
+        };
+      }
+      // Source-domain admission is independent of question surface form.
+      // When every source byte is in the explicit assertion language, no
+      // lexical fallback may answer an unconsumed requirement in that domain.
+      const assertionSource = eventSourceFacts(bundle);
+      if (
+        assertionSource.complete &&
+        !(bundle.clinical ?? []).length &&
+        !(bundle.sourceRecords ?? []).some((r) => r.meta?.patient)
+      ) {
+        return {
+          raw: null,
+          shown: {
+            question: requestOriginal,
+            sourceQuestionPlan: immutableRequest,
+            lead: {
+              text: "I could not independently match this complete request to the source assertions. The passages below are related evidence, not an answer.",
+              verdict: "UNKNOWN",
+              field: null,
+              citations: [],
+            },
+            evidence: decorateResult(
+              {
+                question: requestOriginal,
+                evidence: assertionSource.facts.map((f) => f.citation),
+              },
+              s,
+            ).evidence,
+            visual: null,
+            closest: null,
+            admission: {
+              questionPlanKey: immutableRequest.key,
+              sourceGeneration: immutableRequest.sourceGeneration,
+              status: "unresolved",
+              userReady: false,
+              complete: false,
+              reason: "assertion_domain_requirement_not_admitted",
+              outcomes: immutableRequest.requirements.map((r) => ({
+                requirementId: r.id,
+                status: "not_established",
+                claims: [],
+              })),
+            },
+            semantic: {
+              intent: "UNRESOLVED_ASSERTION_DOMAIN_REQUIREMENT",
+              lang,
+              steps: [
+                "complete_assertion_source_domain_requires_independent_event_admission",
+              ],
+            },
+          },
+        };
+      }
+      const { raw, shown } = await deterministicAnswer(
+        s,
+        question,
+        ctx,
+        opts.patient ?? null,
+      );
+      if (
+        !(bundle.clinical ?? []).length &&
+        !(bundle.sourceRecords ?? []).some((r) => r.meta?.patient) &&
+        (candidateUsesEventAssertion(shown.lead, bundle) ||
+          debtPolarityConflict(requestOriginal, shown.lead, bundle))
+      ) {
+        // No question-form exemption: a legacy candidate quoting an event is
+        // still not a relation certificate. Earlier independent operations
+        // already had their chance; unknown context cannot self-certify here.
+        const evidence = [
+          ...(shown.lead?.citations ?? []),
+          ...(shown.evidence ?? []),
+        ];
+        return {
+          raw: null,
+          shown: {
+            question: requestOriginal,
+            sourceQuestionPlan: immutableRequest,
+            lead: {
+              text: "I found source assertions related to this request, but could not independently verify that they answer the whole question. Inspect them as related evidence, not an answer.",
+              verdict: "UNKNOWN",
+              field: null,
+              citations: [],
+            },
+            evidence,
+            visual: null,
+            closest: null,
+            admission: {
+              questionPlanKey: immutableRequest.key,
+              sourceGeneration: immutableRequest.sourceGeneration,
+              status: "unresolved",
+              userReady: false,
+              complete: false,
+              reason: "event_candidate_requirement_not_admitted",
+              outcomes: immutableRequest.requirements.map((r) => ({
+                requirementId: r.id,
+                status: "not_established",
+                claims: [],
+              })),
+            },
+            semantic: {
+              intent: "UNVERIFIED_EVENT_CANDIDATE",
+              lang,
+              steps: ["event_quote_is_not_independent_relation_admission"],
+            },
+          },
+        };
+      }
+      if (raw?.requestedCoverage === "coordination_unresolved") {
+        // requestedChecked certifies neither decomposition nor whole-question
+        // completeness. Keep every byte of the unresolved caller requirement.
+        return {
+          raw,
+          shown: {
+            question: requestOriginal,
+            sourceQuestionPlan: immutableRequest,
+            lead: {
+              text: raw.spoken,
+              verdict: "UNKNOWN",
+              field: null,
+              citations: [],
+            },
+            evidence: decorateResult(
+              { question: requestOriginal, evidence: raw.reviewEvidence ?? [] },
+              s,
+            ).evidence,
+            visual: null,
+            closest: null,
+            admission: {
+              questionPlanKey: immutableRequest.key,
+              sourceGeneration: immutableRequest.sourceGeneration,
+              status: "unresolved",
+              userReady: false,
+              complete: false,
+              reason: "requirement_coverage_unverified",
+              outcomes: immutableRequest.requirements.map((r) => ({
+                requirementId: r.id,
+                status: "not_established",
+                claims: [],
+                reason: "coordinated_request_not_decomposed",
+              })),
+            },
+            semantic: {
+              intent: "UNRESOLVED_REQUIREMENT_COVERAGE",
+              lang,
+              steps: ["single_field_candidate_not_whole_question"],
+            },
+          },
+        };
+      }
       // A missing identifier binding cannot be rescued with a different field
       // or a provider-generated interpretation of nearby numbers.
-      if (identifierRequest(question)) return { raw, shown };
+      if (
+        directDecision.patient &&
+        /^\s*who\s+is\s+/i.test(original) &&
+        identities.some(
+          (r) =>
+            subjectOf(r) === directDecision.patient &&
+            [
+              r.meta?.patient?.id,
+              r.meta?.patient?.name,
+              r.meta?.patient?.name?.split(/\s+/)[0],
+            ]
+              .filter(Boolean)
+              .some(
+                (label) =>
+                  original
+                    .replace(/^\s*who\s+is\s+/i, "")
+                    .replace(/[?.!]+$/, "")
+                    .trim()
+                    .toLowerCase() === label.toLowerCase(),
+              ),
+        )
+      ) {
+        const rr = (bundle.sourceRecords ?? []).find(
+          (r) => subjectOf({ ...r, segment: r.span?.start }) === opts.patient,
+        );
+        const src = bundle.sources.find((s) => s.id === rr?.sourceId);
+        if (rr && src) {
+          const meta = rr.meta.patient;
+          shown.lead = {
+            text: `${meta.name ?? "The patient"} (${meta.id ?? "document-local identity"})${rr.meta.dob ? `, date of birth ${rr.meta.dob}` : ""}. This is a separate record identity; a shared name does not link different patient IDs.`,
+            verdict: "IDENTITY",
+            field: null,
+            citations: [citeSpan(src, rr.span)],
+          };
+        }
+      }
+      if (identifierRequest(question)) {
+        if (shown.lead?.citations?.length)
+          shown.lead.citations = decorateResult(
+            {
+              question: original,
+              evidence: bindAnswerCitations(
+                shown.lead.citations,
+                original,
+                bundle.sourceRecords ?? [],
+                shown.lead.citations,
+              ),
+            },
+            s,
+          ).evidence;
+        return { raw, shown };
+      }
 
       // Understand first, verify after: intent-specific rescue (grounded
       // background, composed summaries, model interpretation, verified
       // model claims) and the final "does this answer the question" audit.
-      const validate = (ev) => validateEvidence(ev, bundle);
-      const sem = raw?.requestedChecked
+      const semanticBundle = ownerView(bundle, opts.patient);
+      const restore = (ev) =>
+        originalCitation(ev, bundle, semanticBundle, (c) =>
+          evidenceWithinOwner(bundle, opts.patient, c),
+        );
+      const validate = (ev) => !!restore(ev);
+      // A source-bound requested-field decision (including refusal) is
+      // already complete. Whole-document reading cannot replace its scope.
+      const documentEnabled =
+        !raw?.requestedChecked &&
+        process.env.VM_DOCUMENT_REASONING === "on" &&
+        consent &&
+        gemini.enabled();
+      const sem = documentEnabled
         ? {
             lead: shown.lead,
             trace: {
-              intent: "LOOKUP",
+              intent: "DOCUMENT",
               lang,
-              steps: ["requested_scope_preserved"],
+              steps: ["document_reasoning_requested"],
             },
           }
-        : await semanticRescue({
-            question: original,
-            bundle,
-            lead: shown.lead,
-            raw,
-            ctx,
-            validate,
-            gemini,
-            consent,
-            ip: opts.ip,
-            rerun: async (q) =>
-              (await deterministicAnswer(s, q, ctx)).shown.lead ?? null,
-          }).catch(() => ({
-            lead: shown.lead,
-            trace: { steps: ["semantic_error"] },
-          }));
+        : raw?.requestedChecked
+          ? {
+              lead: shown.lead,
+              trace: {
+                intent: "LOOKUP",
+                lang,
+                steps: ["requested_scope_preserved"],
+              },
+            }
+          : await semanticRescue({
+              question: original,
+              bundle: semanticBundle,
+              lead: shown.lead,
+              raw,
+              ctx,
+              validate,
+              gemini,
+              consent,
+              ip: opts.ip,
+              rerun: async (q) =>
+                (await deterministicAnswer(s, q, ctx, opts.patient ?? null))
+                  .shown.lead ?? null,
+            }).catch(() => ({
+              lead: shown.lead,
+              trace: { steps: ["semantic_error"] },
+            }));
+      if (sem.lead?.citations?.length) {
+        const restored = sem.lead.citations.map(restore);
+        sem.lead = restored.some((c) => !c)
+          ? {
+              text: "I could not verify the requested answer in the selected person's records.",
+              verdict: "UNKNOWN",
+              field: null,
+              citations: [],
+            }
+          : { ...sem.lead, citations: restored };
+      }
       if (sem.lead !== shown.lead && sem.lead?.citations?.length)
         sem.lead.citations = decorateResult(
           { evidence: sem.lead.citations, question: original },
           s,
         ).evidence;
       shown.lead = sem.lead;
+      if (
+        opts.patient &&
+        shown.lead?.used?.length &&
+        identities.some(
+          (r) =>
+            subjectOf(r) !== opts.patient &&
+            String(r.meta?.patient?.name ?? "").toLowerCase() ===
+              String(
+                identities.find((x) => subjectOf(x) === opts.patient)?.meta
+                  ?.patient?.name ?? "",
+              ).toLowerCase(),
+        )
+      ) {
+        const others = [...new Set(identities.map(subjectOf))].filter(
+          (id) => id !== opts.patient,
+        );
+        shown.lead.text += ` This answer uses ${opts.patient}; ${others.join(", ")} identifies a different person's records, which I excluded.`;
+      }
+      if (
+        opts.patient &&
+        shown.lead?.verdict === "NOT_IN_REPORT" &&
+        new Set(identities.map(subjectOf)).size > 1
+      )
+        shown.lead.text +=
+          " Records for a different person are excluded from this selected-person answer.";
+      if (
+        opts.patient &&
+        shown.lead?.citations?.some(
+          (c) => !evidenceWithinOwner(bundle, opts.patient, c),
+        )
+      )
+        shown.lead = {
+          text: "I could not verify the requested answer in the selected person's records.",
+          verdict: "UNKNOWN",
+          field: null,
+          citations: [],
+        };
+      if (shown.lead?.citations?.length) {
+        const bound = bindAnswerCitations(
+          shown.lead.citations,
+          original,
+          bundle.sourceRecords ?? bundle.clinical ?? [],
+          shown.lead.citations,
+        );
+        shown.lead.citations = decorateResult(
+          { evidence: bound, question: original },
+          s,
+        ).evidence;
+      }
+      if (documentEnabled) {
+        const documentLead = await readDocumentQuestion({
+          question: original,
+          decomposition: resolveDocumentDecomposition
+            ? createDecomposition({
+                ...(await resolveDocumentDecomposition(original)),
+                question: original,
+              })
+            : ((await understandDocumentQuestion({
+                question: original,
+                gemini,
+                ip: opts.ip,
+                isCurrent: () =>
+                  s.bundle === bundle &&
+                  answerGenerations.get(bundle) ===
+                    immutableRequest.sourceGeneration,
+              })) ?? undefined),
+          sourceGeneration: answerGenerations.get(bundle),
+          isCurrent: () =>
+            s.bundle === bundle &&
+            answerGenerations.get(bundle) === immutableRequest.sourceGeneration,
+          bundle: semanticBundle,
+          gemini,
+          consent,
+          ip: opts.ip,
+          validate,
+        }).catch(() => null);
+        shown.lead = {
+          text: "I could not establish a complete, source-supported answer to that question. Please narrow it or inspect the source passages.",
+          verdict: "UNKNOWN",
+          field: null,
+          citations: [],
+        };
+        sem.trace.steps = [
+          documentLead?.origin === "document-model-audited"
+            ? "whole_context_read_and_independent_audit"
+            : documentLead?.origin === "document-unqualified-question"
+              ? "document_interpretation_unresolved_no_disclosure"
+              : "document_reasoning_unavailable",
+        ];
+        if (documentLead) {
+          const restored = documentLead.citations.map(restore);
+          if (restored.every(Boolean))
+            shown.lead = {
+              ...documentLead,
+              citations: decorateResult(
+                { question: original, evidence: restored },
+                s,
+              ).evidence,
+            };
+        } else
+          shown.lead = {
+            text: "I could not establish a complete, source-supported answer to that question. Please narrow it or inspect the source passages.",
+            verdict: "UNKNOWN",
+            field: null,
+            citations: [],
+          };
+      }
       shown.semantic = sem.trace;
       // A Hindi or Hinglish visitor with nothing supported hears that in
       // their own language, not a silent English fallback.
@@ -924,16 +2084,61 @@ export function createLocalServer({
         shown.lead = noAnswerLead(lang);
       // The picture of the answer: ranges, series, corrections, units,
       // drawn from the same typed rows the sentence came from.
-      shown.visual = visualFor(original, bundle, shown.lead);
+      shown.visual = visualFor(original, bundle, shown.lead, opts.patient);
+      if (opts.patient && shown.lead?.text)
+        shown.lead.text = thirdPerson(shown.lead.text);
       if (shown.lead) delete shown.lead.used;
       return { raw, shown };
     });
+    // Cached candidates are not the identity of the current request. Keep
+    // exact original bytes even when normalized cache keys coalesce wording.
+    const value = JSON.parse(cached.json);
+    value.shown.question = immutableRequest.originalQuestion;
+    value.shown.questionPlan =
+      value.shown.sourceQuestionPlan ?? immutableRequest;
+    // All candidate paths share this final source-currentness boundary, not
+    // just schema-certified answers. Async retrieval/interpretation can finish
+    // after upload/removal rebuilt this same workspace ID. Never return old
+    // leads, related evidence, charts, closest lines or raw draft material.
+    if (
+      s.bundle !== bundle ||
+      answerGenerations.get(bundle) !== immutableRequest.sourceGeneration ||
+      (value.shown.sourceQuestionPlan &&
+        value.shown.sourceQuestionPlan.originalQuestion !== requestOriginal)
+    ) {
+      value.raw = null;
+      value.shown = {
+        question: requestOriginal,
+        questionPlan: immutableRequest,
+        lead: {
+          text: "The source scope changed before this answer was ready. Ask again against the current documents.",
+          verdict: "UNKNOWN",
+          citations: [],
+          field: null,
+        },
+        evidence: [],
+        visual: null,
+        closest: null,
+        admission: {
+          status: "unresolved",
+          userReady: false,
+          reason: "stale_or_wrong_request",
+        },
+        semantic: { steps: ["source_changed_before_response"] },
+      };
+    }
+    return { ...cached, json: JSON.stringify(value) };
   }
   // The deterministic chain (claim graph, clinical answers, sections, form
   // fields, hybrid sentence search), unchanged in behaviour; the semantic
   // router above decides what to do with its result.
-  async function deterministicAnswer(s, question, ctx) {
-    const bundle = s.bundle;
+  async function deterministicAnswer(s, question, ctx, selectedPatient = null) {
+    const originalBundle = s.bundle;
+    const bundle = ownerView(originalBundle, selectedPatient);
+    const restore = (ev) =>
+      originalCitation(ev, originalBundle, bundle, (c) =>
+        evidenceWithinOwner(originalBundle, selectedPatient, c),
+      );
     {
       // Phrased any way: drop a leading greeting, repair the deal's names,
       // and ask a Hindi deal question in the English the engine reads (lab
@@ -967,11 +2172,56 @@ export function createLocalServer({
         model: DENSE_MODEL_ID,
         available: denseAvailableFor(bundle),
       });
+      if (selectedPatient) {
+        raw.evidence = (raw.evidence ?? []).map(restore).filter(Boolean);
+        raw.reviewEvidence = (raw.reviewEvidence ?? [])
+          .map(restore)
+          .filter(Boolean);
+      }
+      if (selectedPatient) {
+        raw.evidence = (raw.evidence ?? []).filter((ev) =>
+          evidenceWithinOwner(bundle, selectedPatient, ev),
+        );
+        raw.reviewEvidence = (raw.reviewEvidence ?? []).filter((ev) =>
+          evidenceWithinOwner(bundle, selectedPatient, ev),
+        );
+      }
       const shown = decorateResult(raw, s);
+      shown.transforms = {
+        originalQuestion: original,
+        retrievalQuestion: question,
+        purpose: "legacy_deterministic_input",
+        semanticPreservationVerified: false,
+      };
+      if (selectedPatient) shown.answer = ""; // no unscoped retrieval text fallback
       // Typed follow-ups ("so finance rejected it?") inherit the previous
       // question's field, exactly as the voice grant does.
-      shown.lead = leadFor(question, raw, bundle, ctx || null);
+      shown.lead = leadFor(question, raw, bundle, ctx || null, selectedPatient);
+      // Diagnostic retrieval chunks are split at known clinical record
+      // boundaries, not ranked into a guessed owner. Context-only spans
+      // remain explicitly separate from the answer's supporting citations.
+      shown.evidence = bindEvidenceToRecords(
+        shown.evidence,
+        question,
+        bundle.sourceRecords ?? bundle.clinical ?? [],
+        shown.lead?.citations ?? [],
+      );
+      shown.evidence = decorateResult(
+        { evidence: shown.evidence, question },
+        s,
+      ).evidence;
       if (identifierRequest(question)) {
+        if (shown.lead?.citations?.length) {
+          const restored = shown.lead.citations.map(restore);
+          if (restored.some((c) => !c))
+            shown.lead = {
+              text: "I could not verify the requested identifier in the selected person's records.",
+              verdict: "UNKNOWN",
+              field: null,
+              citations: [],
+            };
+          else shown.lead.citations = restored;
+        }
         if (shown.lead)
           shown.lead.citations = decorateResult(
             { evidence: shown.lead.citations, question },
@@ -986,6 +2236,39 @@ export function createLocalServer({
       // A section-shaped question ("what does this report suggest?", "why
       // was the scan done?") is answered with that headed section, verbatim.
       let sectioned = raw.requestedChecked === true;
+      // A question across a set of records (summarise, drafts, a day's
+      // events, medicines, duplicate charges, reason, diagnosis): one
+      // grounded answer from all of them, authoritative records first.
+      if (!sectioned && briefIntent(question)) {
+        let b = null;
+        try {
+          const clinicalLine = String(shown.lead?.text ?? "").split(
+            /(?<=\.)\s+(?=Some general background|I can't diagnose|This is for)/,
+          )[0];
+          b = briefAnswer(question, bundle, citeSpan, {
+            labs: labDigest(bundle.clinical ?? [], selectedPatient),
+            clinical: /\d/.test(clinicalLine) ? clinicalLine : null,
+            reports: bundle.clinical ?? [],
+            patient: selectedPatient,
+            // a test named now, or carried from the previous answer ("it")
+            namedTest:
+              !!findTest(question, bundle.clinical ?? []) ||
+              !!findTest(splitFocus(ctx).field ?? "", bundle.clinical ?? []),
+          });
+        } catch {
+          b = null;
+        }
+        if (b) {
+          sectioned = true;
+          shown.lead = {
+            text: b.spoken,
+            verdict: "QUOTED",
+            field: null,
+            citations: b.citations.map((c) => ({ ...c, recordOwned: true })),
+            intent: b.intent,
+          };
+        }
+      }
       // A fact stated in a record's table, from the most authoritative
       // record that states it (signed / final / posted over estimate /
       // draft / preliminary), with superseded provisional values named.
@@ -1002,7 +2285,21 @@ export function createLocalServer({
           recordIntent(question) ||
           openLead)
       ) {
-        let fa = bundleFactAnswer(question, bundle, citeSpan);
+        let fa = bundleFactAnswer(
+          question,
+          selectedPatient
+            ? {
+                ...bundle,
+                records: (bundle.records ?? []).map((e) => ({
+                  ...e,
+                  records: e.records.filter(
+                    (r) => recordSubject(e, r) === selectedPatient,
+                  ),
+                })),
+              }
+            : bundle,
+          citeSpan,
+        );
         // An open lead gives way to a fact only when an authoritative record
         // settles it: it supersedes one of the open values, or answers a
         // different field than the one left open.
@@ -1025,7 +2322,7 @@ export function createLocalServer({
             text: fa.spoken,
             verdict: fa.clarify ? "AMBIGUOUS_PATIENT" : "QUOTED",
             field: null,
-            citations: fa.citations,
+            citations: fa.citations.map((c) => ({ ...c, recordOwned: true })),
             record: fa.record
               ? {
                   title: fa.record.title,
@@ -1117,6 +2414,38 @@ export function createLocalServer({
           { evidence: shown.lead.citations, question },
           s,
         ).evidence;
+      if (selectedPatient && shown.lead?.citations?.length) {
+        const restored = shown.lead.citations.map(restore);
+        if (restored.some((c) => !c))
+          shown.lead = {
+            text: "I could not verify the requested answer in the selected person's records.",
+            verdict: "UNKNOWN",
+            field: null,
+            citations: [],
+          };
+        else shown.lead.citations = restored;
+      }
+      if (selectedPatient) {
+        shown.evidence = (shown.evidence ?? []).filter((ev) =>
+          evidenceWithinOwner(bundle, selectedPatient, ev),
+        );
+        if (
+          shown.closest &&
+          !evidenceWithinOwner(bundle, selectedPatient, shown.closest.citation)
+        )
+          delete shown.closest;
+        if (
+          shown.lead?.citations?.some(
+            (c) => !evidenceWithinOwner(bundle, selectedPatient, c),
+          )
+        )
+          shown.lead = {
+            text: "I could not verify the requested answer in the selected person's records.",
+            verdict: "UNKNOWN",
+            field: null,
+            citations: [],
+          };
+      }
       return { raw, shown };
     }
   }
@@ -1144,6 +2473,7 @@ export function createLocalServer({
     target.library = docsIn;
     bundle.locateEvidence = locatorFor(target.sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsIn, extractReport);
+    bundle.sourceRecords = sourceRecordsFor(bundle, docsIn);
     attachRecords(bundle, docsIn);
     attachDigests(bundle, docsIn, denseStatus());
     target.bundle = bundle;
@@ -1409,6 +2739,7 @@ export function createLocalServer({
       bundle.sources[i].provisional = docsNow[i].status === "partial";
     bundle.locateEvidence = locatorFor(sourceToEntry);
     bundle.clinical = clinicalReportsFor(bundle, docsNow, extractReport);
+    bundle.sourceRecords = sourceRecordsFor(bundle, docsNow);
     attachRecords(bundle, docsNow);
     attachDigests(bundle, docsNow, denseStatus());
     // Commit source identity and answer index together. A failed digest,
@@ -1637,6 +2968,72 @@ export function createLocalServer({
     eleven: createElevenStt(),
     fallback: gemini,
   });
+  if (process.env.VM_SHARED_VOICE_REASONING === "on") {
+    const sharedVoiceAnswer = async ({
+      question,
+      originalQuestion = question,
+      bundle,
+      exactSchemaOnly = false,
+    }) => {
+      const candidates = [
+        voiceCase,
+        ...Object.values(caseSessions),
+        ...[...workspaces.values()].map((w) => w.s),
+        ...sessions.values(),
+      ];
+      const sourceSession = candidates.find((s) => s?.bundle === bundle);
+      if (!sourceSession) return null;
+      if (
+        exactSchemaOnly &&
+        !exactFieldPlan(originalQuestion, bundle, 0) &&
+        !eventQuestionPlan(originalQuestion, bundle, 0) &&
+        !eventRemainderPlan(originalQuestion, bundle, 0) &&
+        !clinicalListPlan(
+          originalQuestion,
+          bundle,
+          0,
+          patientDecision(originalQuestion, identityReportsFor(bundle)).patient,
+        )
+      )
+        return null;
+      // Voice has no trusted per-turn document-provider consent yet. A typed
+      // checkbox or a caller's system/history content cannot authorize egress.
+      // Explicitly prevent model calls even for synthetic source sessions.
+      const result = await resolveAnswer(sourceSession, question, "", {
+        noModel: true,
+        originalQuestion,
+      });
+      const value = JSON.parse(result.json);
+      if (sourceSession.bundle !== bundle)
+        throw Error("Voice source changed during shared answer");
+      // A missing clinical or nonclinical lead uses the typed final contract,
+      // never a second voice factual fallback. Broad demo-deal orchestration
+      // retains its existing explicit exception while migration continues.
+      if (!value.shown?.lead?.text) {
+        if (sourceSession === caseSessions.deal) return null;
+        const final = finalAnswer(value.shown);
+        return {
+          ...value.shown,
+          lead: {
+            text: final.text,
+            verdict: final.verdict,
+            citations: final.citations,
+            field: null,
+          },
+          raw: value.raw,
+        };
+      }
+      if (
+        sourceSession === caseSessions.deal &&
+        value.shown.lead.verdict === "UNKNOWN" &&
+        BROAD_DEAL.test(question)
+      )
+        return null;
+      return { ...value.shown, raw: value.raw };
+    };
+    voice.setAnswerResolver?.(sharedVoiceAnswer);
+    byoVoice.setAnswerResolver?.(sharedVoiceAnswer);
+  }
   const publicApi = createPublicApi({
     cases: caseSessions,
     workspaces: workspaceApi,
@@ -1644,7 +3041,29 @@ export function createLocalServer({
       const lang = langOfText(question);
       // About the page, not the records ("how can you help", "how do I use
       // my own reports", "thanks"): a fixed reply, and a page action.
-      const social = socialTurn(repairDealTerms(question), { lang });
+      const uploadedCase =
+        cs !== caseSessions.health && cs !== caseSessions.deal;
+      const social = socialTurn(repairDealTerms(question), {
+        lang,
+        uploaded: uploadedCase,
+      });
+      // Greeting or help on uploaded records: examples from those records.
+      if (
+        social &&
+        uploadedCase &&
+        ["GREET", "HELP"].includes(social.intent) &&
+        lang === "en"
+      ) {
+        const ex = (() => {
+          try {
+            return suggestQuestions(cs.bundle);
+          } catch {
+            return [];
+          }
+        })();
+        if (ex.length)
+          social.spoken = `Hi! I've read your documents. You could ask: ${ex.map((x) => `"${x.replace(/^./, (c) => c.toUpperCase())}"`).join(", ")}. I'll show the exact line each answer comes from.`;
+      }
       if (social && TYPED_SOCIAL.has(social.intent))
         return {
           question,
@@ -2476,11 +3895,23 @@ export function createLocalServer({
           data.context === null
             ? ""
             : typeof data.context === "string" &&
-                /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(data.context)
+                /^[A-Za-z0-9][A-Za-z0-9 .:_#/-]{0,255}$/.test(data.context)
               ? data.context
               : (s.lastField ?? "");
         const bundle = s.bundle;
-        const { json, cache } = await resolveAnswer(s, data.question, ctx);
+        // Explicit current-patient context from the screen: honored only
+        // when it names an actual subject of these records; anything else
+        // (an unknown or stale id) selects nothing, never a wrong person.
+        const patient =
+          typeof data.patient === "string" &&
+          identityReportsFor(s.bundle).some(
+            (r) => subjectOf(r) === data.patient.trim(),
+          )
+            ? data.patient.trim()
+            : null;
+        const { json, cache } = await resolveAnswer(s, data.question, ctx, {
+          patient,
+        });
         if (s.bundle !== bundle)
           throw Error("Documents changed while answering; ask again.");
         const cached = JSON.parse(json);
