@@ -269,7 +269,7 @@ export function briefAnswer(question, bundle, cite, extra = {}) {
     );
     const wordsOf = (x) =>
       `${x.r.title ?? ""} ${x.r.status ?? ""}`.toLowerCase();
-    const recs = all.filter((x) =>
+    const recs = mine.filter((x) =>
       which
         .split(/\s+/)
         .some((w) => w.length > 3 && wordsOf(x).includes(w.replace(/s$/, ""))),
