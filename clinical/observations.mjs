@@ -124,25 +124,51 @@ export function reportMeta(full) {
   const reported = new RegExp(`Reported:?\\s*(?:on\\s*)?${DATE}`, "i").exec(
     text,
   );
-  const status =
-    /Report status\s*:?\s*(final|preliminary|provisional|interim|partial|amended|corrected|revised)/i.exec(
-      text,
-    );
+  // Report authority is a source operation, not keyword retrieval. Require
+  // a complete printed field value or a standalone header label. Prose,
+  // negated mentions and trailing conditions cannot create version authority.
+  const statusWords =
+    "final|preliminary|provisional|interim|partial|amended|corrected|revised";
+  const lines = full
+    .split("\n")
+    .map((l) => l.replace(/^#+\s*/, "").trim())
+    .filter(Boolean);
+  const field = new RegExp(
+    `^Report status\\s*:?[ \t]*(${statusWords})[ \t]*$`,
+    "i",
+  );
+  const inlineField = new RegExp(
+    `^Patient: [^\\n,|]+, ID [A-Z0-9][A-Z0-9_.-]{2,} Collected: ${DATE}(?: Reported: ${DATE})? Report status\\s*:?[ \t]*(${statusWords})[ \t]*$`,
+    "i",
+  );
+  const metadataDate = String.raw`(?:[0-9]{1,2}[/.-][0-9]{1,2}[/.-][0-9]{4}|[0-9]{1,2} [A-Za-z]{3,9} [0-9]{4})(?: [0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?(?:[ ]?(?:AM|PM))?)?`;
+  const datedMetadata = new RegExp(
+    `^Collected\\s*:\\s*${metadataDate}\\s+Reported\\s*:\\s*${metadataDate}\\s+(Report status\\s*:?[ \t]*(?:${statusWords}))[ \t]*$`,
+    "i",
+  );
+  const status = lines
+    .map((l) => {
+      const direct = field.exec(l);
+      if (direct) return direct;
+      const dated = datedMetadata.exec(l);
+      if (dated) return field.exec(dated[1]);
+      if (!inlineField.test(l)) return null;
+      return field.exec(l.slice(l.search(/report status/i)));
+    })
+    .find(Boolean);
   const g = genericMeta(text, full);
-  // No "Report status:" field: a status printed as a capitalised label in
-  // the first header lines ("PRELIMINARY", "AMENDED / FINAL"). Capitals
-  // only and header lines only, so prose ("superseded by the amended
-  // version") never sets a status.
+  // This deliberately small uppercase label schema retains known packet
+  // headings, but does not treat an uppercase word inside a sentence as a label.
   const label =
     status ??
-    /\b(AMENDED|CORRECTED|REVISED|PRELIMINARY|PROVISIONAL|INTERIM|FINAL)\b/.exec(
-      full
-        .split("\n")
-        .map((l) => l.replace(/^#+\s*/, "").trim())
-        .filter(Boolean)
-        .slice(0, 4)
-        .join("\n"),
-    );
+    lines
+      .slice(0, 4)
+      .map((l) =>
+        /^(AMENDED|CORRECTED|REVISED|PRELIMINARY|PROVISIONAL|INTERIM|FINAL)(?:(?:\s*\/\s*|\s+)(?:AMENDED|CORRECTED|REVISED|PRELIMINARY|PROVISIONAL|INTERIM|FINAL|VERSION|REPORT|LAB|RESULT|CHEMISTRY|GENERAL|MEDICINE|AND|HEMATOLOGY))*(?: OF [0-9]{1,2} [A-Z]{3,9} SAMPLE)?$/.exec(
+          l,
+        ),
+      )
+      .find(Boolean);
   const st = label?.[1].toLowerCase();
   return {
     patient: patient
@@ -687,9 +713,14 @@ export function seriesFor(reports, key, patientId) {
         date,
         current,
         conflicts,
-        superseded: conflicts.length
-          ? []
-          : older.filter((o) => o.raw !== current.raw),
+        // Higher source rank can select a row, but FINAL versus UNKNOWN
+        // does not establish a correction event. Only printed amendment
+        // authority may populate the correction history used in speech.
+        superseded:
+          conflicts.length ||
+          !["amended", "corrected"].includes(current.report.meta.status)
+            ? []
+            : older.filter((o) => o.raw !== current.raw),
       };
     });
 }
