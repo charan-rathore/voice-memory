@@ -72,13 +72,10 @@ test("multi-owner source blocks cannot promote a partly missing request to a who
     const partial = await ask(partialQ);
     assert.equal(partial.final.kind, "partial");
     assert.match(partial.final.text, /50 ng\/mL/);
-    assert.match(partial.final.text, /SYN-0003.*could not find/);
+    assert.match(partial.final.text, /SYN-0003.*could not establish/);
     assert.equal(partial.questionPlan.originalQuestion, partialQ);
-    assert.equal(partial.questionPlan.coverageEstablished, false);
-    assert.equal(
-      partial.requirementCoverage.scope,
-      "owner-block-coverage-only",
-    );
+    assert.equal(partial.questionPlan.coverageEstablished, true);
+    assert.equal(partial.requirementCoverage.scope, "owner-test-coverage-only");
     assert.equal(partial.requirementCoverage.semanticAdmissionVerified, false);
     assert.deepEqual(
       partial.requirementCoverage.outcomes.map((o) => [o.owner, o.status]),

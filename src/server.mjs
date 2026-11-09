@@ -1,5 +1,9 @@
 import { finalAnswer } from "./answer-contract.mjs";
-import { clinicalListPlan, exactTestLabel } from "./clinical-requirements.mjs";
+import {
+  clinicalListPlan,
+  clinicalOwnerTestPlan,
+  exactTestLabel,
+} from "./clinical-requirements.mjs";
 import {
   resolveExplicitEvents,
   eventQuestionPlan,
@@ -1115,10 +1119,180 @@ export function createLocalServer({
           },
         };
       }
+      const ownerTests =
+        decision.multiple && (bundle.clinical ?? []).length
+          ? clinicalOwnerTestPlan(
+              requestOriginal,
+              bundle,
+              immutableRequest.sourceGeneration,
+              decision.candidates,
+              identities.map((r) => ({
+                owner: subjectOf(r),
+                name: r.meta?.patient?.name,
+              })),
+            )
+          : null;
+      if (ownerTests) {
+        const outcomes = ownerTests.requirements.map((r) => {
+          const owner = r.slots.targetOwner;
+          const own = (bundle.clinical ?? []).filter(
+            (report) => subjectOf(report) === owner,
+          );
+          const matches = own
+            .flatMap((report) => report.observations ?? [])
+            .filter((o) => exactTestLabel(o.test) === r.slots.object);
+          const answer = matches.length
+            ? clinicalAnswer(
+                `What is ${owner}'s ${r.text} result?`,
+                own,
+                owner,
+                identities,
+              )
+            : null;
+          const used = answer?.used ?? [];
+          const citations = used
+            .map((o) => observationEvidence(o, bundle))
+            .filter(Boolean);
+          const supported =
+            used.length > 0 &&
+            citations.length === used.length &&
+            used.every(
+              (o) =>
+                exactTestLabel(o.test) === r.slots.object &&
+                subjectOf(o.report) === owner,
+            ) &&
+            citations.every((c) => evidenceWithinOwner(bundle, owner, c));
+          const name = identities.find((report) => subjectOf(report) === owner)
+            ?.meta?.patient?.name;
+          const ownerLabel = name ? `${name} (${owner})` : owner;
+          return {
+            requirementId: r.id,
+            owner,
+            test: r.slots.object,
+            status: supported ? "answered" : "not_established",
+            text: supported
+              ? `${ownerLabel}, ${r.text}: ${thirdPerson(answer.spoken)}`
+              : `${ownerLabel}, ${r.text}: I could not establish the requested result in this person's records.`,
+            citations: supported ? citations : [],
+          };
+        });
+        const count = outcomes.filter((o) => o.status === "answered").length;
+        return {
+          raw: null,
+          shown: {
+            sourceQuestionPlan: ownerTests,
+            lead: {
+              text: outcomes.map((o) => o.text).join(" "),
+              verdict:
+                count === outcomes.length
+                  ? "CLINICAL_REQUIREMENTS"
+                  : count
+                    ? "PARTIAL_DOCUMENT"
+                    : "UNKNOWN",
+              field: null,
+              citations: decorateResult(
+                {
+                  question: requestOriginal,
+                  evidence: bindAnswerCitations(
+                    outcomes.flatMap((o) =>
+                      o.citations.map((c) => ({ ...c, recordOwned: true })),
+                    ),
+                    requestOriginal,
+                    bundle.sourceRecords ?? bundle.clinical ?? [],
+                    outcomes.flatMap((o) => o.citations),
+                  ),
+                },
+                s,
+              ).evidence,
+              origin: "explicit-owner-test-matrix",
+              limitations: ownerTests.limitations,
+            },
+            evidence: [],
+            visual: null,
+            requirementCoverage: {
+              questionPlanKey: ownerTests.key,
+              complete: count === outcomes.length,
+              status:
+                count === outcomes.length
+                  ? "covered"
+                  : count
+                    ? "partial"
+                    : "unresolved",
+              scope: "owner-test-coverage-only",
+              semanticAdmissionVerified: false,
+              outcomes: outcomes.map(
+                ({ requirementId, owner, test, status }) => ({
+                  requirementId,
+                  owner,
+                  test,
+                  status,
+                  operation: "existing-clinical-source-lookup",
+                }),
+              ),
+            },
+            semantic: {
+              intent: "EXPLICIT_OWNER_TEST_MATRIX",
+              lang,
+              steps: [
+                "caller_owned_owner_test_pairs",
+                "source_owned_exact_test_lookups_not_independent_certificates",
+              ],
+            },
+          },
+        };
+      }
       if (decision.multiple) {
         // Answer every explicitly requested owner from their own records.
         // No retrieval fallback may replace a missing person's block with
         // a different person's facts or silently omit that person.
+        // A legacy clinical candidate cannot consume an arbitrary multi-owner
+        // request. Only the exact broad inventory form is retained here; exact
+        // test requests were consumed by the owner-test plan above. Related
+        // values cannot erase a date, condition or additional subquestion.
+        const ownerIds = decision.candidates.map((x) =>
+          x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        );
+        const genericInventory = new RegExp(
+          "^What are the results for (" +
+            ownerIds.join("|") +
+            ")(?: and (" +
+            ownerIds.join("|") +
+            "))+\\?$",
+          "i",
+        ).test(requestOriginal);
+        if (
+          !genericInventory &&
+          (bundle.clinical ?? []).length &&
+          decision.candidates.some(
+            (id) =>
+              clinicalAnswer(
+                requestOriginal,
+                (bundle.clinical ?? []).filter((r) => subjectOf(r) === id),
+                id,
+                identities,
+              )?.used?.length,
+          )
+        ) {
+          return {
+            raw: null,
+            shown: {
+              sourceQuestionPlan: immutableRequest,
+              lead: {
+                text: "I could not establish every test, owner and constraint in this complete request. Please ask an explicit test-results question with the printed record IDs. Related clinical values are not a complete answer.",
+                verdict: "UNKNOWN",
+                field: null,
+                citations: [],
+              },
+              evidence: [],
+              visual: null,
+              semantic: {
+                intent: "UNRESOLVED_MULTI_OWNER_CLINICAL_REQUEST",
+                lang,
+                steps: ["unconsumed_request_not_replaced_by_owner_blocks"],
+              },
+            },
+          };
+        }
         const parts = [],
           ownerOutcomes = [],
           citations = [],

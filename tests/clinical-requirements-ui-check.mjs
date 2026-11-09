@@ -96,7 +96,7 @@ try {
   );
   assert.match(
     await page.locator("#answer").innerText(),
-    /SYN-0003.*could not find/s,
+    /SYN-0003.*could not establish/s,
   );
   await page.locator("#answer").screenshot({
     path: "/downloads/voice-memory-multi-owner-partial-mobile.png",
@@ -104,6 +104,28 @@ try {
   await ask("What is TSH for SYN-0001 and SYN-0003?");
   assert.match(await page.locator("#answer").innerText(), /0.30/);
   assert.match(await page.locator("#answer").innerText(), /2.10/);
+  await ask("What are TSH and sodium results for SYN-0001 and SYN-0003?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Partial answer",
+  );
+  assert.match(await answer.innerText(), /0.30/);
+  assert.match(await answer.innerText(), /2.10/);
+  assert.equal(
+    (await answer.innerText()).match(/sodium: I could not establish/g).length,
+    2,
+  );
+  await answer.screenshot({
+    path: "/downloads/voice-memory-owner-test-matrix-mobile.png",
+  });
+  await ask("What is TSH for SYN-0001 and SYN-0003 yesterday?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Answer not established",
+  );
+  await answer.screenshot({
+    path: "/downloads/voice-memory-owner-test-constraint-mobile.png",
+  });
   console.log(
     "PASS explicit single-ID multi-test coverage; positive Ferritin/TSH, missing Sodium partial;320px screenshots. No providers.",
   );
