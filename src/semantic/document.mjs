@@ -77,12 +77,27 @@ export async function readDocumentQuestion({
       requestPlan,
       reason: "decomposition_not_qualified",
     };
-  let plan;
+  // The two blind source reads never see each other, so they run
+  // concurrently: one model round trip instead of two. Each result is still
+  // validated independently and reconciled below; nothing here trusts the
+  // other read. Cost note: when the primary read fails, the independent read
+  // has already been spent (previously it was skipped).
+  const blind =
+    decomposition.provenance === "source-exact-blind-model-reconstruction-v1";
+  if (blind && !gemini.documentCoverage) return null;
+  let plan,
+    independentPlan = null;
   try {
-    plan = validateDocumentResponse(
-      await gemini.documentRead(requestPlan, documents, { ip }),
-      { requestPlan, scope },
-    );
+    const [primaryRaw, independentRaw] = await Promise.all([
+      gemini.documentRead(requestPlan, documents, { ip }),
+      blind ? gemini.documentCoverage(requestPlan, documents, { ip }) : null,
+    ]);
+    plan = validateDocumentResponse(primaryRaw, { requestPlan, scope });
+    if (blind)
+      independentPlan = validateDocumentResponse(independentRaw, {
+        requestPlan,
+        scope,
+      });
   } catch {
     return null;
   }
@@ -91,22 +106,11 @@ export async function readDocumentQuestion({
   // agree. Every retained claim still faces the exact source and owner gate
   // below, followed by the separate full-document entailment audit.
   const primaryPlan = plan;
-  let independentPlan = null;
-  if (
-    decomposition.provenance === "source-exact-blind-model-reconstruction-v1"
-  ) {
-    if (!gemini.documentCoverage || !current()) return null;
-    try {
-      independentPlan = validateDocumentResponse(
-        await gemini.documentCoverage(requestPlan, documents, { ip }),
-        { requestPlan, scope },
-      );
-      const merged = reconcileDocumentProposals(plan, independentPlan);
-      if (!merged || !current()) return null;
-      plan = merged;
-    } catch {
-      return null;
-    }
+  if (blind) {
+    if (!current()) return null;
+    const merged = reconcileDocumentProposals(plan, independentPlan);
+    if (!merged || !current()) return null;
+    plan = merged;
   }
   const statements = [],
     citations = [];
@@ -223,7 +227,13 @@ export async function readDocumentQuestion({
           .filter((s) => s.requirementId === r.id)
           .map((s) => s.text)
           .join(" ");
-        return r.status === "answered" ? answer : `${r.text.trim()} ${answer}`;
+        // Unanswered parts are named verbatim (exact spans of the asker's own
+        // question) in a sentence a listener can follow on a call.
+        if (r.status === "answered") return answer;
+        const span = `“${r.text.trim().replace(/[,;:]$/, "")}”`;
+        return plan.disputes?.some((d) => d.requirementId === r.id)
+          ? `For ${span}, the reading checks disagreed, so I have not established an answer.`
+          : `I could not establish ${span} from these documents.`;
       })
       .join("\n\n"),
     verdict: citations.length

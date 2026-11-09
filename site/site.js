@@ -1103,6 +1103,7 @@
     $("#answer").innerHTML = `
       <p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : via === "voice" ? "You said" : "You asked"}</span><q>${esc(question)}</q></p>
       <p class="a-lead"><span class="verdict-chip ${cls}">${esc(label)}</span>${openerHtml}${words}</p>
+      ${coverageHtml(r)}
       ${
         r.lead?.interpretedAs
           ? `<p class="a-understood">Understood as “${esc(r.lead.interpretedAs)}”</p>`
@@ -1253,6 +1254,41 @@
 
   // After "I don't see that": the closest line, as a pointer to open and
   // judge, visibly not the answer. Clicking opens the document at it.
+  // Server-recorded coverage only; the browser never splits a question.
+  function coverageHtml(r) {
+    const c = r.wholeQuestion ?? r.final?.coverage;
+    if (!c || c.state === "not_applicable") return "";
+    const outcomes = r.requirementCoverage?.outcomes ?? [];
+    const named = outcomes.filter((o) => typeof o.text === "string" && o.text.trim());
+    const delay = (i) => (reduced ? 0 : 120 + i * 110);
+    if (c.state === "unverified")
+      return `<details class="cov cov-unverified">
+        <summary><span class="cov-meter" aria-hidden="true"><i class="cov-seg cov-seg-open" style="animation-delay:${delay(0)}ms"></i></span>
+          <span class="cov-title">Coverage not checked</span>
+          <span class="cov-sub">Your question was kept whole. Why?</span></summary>
+        <p>This answer comes from the documents, but no check split your question into its parts, so it may not cover everything you asked. With cloud reading allowed, each part is read and proven separately, or named as missing.</p>
+      </details>`;
+    const answered = named.filter((o) => o.status === "answered").length;
+    const total = named.length;
+    const title = c.state === "established"
+      ? total > 1 ? `All ${total} parts answered from the source` : "Answered from the source"
+      : total
+        ? `${answered} of ${total} parts answered`
+        : "Not every requested part was established";
+    const label = { answered: "Answered", not_established: "Not in these documents", clarify: "Readings disagreed" };
+    return `<div class="cov cov-${esc(c.state)}" role="group" aria-label="${esc(title)}">
+      <div class="cov-head"><span class="cov-meter" aria-hidden="true">${named
+        .map((o, i) => `<i class="cov-seg cov-seg-${esc(o.status)}" style="animation-delay:${delay(i)}ms"></i>`)
+        .join("")}</span><span class="cov-title">${esc(title)}</span></div>
+      ${total ? `<ol class="cov-parts">${named
+        .map((o, i) => `<li class="cov-part cov-part-${esc(o.status)}" style="animation-delay:${delay(i) + 80}ms">
+          <span class="cov-dot" aria-hidden="true"></span>
+          <q>${esc(o.text.trim().replace(/[,;:]$/, ""))}</q>
+          <span class="cov-status">${esc(label[o.status] ?? o.status)}</span></li>`)
+        .join("")}</ol>` : ""}
+    </div>`;
+  }
+
   function closestHtml(c) {
     if (!c?.line) return "";
     state.closest = c.citation;

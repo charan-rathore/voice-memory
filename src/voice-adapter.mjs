@@ -46,6 +46,11 @@ import {
 } from "../clinical/answer.mjs";
 import { aliasesFor, nameOf, thirdPerson } from "../clinical/explain.mjs";
 import {
+  coverageNotice,
+  wholeQuestionCoverage,
+} from "./whole-question-coverage.mjs";
+import { finalAnswer } from "./answer-contract.mjs";
+import {
   voiceQuestions,
   isFragment,
   FRAGMENT_REPLY,
@@ -1368,6 +1373,8 @@ export function createVoiceAdapter({
           spoken = toHindi(spoken);
         if (!social && bundle.clinical?.length) spoken = thirdPerson(spoken);
         releaseBusy();
+        let sharedRendered = false,
+          sharedCoverage = null;
         // Optional server-owned common answer boundary. Caller messages never
         // select a provider, grant consent, or supply this resolver. Scope and
         // cancellation are checked again after the asynchronous result.
@@ -1397,6 +1404,8 @@ export function createVoiceAdapter({
           if (streaming && !current())
             return Response.json({ error: "Superseded turn" }, { status: 409 });
           if (unified) {
+            sharedRendered = true;
+            sharedCoverage = unified.wholeQuestion ?? null;
             const lead = unified.lead;
             const evs = lead?.citations ?? [];
             if (
@@ -1437,6 +1446,28 @@ export function createVoiceAdapter({
             };
           }
         }
+        // Whole-question coverage on the call. A turn rendered by the shared
+        // resolver already carries its coverage and disclosure in lead.text.
+        // A voice-local renderer has no qualified decomposition (its splits
+        // are not qualification), so an asserting answer discloses that
+        // whole-question coverage was not verified, in the caller's language,
+        // with the same sentence the screen shows.
+        // Social replies (thanks, can-you-hear-me, help) assert no answer.
+        if (turn?.spokenTurn && spoken && !sharedRendered && !social) {
+          const kind = finalAnswer({
+            lead: { text: spoken, verdict: turn.spokenTurn.verdict },
+          }).kind;
+          const coverage = wholeQuestionCoverage({ question: askedRaw }, kind);
+          turn.spokenTurn.wholeQuestion = coverage;
+          if (coverage.state === "unverified") {
+            const notice = coverageNotice(
+              lang === "hi" ? "hi" : lang === "hinglish" ? "hinglish" : "en",
+            );
+            if (!spoken.includes(notice)) spoken = `${spoken.trim()} ${notice}`;
+            turn.spokenTurn.spoken = spoken;
+          }
+        } else if (turn?.spokenTurn && sharedRendered)
+          turn.spokenTurn.wholeQuestion = sharedCoverage;
         // Answer first, nothing repeated: a general explanation already spoken
         // earlier in THIS call ("Some general background: ferritin shows...")
         // is not read out again. Facts are never dropped, only these fixed

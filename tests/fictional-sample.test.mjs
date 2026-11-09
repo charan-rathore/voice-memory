@@ -66,5 +66,11 @@ test("'Was the budget approved?' is answered from the budget sentence, not refus
 
 test("the explicit launch negative still answers the launch question", async () => {
   const r = await ask("Is the pilot launch approved?");
-  assert.match(r.lead?.text ?? "", /^No\. .*pilot launch is not approved\.$/);
+  // Reviewed fixture update (docs/qualification/whole-question-coverage-
+  // 2026-11-09.md): an opaque-plan answer now ends with the one coverage
+  // disclosure sentence. The answer itself is unchanged and still anchored.
+  assert.match(
+    r.lead?.text ?? "",
+    /^No\. .*pilot launch is not approved\. I haven't verified that this covers every part of the question\.$/,
+  );
 });

@@ -80,7 +80,15 @@ export async function speak(voice, history) {
   return { status: 200, text };
 }
 
-const words = (s) => s.split(/\s+/).filter(Boolean).length;
+// Reviewed fixture update (docs/qualification/whole-question-coverage-
+// 2026-11-09.md): opaque-plan answers end with one fixed coverage disclosure.
+// The word cap measures the answer itself; the disclosure on the call is
+// asserted in tests/whole-question-coverage-api.test.mjs.
+const COVERAGE_NOTICE =
+  "I haven't verified that this covers every part of the question.";
+const answerWords = (s) =>
+  s.replace(COVERAGE_NOTICE, "").split(/\s+/).filter(Boolean).length;
+const words = answerWords;
 const low = (s) => s.toLowerCase();
 
 export function judge(c, text) {
