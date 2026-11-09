@@ -431,19 +431,30 @@ function anchorEntry(series, anchor) {
 }
 
 function authorityConflictAnswer(used, lang = "en") {
-  const spoken = {
-    en: "These reports give conflicting values with equal report authority. I cannot identify a correction or choose a result from upload order. Please check the original reports with the lab.",
-    hi: "इन रिपोर्ट्स में समान दर्जे के अलग नतीजे हैं। अपलोड के क्रम से मैं सुधार या सही नतीजा नहीं चुन सकती। कृपया लैब से मूल रिपोर्ट की जाँच करें।",
+  const accessionConflict = used.some(
+    (o) => o.authorityConflictReason === "different_accessions",
+  );
+  const accessionSpoken = {
+    en: "These results have different printed accession identifiers for the same collection date. Date and report status alone do not establish that one corrects the other. I cannot choose a single result from these records. Please check the original reports with the lab.",
+    hi: "इन नतीजों की संग्रह तारीख एक है, लेकिन छपे एक्सेशन पहचानकर्ता अलग हैं। केवल तारीख और रिपोर्ट की स्थिति से यह साबित नहीं होता कि एक नतीजा दूसरे का सुधार है। मैं एक नतीजा नहीं चुन सकती। कृपया लैब से मूल रिपोर्ट की जाँच करें।",
     hinglish:
-      "In reports mein barabar authority ke alag results hain. Upload order se correction ya sahi result nahi chun sakti. Lab se original reports check kijiye.",
-  }[lang];
+      "In results ki collection date ek hai, lekin printed accession identifiers alag hain. Sirf date aur report status se correction link nahi banta. Main ek result nahi chun sakti. Lab se original reports check kijiye.",
+  };
+  const spoken = accessionConflict
+    ? accessionSpoken[lang]
+    : {
+        en: "These reports give conflicting values with equal report authority. I cannot identify a correction or choose a result from upload order. Please check the original reports with the lab.",
+        hi: "इन रिपोर्ट्स में समान दर्जे के अलग नतीजे हैं। अपलोड के क्रम से मैं सुधार या सही नतीजा नहीं चुन सकती। कृपया लैब से मूल रिपोर्ट की जाँच करें।",
+        hinglish:
+          "In reports mein barabar authority ke alag results hain. Upload order se correction ya sahi result nahi chun sakti. Lab se original reports check kijiye.",
+      }[lang];
   return {
     spoken,
     verdict: "NOT_COMPARABLE",
     field: null,
     intent: "LOOKUP",
     lang,
-    used,
+    used: used.map((o) => ({ ...o, authorityConflict: true })),
   };
 }
 
@@ -940,7 +951,22 @@ function correctionTurn(
 export function observationEvidence(o, bundle) {
   const src = bundle.sources.find((s) => s.id === o.report.sourceId);
   if (!src || typeof o.source.start !== "number") return null;
-  const { start, end } = o.source;
+  let { start, end } = o.source;
+  if (o.authorityConflictReason === "different_accessions") {
+    const recordStart = o.report.span?.start ?? 0;
+    // This refusal claims a specimen-identifier conflict, so row-only
+    // evidence is insufficient. Include the source-owned record header.
+    if (
+      !Number.isInteger(recordStart) ||
+      recordStart < 0 ||
+      recordStart > start ||
+      !src.text.slice(recordStart, end).includes(o.report.meta.accession)
+    )
+      return null;
+    const header = src.text.slice(recordStart, end);
+    const identifierAt = header.indexOf(o.report.meta.accession);
+    start = recordStart + header.lastIndexOf("\n", identifierAt) + 1;
+  }
   return {
     sourceId: src.id,
     clinical: true,

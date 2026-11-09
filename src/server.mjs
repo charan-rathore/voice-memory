@@ -1158,6 +1158,7 @@ export function createLocalServer({
             citations.length === used.length &&
             used.every(
               (o) =>
+                !o.authorityConflict &&
                 exactTestLabel(o.test) === r.slots.object &&
                 subjectOf(o.report) === owner,
             ) &&
@@ -1328,7 +1329,10 @@ export function createLocalServer({
             a = null;
           // A source-owned block is still not an independent clinical proof.
           // But a missing block must never count as whole-request success.
-          const supportedBlock = !!a?.spoken && (a.citations ?? []).length > 0;
+          const supportedBlock =
+            !!a?.spoken &&
+            (a.citations ?? []).length > 0 &&
+            !(a.used ?? []).some((o) => o.authorityConflict);
           if (!supportedBlock) a = null;
           ownerOutcomes.push({
             owner: id,
@@ -1498,6 +1502,7 @@ export function createLocalServer({
             citations.length === used.length &&
             used.every(
               (o) =>
+                !o.authorityConflict &&
                 exactTestLabel(o.test) === r.slots.object &&
                 subjectOf(o.report) === opts.patient,
             ) &&

@@ -705,7 +705,21 @@ export function seriesFor(reports, key, patientId) {
       const distinct = new Set(
         peers.map((o) => JSON.stringify([o.raw, o.unit, o.comparator, o.qual])),
       );
-      const conflicts = distinct.size > 1 ? peers : [];
+      // Collection date and report status cannot link different printed
+      // specimen/order identifiers into a correction. This rejects unsupported
+      // linkage; matching or missing identifiers are not positive proof.
+      const accessions = new Set(
+        list.map((o) => o.report.meta.accession).filter(Boolean),
+      );
+      const accessionConflict = accessions.size > 1;
+      const conflicts = accessionConflict
+        ? list.map((o) => ({
+            ...o,
+            authorityConflictReason: "different_accessions",
+          }))
+        : distinct.size > 1
+          ? peers
+          : [];
       const current = conflicts.length
         ? { ...selected, authorityConflict: true }
         : selected;
