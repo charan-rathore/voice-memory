@@ -99,6 +99,51 @@ try {
   await page.locator("#answer").screenshot({
     path: "/downloads/voice-memory-event-unsupported-mobile.png",
   });
+  await ask("Who approved the commercial scope?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Recorded source assertion",
+  );
+  assert.match(
+    await page.locator("#answer").innerText(),
+    /The source names Priya/,
+  );
+  await page
+    .locator("#answer")
+    .screenshot({ path: "/downloads/voice-memory-event-actor-mobile.png" });
+  await ask("Who signed the commercial scope?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Answer not established",
+  );
+  await page.locator("#answer").screenshot({
+    path: "/downloads/voice-memory-event-actor-unresolved-mobile.png",
+  });
+  await page.locator("#files").setInputFiles({
+    name: "Purchase.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      "# PURCHASE ORDER PO-55120\n\nAPPROVED / SIGNED\nApproved by: Priya Nair, Head of Procurement Approval date: 03 Nov 2026",
+    ),
+  });
+  await page.locator("#upl-list li", { hasText: "Ready" }).nth(1).waitFor();
+  await ask("Who approved the purchase order?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Recorded fields",
+  );
+  assert.match(
+    await page.locator("#answer").innerText(),
+    /not confirmation that the event occurred/,
+  );
+  await page
+    .locator("#answer")
+    .screenshot({ path: "/downloads/voice-memory-recorded-role-mobile.png" });
+  await ask("Who signed the purchase order?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Answer not established",
+  );
   console.log(
     "PASS event source assertion, unsupported signature, complete compound partial outcome;320px screenshots captured. No provider calls.",
   );

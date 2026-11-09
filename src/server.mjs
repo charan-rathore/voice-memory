@@ -1442,7 +1442,13 @@ export function createLocalServer({
             lead: {
               text: parts.join(" "),
               verdict: admission.complete
-                ? "RECORDED_EVENT"
+                ? admission.outcomes.every((o) =>
+                    o.claims.every(
+                      (c) => c.operation === "recorded-role-field",
+                    ),
+                  )
+                  ? "SCHEMA_FIELDS"
+                  : "RECORDED_EVENT"
                 : admission.userReady
                   ? "PARTIAL_DOCUMENT"
                   : admission.status === "clarify"

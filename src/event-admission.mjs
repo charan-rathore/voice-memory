@@ -1,6 +1,7 @@
 // Bounded event assertion language, not an arbitrary-document entailment model.
 // Questions are consumed completely before retrieval. Actor, action, object,
-// recipient, amount and polarity are never supplied by a candidate producer.
+// recipient, amount and polarity are caller constraints; an explicit actor-slot
+// completion is reconstructed from the complete assertion source, not a producer.
 import { createHash } from "node:crypto";
 import { admitAnswer } from "./answer-admission.mjs";
 const digest = (x) =>
@@ -63,6 +64,21 @@ const actionOf = (participle) =>
     participle.toLowerCase()
   ];
 function parseQuestionPart(s) {
+  const actorQuestion = new RegExp(
+    `^Who (?:(paid) (${money}) to (${entity})|(approved|signed) (${object}))$`,
+    "i",
+  ).exec(s);
+  if (actorQuestion) {
+    const concrete = canon(
+      "Placeholder",
+      actionOf(actorQuestion[1] || actorQuestion[4]),
+      actorQuestion[1]
+        ? `${actorQuestion[2]} to ${actorQuestion[3]}`
+        : actorQuestion[5],
+      "positive",
+    );
+    return concrete ? { ...concrete, actor: null } : null;
+  }
   const direct = eventPattern(true).exec(s);
   if (direct)
     return canon(
@@ -114,9 +130,9 @@ export function eventQuestionPlan(question, bundle, generation) {
     return null;
   // This exact connective is part of the small language. No guessed split of
   // opaque clauses, follow-up pronouns, corrections or temporal modifiers.
-  const m = /^(?:Did|Has|Was) .+\?$/i.exec(question);
+  const m = /^(?:Did|Has|Was|Who) .+\?$/i.exec(question);
   if (!m) return null;
-  const parts = question.slice(0, -1).split(/ and (?=(?:did|has|was) )/i);
+  const parts = question.slice(0, -1).split(/ and (?=(?:did|has|was|who) )/i);
   if (parts.length > 4) return null;
   const parsed = parts.map(parseQuestionPart);
   if (parsed.some((p) => !p)) return null;
@@ -126,6 +142,7 @@ export function eventQuestionPlan(question, bundle, generation) {
     protectedText: question,
     owners: [],
     slots,
+    ...(slots.actor === null ? { answerSlot: "actor" } : {}),
     semanticState: "bounded-explicit-event-question",
   }));
   const value = {
@@ -137,7 +154,7 @@ export function eventQuestionPlan(question, bundle, generation) {
     coverageEstablished: true,
     semanticQualification: "bounded-explicit-event-assertion-language",
     limitations: [
-      "Only fully consumed named actor pay/approve/sign questions and assertion-only source sets are certified. No coreference, synonyms, dates, versions, surrounding conditions or real-world event truth is inferred.",
+      "Only fully consumed pay/approve/sign questions are handled. Event completion requires assertion-only source sets. Exact record headings with literal Approved by or Signed by fields support recorded-field observations only. No coreference, synonyms, dates, versions, surrounding conditions or real-world event truth is inferred.",
     ],
   };
   return freeze({ ...value, key: digest(value) });
@@ -180,10 +197,101 @@ const ambiguousCase = (facts, slots) =>
       relationKey(f.slots).toLowerCase() === relationKey(slots).toLowerCase() &&
       relationKey(f.slots) !== relationKey(slots),
   );
+// A wh requirement leaves exactly one slot open, not every slot. Compare
+// every bound predicate; only positive source assertions can fill its actor.
+function sourceMatches(fact, requirement) {
+  if (requirement.answerSlot !== "actor")
+    return relationKey(fact.slots) === relationKey(requirement.slots);
+  const { actor: _, polarity: __, ...source } = fact.slots;
+  const { actor: ___, polarity: ____, ...wanted } = requirement.slots;
+  return same(source, wanted);
+}
+function eventHits(source, requirement) {
+  const all = source.facts.filter((f) => sourceMatches(f, requirement));
+  const caseConflict =
+    requirement.answerSlot === "actor"
+      ? all.some((a) =>
+          source.facts.some(
+            (b) =>
+              relationKey(a.slots).toLowerCase() ===
+                relationKey(b.slots).toLowerCase() &&
+              relationKey(a.slots) !== relationKey(b.slots),
+          ),
+        )
+      : ambiguousCase(source.facts, requirement.slots);
+  const conflict =
+    caseConflict ||
+    new Set(all.map((f) => f.slots.polarity)).size > 1 ||
+    (requirement.answerSlot === "actor" &&
+      new Set(
+        all
+          .filter((f) => f.slots.polarity === "positive")
+          .map((f) => f.slots.actor),
+      ).size > 1);
+  return {
+    conflict,
+    hits:
+      requirement.answerSlot === "actor"
+        ? all.filter((f) => f.slots.polarity === "positive")
+        : all,
+  };
+}
+// A printed role field is a different operation from an event assertion.
+// It reports only literal source text under an exactly named record heading.
+// It never turns status words, prose or a nearby person's name into an actor.
+function recordedRoleClaims(bundle, requirement) {
+  if (requirement.answerSlot !== "actor") return [];
+  const { action, object: target, amount, recipient } = requirement.slots;
+  if (amount !== null || recipient !== null) return [];
+  const label = { approve: "Approved by", sign: "Signed by", pay: "Paid by" }[
+    action
+  ];
+  const wanted = target.replace(/^the /, "").toLowerCase();
+  const rows = [];
+  for (const source of bundle.sources ?? []) {
+    let offset = 0,
+      heading = null;
+    for (const line of source.text.split("\n")) {
+      const start = offset;
+      offset += line.length + 1;
+      const h =
+        /^#{1,6} ([A-Za-z][A-Za-z -]*?)(?: ([A-Z]{1,8}-[A-Z0-9-]+))?$/.exec(
+          line,
+        );
+      if (line.startsWith("#"))
+        heading =
+          h && h[1].toLowerCase() === wanted
+            ? { start, end: start + line.length, quote: line }
+            : null;
+      if (!heading || !line.startsWith(label + ": ")) continue;
+      const value = line.slice(label.length + 2);
+      if (!value || value.length > 500) continue;
+      const cite = (span) => ({
+        sourceId: source.id,
+        title: source.title,
+        hash: source.hash ?? digest(source.text),
+        ...span,
+      });
+      rows.push({
+        text: `The source record lists "${line}". This is a recorded field, not confirmation that the event occurred.`,
+        fieldValue: value,
+        operation: "recorded-role-field",
+        citations: [
+          cite(heading),
+          cite({ start, end: start + line.length, quote: line }),
+        ],
+      });
+    }
+  }
+  return rows;
+}
 function proposedClaim(fact, requirement) {
   const matches = fact.slots.polarity === requirement.slots.polarity;
   return {
-    text: `${matches ? "Yes" : "No"}. The source records: "${fact.citation.quote}"`,
+    text:
+      requirement.answerSlot === "actor"
+        ? `The source names ${fact.slots.actor}: "${fact.citation.quote}"`
+        : `${matches ? "Yes" : "No"}. The source records: "${fact.citation.quote}"`,
     slots: fact.slots,
     citations: [fact.citation],
   };
@@ -200,10 +308,28 @@ export function verifyEventCertificate({ plan, requirement, claim, bundle }) {
     !rebuilt.requirements.some((r) => same(r, requirement))
   )
     return { ok: false };
+  const roleFields = recordedRoleClaims(bundle, requirement);
+  if (claim.operation === "recorded-role-field")
+    return {
+      ok:
+        roleFields.length > 0 &&
+        new Set(roleFields.map((c) => c.fieldValue)).size === 1 &&
+        roleFields.some((c) =>
+          same(c, {
+            text: claim.text,
+            fieldValue: claim.fieldValue,
+            operation: claim.operation,
+            citations: claim.citations,
+          }),
+        ),
+      kind: "exact-recorded-role-field",
+      requirementId: requirement.id,
+      questionPlanKey: plan.key,
+      sourceGeneration: plan.sourceGeneration,
+      operation: "read-literal-role-label-under-exact-record-heading",
+    };
   const source = eventSourceFacts(bundle);
-  const hits = source.facts.filter(
-    (f) => relationKey(f.slots) === relationKey(requirement.slots),
-  );
+  const { hits, conflict } = eventHits(source, requirement);
   const match = hits.find((f) =>
     same(proposedClaim(f, requirement), {
       text: claim.text,
@@ -214,7 +340,7 @@ export function verifyEventCertificate({ plan, requirement, claim, bundle }) {
   return {
     ok:
       source.complete &&
-      !ambiguousCase(source.facts, requirement.slots) &&
+      !conflict &&
       !!match &&
       new Set(hits.map((f) => f.slots.polarity)).size === 1,
     kind: "explicit-event-relation",
@@ -244,12 +370,17 @@ export async function resolveExplicitEvents({
     questionPlanKey: plan.key,
     sourceGeneration,
     outcomes: plan.requirements.map((r) => {
-      const hits = source.facts.filter(
-        (f) => relationKey(f.slots) === relationKey(r.slots),
-      );
-      const conflict =
-        ambiguousCase(source.facts, r.slots) ||
-        new Set(hits.map((f) => f.slots.polarity)).size > 1;
+      const roleFields = recordedRoleClaims(bundle, r);
+      if (roleFields.length) {
+        const conflict =
+          new Set(roleFields.map((c) => c.fieldValue)).size !== 1;
+        return {
+          requirementId: r.id,
+          status: conflict ? "clarify" : "answered",
+          claims: conflict ? [] : roleFields,
+        };
+      }
+      const { hits, conflict } = eventHits(source, r);
       return {
         requirementId: r.id,
         status:

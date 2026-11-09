@@ -77,6 +77,13 @@ test("actual HTTP wrong signature inference is blocked; certified event requirem
     assert.equal(wrong.final.citations.length, 0);
     assert.equal(wrong.admission.outcomes[0].status, "not_established");
     assert.equal(wrong.questionPlan.requirements[0].slots.action, "sign");
+    const wrongActor = await ask(original, "Who signed the commercial scope?");
+    assert.equal(
+      wrongActor.final.kind,
+      "abstained",
+      "signature actor must not come from approval",
+    );
+    assert.equal(wrongActor.final.citations.length, 0);
     const w = await ws();
     await upload(
       w,
@@ -113,6 +120,8 @@ test("actual HTTP wrong signature inference is blocked; certified event requirem
       "Did Priya approve the commercial scope?",
       "Has Priya approved the commercial scope?",
       "Was the commercial scope approved by Priya?",
+      "Who approved the commercial scope?",
+      "Who paid $1,500 to Nimbus?",
       "Was the delivery plan signed by Kamal?",
       "Did Kamal sign the delivery plan?",
       "Did Arjun pay $1,500 to Nimbus and did Priya sign the commercial scope?",
@@ -142,6 +151,8 @@ test("actual HTTP wrong signature inference is blocked; certified event requirem
       "Did Priya sign the commercial scope?",
       "Has Priya signed the commercial scope?",
       "Was the commercial scope signed by Priya?",
+      "Who signed the commercial scope?",
+      "Who signed the delivery plan?",
     ]) {
       const r = await ask(w, q);
       assert.equal(r.final.kind, "abstained", q);
@@ -161,6 +172,21 @@ test("actual HTTP wrong signature inference is blocked; certified event requirem
       conflict.admission.outcomes.map((o) => o.status),
       ["clarify", "answered"],
     );
+    await upload(
+      w,
+      "Purchase.txt",
+      "# PURCHASE ORDER PO-55120\n\nAPPROVED / SIGNED\nApproved by: Priya Nair, Head of Procurement Approval date: 03 Nov 2026",
+    );
+    const role = await ask(w, "Who approved the purchase order?");
+    assert.equal(role.final.verdict, "SCHEMA_FIELDS");
+    assert.match(role.final.text, /Priya Nair/);
+    assert.match(role.final.text, /not confirmation that the event occurred/);
+    assert.equal(
+      await voice("Who approved the purchase order?"),
+      role.final.text,
+    );
+    const notSigned = await ask(w, "Who signed the purchase order?");
+    assert.equal(notSigned.final.kind, "abstained");
     assert.equal(calls, 0);
   } finally {
     s.closeAllConnections();

@@ -347,3 +347,144 @@ test("explicit active, perfect and passive syntax maps independently to the same
     assert.equal(eventQuestionPlan(q, bundle(source), 3), null, q);
   }
 });
+
+test("actor-slot completion binds every remaining relation slot and never treats approval as signature", async () => {
+  const source =
+    "Priya approved the commercial scope.\nKamal signed the delivery plan.\nArjun paid $1,500 to Nimbus.\nNimbus paid $5,000 to Arjun.";
+  for (const [q, actor] of [
+    ["Who approved the commercial scope?", "Priya"],
+    ["Who signed the delivery plan?", "Kamal"],
+    ["Who paid $1,500 to Nimbus?", "Arjun"],
+    ["Who paid $5,000 to Arjun?", "Nimbus"],
+  ]) {
+    const r = await resolve(q, source);
+    assert.ok(r?.plan, q);
+    assert.equal(r.plan.requirements[0].answerSlot, "actor");
+    assert.equal(r.plan.requirements[0].slots.actor, null);
+    assert.equal(r.admission.complete, true, q);
+    assert.equal(r.admission.outcomes[0].claims[0].slots.actor, actor);
+    assert.ok(
+      r.admission.outcomes[0].claims[0].text.startsWith(
+        "The source names " + actor,
+      ),
+    );
+  }
+  for (const q of [
+    "Who signed the commercial scope?",
+    "Who approved the delivery plan?",
+    "Who paid $5,000 to Nimbus?",
+    "Who paid $1,500 to Arjun?",
+  ]) {
+    assert.equal((await resolve(q, source)).admission.userReady, false, q);
+  }
+  assert.equal(
+    (
+      await resolve(
+        "Who signed the delivery plan?",
+        "Kamal did not sign the delivery plan.",
+      )
+    ).admission.userReady,
+    false,
+  );
+  const conflict = await resolve(
+    "Who signed the delivery plan?",
+    "Kamal signed the delivery plan.\nPriya signed the delivery plan.",
+  );
+  assert.equal(conflict.admission.status, "clarify");
+  const negated = await resolve(
+    "Who signed the delivery plan?",
+    "Kamal signed the delivery plan.\nKamal did not sign the delivery plan.",
+  );
+  assert.equal(negated.admission.status, "clarify");
+  const partial = await resolve(
+    "Who approved the commercial scope and who signed the commercial scope?",
+    source,
+  );
+  assert.equal(partial.admission.status, "partial");
+  assert.deepEqual(
+    partial.admission.outcomes.map((o) => o.status),
+    ["answered", "not_established"],
+  );
+  const b = bundle(source),
+    r = await resolveExplicitEvents({
+      question: "Who approved the commercial scope?",
+      bundle: b,
+      sourceGeneration: 3,
+    });
+  const claim = r.admission.outcomes[0].claims[0],
+    requirement = r.plan.requirements[0];
+  const forged = {
+    text: claim.text.replace("Priya", "Kamal"),
+    slots: { ...claim.slots, actor: "Kamal" },
+    citations: claim.citations,
+  };
+  assert.equal(
+    verifyEventCertificate({
+      plan: r.plan,
+      requirement,
+      claim: forged,
+      bundle: b,
+    }).ok,
+    false,
+  );
+});
+
+test("actor questions over arbitrary source language keep caller slots but cannot certify an event", async () => {
+  const source = "Procurement record\nPriya approved the purchase order.";
+  const r = await resolve("Who approved the purchase order?", source);
+  assert.equal(r.admission.userReady, false);
+  assert.equal(r.plan.requirements[0].slots.action, "approve");
+});
+
+test("literal role-field observations bind exact record heading and exact action label independently", async () => {
+  const source =
+    "# PURCHASE ORDER PO-55120\n\nAPPROVED / SIGNED\nApproved by: Priya Nair, Head of Procurement Approval date: 03 Nov 2026\n\n# DELIVERY NOTE DN-901\nSigned by: Kamal";
+  const r = await resolve("Who approved the purchase order?", source);
+  assert.equal(r.admission.complete, true);
+  const c = r.admission.outcomes[0].claims[0];
+  assert.equal(c.operation, "recorded-role-field");
+  assert.match(c.text, /Priya Nair/);
+  assert.match(c.text, /not confirmation that the event occurred/);
+  assert.deepEqual(
+    c.citations.map((c) => c.quote),
+    [
+      "# PURCHASE ORDER PO-55120",
+      "Approved by: Priya Nair, Head of Procurement Approval date: 03 Nov 2026",
+    ],
+  );
+  for (const q of [
+    "Who signed the purchase order?",
+    "Who approved the delivery note?",
+    "Who approved the scope?",
+  ])
+    assert.equal((await resolve(q, source)).admission.userReady, false, q);
+  const mixed = await resolve(
+    "Who approved the purchase order and who signed the purchase order?",
+    source,
+  );
+  assert.equal(mixed.admission.status, "partial");
+  const conflicting = await resolve(
+    "Who approved the purchase order?",
+    source + "\n# PURCHASE ORDER PO-992\nApproved by: Noor",
+  );
+  assert.equal(conflicting.admission.status, "clarify");
+  const amended = await resolve(
+    "Who approved the purchase order?",
+    source.replace(
+      "# PURCHASE ORDER PO-55120",
+      "# NOT THE PURCHASE ORDER PO-55120",
+    ),
+  );
+  assert.equal(amended.admission.userReady, false);
+  const b = bundle(source);
+  const forged = { ...c, text: c.text.replace("Priya", "Noor") };
+  assert.equal(
+    verifyEventCertificate({
+      plan: r.plan,
+      requirement: r.plan.requirements[0],
+      claim: forged,
+      bundle: b,
+    }).ok,
+    false,
+  );
+});
