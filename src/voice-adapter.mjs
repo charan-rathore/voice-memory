@@ -20,6 +20,7 @@ import {
   embedQueryReady,
 } from "./dense.mjs";
 import { spokenTurn, historyField } from "./spoken.mjs";
+import { createConversationShadow } from "./conversation-shadow.mjs";
 import { normalizeSpoken } from "./spoken-normalize.mjs";
 import { repairRecordTerms, vocabularyOf } from "./transcript-fix.mjs";
 
@@ -104,6 +105,10 @@ export function createVoiceAdapter({
   // Operator-provided (fixed) credentials get a durable record that survives
   // grant release: bundle binding, immutable hard expiry, retirement.
   const credentials = new Map();
+  // The shared conversation contract, observing every spoken turn with
+  // server-owned per-call state (src/conversation-shadow.mjs). It does not
+  // change what is spoken yet.
+  const shadow = createConversationShadow();
   const admit = (token) => {
     const cred = credentials.get(token);
     if (cred) {
@@ -386,6 +391,13 @@ export function createVoiceAdapter({
           ]),
         ]);
       const startingVersion = versionOf(bundle);
+      // One conversation per call. A fixed bearer is shared by callers, so
+      // without a per-call handle there is no safe conversation to keep.
+      const shadowKey = callTag
+        ? JSON.stringify(["call", callTag])
+        : credentials.has(token)
+          ? null
+          : JSON.stringify(["token", token]);
       const askedRaw = latestUser(data.messages);
       if (!askedRaw) {
         return Response.json(
@@ -415,6 +427,7 @@ export function createVoiceAdapter({
         );
       }
       if (scopeGone || scopeBad) {
+        shadow.forget(shadowKey);
         // Their workspace expired (30 idle minutes) or was replaced, or the
         // call names a scope this server cannot read. Say so plainly, and
         // show the same words on the page; never answer from the fictional
@@ -1349,6 +1362,25 @@ export function createVoiceAdapter({
           // are never truncated into a potentially misleading replay.
           while (cache.size > 16) cache.delete(cache.keys().next().value);
         }
+        let conversation = null;
+        try {
+          conversation = shadow.observe({
+            key: shadowKey,
+            bundle,
+            version: startingVersion,
+            heard: askedRaw,
+            legacy: {
+              spoken,
+              verdict: turn?.spokenTurn?.verdict ?? null,
+              intent: social?.intent ?? turn?.spokenTurn?.intent ?? null,
+              citations: turn?.spokenTurn?.citations ?? [],
+              evidence: turn?.result?.evidence?.length ?? 0,
+            },
+          });
+          grant.conversation = conversation;
+        } catch {
+          /* the shadow never breaks a call */
+        }
         const id = "local-contract-" + randomBytes(8).toString("hex");
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
@@ -1384,6 +1416,8 @@ export function createVoiceAdapter({
                 scope: bundle?.scope ?? null,
                 call: callTag,
                 caseId,
+                // the shared contract's reading of this turn (additive)
+                conversation,
               });
             } catch {
               /* memory is best-effort; never break the call */
@@ -1489,6 +1523,12 @@ export function createVoiceAdapter({
       const g = grants.get(token);
       if (!g || g.expires <= now()) return null;
       return g.turn ?? null;
+    },
+    /** The shared contract's reading of this capability's last spoken turn. */
+    lastConversation(token) {
+      const g = grants.get(token);
+      if (!g || g.expires <= now()) return null;
+      return g.conversation ?? null;
     },
   };
 }
