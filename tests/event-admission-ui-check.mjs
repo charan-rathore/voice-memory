@@ -171,6 +171,18 @@ try {
   await page
     .locator("#answer")
     .screenshot({ path: "/downloads/voice-memory-event-qualifier-mobile.png" });
+  await ask("How much did Arjun not pay to Nimbus?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Answer not established",
+  );
+  assert.match(
+    await page.locator("#answer").innerText(),
+    /related evidence, not an answer/,
+  );
+  await page.locator("#answer").screenshot({
+    path: "/downloads/voice-memory-assertion-domain-unresolved-mobile.png",
+  });
   await page.locator("#files").setInputFiles({
     name: "Purchase.txt",
     mimeType: "text/plain",

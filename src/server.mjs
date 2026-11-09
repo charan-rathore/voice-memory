@@ -4,6 +4,7 @@ import {
   resolveExplicitEvents,
   eventQuestionPlan,
   eventRemainderPlan,
+  eventSourceFacts,
   resolveExplicitEventRemainder,
 } from "./event-admission.mjs";
 import {
@@ -1485,6 +1486,58 @@ export function createLocalServer({
               steps: [
                 "caller_owned_event_slots",
                 "independent_source_relation_reconstruction",
+              ],
+            },
+          },
+        };
+      }
+      // Source-domain admission is independent of question surface form.
+      // When every source byte is in the explicit assertion language, no
+      // lexical fallback may answer an unconsumed requirement in that domain.
+      const assertionSource = eventSourceFacts(bundle);
+      if (
+        assertionSource.complete &&
+        !(bundle.clinical ?? []).length &&
+        !(bundle.sourceRecords ?? []).some((r) => r.meta?.patient)
+      ) {
+        return {
+          raw: null,
+          shown: {
+            question: requestOriginal,
+            sourceQuestionPlan: immutableRequest,
+            lead: {
+              text: "I could not independently match this complete request to the source assertions. The passages below are related evidence, not an answer.",
+              verdict: "UNKNOWN",
+              field: null,
+              citations: [],
+            },
+            evidence: decorateResult(
+              {
+                question: requestOriginal,
+                evidence: assertionSource.facts.map((f) => f.citation),
+              },
+              s,
+            ).evidence,
+            visual: null,
+            closest: null,
+            admission: {
+              questionPlanKey: immutableRequest.key,
+              sourceGeneration: immutableRequest.sourceGeneration,
+              status: "unresolved",
+              userReady: false,
+              complete: false,
+              reason: "assertion_domain_requirement_not_admitted",
+              outcomes: immutableRequest.requirements.map((r) => ({
+                requirementId: r.id,
+                status: "not_established",
+                claims: [],
+              })),
+            },
+            semantic: {
+              intent: "UNRESOLVED_ASSERTION_DOMAIN_REQUIREMENT",
+              lang,
+              steps: [
+                "complete_assertion_source_domain_requires_independent_event_admission",
               ],
             },
           },
