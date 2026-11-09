@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   eventQuestionPlan,
+  eventRemainderPlan,
+  resolveExplicitEventRemainder,
   eventSourceFacts,
   resolveExplicitEvents,
   verifyEventCertificate,
@@ -550,5 +552,67 @@ test("amount completion preserves payer/payee/action and complete repeated inter
       bundle: bundle(source),
     }).ok,
     false,
+  );
+});
+
+test("exact event prefix retains the complete opaque conjunction and remainder without a whole-answer certificate", async () => {
+  const b = bundle(
+    "Arjun paid $1,500 to Nimbus.\nNimbus paid $5,000 to Arjun.",
+  );
+  const q = "How much did Arjun pay to Nimbus and when and who approved it?";
+  const plan = eventRemainderPlan(q, b, 3);
+  assert.equal(plan.coverageEstablished, false);
+  assert.equal(plan.originalQuestion, q);
+  assert.equal(plan.unresolvedRemainder, " and when and who approved it?");
+  assert.ok(Object.isFrozen(plan.requirements[1]));
+  const r = await resolveExplicitEventRemainder({
+    question: q,
+    bundle: b,
+    sourceGeneration: 3,
+  });
+  assert.equal(r.admission.status, "partial");
+  assert.equal(r.admission.complete, false);
+  assert.equal(r.requirementCoverage.semanticAdmissionVerified, false);
+  assert.deepEqual(
+    r.admission.outcomes.map((o) => o.status),
+    ["answered", "not_established"],
+  );
+  assert.equal(r.requirementCoverage.prefixAdmission.admission.complete, true);
+  const or =
+    "How much did Arjun pay to Nimbus or how much did Nimbus pay to Arjun?";
+  const disjunction = await resolveExplicitEventRemainder({
+    question: or,
+    bundle: b,
+    sourceGeneration: 3,
+  });
+  assert.equal(disjunction.admission.userReady, false);
+  assert.equal(
+    disjunction.admission.outcomes.flatMap((o) => o.claims).length,
+    0,
+  );
+  assert.equal(
+    disjunction.plan.unresolvedRemainder,
+    " or how much did Nimbus pay to Arjun?",
+  );
+  assert.equal(
+    eventRemainderPlan(
+      "How much did Arjun pay to Nimbus and how much did Nimbus pay to Arjun?",
+      b,
+      3,
+    ),
+    null,
+  );
+  assert.equal(
+    eventRemainderPlan("How much did Arjun pay to Nimbus if approved?", b, 3),
+    null,
+  );
+  assert.equal(
+    await resolveExplicitEventRemainder({
+      question: q,
+      bundle: b,
+      sourceGeneration: 3,
+      isCurrent: () => false,
+    }),
+    null,
   );
 });

@@ -141,6 +141,26 @@ try {
   await page.locator("#answer").screenshot({
     path: "/downloads/voice-memory-event-amount-partial-mobile.png",
   });
+  await ask("How much did Arjun pay to Nimbus and when and who approved it?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Partial answer",
+  );
+  assert.match(
+    await page.locator("#answer").innerText(),
+    /when and who approved it/,
+  );
+  await page
+    .locator("#answer")
+    .screenshot({ path: "/downloads/voice-memory-event-remainder-mobile.png" });
+  await ask(
+    "How much did Arjun pay to Nimbus or how much did Nimbus pay to Arjun?",
+  );
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Answer not established",
+  );
+  assert.equal(await page.locator("#answer .cites .cite").count(), 0);
   await page.locator("#files").setInputFiles({
     name: "Purchase.txt",
     mimeType: "text/plain",

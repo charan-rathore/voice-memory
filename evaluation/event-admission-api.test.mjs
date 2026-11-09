@@ -198,6 +198,43 @@ test("actual HTTP wrong signature inference is blocked; certified event requirem
       amountPartial.admission.outcomes.map((o) => o.status),
       ["answered", "not_established"],
     );
+    const simpleRemainder = await ask(
+      w,
+      "How much did Arjun pay to Nimbus and when?",
+    );
+    assert.equal(
+      simpleRemainder.final.kind,
+      "partial",
+      "time requirement cannot be dropped from the amount answer",
+    );
+    const remainderQuestion =
+      "How much did Arjun pay to Nimbus and when and who approved it?";
+    const remainder = await ask(w, remainderQuestion);
+    assert.equal(remainder.final.kind, "partial");
+    assert.equal(remainder.questionPlan.originalQuestion, remainderQuestion);
+    assert.equal(remainder.questionPlan.coverageEstablished, false);
+    assert.equal(
+      remainder.questionPlan.unresolvedRemainder,
+      " and when and who approved it?",
+    );
+    assert.equal(
+      remainder.requirementCoverage.semanticAdmissionVerified,
+      false,
+    );
+    assert.match(remainder.final.text, /\$1,500/);
+    assert.match(remainder.final.text, /when and who approved it/);
+    assert.equal(remainder.admission, null);
+    assert.equal(await voice(remainderQuestion), remainder.final.text);
+    const orQuestion =
+      "How much did Arjun pay to Nimbus or how much did Nimbus pay to Arjun?";
+    const disjunction = await ask(w, orQuestion);
+    assert.equal(disjunction.final.kind, "abstained");
+    assert.equal(disjunction.final.citations.length, 0);
+    assert.equal(
+      disjunction.questionPlan.unresolvedRemainder,
+      " or how much did Nimbus pay to Arjun?",
+    );
+    assert.equal(await voice(orQuestion), disjunction.final.text);
     await upload(
       w,
       "Contradiction.txt",

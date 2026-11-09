@@ -444,3 +444,117 @@ export async function resolveExplicitEvents({
     return null;
   return { plan, admission };
 }
+
+// Compose a completely parsed first clause with an untouched opaque remainder.
+// This does not interpret the remainder or certify whole-question coverage.
+export function eventRemainderPlan(question, bundle, sourceGeneration) {
+  if (
+    typeof question !== "string" ||
+    question.length > 1000 ||
+    !question.endsWith("?")
+  )
+    return null;
+  if (eventQuestionPlan(question, bundle, sourceGeneration)) return null;
+  const body = question.slice(0, -1);
+  const matches = [...body.matchAll(/ (and|or) /gi)];
+  for (const m of matches) {
+    const first = body.slice(0, m.index) + "?",
+      tail = body.slice(m.index);
+    const known = eventQuestionPlan(first, bundle, sourceGeneration);
+    if (!known || known.requirements.length !== 1) continue;
+    const value = {
+      version: 1,
+      originalQuestion: question,
+      sourceGeneration,
+      sourceFingerprint: fingerprint(bundle),
+      coverageEstablished: false,
+      semanticQualification: "explicit-prefix-with-uninterpreted-remainder",
+      unresolvedRemainder: tail + "?",
+      connective: m[1].toLowerCase(),
+      prefixPlanKey: known.key,
+      requirements: [
+        {
+          ...known.requirements[0],
+          id: "prefix-" + digest([question, known.key]).slice(0, 16),
+          protectedText: question,
+        },
+        {
+          id: "opaque-" + digest([question, tail]).slice(0, 16),
+          text: tail + "?",
+          protectedText: tail + "?",
+          owners: [],
+          slots: {},
+          semanticState: "opaque-unresolved-tail",
+        },
+      ],
+      limitations: [
+        "Only the first exact event clause is independently checked. The entire remaining conjunction and text stay opaque; whole-request coverage is not established. For or, neither alternative is selected.",
+      ],
+    };
+    return freeze({ ...value, key: digest(value), prefixQuestion: first });
+  }
+  return null;
+}
+export async function resolveExplicitEventRemainder({
+  question,
+  bundle,
+  sourceGeneration,
+  isCurrent = () => true,
+}) {
+  if (
+    (bundle.clinical ?? []).length ||
+    (bundle.sourceRecords ?? []).some((r) => r.meta?.patient)
+  )
+    return null;
+  const plan = eventRemainderPlan(question, bundle, sourceGeneration);
+  if (!plan) return null;
+  const prefix =
+    plan.connective === "and"
+      ? await resolveExplicitEvents({
+          question: plan.prefixQuestion,
+          bundle,
+          sourceGeneration,
+          isCurrent,
+        })
+      : null;
+  if (!isCurrent() || fingerprint(bundle) !== plan.sourceFingerprint)
+    return null;
+  const first = prefix?.admission.outcomes[0];
+  const outcomes = [
+    {
+      requirementId: plan.requirements[0].id,
+      status: first?.status ?? "not_established",
+      claims: first?.claims ?? [],
+    },
+    {
+      requirementId: plan.requirements[1].id,
+      status: "not_established",
+      claims: [],
+    },
+  ];
+  const userReady = outcomes.some((o) => o.status === "answered");
+  return {
+    plan,
+    admission: {
+      complete: false,
+      userReady,
+      status: userReady ? "partial" : "unresolved",
+      outcomes,
+    },
+    requirementCoverage: {
+      questionPlanKey: plan.key,
+      complete: false,
+      status: userReady ? "partial" : "unresolved",
+      semanticAdmissionVerified: false,
+      unresolvedRemainder: plan.unresolvedRemainder,
+      prefixAdmission: prefix
+        ? { plan: prefix.plan, admission: prefix.admission }
+        : null,
+      outcomes: outcomes.map(({ requirementId, status }) => ({
+        requirementId,
+        status,
+        operation: "independently-checked-prefix-with-opaque-remainder",
+      })),
+    },
+  };
+}

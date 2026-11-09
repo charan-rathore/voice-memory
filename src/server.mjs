@@ -3,6 +3,8 @@ import { clinicalListPlan, exactTestLabel } from "./clinical-requirements.mjs";
 import {
   resolveExplicitEvents,
   eventQuestionPlan,
+  eventRemainderPlan,
+  resolveExplicitEventRemainder,
 } from "./event-admission.mjs";
 import {
   briefAnswer,
@@ -1420,14 +1422,17 @@ export function createLocalServer({
           },
         };
       }
-      const events = await resolveExplicitEvents({
+      const eventArgs = {
         question: requestOriginal,
         bundle,
         sourceGeneration: immutableRequest.sourceGeneration,
         isCurrent: () =>
           s.bundle === bundle &&
           answerGenerations.get(bundle) === immutableRequest.sourceGeneration,
-      });
+      };
+      const events =
+        (await resolveExplicitEvents(eventArgs)) ??
+        (await resolveExplicitEventRemainder(eventArgs));
       if (events) {
         const { plan, admission } = events;
         const parts = admission.outcomes.map((o) => {
@@ -1468,10 +1473,14 @@ export function createLocalServer({
               limitations: plan.limitations,
             },
             sourceQuestionPlan: plan,
-            admission,
+            ...(events.requirementCoverage
+              ? { requirementCoverage: events.requirementCoverage }
+              : { admission }),
             evidence: [],
             semantic: {
-              intent: "EXPLICIT_EVENT_REQUIREMENTS",
+              intent: events.requirementCoverage
+                ? "EXPLICIT_EVENT_PREFIX_UNRESOLVED_REMAINDER"
+                : "EXPLICIT_EVENT_REQUIREMENTS",
               lang,
               steps: [
                 "caller_owned_event_slots",
@@ -2661,6 +2670,7 @@ export function createLocalServer({
         exactSchemaOnly &&
         !exactFieldPlan(originalQuestion, bundle, 0) &&
         !eventQuestionPlan(originalQuestion, bundle, 0) &&
+        !eventRemainderPlan(originalQuestion, bundle, 0) &&
         !clinicalListPlan(
           originalQuestion,
           bundle,
