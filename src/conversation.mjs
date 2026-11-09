@@ -65,7 +65,7 @@ const SAY = {
   en: {
     hear: "Yes, I can hear you clearly. Ask me about the lab reports for S Y N zero zero zero one, or the Northstar deal.",
     greet:
-      "Hi! I'm Voice Memory. You can ask things like: what is S Y N zero zero zero one's ferritin, has creatinine gone up since September, or was the forty two thousand dollar revision finalized?",
+      "Hi, I'm Voice Memory. Ask about a lab result, like ferritin, or the Northstar deal, and the line I answer from will appear on your screen.",
     help: "I read records, like lab reports, contracts and meeting notes, and tell you what they say, what changed, and what was never approved, always with the exact line. You can ask about the sample records on the page, or use your own: open Your documents and drop in a PDF, Word file or a photo of a report. I've highlighted it for you.",
     upload:
       "To use your own records, open Your documents on the page, it's highlighted now, and drop in up to five PDFs, Word files or photos. They stay private to your browser tab and are deleted after thirty idle minutes. Then ask me anything about them, here or by typing.",
@@ -84,7 +84,7 @@ const SAY = {
   hi: {
     hear: "हाँ, मैं आपको साफ़ सुन पा रही हूँ। आप S Y N zero zero zero one की लैब रिपोर्ट या Northstar डील के बारे में पूछिए।",
     greet:
-      "नमस्ते! मैं Voice Memory हूँ। आप पूछ सकते हैं: ferritin कितना है, क्या creatinine सितंबर से बढ़ा है, या क्या forty two thousand dollar वाला revision final हुआ?",
+      "नमस्ते, मैं Voice Memory हूँ। किसी लैब नतीजे, जैसे ferritin, या Northstar डील के बारे में पूछिए, जिस लाइन से जवाब आएगा वह आपकी स्क्रीन पर दिखेगी।",
     help: "मैं रिकॉर्ड पढ़ती हूँ, जैसे लैब रिपोर्ट, contract और meeting notes, और बताती हूँ कि उनमें क्या लिखा है, क्या बदला, और क्या कभी मंज़ूर नहीं हुआ, हमेशा सही लाइन के साथ। आप पेज पर दिए sample रिकॉर्ड्स के बारे में पूछ सकते हैं, या अपनी फ़ाइलें इस्तेमाल कर सकते हैं: Your documents खोलिए और PDF, Word फ़ाइल या रिपोर्ट की फ़ोटो डालिए। मैंने वह जगह highlight कर दी है।",
     upload:
       "अपने रिकॉर्ड इस्तेमाल करने के लिए पेज पर Your documents खोलिए, वह अभी highlight है, और पाँच तक PDF, Word फ़ाइल या फ़ोटो डालिए। वे सिर्फ़ आपके browser tab तक रहते हैं और तीस मिनट बाद मिट जाते हैं। फिर उनके बारे में कुछ भी पूछिए, बोलकर या लिखकर।",

@@ -11,7 +11,7 @@ the last completed step. Newest status at the top; steps below in order.
 | 1. Shared turn contract `src/conversation-turn.mjs` | done, 25 tests |
 | 2. Voice route wiring in shadow mode `src/conversation-shadow.mjs` | done, 8 SSE route tests |
 | 3. Docs: `docs/CONVERSATION-CONTRACT.md`, this log | done |
-| 4. Live-call UI and copy (`site/`) | see step 4 below |
+| 4. Live-call UI and copy (`site/`) | done (copy, header, truthful call states, greeting) |
 | 5. Cut-over: contract decides answers on voice and `/api/ask` | **not started** (needs the full dependency set; see step 5) |
 | 6. Real-call measurements | **not run** (no call was placed) |
 | 7. Correction-propagation benchmark | **designed, not run** (step 7) |
@@ -148,10 +148,41 @@ voice/typed parity, the fragment divergence, shadow bounds.
 Existing adapter suites that run here (`voice-adapter`, `record-owner-voice`,
 `voice-companion`, `requested-owner`): 44/44 before and after.
 
-## Step 4: UI and copy
+## Step 4: UI and copy (done, rendered and checked in headless Chrome)
 
-See the commit for this step; summary is kept in the final report section
-below once done.
+Checked with screenshots at 1440×900 and 390×844, with and without
+`prefers-reduced-motion: reduce`. The settled and reduced-motion states were
+already complete; what looked unfinished were mid-animation frames (empty
+"Amended" card for about two seconds, auto-typed input).
+
+- `site/index.html`: hero eyebrow "Typed demo live now · evidence engine
+  underneath" → "Fictional records · every answer cites its source line".
+  Try header: removed the unconditional "Every answer below is computed now"
+  (false while saved cold-start answers are shown; the answer card already
+  labels those "Saved run of the same engine"). It now names the three sets of
+  records and adds: "The record decides factual answers. Voice Memory may
+  clarify what you mean, but it only states what the documents support."
+- `site/site.css`: `.try-sub`, `.try-rule` (existing type scale and `--ink-2`).
+- `site/site.js`: in-call states come only from real events: "Listening · mic"
+  at call start; after each answered turn, "Answered. The source is on
+  screen." or, for an uncited question back, "Need one detail." No timers,
+  no simulated progress.
+- `src/conversation.mjs`: shorter demo greeting (English and Hindi) that
+  invites one action and says the source line appears on screen; keeps one
+  demo example (ferritin), as `evaluation/upload-social.test.mjs` requires the
+  demo greeting to be distinguishable from the upload greeting.
+
+Not done, deliberately:
+
+- "Understanding" and "Checking the record" call states need a server-side
+  in-flight marker on `/api/voice/turns`; showing them from a timer would be
+  fake progress.
+- "Heard / Understood as" for call turns from the contract: in shadow mode the
+  contract did not decide the answer, so surfacing its reading would be
+  misleading. Turn it on at cut-over (`conversation.understoodAs`).
+- Pre-existing: on mobile the floating nav pill overlaps body text while
+  scrolling; not changed here.
+- A broader visual redesign was not attempted without a design direction.
 
 ## Step 5: cut-over (next engineer: start here)
 
