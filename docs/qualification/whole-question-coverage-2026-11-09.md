@@ -115,12 +115,24 @@ Comparison is per test name, baseline `a8c5a2a` against this branch, under ident
 
 Every baseline failure is identical on the branch and comes from the sandbox (stubbed PDF, OCR, embedding and esbuild paths), not from this change. These are not the 1,171-pass figures from a dependency-ready environment; that environment must re-run them.
 
-NOT run here (need a dependency-ready environment): `npm run format:check` (prettier), `npm run typecheck` (tsc), `npm run build` (esbuild), the Playwright browser suites, and the PDF, OCR and embedding paths. Run them before merge:
+Partially verified with tools already present on the machine (not the pinned versions):
+- Prettier 3.8.1 (lockfile pins 3.6.2): every changed file in the `format:check` globs passes. The baseline files are also clean under 3.8.1.
+- TypeScript 6.0.3 (lockfile pins 5.9.3): `tsc -p tsconfig.json` shows the same two environment errors (missing `@types/node`, a TS 6 `baseUrl` deprecation) on baseline and branch, with zero new errors. Typecheck scope is `src/engine.ts` and `src/context.ts`, which this branch does not touch.
+
+NOT run here: `npm run build` (esbuild; its entry points are unchanged), the Playwright browser suites, and the PDF, OCR and embedding paths. Hosted CI runs on this PR. To reproduce locally:
 
 ```
 npm ci && npm run build && npm run format && npm run typecheck
 npm test && npm run test:boundaries && npm run test:evaluation && npm run test:clinical && npm run test:ingest
 ```
+
+## Page weight and latency
+
+- The site's first-load budget is 530,000 bytes (`evaluation/site-contract.test.mjs`). Baseline is 525,615 bytes. The coverage strip first took it to 531,052. The final compact CSS gives 529,904, within budget, and the budget itself was not changed.
+- `/ask` round trips with the provider off, 60 requests per run, measured on the same machine against baseline and branch engines, alternating: p50 0.8–2.1 ms and p95 2.0–5.0 ms on both. RSS is about 100 MB each. Reconciling coverage adds no measurable cost.
+  - Caveat: embeddings are stubbed here, and some requests may be answer-cache hits, so these are not production latency figures.
+  - Tier 2 latency is dominated by provider round trips. Running the blind passes concurrently removes two of the five sequential calls.
+  - The voice path's shared resolver stays `noModel`, so a call never waits on Tier 2.
 
 ## Design notes from comparable systems
 

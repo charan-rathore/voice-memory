@@ -1250,10 +1250,7 @@
 
   // After "I don't see that": the closest line, as a pointer to open and
   // judge, visibly not the answer. Clicking opens the document at it.
-  // Whole-question coverage (src/whole-question-coverage.mjs). Shows only
-  // what the server recorded: per-part outcomes when a decomposition or a
-  // certified operation qualified them, otherwise an explicit "coverage not
-  // checked". Never splits or guesses parts of the question in the browser.
+  // Server-recorded coverage only; the browser never splits a question.
   function coverageHtml(r) {
     const c = r.wholeQuestion ?? r.final?.coverage;
     if (!c || c.state === "not_applicable") return "";
