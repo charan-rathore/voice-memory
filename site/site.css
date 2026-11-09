@@ -4971,3 +4971,147 @@ html:not(.voice-on) .voice-off {
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+
+/* Whole-question coverage strip (coverageHtml in site.js). Teal = proven
+   from the source, amber = named as missing or disputed, dashed grey = not
+   checked. Every state also has words; colour is never the only signal. */
+.cov {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--paper) 70%, transparent);
+  font: 400 14px/1.45 var(--sans);
+  color: var(--ink-2);
+}
+.cov-head,
+.cov summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.cov summary {
+  cursor: pointer;
+  list-style: none;
+  min-height: 32px;
+}
+.cov summary::-webkit-details-marker {
+  display: none;
+}
+.cov summary:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.cov-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+.cov-sub {
+  color: var(--ink-3);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.cov-meter {
+  display: inline-flex;
+  gap: 4px;
+}
+.cov-seg {
+  display: block;
+  width: 34px;
+  height: 7px;
+  border-radius: 4px;
+  transform-origin: left center;
+  animation: cov-fill 520ms var(--spring) both;
+}
+.cov-seg-answered {
+  background: var(--teal);
+}
+.cov-seg-not_established,
+.cov-seg-clarify {
+  background: color-mix(in srgb, var(--amber) 30%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--amber);
+}
+.cov-seg-open {
+  width: 96px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--ink-3) 0 6px,
+    transparent 6px 10px
+  );
+}
+@keyframes cov-fill {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.cov-parts {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.cov-part {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 10px;
+  animation: word 380ms var(--ease) both;
+}
+@media (max-width: 520px) {
+  .cov-part {
+    grid-template-columns: 9px minmax(0, 1fr);
+  }
+  .cov-status {
+    grid-column: 2;
+  }
+}
+.cov-part q {
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--ink);
+  quotes: "“" "”";
+}
+.cov-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  transform: translateY(-1px);
+}
+.cov-part-answered .cov-dot {
+  background: var(--teal);
+}
+.cov-part-not_established .cov-dot,
+.cov-part-clarify .cov-dot {
+  border: 2px solid var(--amber);
+}
+.cov-status {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.cov-part-answered .cov-status {
+  color: color-mix(in srgb, var(--teal) 75%, var(--ink));
+}
+.cov-part-not_established .cov-status,
+.cov-part-clarify .cov-status {
+  color: color-mix(in srgb, var(--amber) 70%, var(--ink));
+}
+.cov details p,
+.cov-unverified p {
+  margin: 8px 0 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cov-seg,
+  .cov-part {
+    animation: none;
+  }
+}

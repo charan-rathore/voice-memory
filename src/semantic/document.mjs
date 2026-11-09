@@ -226,7 +226,13 @@ export async function readDocumentQuestion({
           .filter((s) => s.requirementId === r.id)
           .map((s) => s.text)
           .join(" ");
-        return r.status === "answered" ? answer : `${r.text.trim()} ${answer}`;
+        // Unanswered parts are named verbatim (exact spans of the asker's own
+        // question) in a sentence a listener can follow on a call.
+        if (r.status === "answered") return answer;
+        const span = `“${r.text.trim().replace(/[,;:]$/, "")}”`;
+        return plan.disputes?.some((d) => d.requirementId === r.id)
+          ? `For ${span}, the reading checks disagreed, so I have not established an answer.`
+          : `I could not establish ${span} from these documents.`;
       })
       .join("\n\n"),
     verdict: citations.length

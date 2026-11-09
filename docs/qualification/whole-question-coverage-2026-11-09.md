@@ -81,6 +81,20 @@ Bugs found by the existing suites and fixed in code, not in expectations:
 - Coverage briefly copied request identity (original wording and opaque plan key). That broke the cache-equality contract, so coverage now lives only in computed fields. Caught by `tests/cache.test.mjs`.
 - Voice social replies ("You're welcome…") received the disclosure. They are now excluded. Caught by `evaluation/conversation-repeat.test.mjs`.
 
+## Follow-up commits on this branch
+
+- **Latency.** The two blind question reconstructions, and the two blind document reads, now run concurrently. Neither pass ever sees the other's output, so qualified questions save two model round trips. Validation, exact agreement, reconciliation and the audit are unchanged. The protected property "no provider call starts after a source change" still holds.
+  - Reviewed test update: `tests/question-understanding.test.mjs` now asserts that property directly. It used to count calls in sequential order.
+  - New `tests/blind-pass-concurrency.test.mjs` deadlocks if either pair runs sequentially.
+  - Cost note: when the primary document read fails, the independent read has already been spent.
+- **Wording.** Unanswered parts now read "I could not establish “<exact span>” from these documents." A disputed part reads "For “<span>”, the reading checks disagreed, so I have not established an answer." This replaces the earlier dangling span followed by a generic sentence.
+- **Answer card (site/).** A coverage strip renders only from server fields (`wholeQuestion`, `requirementCoverage`):
+  - an animated per-part meter;
+  - each exact part with its outcome in words;
+  - an expandable "Coverage not checked" explanation for opaque answers.
+  - It respects reduced motion and never splits questions in the browser.
+  - Checked in Chrome at 1280 px and 390 px against the real `site/` and the real engine. The qualified states were replayed from real engine responses produced with the offline scripted provider. No clipping was found.
+
 ## Suite results and environment limits
 
 This session cannot reach the npm registry, and package installs are disabled for the account, so `node_modules` is absent. Tests ran under a sandbox-only harness kept outside the repository:
