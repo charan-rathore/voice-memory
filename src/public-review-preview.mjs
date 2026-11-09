@@ -98,7 +98,7 @@ export function createLocalServer({
         key.limit_reset === null &&
         key.limit_remaining >= 0.0476289 &&
         Date.parse(key.expires_at) > now() &&
-        Date.parse(key.expires_at) <= deadline
+        Date.parse(key.expires_at) <= startup + 60 * 60_000
       )
     )
       throw Error("Dedicated test key cap or expiry could not be verified");

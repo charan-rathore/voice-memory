@@ -207,6 +207,7 @@ test("missing paid activation, bad cap, missing expiry or insufficient budget ca
     { key: { limit: 5 } },
     { key: { limit_reset: "daily" } },
     { key: { expires_at: null } },
+    { key: { expires_at: new Date(Date.now() + 65 * 60000).toISOString() } },
     { key: { limit_remaining: 0.02 } },
     { fail: true },
     { reject: true },
@@ -253,4 +254,19 @@ test("deployment entrypoint in PR preview mode never starts production routes or
   assert.equal(health.service, "isolated-public-review");
   assert.equal(health.active, false);
   assert.equal(health.inference, false);
+});
+
+test("one-hour provider backup expiry does not extend the25-minute page or inference window", async () => {
+  const s = await setup({
+    key: { expires_at: new Date(Date.now() + 55 * 60000).toISOString() },
+  });
+  try {
+    const cookie = await s.login();
+    assert.ok((await (await s.run(cookie)).json()).answer);
+    s.expire();
+    assert.equal((await s.run(cookie)).status, 503);
+    assert.equal(s.captures.length, 1);
+  } finally {
+    await s.close();
+  }
 });
