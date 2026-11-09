@@ -679,9 +679,21 @@ export function seriesFor(reports, key, patientId) {
     for (const o of r.observations) {
       if (o.key !== key) continue;
       const list = byDate.get(date) ?? [];
-      // the same test twice in one report (percent and absolute count) is
-      // two rows, not a correction: keep the first, as printed
-      if (list.some((x) => x.report === r)) continue;
+      // The legacy first-unit lookup is not a certificate for multi-unit
+      // rows. Preserve it, but inspect every same-test/unit source group for
+      // contradictory values before any first-row coalescing can hide them.
+      const matching = r.observations.filter((x) => x.key === key);
+      const sameUnit = matching.filter((x) => x.unit === o.unit);
+      const valueSignature = (x) =>
+        JSON.stringify([x.raw, x.unit, x.comparator, x.qual]);
+      const unitConflict = new Set(sameUnit.map(valueSignature)).size > 1;
+      if (o.unit !== matching[0].unit && !unitConflict) continue;
+      if (
+        list.some(
+          (x) => x.report === r && valueSignature(x) === valueSignature(o),
+        )
+      )
+        continue;
       list.push({ ...o, report: r });
       byDate.set(date, list);
     }
