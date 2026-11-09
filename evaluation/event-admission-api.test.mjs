@@ -122,6 +122,7 @@ test("actual HTTP wrong signature inference is blocked; certified event requirem
       "Was the commercial scope approved by Priya?",
       "Who approved the commercial scope?",
       "Who paid $1,500 to Nimbus?",
+      "How much did Arjun pay to Nimbus?",
       "Was the delivery plan signed by Kamal?",
       "Did Kamal sign the delivery plan?",
       "Did Arjun pay $1,500 to Nimbus and did Priya sign the commercial scope?",
@@ -158,6 +159,45 @@ test("actual HTTP wrong signature inference is blocked; certified event requirem
       assert.equal(r.final.kind, "abstained", q);
       assert.equal(r.final.citations.length, 0);
     }
+    await upload(
+      w,
+      "Reciprocal.txt",
+      "Nimbus paid $5,000 to Arjun.\nPriya approved the commercial scope.",
+    );
+    const reciprocal = await ask(w, "How much did Nimbus pay to Arjun?");
+    assert.equal(reciprocal.final.kind, "answered");
+    assert.match(reciprocal.final.text, /\$5,000/);
+    assert.doesNotMatch(reciprocal.final.text, /\$1,500/);
+    assert.equal(
+      await voice("How much did Nimbus pay to Arjun?"),
+      reciprocal.final.text,
+    );
+    const amounts = await ask(
+      w,
+      "How much did Arjun pay to Nimbus and how much did Nimbus pay to Arjun?",
+    );
+    assert.equal(amounts.final.kind, "answered");
+    assert.equal(amounts.admission.outcomes.length, 2);
+    assert.match(amounts.final.text, /\$1,500/);
+    assert.match(amounts.final.text, /\$5,000/);
+    assert.equal(
+      await voice(
+        "How much did Arjun pay to Nimbus and how much did Nimbus pay to Arjun?",
+      ),
+      amounts.final.text,
+    );
+    const debt = await ask(w, "How much did Arjun owe to Nimbus?");
+    assert.equal(debt.final.kind, "abstained");
+    assert.equal(debt.final.citations.length, 0);
+    const amountPartial = await ask(
+      w,
+      "How much did Arjun pay to Nimbus and how much did Arjun owe to Nimbus?",
+    );
+    assert.equal(amountPartial.final.kind, "partial");
+    assert.deepEqual(
+      amountPartial.admission.outcomes.map((o) => o.status),
+      ["answered", "not_established"],
+    );
     await upload(
       w,
       "Contradiction.txt",

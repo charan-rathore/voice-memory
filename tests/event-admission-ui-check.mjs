@@ -119,6 +119,28 @@ try {
   await page.locator("#answer").screenshot({
     path: "/downloads/voice-memory-event-actor-unresolved-mobile.png",
   });
+  await ask("How much did Arjun pay to Nimbus?");
+  assert.match(
+    await page.locator("#answer").innerText(),
+    /The source records \$1,500/,
+  );
+  await page
+    .locator("#answer")
+    .screenshot({ path: "/downloads/voice-memory-event-amount-mobile.png" });
+  await ask(
+    "How much did Arjun pay to Nimbus and how much did Arjun owe to Nimbus?",
+  );
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Partial answer",
+  );
+  assert.match(
+    await page.locator("#answer").innerText(),
+    /How much did Arjun owe/,
+  );
+  await page.locator("#answer").screenshot({
+    path: "/downloads/voice-memory-event-amount-partial-mobile.png",
+  });
   await page.locator("#files").setInputFiles({
     name: "Purchase.txt",
     mimeType: "text/plain",

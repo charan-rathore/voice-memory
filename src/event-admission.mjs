@@ -19,8 +19,8 @@ const object = "(?:the )?[a-z][a-z -]{0,79}";
 const eventPattern = (question) =>
   new RegExp(
     question
-      ? `^Did (${entity}) (not )?(?:(pay) (${money}) to (${entity})|(approve|sign) (${object}))$`
-      : `^(${entity}) (?:(did not) (pay|approve|sign) |(paid|approved|signed) )(.+)\\.$`,
+      ? `^Did (${entity}) (not )?(?:(pay|owe) (${money}) to (${entity})|(approve|sign) (${object}))$`
+      : `^(${entity}) (?:(did not) (pay|owe|approve|sign) |(paid|owed|approved|signed) )(.+)\\.$`,
     "i",
   );
 const canon = (actor, action, target, polarity) => {
@@ -36,13 +36,13 @@ const canon = (actor, action, target, polarity) => {
     )
   )
     return null;
-  if (action === "pay") {
+  if (action === "pay" || action === "owe") {
     const m = new RegExp(`^(${money}) to (${entity})$`).exec(target);
     return m && !pronoun.test(m[2]) && named.test(m[2])
       ? {
           actor,
           action,
-          object: "payment",
+          object: action === "pay" ? "payment" : "debt",
           amount: m[1],
           recipient: m[2],
           polarity,
@@ -60,10 +60,23 @@ const canon = (actor, action, target, polarity) => {
   };
 };
 const actionOf = (participle) =>
-  ({ paid: "pay", approved: "approve", signed: "sign" })[
+  ({ paid: "pay", owed: "owe", approved: "approve", signed: "sign" })[
     participle.toLowerCase()
   ];
 function parseQuestionPart(s) {
+  const amountQuestion = new RegExp(
+    `^How much did (${entity}) (pay|owe) to (${entity})$`,
+    "i",
+  ).exec(s);
+  if (amountQuestion) {
+    const concrete = canon(
+      amountQuestion[1],
+      amountQuestion[2].toLowerCase(),
+      `$0 to ${amountQuestion[3]}`,
+      "positive",
+    );
+    return concrete ? { ...concrete, amount: null } : null;
+  }
   const actorQuestion = new RegExp(
     `^Who (?:(paid) (${money}) to (${entity})|(approved|signed) (${object}))$`,
     "i",
@@ -116,7 +129,9 @@ function parseAssertion(s) {
   if (!m) return null;
   const verb =
     m[3]?.toLowerCase() ||
-    { paid: "pay", approved: "approve", signed: "sign" }[m[4]?.toLowerCase()];
+    { paid: "pay", owed: "owe", approved: "approve", signed: "sign" }[
+      m[4]?.toLowerCase()
+    ];
   return canon(m[1], verb, m[5], m[2] ? "negative" : "positive");
 }
 const fingerprint = (bundle) =>
@@ -130,9 +145,11 @@ export function eventQuestionPlan(question, bundle, generation) {
     return null;
   // This exact connective is part of the small language. No guessed split of
   // opaque clauses, follow-up pronouns, corrections or temporal modifiers.
-  const m = /^(?:Did|Has|Was|Who) .+\?$/i.exec(question);
+  const m = /^(?:Did|Has|Was|Who|How much did) .+\?$/i.exec(question);
   if (!m) return null;
-  const parts = question.slice(0, -1).split(/ and (?=(?:did|has|was|who) )/i);
+  const parts = question
+    .slice(0, -1)
+    .split(/ and (?=(?:did|has|was|who|how much did) )/i);
   if (parts.length > 4) return null;
   const parsed = parts.map(parseQuestionPart);
   if (parsed.some((p) => !p)) return null;
@@ -142,7 +159,11 @@ export function eventQuestionPlan(question, bundle, generation) {
     protectedText: question,
     owners: [],
     slots,
-    ...(slots.actor === null ? { answerSlot: "actor" } : {}),
+    ...(slots.actor === null
+      ? { answerSlot: "actor" }
+      : slots.amount === null && ["pay", "owe"].includes(slots.action)
+        ? { answerSlot: "amount" }
+        : {}),
     semanticState: "bounded-explicit-event-question",
   }));
   const value = {
@@ -154,7 +175,7 @@ export function eventQuestionPlan(question, bundle, generation) {
     coverageEstablished: true,
     semanticQualification: "bounded-explicit-event-assertion-language",
     limitations: [
-      "Only fully consumed pay/approve/sign questions are handled. Event completion requires assertion-only source sets. Exact record headings with literal Approved by or Signed by fields support recorded-field observations only. No coreference, synonyms, dates, versions, surrounding conditions or real-world event truth is inferred.",
+      "Only fully consumed pay/owe/approve/sign questions are handled. Event completion requires assertion-only source sets. Exact record headings with literal Approved by or Signed by fields support recorded-field observations only. No coreference, synonyms, dates, versions, surrounding conditions or real-world event truth is inferred.",
     ],
   };
   return freeze({ ...value, key: digest(value) });
@@ -197,43 +218,45 @@ const ambiguousCase = (facts, slots) =>
       relationKey(f.slots).toLowerCase() === relationKey(slots).toLowerCase() &&
       relationKey(f.slots) !== relationKey(slots),
   );
-// A wh requirement leaves exactly one slot open, not every slot. Compare
-// every bound predicate; only positive source assertions can fill its actor.
+// A missing-slot requirement leaves exactly one slot open, not every slot.
+// Every bound predicate must match; only positive assertions fill that slot.
 function sourceMatches(fact, requirement) {
-  if (requirement.answerSlot !== "actor")
+  if (!requirement.answerSlot)
     return relationKey(fact.slots) === relationKey(requirement.slots);
-  const { actor: _, polarity: __, ...source } = fact.slots;
-  const { actor: ___, polarity: ____, ...wanted } = requirement.slots;
+  const source = { ...fact.slots },
+    wanted = { ...requirement.slots };
+  delete source[requirement.answerSlot];
+  delete wanted[requirement.answerSlot];
+  delete source.polarity;
+  delete wanted.polarity;
   return same(source, wanted);
 }
 function eventHits(source, requirement) {
   const all = source.facts.filter((f) => sourceMatches(f, requirement));
-  const caseConflict =
-    requirement.answerSlot === "actor"
-      ? all.some((a) =>
-          source.facts.some(
-            (b) =>
-              relationKey(a.slots).toLowerCase() ===
-                relationKey(b.slots).toLowerCase() &&
-              relationKey(a.slots) !== relationKey(b.slots),
-          ),
-        )
-      : ambiguousCase(source.facts, requirement.slots);
+  const caseConflict = requirement.answerSlot
+    ? all.some((a) =>
+        source.facts.some(
+          (b) =>
+            relationKey(a.slots).toLowerCase() ===
+              relationKey(b.slots).toLowerCase() &&
+            relationKey(a.slots) !== relationKey(b.slots),
+        ),
+      )
+    : ambiguousCase(source.facts, requirement.slots);
   const conflict =
     caseConflict ||
     new Set(all.map((f) => f.slots.polarity)).size > 1 ||
-    (requirement.answerSlot === "actor" &&
+    (requirement.answerSlot &&
       new Set(
         all
           .filter((f) => f.slots.polarity === "positive")
-          .map((f) => f.slots.actor),
+          .map((f) => f.slots[requirement.answerSlot]),
       ).size > 1);
   return {
     conflict,
-    hits:
-      requirement.answerSlot === "actor"
-        ? all.filter((f) => f.slots.polarity === "positive")
-        : all,
+    hits: requirement.answerSlot
+      ? all.filter((f) => f.slots.polarity === "positive")
+      : all,
   };
 }
 // A printed role field is a different operation from an event assertion.
@@ -291,7 +314,9 @@ function proposedClaim(fact, requirement) {
     text:
       requirement.answerSlot === "actor"
         ? `The source names ${fact.slots.actor}: "${fact.citation.quote}"`
-        : `${matches ? "Yes" : "No"}. The source records: "${fact.citation.quote}"`,
+        : requirement.answerSlot === "amount"
+          ? `The source records ${fact.slots.amount}: "${fact.citation.quote}"`
+          : `${matches ? "Yes" : "No"}. The source records: "${fact.citation.quote}"`,
     slots: fact.slots,
     citations: [fact.citation],
   };

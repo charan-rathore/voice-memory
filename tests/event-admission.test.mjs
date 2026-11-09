@@ -488,3 +488,67 @@ test("literal role-field observations bind exact record heading and exact action
     false,
   );
 });
+
+test("amount completion preserves payer/payee/action and complete repeated interrogatives", async () => {
+  const source =
+    "Arjun paid $1,500 to Nimbus.\nNimbus paid $5,000 to Arjun.\nPriya approved the commercial scope.";
+  for (const [q, amount] of [
+    ["How much did Arjun pay to Nimbus?", "$1,500"],
+    ["How much did Nimbus pay to Arjun?", "$5,000"],
+  ]) {
+    const r = await resolve(q, source);
+    assert.equal(r.plan.requirements[0].answerSlot, "amount");
+    assert.equal(r.admission.complete, true);
+    assert.equal(r.admission.outcomes[0].claims[0].slots.amount, amount);
+  }
+  for (const q of [
+    "How much did Priya pay to Nimbus?",
+    "How much did Arjun owe to Nimbus?",
+  ])
+    assert.equal((await resolve(q, source)).admission.userReady, false, q);
+  const compound = await resolve(
+    "How much did Arjun pay to Nimbus and how much did Nimbus pay to Arjun?",
+    source,
+  );
+  assert.equal(compound.admission.complete, true);
+  assert.deepEqual(
+    compound.admission.outcomes.map((o) => o.claims[0].slots.amount),
+    ["$1,500", "$5,000"],
+  );
+  const mixed = await resolve(
+    "How much did Arjun pay to Nimbus and how much did Arjun owe to Nimbus?",
+    source,
+  );
+  assert.equal(mixed.admission.status, "partial");
+  assert.deepEqual(
+    mixed.admission.outcomes.map((o) => o.status),
+    ["answered", "not_established"],
+  );
+  const owed = await resolve(
+    "How much did Arjun owe to Nimbus?",
+    "Arjun owed $900 to Nimbus.",
+  );
+  assert.equal(owed.admission.complete, true);
+  assert.equal(owed.admission.outcomes[0].claims[0].slots.action, "owe");
+  const conflict = await resolve(
+    "How much did Arjun pay to Nimbus?",
+    source + "\nArjun paid $2,000 to Nimbus.",
+  );
+  assert.equal(conflict.admission.status, "clarify");
+  const negative = await resolve(
+    "How much did Arjun pay to Nimbus?",
+    "Arjun did not pay $1,500 to Nimbus.",
+  );
+  assert.equal(negative.admission.userReady, false);
+  const r = await resolve("How much did Arjun pay to Nimbus?", source);
+  const claim = r.admission.outcomes[0].claims[0];
+  assert.equal(
+    verifyEventCertificate({
+      plan: r.plan,
+      requirement: r.plan.requirements[0],
+      claim: { ...claim, slots: { ...claim.slots, amount: "$5,000" } },
+      bundle: bundle(source),
+    }).ok,
+    false,
+  );
+});
