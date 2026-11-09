@@ -227,6 +227,35 @@ export function eventSourceFacts(bundle) {
   }
   return { complete: facts.length > 0, facts };
 }
+// Rejection-only contradiction check. This does not admit positive debt
+// answers or infer the creditor, date, balance or surrounding conditions.
+export function debtPolarityConflict(question, lead, bundle) {
+  const m = new RegExp(`^How much does (${entity}) not owe\\?$`).exec(question);
+  if (!m) return false;
+  for (const source of bundle.sources ?? []) {
+    const cites = (lead?.citations ?? []).filter(
+      (c) =>
+        c.sourceId === source.id &&
+        Number.isInteger(c.start) &&
+        Number.isInteger(c.end) &&
+        source.text.slice(c.start, c.end) === c.quote,
+    );
+    if (!cites.length) continue;
+    let offset = 0;
+    for (const line of source.text.split("\n")) {
+      const start = offset;
+      offset += line.length + 1;
+      const fact = new RegExp(`^(${entity}) owes (${money})\\.$`).exec(line);
+      if (
+        fact &&
+        fact[1] === m[1] &&
+        cites.some((c) => c.start < start + line.length && c.end > start)
+      )
+        return true;
+    }
+  }
+  return false;
+}
 // Rejection-only provenance. Finding a parsed assertion inside a larger
 // source does not establish complete context or permit affirmative admission.
 export function candidateUsesEventAssertion(lead, bundle) {

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   eventQuestionPlan,
   candidateUsesEventAssertion,
+  debtPolarityConflict,
   eventRemainderPlan,
   resolveExplicitEventRemainder,
   eventSourceFacts,
@@ -759,4 +760,41 @@ test("rejection-only event candidate provenance requires real source spans and d
     true,
   );
   assert.equal(candidateUsesEventAssertion(null, b), false);
+});
+
+test("negative present-debt amount cannot be supported by a positive same-actor debt assertion", () => {
+  const text = "Debt ledger\nArjun owes $1,500.\nNimbus owes $5,000.";
+  const b = bundle(text);
+  const quote = "Arjun owes $1,500.",
+    start = text.indexOf(quote);
+  const lead = {
+    citations: [{ sourceId: "s", start, end: start + quote.length, quote }],
+  };
+  assert.equal(
+    debtPolarityConflict("How much does Arjun not owe?", lead, b),
+    true,
+  );
+  for (const q of [
+    "How much does Nimbus not owe?",
+    "How much does Arjun owe?",
+    "How much did Arjun not owe?",
+    "How much does Arjun not owe yesterday?",
+  ])
+    assert.equal(debtPolarityConflict(q, lead, b), false, q);
+  assert.equal(
+    debtPolarityConflict(
+      "How much does Arjun not owe?",
+      { citations: [{ ...lead.citations[0], quote: "Arjun owes $9,000." }] },
+      b,
+    ),
+    false,
+  );
+  assert.equal(
+    debtPolarityConflict(
+      "How much does Arjun not owe?",
+      { citations: [{ ...lead.citations[0], sourceId: "other" }] },
+      b,
+    ),
+    false,
+  );
 });

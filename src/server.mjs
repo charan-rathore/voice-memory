@@ -6,6 +6,7 @@ import {
   eventRemainderPlan,
   eventSourceFacts,
   candidateUsesEventAssertion,
+  debtPolarityConflict,
   resolveExplicitEventRemainder,
 } from "./event-admission.mjs";
 import {
@@ -1553,7 +1554,8 @@ export function createLocalServer({
       if (
         !(bundle.clinical ?? []).length &&
         !(bundle.sourceRecords ?? []).some((r) => r.meta?.patient) &&
-        candidateUsesEventAssertion(shown.lead, bundle)
+        (candidateUsesEventAssertion(shown.lead, bundle) ||
+          debtPolarityConflict(requestOriginal, shown.lead, bundle))
       ) {
         // No question-form exemption: a legacy candidate quoting an event is
         // still not a relation certificate. Earlier independent operations
