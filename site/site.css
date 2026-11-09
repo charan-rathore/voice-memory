@@ -584,6 +584,17 @@ mark.hl {
 .try-head .sub {
   margin: 0;
 }
+.try-sub {
+  max-width: 34rem;
+  display: grid;
+  gap: 10px;
+}
+.try-head .try-rule {
+  font-size: 0.86em;
+  color: var(--ink-2);
+  padding-left: 12px;
+  border-left: 2px solid currentColor;
+}
 .desk {
   margin-top: 34px;
   display: grid;

@@ -2240,7 +2240,7 @@
       callbar.classList.add("live");
       $("#call-label").textContent = "Hang up";
       callState(
-        `<b>Live${state.mic ? " · " + esc(state.mic) : ""}.</b> Ask: “${esc(state.cases[state.case]?.suggestions?.[0] ?? "What is SYN-0001's ferritin result?")}”`,
+        `<b>Listening${state.mic ? " · " + esc(state.mic) : ""}.</b> Ask: “${esc(state.cases[state.case]?.suggestions?.[0] ?? "What is SYN-0001's ferritin result?")}”`,
       );
       startTurnPolling();
     });
@@ -2356,6 +2356,15 @@
           renderAnswer(
             { lead: t.lead, evidence: [] },
             { via: "call", source: "live", question: t.question, caseId },
+          );
+          // One truthful state per answered turn, no timers: the agent is
+          // asking for a detail (an uncited question) or has answered.
+          const asks =
+            !(t.lead?.citations?.length > 0) && /\?\s*$/.test(t.lead?.text ?? "");
+          callState(
+            asks
+              ? "<b>Need one detail.</b> Answer the question, or ask something else."
+              : "<b>Answered.</b> The source is on screen. Ask your next question.",
           );
         }
       } catch (e) {
