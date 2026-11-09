@@ -198,6 +198,25 @@ test("actual HTTP wrong signature inference is blocked; certified event requirem
       amountPartial.admission.outcomes.map((o) => o.status),
       ["answered", "not_established"],
     );
+    for (const suffix of [
+      "yesterday",
+      "in total",
+      "if approved",
+      "for the final version",
+    ]) {
+      const q = "How much did Arjun pay to Nimbus " + suffix + "?";
+      const qualifier = await ask(w, q);
+      assert.equal(qualifier.final.kind, "abstained", q);
+      assert.equal(qualifier.final.citations.length, 0);
+      assert.equal(qualifier.questionPlan.originalQuestion, q);
+      assert.equal(
+        qualifier.questionPlan.unresolvedRemainder,
+        " " + suffix + "?",
+      );
+      assert.equal(qualifier.questionPlan.coverageEstablished, false);
+      assert.equal(qualifier.requirementCoverage.prefixAdmission, null);
+      assert.equal(await voice(q), qualifier.final.text);
+    }
     const simpleRemainder = await ask(
       w,
       "How much did Arjun pay to Nimbus and when?",

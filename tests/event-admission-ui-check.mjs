@@ -161,6 +161,16 @@ try {
     "Answer not established",
   );
   assert.equal(await page.locator("#answer .cites .cite").count(), 0);
+  await ask("How much did Arjun pay to Nimbus yesterday?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Answer not established",
+  );
+  assert.equal(await page.locator("#answer .cites .cite").count(), 0);
+  assert.match(await page.locator("#answer").innerText(), /yesterday/);
+  await page
+    .locator("#answer")
+    .screenshot({ path: "/downloads/voice-memory-event-qualifier-mobile.png" });
   await page.locator("#files").setInputFiles({
     name: "Purchase.txt",
     mimeType: "text/plain",

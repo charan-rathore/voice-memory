@@ -456,8 +456,13 @@ export function eventRemainderPlan(question, bundle, sourceGeneration) {
     return null;
   if (eventQuestionPlan(question, bundle, sourceGeneration)) return null;
   const body = question.slice(0, -1);
-  const matches = [...body.matchAll(/ (and|or) /gi)];
-  for (const m of matches) {
+  const conjunctions = [...body.matchAll(/ (and|or) /gi)];
+  // A suffix that is not an independent conjunction may constrain the event.
+  // Preserve any such suffix without lexical guesses about date/total/etc.
+  const qualifiers = [...body.matchAll(/ /g)]
+    .reverse()
+    .map((m) => ({ index: m.index, 1: "qualifier" }));
+  for (const m of [...conjunctions, ...qualifiers]) {
     const first = body.slice(0, m.index) + "?",
       tail = body.slice(m.index);
     const known = eventQuestionPlan(first, bundle, sourceGeneration);
@@ -470,7 +475,11 @@ export function eventRemainderPlan(question, bundle, sourceGeneration) {
       coverageEstablished: false,
       semanticQualification: "explicit-prefix-with-uninterpreted-remainder",
       unresolvedRemainder: tail + "?",
-      connective: m[1].toLowerCase(),
+      connective:
+        m[1].toLowerCase() === "and" &&
+        !/^ and (?:who|what|where|when|why|how|did|has|was|is)\b/i.test(tail)
+          ? "qualifier"
+          : m[1].toLowerCase(),
       prefixPlanKey: known.key,
       requirements: [
         {
@@ -488,7 +497,7 @@ export function eventRemainderPlan(question, bundle, sourceGeneration) {
         },
       ],
       limitations: [
-        "Only the first exact event clause is independently checked. The entire remaining conjunction and text stay opaque; whole-request coverage is not established. For or, neither alternative is selected.",
+        "Only the first exact event clause is independently checked. The entire remaining conjunction and text stay opaque; whole-request coverage is not established. For or, neither alternative is selected. A non-conjunction suffix may constrain the event, so no unconditional prefix answer is admitted.",
       ],
     };
     return freeze({ ...value, key: digest(value), prefixQuestion: first });

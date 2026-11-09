@@ -603,8 +603,9 @@ test("exact event prefix retains the complete opaque conjunction and remainder w
     null,
   );
   assert.equal(
-    eventRemainderPlan("How much did Arjun pay to Nimbus if approved?", b, 3),
-    null,
+    eventRemainderPlan("How much did Arjun pay to Nimbus if approved?", b, 3)
+      .unresolvedRemainder,
+    " if approved?",
   );
   assert.equal(
     await resolveExplicitEventRemainder({
@@ -613,6 +614,40 @@ test("exact event prefix retains the complete opaque conjunction and remainder w
       sourceGeneration: 3,
       isCurrent: () => false,
     }),
+    null,
+  );
+});
+
+test("any trailing event qualifier remains opaque and cannot be dropped or treated as an independent answer part", async () => {
+  const b = bundle(
+    "Arjun paid $1,500 to Nimbus.\nNimbus paid $5,000 to Arjun.",
+  );
+  for (const suffix of [
+    "yesterday",
+    "in total",
+    "since launch",
+    "if approved",
+    "during the last period",
+    "exactly",
+    "for the final version",
+    "and only if approved",
+  ]) {
+    const q = "How much did Arjun pay to Nimbus " + suffix + "?";
+    const r = await resolveExplicitEventRemainder({
+      question: q,
+      bundle: b,
+      sourceGeneration: 3,
+    });
+    assert.ok(r, q);
+    assert.equal(r.plan.coverageEstablished, false);
+    assert.equal(r.plan.unresolvedRemainder, " " + suffix + "?");
+    assert.equal(r.plan.connective, "qualifier");
+    assert.equal(r.admission.userReady, false);
+    assert.equal(r.admission.outcomes.flatMap((o) => o.claims).length, 0);
+    assert.equal(r.requirementCoverage.prefixAdmission, null);
+  }
+  assert.equal(
+    eventRemainderPlan("How much did Arjun pay to Nimbus?", b, 3),
     null,
   );
 });
