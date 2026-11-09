@@ -1,7 +1,3 @@
-// Voice Memory landing: a live evidence desk on the public, key-free API
-// (/api/public/*, proxied to the engine by vercel.json). While the free host
-// wakes up, answers for the suggested questions come from a saved run of the
-// same engine (snapshot.js) and are labelled as such.
 (() => {
   "use strict";
   document.documentElement.classList.remove("no-js");
@@ -73,12 +69,6 @@
     );
   const note = (t) => ($("#engine-note").textContent = t);
 
-  // ------------------------------------------------------------ API
-  // ------------------------------------------------------------ your own voice keys
-  // A visitor's own Bolna, Sarvam or ElevenLabs keys. They stay in this
-  // browser (this tab, or this device if they choose), are sent to this
-  // server only with the one call or Listen request that needs them, and the
-  // server uses them once and keeps nothing.
   let byoEnabled = false;
   const byo = (() => {
     const K = "vm-byo";
@@ -137,7 +127,6 @@
   })();
   window.VM_BYO = { ttsHeaders: () => byo.ttsHeaders() };
   const listenOn = () => !!state.voiceOut?.enabled || byo.hasTts();
-  // A closed admission gate must never hide the stop control for a live call.
   const callOn = () => !!state.call || !!state.voice?.ready || byo.hasCall();
   const syncVoiceClasses = () => {
     document.documentElement.classList.toggle("voice-on", callOn());
@@ -192,21 +181,13 @@
       syncReaderConsent();
       syncVoiceClasses();
     } catch {
-      // A failed probe is not a gate change: keep the last known UI state.
     } finally {
       voiceStatusPending = false;
     }
   });
 
-  // Capped exponential backoff with full jitter (AWS Architecture Blog,
-  // "Exponential Backoff And Jitter"): wait a random time in [0, min(cap,
-  // base * 2^attempt)], so many visitors arriving during one cold boot spread
-  // their probes out instead of hitting the waking host in lockstep. A
-  // server's Retry-After is honoured as a floor.
   const backoff = (attempt, { base = 1000, cap = 30000, floor = 0 } = {}) =>
     Math.max(floor, Math.random() * Math.min(cap, base * 2 ** attempt));
-  // Hidden tabs don't probe: a forgotten background tab would otherwise keep
-  // the free host awake (and spend its monthly hours) indefinitely.
   const whenVisible = () =>
     document.hidden
       ? new Promise((r) =>
@@ -221,9 +202,6 @@
 
   async function connect() {
     note("Connecting to the live engine…");
-    // Never give up: a cold free-tier boot plus first-ingest can take several
-    // minutes, so keep probing (with backoff) while the page is visible. A
-    // page that stops retrying strands every visitor who arrived early.
     const t0 = Date.now();
     for (let i = 0; ; i++) {
       let floor = 0;
@@ -233,8 +211,6 @@
         syncReaderConsent();
         if (s.cases.health && s.cases.deal) {
           const { cases } = await api("/cases");
-          // Demo readiness may arrive after an independent visitor upload.
-          // Merge it without discarding that workspace's ready document set.
           state.cases = {
             ...state.cases,
             ...Object.fromEntries(cases.map((c) => [c.id, c])),
@@ -253,8 +229,6 @@
               : "Live engine connected. Every answer is computed now from the fictional records.",
           );
           renderRail();
-          // An opened reader may still be fetching text/PDF pages. Only
-          // refresh the placeholder or grid, never replace that reader.
           if (
             !$("#viewer-body").firstElementChild ||
             $("#viewer-body .viewer-empty, #viewer-body .case-files")
@@ -276,7 +250,6 @@
     }
   }
 
-  // ------------------------------------------------------------ verdicts
   const VERDICT = {
     LATEST: ["v-latest", "Latest value"],
     UNCLEAR: ["v-warn", "Unclear scan - check source"],
@@ -336,7 +309,6 @@
       .replace(/^c-2026-10/, "SYN-0003 · Oct")
       .trim();
 
-  // ------------------------------------------------------------ your documents
   const apiCase = (id) => (id === "own" ? state.ws : id);
   const OWN = {
     id: "own",
@@ -360,7 +332,6 @@
     state.thread = state.thread.filter((t) => t.caseId !== "own");
     renderThread();
     if (state.case !== "own") return;
-    // Workspace identity changed while an old request may still be in flight.
     state.askSeq++;
     state.current = null;
     state.currentCites = [];
@@ -371,8 +342,6 @@
   }
   let workspacePending = null;
   function ensureWorkspace() {
-    // Concurrent drops share one creation; a temporary read error never
-    // silently splits an existing library into a new workspace.
     if (workspacePending) return workspacePending;
     workspacePending = (async () => {
       if (state.ws) {
@@ -386,8 +355,6 @@
           try {
             sessionStorage.removeItem("vm_ws");
           } catch {}
-          // Keep new drops that have not been sent; completed rows belong
-          // to the expired workspace and cannot remain marked Ready here.
           state.wsDocs = state.wsDocs.filter(
             (d) => String(d.id).startsWith("local:") && !d.serverId,
           );
@@ -413,8 +380,6 @@
     });
     return workspacePending;
   }
-  // One upload over XHR: fetch cannot report upload progress, and the bytes
-  // actually leaving the browser are the first stage the reading view shows.
   function sendFile(id, f, onBytes) {
     return new Promise((resolve, reject) => {
       const x = new XMLHttpRequest();
@@ -452,9 +417,6 @@
     if (!files.length) return;
     resetReaderConsent();
     if (state.case !== "own") setCase("own");
-    // Every file shows up the moment it is dropped, with what is really
-    // happening to it: connecting to the engine, then bytes sent, then the
-    // server's own progress. The reading view loads in parallel.
     const dropped = performance.now();
     const local = files.map((f, i) => ({
       id: `local:${dropped}:${i}`,
@@ -476,9 +438,6 @@
     renderUploads();
     syncReaderConsent();
     readingView();
-    // Uploads must not wait for the demo cases to finish loading: visitor
-    // workspaces are independent of them, so on a cold boot we retry the
-    // workspace create instead of turning the visitor away.
     let id = null;
     for (let attempt = 0; attempt < 8 && !id; attempt++) {
       try {
@@ -503,7 +462,6 @@
         await new Promise((r) => setTimeout(r, 3000));
       }
     }
-    // All files at once: the engine reads them in parallel.
     await Promise.all(
       files.map(async (f, i) => {
         const d = local[i];
@@ -540,9 +498,6 @@
           d.status === "failed" &&
           !st.documents.some((x) => x.title === d.title),
       );
-      // A file still on its way has no server entry yet: keep its local
-      // placeholder; once the server lists it (by id, or by name before the
-      // upload reply has arrived), carry the drop time over.
       const claimed = new Set(
         state.wsDocs.map((d) => d.serverId).filter(Boolean),
       );
@@ -579,8 +534,6 @@
     } catch (e) {
       if (state.ws !== workspaceId) return "stale";
       if (e?.status === 404 || e?.status === 410) {
-        // Confirmed gone (a deploy or the idle sweep cleared it): stop
-        // showing its documents as if they were still answerable.
         invalidateKeyScope();
         state.ws = null;
         try {
@@ -602,9 +555,6 @@
         discardOwnContext();
         outcome = "gone";
       } else {
-        // Transient (network blip, engine waking): keep the workspace and
-        // let polling back off and recover. Chips say so after a few
-        // failures instead of freezing on a stale stage forever.
         state.wsFail = (state.wsFail ?? 0) + 1;
         outcome = "transient";
       }
@@ -617,9 +567,6 @@
       const ready = (state.cases.own?.documents ?? []).length;
       if (ready !== state.ownReady) {
         state.ownReady = ready;
-        // The Documents pane must follow the upload list: refresh it while
-        // it shows the placeholder or the file grid, never over an open
-        // document.
         if ($("#viewer-body .viewer-empty") || $("#viewer-body .case-files"))
           showEmptyViewer();
         if ($("#answer .overview")) {
@@ -645,8 +592,6 @@
             !["ready", "needs_review", "failed", "expired"].includes(
               d.status,
             ) ||
-            // a settled document's digest arrives with the index rebuild
-            // (only documents the server still holds: not failed or expired)
             (d.digest == null &&
               ["ready", "needs_review"].includes(d.status) &&
               (state.digestPolls[d.id] = (state.digestPolls[d.id] ?? 0) + 1) <
@@ -656,7 +601,6 @@
         pollTimer = setTimeout(pollWorkspace, backoff);
     });
   }
-  // The live reading view loads with the first upload, not the first paint.
   let readingLoad = null;
   const readingView = () =>
     (readingLoad ??= new Promise((resolve, reject) => {
@@ -721,8 +665,6 @@
           try {
             R?.render($("#upl-flow"), state.wsDocs, { drops: state.drops });
           } catch (e) {
-            // A view bug must not take the upload list and polling down
-            // with it: the list above is the truthful fallback.
             console.error("reading view failed", e);
           }
         })
