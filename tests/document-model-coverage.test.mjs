@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { importBundle } from "../dist/engine.mjs";
-import { readDocumentQuestion } from "../src/semantic/document.mjs";
+import {
+  readDocumentQuestion,
+  reconcileDocumentProposals,
+} from "../src/semantic/document.mjs";
 import { understandDocumentQuestion } from "../src/semantic/question-understanding.mjs";
 
 const source =
