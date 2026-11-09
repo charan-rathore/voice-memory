@@ -12,6 +12,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { coverageNotice } from "../../src/whole-question-coverage.mjs";
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const root = path.join(here, "../..");
@@ -95,6 +96,13 @@ async function turn(history, { signal } = {}) {
   };
 }
 
+const COVERAGE_NOTICES = new RegExp(
+  ["en", "hi", "hinglish"]
+    .map((l) => coverageNotice(l).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|"),
+  "g",
+);
+
 function check(where, text, t) {
   const low = text.toLowerCase();
   for (const h of t.has ?? [])
@@ -103,8 +111,10 @@ function check(where, text, t) {
   for (const n of t.not ?? [])
     if (low.includes(n.toLowerCase()))
       fail(`${where}: contains "${n}" in "${text}"`);
-  if (text.split(/\s+/).length > 45)
-    fail(`${where}: ${text.split(/\s+/).length} words`);
+  // The word cap measures the answer; the fixed whole-question coverage
+  // disclosure (src/whole-question-coverage.mjs) is not answer content.
+  const words = text.replace(COVERAGE_NOTICES, "").split(/\s+/).filter(Boolean);
+  if (words.length > 45) fail(`${where}: ${words.length} words`);
   if (/\.md\b|_/.test(text)) fail(`${where}: reads a filename`);
 }
 
