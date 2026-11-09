@@ -86,6 +86,27 @@ export async function readDocumentQuestion({
   } catch {
     return null;
   }
+  // Both blind source reads are candidates, never authorities. Keep the union
+  // of their distinct claims only when immutable request/outcome identities
+  // agree. Every retained claim still faces the exact source and owner gate
+  // below, followed by the separate full-document entailment audit.
+  let independentPlan = null;
+  if (
+    decomposition.provenance === "source-exact-blind-model-reconstruction-v1"
+  ) {
+    if (!gemini.documentCoverage || !current()) return null;
+    try {
+      independentPlan = validateDocumentResponse(
+        await gemini.documentCoverage(requestPlan, documents, { ip }),
+        { requestPlan, scope },
+      );
+      const merged = reconcileDocumentProposals(plan, independentPlan);
+      if (!merged || !current()) return null;
+      plan = merged;
+    } catch {
+      return null;
+    }
+  }
   const statements = [],
     citations = [];
   for (const part of plan.requirements) {
@@ -173,16 +194,33 @@ export async function readDocumentQuestion({
       });
     }
   }
+  if (!current()) return null;
   const audit = await gemini.documentAudit(requestPlan, plan, statements, {
     ip,
     documents,
+    independentPlan,
   });
   // Model audit is fallible. Fail closed on missing/partial judgments, preserve
   // this limitation in evaluation; do not call it a mathematical proof.
-  if (!validateDocumentAudit(audit, { requestPlan, statements }) || !current())
+  if (
+    !validateDocumentAudit(audit, {
+      requestPlan,
+      statements,
+      independentPlan,
+    }) ||
+    !current()
+  )
     return null;
   return {
-    text: statements.map((s) => `${s.request}: ${s.text}`).join("\n\n"),
+    text: plan.requirements
+      .map((r) => {
+        const answer = statements
+          .filter((s) => s.requirementId === r.id)
+          .map((s) => s.text)
+          .join(" ");
+        return r.status === "answered" ? answer : `${r.text.trim()} ${answer}`;
+      })
+      .join("\n\n"),
     verdict: citations.length
       ? plan.requirements.every((r) => r.status === "answered")
         ? "DOCUMENT_ANSWER"
@@ -203,4 +241,64 @@ export async function readDocumentQuestion({
       "Model entailment audit is fallible; source verification is exact.",
     ],
   };
+}
+
+// Structural reconciliation does not certify meaning. It prevents one source
+// read from silently discarding an alternative found by the other. Conflicting
+// outcomes fail closed; contradictory affirmative claims remain visible to the
+// final audit rather than being selected by majority or first-match order.
+export function reconcileDocumentProposals(primary, independent) {
+  if (
+    primary.question !== independent.question ||
+    primary.questionPlanKey !== independent.questionPlanKey ||
+    primary.scopeKey !== independent.scopeKey ||
+    primary.requirements.length !== independent.requirements.length
+  )
+    return null;
+  const merged = structuredClone(primary);
+  for (const r of merged.requirements) {
+    const other = independent.requirements.find((x) => x.id === r.id);
+    if (
+      !other ||
+      other.text !== r.text ||
+      other.status !== r.status ||
+      JSON.stringify(other.owners) !== JSON.stringify(r.owners)
+    )
+      return null;
+    if (r.status !== "answered") continue;
+    // Choose an existing, source-supported wording only when its evidence
+    // contains all support used by the other read. This is source coverage,
+    // not meaning equivalence: the final audit still judges every independent
+    // claim against the selected wording and can reject it.
+    const covers = (a, b) =>
+      b.claims.every((claim) =>
+        claim.evidence.every((ref) =>
+          a.claims.some((candidate) =>
+            candidate.evidence.some(
+              (ev) =>
+                ev.document === ref.document &&
+                ev.sourceId === ref.sourceId &&
+                typeof ev.quote === "string" &&
+                typeof ref.quote === "string" &&
+                ev.quote.includes(ref.quote),
+            ),
+          ),
+        ),
+      );
+    if (covers(r, other)) continue;
+    if (covers(other, r)) {
+      r.claims = structuredClone(other.claims);
+      continue;
+    }
+    const key = (claim) => JSON.stringify([claim.statement, claim.evidence]);
+    const seen = new Set(r.claims.map(key));
+    for (const claim of other.claims) {
+      if (!seen.has(key(claim))) {
+        r.claims.push(structuredClone(claim));
+        seen.add(key(claim));
+      }
+    }
+    if (r.claims.length > 12) return null;
+  }
+  return merged;
 }

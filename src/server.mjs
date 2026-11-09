@@ -115,6 +115,7 @@ import { ownerView, originalCitation } from "./owner-view.mjs";
 import { readDocumentQuestion } from "./semantic/document.mjs";
 import { questionPlan } from "./question-plan.mjs";
 import { createDecomposition } from "./question-decomposition.mjs";
+import { understandDocumentQuestion } from "./semantic/question-understanding.mjs";
 import {
   resolveExactFields,
   exactFieldPlan,
@@ -2026,7 +2027,15 @@ export function createLocalServer({
                 ...(await resolveDocumentDecomposition(original)),
                 question: original,
               })
-            : undefined,
+            : ((await understandDocumentQuestion({
+                question: original,
+                gemini,
+                ip: opts.ip,
+                isCurrent: () =>
+                  s.bundle === bundle &&
+                  answerGenerations.get(bundle) ===
+                    immutableRequest.sourceGeneration,
+              })) ?? undefined),
           sourceGeneration: answerGenerations.get(bundle),
           isCurrent: () =>
             s.bundle === bundle &&

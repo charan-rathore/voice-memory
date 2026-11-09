@@ -1,6 +1,8 @@
 // Lossless caller-owned decomposition contract, NOT a language parser.
 // Only server-owned upstream resolvers can supply segments. Model proposals
-// and request-body fields are not trusted decomposition authority.
+// alone and request-body fields are not trusted decomposition authority.
+// The optional production interpreter separately reconstructs and source-checks
+// two blind proposals before this contract derives caller-span IDs.
 import { createHash } from "node:crypto";
 const hash = (x) =>
   createHash("sha256").update(JSON.stringify(x)).digest("hex");

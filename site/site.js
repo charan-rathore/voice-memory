@@ -299,6 +299,7 @@
     CLINICAL_REQUIREMENTS: ["v-ok", "Requested test results"],
     PARTIAL_FIELDS: ["v-warn", "Partial answer"],
     PARTIAL_DOCUMENT: ["v-warn", "Partial answer"],
+    DOCUMENT_ANSWER: ["v-ok", "Cloud answer"],
     SOURCE_OUTLINE: ["v-warn", "Source headings, not a summary"],
     UNBOUND_OWNER: ["v-ask", "Record identity unresolved"],
     EXPLAINED: ["v-ok", "Explained"],
@@ -1024,19 +1025,26 @@
         getAnswers = false;
       }
     }
-    return api("/ask", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        case: apiCase(caseId),
-        question,
-        context: context || undefined,
-        patient: patient || undefined,
-        ...(caseId === "own"
-          ? (readerConsent?.request() ?? { semantic: false })
-          : {}),
-      }),
-    });
+    const reading =
+      caseId === "own" ? (readerConsent?.request() ?? { semantic: false }) : {};
+    // Cloud reading now includes multiple bounded checks. The old 20-second
+    // lookup timeout could abandon a valid answer while paid work continued.
+    // Consent/source change handling and askSeq still prevent stale delivery.
+    return api(
+      "/ask",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          case: apiCase(caseId),
+          question,
+          context: context || undefined,
+          patient: patient || undefined,
+          ...reading,
+        }),
+      },
+      reading.semantic === true ? 90000 : 20000,
+    );
   }
 
   async function ask(question, { via = "typed", caseId = state.case } = {}) {

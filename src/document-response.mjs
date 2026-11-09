@@ -36,7 +36,10 @@ export function validateDocumentResponse(response, { requestPlan, scope }) {
 
 // Exactly one judgment for every statement, including uncertainty. An audit
 // cannot omit a claim, duplicate another or relabel a requirement.
-export function validateDocumentAudit(audit, { requestPlan, statements }) {
+export function validateDocumentAudit(
+  audit,
+  { requestPlan, statements, independentPlan = null },
+) {
   if (
     audit?.questionPlanKey !== requestPlan.key ||
     audit.scopeKey !== requestPlan.scopeKey ||
@@ -48,6 +51,24 @@ export function validateDocumentAudit(audit, { requestPlan, statements }) {
     audit.items.length !== statements.length
   )
     return false;
+  if (independentPlan) {
+    const expected = independentPlan.requirements.flatMap((r) =>
+      r.status === "answered"
+        ? r.claims.map((_, i) => [r.id, i])
+        : [[r.id, null]],
+    );
+    if (
+      !Array.isArray(audit.coverageItems) ||
+      audit.coverageItems.length !== expected.length ||
+      !audit.coverageItems.every(
+        (v, i) =>
+          v.requirementId === expected[i][0] &&
+          v.claimIndex === expected[i][1] &&
+          v.accept === true,
+      )
+    )
+      return false;
+  }
   return audit.items.every(
     (v, i) =>
       v.index === i &&

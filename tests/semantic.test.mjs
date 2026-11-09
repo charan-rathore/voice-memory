@@ -550,7 +550,7 @@ test("openrouter: interpret translates the request and normalizes the reply", as
   assert.equal(c.body.messages[0].role, "user");
   assert.match(c.body.messages[0].content, /mera ferritin\?/);
   assert.equal(c.body.response_format.type, "json_schema");
-  assert.deepEqual(c.body.reasoning, { effort: "low" });
+  assert.deepEqual(c.body.reasoning, { effort: "low", exclude: true });
   assert.equal(c.init.headers.authorization, "Bearer sk-or-test");
   const st = gem.status();
   assert.ok(st.budget.usd > 0, "usage is charged from normalized token counts");
@@ -1042,5 +1042,54 @@ test("router: a rewrite that flips negation or swaps the named subject is refuse
     out2.lead?.verdict,
     "APPROVED",
     "a subject-swapping rewrite is not rerun",
+  );
+});
+
+test("openrouter: document interpretation uses actual JSON mode, exact route and token-price ceilings", async () => {
+  const fetchImpl = fakeFetch(async () =>
+    orResponse('{"question":"Who paid?","requirements":["Who paid?"]}', {
+      usage: { cost: 0.004 },
+    }),
+  );
+  const gem = createGemini({
+    env: {
+      OPENROUTER_API_KEY: "sk-or-test",
+      VM_OPENROUTER_MODEL: "deepseek/deepseek-v4.1-flash-1017",
+      VM_OPENROUTER_PROVIDER: "relace",
+      VM_OPENROUTER_REASONING: "off",
+      VM_GEMINI_IN_USD_PER_M: ".006",
+      VM_GEMINI_OUT_USD_PER_M: ".50",
+    },
+    fetchImpl,
+  });
+  const result = await gem.questionRequirements("Who paid?", {
+    pass: "proposal",
+  });
+  assert.equal(result.question, "Who paid?");
+  const body = fetchImpl.calls[0].body;
+  assert.deepEqual(body.response_format, { type: "json_object" });
+  assert.deepEqual(body.reasoning, { enabled: false, exclude: true });
+  assert.deepEqual(body.provider, {
+    require_parameters: true,
+    max_price: { prompt: 0.006, completion: 0.5 },
+    only: ["relace"],
+    allow_fallbacks: false,
+  });
+  assert.equal(
+    gem.status().budget.usd,
+    0.004,
+    "provider cost is not understated by list-price estimates",
+  );
+  await gem.questionRequirements("Who paid?", { pass: "reconstruction" });
+  assert.equal(
+    fetchImpl.calls.length,
+    2,
+    "blind reconstruction has a distinct request and cache identity",
+  );
+  assert.ok(
+    !fetchImpl.calls[1].body.messages[0].content.includes(
+      '"requirements":["Who paid?"]',
+    ),
+    "first proposal is not sent to reconstruction",
   );
 });
