@@ -28,6 +28,40 @@ test("SSE streams OpenAI deltas and DONE, separately retains source proof", asyn
   assert.match(text, /data: \[DONE\]/);
   assert.ok(a.lastTurn(t).result.evidence.length);
 });
+test("a token bound to one workspace never reveals another workspace's records", async () => {
+  const a = createVoiceAdapter();
+  const tokenA = a.bind(
+    importBundle([
+      {
+        title: "Alpha brief",
+        text: "Project Kestrel launches on Tuesday after final sign-off from the team.",
+      },
+    ]),
+  );
+  // A second caller's workspace exists alongside; it is never bound to tokenA.
+  a.bind(
+    importBundle([
+      {
+        title: "Bravo brief",
+        text: "Project Falcon ships on Friday pending the remaining vendor checks.",
+      },
+    ]),
+  );
+  const r = await a.handle(request(tokenA, "When does Project Falcon ship?"));
+  const text = await r.text();
+  assert.equal(r.status, 200);
+  assert.ok(
+    !text.includes("Falcon"),
+    "answer must not carry the other workspace's record",
+  );
+  const turn = a.lastTurn(tokenA);
+  assert.ok(
+    (turn.result.evidence ?? []).every(
+      (e) => !JSON.stringify(e).includes("Bravo"),
+    ),
+    "evidence must stay inside the token's own workspace",
+  );
+});
 test("caller-supplied scope cannot access another bundle", async () => {
   const a = createVoiceAdapter(),
     t = a.bind(b());
