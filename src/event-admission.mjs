@@ -64,6 +64,19 @@ const actionOf = (participle) =>
     participle.toLowerCase()
   ];
 function parseQuestionPart(s) {
+  const recipientQuestion = new RegExp(
+    `^(?:To whom did (${entity}) (pay|owe) (${money})|Who did (${entity}) (pay|owe) (${money}) to)$`,
+    "i",
+  ).exec(s);
+  if (recipientQuestion) {
+    const concrete = canon(
+      recipientQuestion[1] || recipientQuestion[4],
+      (recipientQuestion[2] || recipientQuestion[5]).toLowerCase(),
+      `${recipientQuestion[3] || recipientQuestion[6]} to Placeholder`,
+      "positive",
+    );
+    return concrete ? { ...concrete, recipient: null } : null;
+  }
   const amountQuestion = new RegExp(
     `^How much did (${entity}) (pay|owe) to (${entity})$`,
     "i",
@@ -145,11 +158,13 @@ export function eventQuestionPlan(question, bundle, generation) {
     return null;
   // This exact connective is part of the small language. No guessed split of
   // opaque clauses, follow-up pronouns, corrections or temporal modifiers.
-  const m = /^(?:Did|Has|Was|Who|How much did) .+\?$/i.exec(question);
+  const m = /^(?:Did|Has|Was|Who|How much did|To whom did) .+\?$/i.exec(
+    question,
+  );
   if (!m) return null;
   const parts = question
     .slice(0, -1)
-    .split(/ and (?=(?:did|has|was|who|how much did) )/i);
+    .split(/ and (?=(?:did|has|was|who|how much did|to whom did) )/i);
   if (parts.length > 4) return null;
   const parsed = parts.map(parseQuestionPart);
   if (parsed.some((p) => !p)) return null;
@@ -163,7 +178,9 @@ export function eventQuestionPlan(question, bundle, generation) {
       ? { answerSlot: "actor" }
       : slots.amount === null && ["pay", "owe"].includes(slots.action)
         ? { answerSlot: "amount" }
-        : {}),
+        : slots.recipient === null && ["pay", "owe"].includes(slots.action)
+          ? { answerSlot: "recipient" }
+          : {}),
     semanticState: "bounded-explicit-event-question",
   }));
   const value = {
@@ -316,7 +333,9 @@ function proposedClaim(fact, requirement) {
         ? `The source names ${fact.slots.actor}: "${fact.citation.quote}"`
         : requirement.answerSlot === "amount"
           ? `The source records ${fact.slots.amount}: "${fact.citation.quote}"`
-          : `${matches ? "Yes" : "No"}. The source records: "${fact.citation.quote}"`,
+          : requirement.answerSlot === "recipient"
+            ? `The source names ${fact.slots.recipient} as recipient: "${fact.citation.quote}"`
+            : `${matches ? "Yes" : "No"}. The source records: "${fact.citation.quote}"`,
     slots: fact.slots,
     citations: [fact.citation],
   };
@@ -477,7 +496,9 @@ export function eventRemainderPlan(question, bundle, sourceGeneration) {
       unresolvedRemainder: tail + "?",
       connective:
         m[1].toLowerCase() === "and" &&
-        !/^ and (?:who|what|where|when|why|how|did|has|was|is)\b/i.test(tail)
+        !/^ and (?:who|what|where|when|why|how|did|has|was|is|to whom)\b/i.test(
+          tail,
+        )
           ? "qualifier"
           : m[1].toLowerCase(),
       prefixPlanKey: known.key,

@@ -183,6 +183,18 @@ try {
   await page.locator("#answer").screenshot({
     path: "/downloads/voice-memory-assertion-domain-unresolved-mobile.png",
   });
+  await ask("To whom did Arjun pay $1,500?");
+  assert.equal(
+    await page.locator("#answer .verdict-chip").innerText(),
+    "Recorded source assertion",
+  );
+  assert.match(
+    await page.locator("#answer").innerText(),
+    /Nimbus as recipient/,
+  );
+  await page
+    .locator("#answer")
+    .screenshot({ path: "/downloads/voice-memory-event-recipient-mobile.png" });
   await page.locator("#files").setInputFiles({
     name: "Purchase.txt",
     mimeType: "text/plain",

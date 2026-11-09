@@ -651,3 +651,65 @@ test("any trailing event qualifier remains opaque and cannot be dropped or treat
     null,
   );
 });
+
+test("recipient completion binds payer action amount and positive polarity without reciprocal swapping", async () => {
+  const source = "Arjun paid $1,500 to Nimbus.\nNimbus paid $5,000 to Arjun.";
+  for (const [q, actor, recipient, amount] of [
+    ["To whom did Arjun pay $1,500?", "Arjun", "Nimbus", "$1,500"],
+    ["Who did Nimbus pay $5,000 to?", "Nimbus", "Arjun", "$5,000"],
+  ]) {
+    const r = await resolve(q, source);
+    assert.ok(r, q);
+    assert.equal(r.plan.requirements[0].answerSlot, "recipient");
+    assert.equal(r.plan.requirements[0].slots.recipient, null);
+    assert.equal(r.admission.complete, true);
+    assert.deepEqual(
+      [
+        r.admission.outcomes[0].claims[0].slots.actor,
+        r.admission.outcomes[0].claims[0].slots.recipient,
+        r.admission.outcomes[0].claims[0].slots.amount,
+      ],
+      [actor, recipient, amount],
+    );
+  }
+  for (const q of [
+    "To whom did Nimbus pay $1,500?",
+    "Who did Arjun owe $1,500 to?",
+    "Who did Priya pay $1,500 to?",
+  ])
+    assert.equal((await resolve(q, source)).admission.userReady, false, q);
+  const c = await resolve(
+    "To whom did Arjun pay $1,500?",
+    source + "\nArjun paid $1,500 to Orion.",
+  );
+  assert.equal(c.admission.status, "clarify");
+  assert.equal(
+    (
+      await resolve(
+        "To whom did Arjun pay $1,500?",
+        "Arjun did not pay $1,500 to Nimbus.",
+      )
+    ).admission.userReady,
+    false,
+  );
+  const mixed = await resolve(
+    "To whom did Arjun pay $1,500 and who did Arjun owe $1,500 to?",
+    source,
+  );
+  assert.equal(mixed.admission.status, "partial");
+  assert.deepEqual(
+    mixed.admission.outcomes.map((o) => o.status),
+    ["answered", "not_established"],
+  );
+  const r = await resolve("To whom did Arjun pay $1,500?", source);
+  const claim = r.admission.outcomes[0].claims[0];
+  assert.equal(
+    verifyEventCertificate({
+      plan: r.plan,
+      requirement: r.plan.requirements[0],
+      claim: { ...claim, slots: { ...claim.slots, recipient: "Arjun" } },
+      bundle: bundle(source),
+    }).ok,
+    false,
+  );
+});
