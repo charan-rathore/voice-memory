@@ -428,6 +428,8 @@ export function createVoiceAdapter({
       }
       if (scopeGone || scopeBad) {
         shadow.forget(shadowKey);
+        // The last diagnostic must not outlive the owning workspace.
+        grant.conversation = null;
         // Their workspace expired (30 idle minutes) or was replaced, or the
         // call names a scope this server cannot read. Say so plainly, and
         // show the same words on the page; never answer from the fictional
@@ -1363,8 +1365,13 @@ export function createVoiceAdapter({
           while (cache.size > 16) cache.delete(cache.keys().next().value);
         }
         let conversation = null;
+        // Do not expose a previous call's diagnostic if shadow observation
+        // throws, or if the current response has become scope-invalid.
+        grant.conversation = null;
         try {
-          conversation = shadow.observe({
+          if (turn?.spokenTurn?.intent === "SCOPE_CHANGED")
+            shadow.forget(shadowKey);
+          else conversation = shadow.observe({
             key: shadowKey,
             bundle,
             version: startingVersion,
