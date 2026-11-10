@@ -1371,19 +1371,20 @@ export function createVoiceAdapter({
         try {
           if (turn?.spokenTurn?.intent === "SCOPE_CHANGED")
             shadow.forget(shadowKey);
-          else conversation = shadow.observe({
-            key: shadowKey,
-            bundle,
-            version: startingVersion,
-            heard: askedRaw,
-            legacy: {
-              spoken,
-              verdict: turn?.spokenTurn?.verdict ?? null,
-              intent: social?.intent ?? turn?.spokenTurn?.intent ?? null,
-              citations: turn?.spokenTurn?.citations ?? [],
-              evidence: turn?.result?.evidence?.length ?? 0,
-            },
-          });
+          else
+            conversation = shadow.observe({
+              key: shadowKey,
+              bundle,
+              version: startingVersion,
+              heard: askedRaw,
+              legacy: {
+                spoken,
+                verdict: turn?.spokenTurn?.verdict ?? null,
+                intent: social?.intent ?? turn?.spokenTurn?.intent ?? null,
+                citations: turn?.spokenTurn?.citations ?? [],
+                evidence: turn?.result?.evidence?.length ?? 0,
+              },
+            });
           grant.conversation = conversation;
         } catch {
           /* the shadow never breaks a call */
