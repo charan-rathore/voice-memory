@@ -951,25 +951,6 @@
   // the free host); visitor workspaces always POST. If the engine predates
   // GET /answer (the site deploys before the engine does), fall back to POST.
   let getAnswers = true;
-  // A page tile in the reading view opens that original page.
-  document.addEventListener("vm:open-page", async (e) => {
-    const { title, page } = e.detail ?? {};
-    if (!title) return;
-    await openDoc(title);
-    const sec = [...document.querySelectorAll("#viewer-body .rd-doc")].find(
-      (x) => x.classList.contains("focus"),
-    );
-    const target =
-      sec?.querySelectorAll(".page")[Math.max(0, (page ?? 1) - 1)] ?? sec;
-    target?.scrollIntoView({
-      block: "start",
-      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-    });
-    target?.setAttribute("tabindex", "-1");
-    target?.focus({ preventScroll: true });
-  });
   document.addEventListener("vm:person", (e) => {
     const id = e.detail?.id;
     if (!id || !/^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(id)) return;

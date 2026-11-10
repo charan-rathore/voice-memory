@@ -696,7 +696,7 @@
     openPage(c.title, c.location?.pages?.[0] ?? 1, c);
   }
   function row(parent, text, subtext, citation, pageTitle, pageNumber) {
-    const li = make("li", "rd-data-row");
+    const li = make(parent.tagName === "UL" ? "li" : "div", "rd-data-row");
     li.append(make("span", "", text));
     if (subtext) li.append(make("small", "", subtext));
     if (citation?.quote) {
