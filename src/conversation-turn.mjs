@@ -850,9 +850,10 @@ export function resolveConversationTurn(input, prior = null) {
         understanding.needsClarification = true;
         return finish({
           outcome: "clarify",
-          spoken: lang === "hi"
-            ? "इस सवाल के कई हिस्से हो सकते हैं। हर हिस्से का जवाब जाँचने के लिए उन्हें अलग-अलग पूछिए।"
-            : "That may ask more than one thing. Please ask each part separately so I don't leave one unanswered.",
+          spoken:
+            lang === "hi"
+              ? "इस सवाल के कई हिस्से हो सकते हैं। हर हिस्से का जवाब जाँचने के लिए उन्हें अलग-अलग पूछिए।"
+              : "That may ask more than one thing. Please ask each part separately so I don't leave one unanswered.",
           staged: { kind: "clarify" },
           pendingAfter: null,
           dimension: "clarify",
@@ -980,15 +981,17 @@ export function resolveConversationTurn(input, prior = null) {
     verdict: single ? single.verdict : segments.map((s) => s.verdict).join("+"),
     citations: segments.flatMap((s) => s.citations),
     factIds: [...new Set(segments.flatMap((s) => s.factIds))],
-    staged: answered.length ? {
-      kind: "record",
-      subject: single
-        ? single.subject
-        : segments.map((s) => s.subject).join("+"),
-      dimension: single ? single.dimension : null,
-      fingerprint: single ? single.fingerprint : null,
-      temporal: segments.some((s) => s.temporal),
-    } : { kind: "abstain" },
+    staged: answered.length
+      ? {
+          kind: "record",
+          subject: single
+            ? single.subject
+            : segments.map((s) => s.subject).join("+"),
+          dimension: single ? single.dimension : null,
+          fingerprint: single ? single.fingerprint : null,
+          temporal: segments.some((s) => s.temporal),
+        }
+      : { kind: "abstain" },
     pendingAfter: null,
     dimension: single ? single.dimension : null,
     complete,
@@ -1047,9 +1050,10 @@ export function commitConversationTurn(
     // look as if it was successfully committed.
     return {
       ...base,
-      seen: utteranceId == null
-        ? base.seen
-        : base.seen.filter((s) => s.turnId !== turnId),
+      seen:
+        utteranceId == null
+          ? base.seen
+          : base.seen.filter((s) => s.turnId !== turnId),
     };
   }
   return trimmed({
