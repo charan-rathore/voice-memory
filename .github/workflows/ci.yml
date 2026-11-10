@@ -12,7 +12,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,6 +29,17 @@ jobs:
       - run: npm run test:ingest
       - run: npm run test:clinical
       - run: npm run test:vault
+      - name: Browser regression suite (four viewports, real source links)
+        run: npm run test:browser
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          VM_SHOTS_DIR: .shots
+      - name: Graph regression suite
+        run: npm run test:graph
+      - name: Call UI and scope regression suite
+        run: npm run test:call-ui
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
       - name: Bring-your-own documents flow in a real browser
         run: node tests/site-check.mjs
         env:
