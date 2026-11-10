@@ -865,7 +865,9 @@ export function resolveConversationTurn(input, prior = null) {
       // is likewise not a certified single-subject lookup.
       const unsupportedComparison =
         frame.subjects.length > 1 &&
-        /\b(?:compare|comparison|difference|differences|versus|vs\.?|between)\b|तुलना|अंतर/i.test(text);
+        /\b(?:compare|comparison|difference|differences|versus|vs\.?|between)\b|तुलना|अंतर/i.test(
+          text,
+        );
       if (
         unsupportedComparison ||
         (pieces.length === 1 &&
