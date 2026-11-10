@@ -338,16 +338,30 @@ for (const [name, c] of Object.entries(scripted.cases))
 
 test("QUALIFIED PATH respects consent and the kill switch: zero provider calls", async () => {
   const c = scripted.cases.ownerRetention;
-  for (const variant of ["no-consent", "switch-off", "default-off"]) {
+  for (const variant of [
+    "no-consent",
+    "switch-off",
+    "default-off",
+    "no-consent-on",
+  ]) {
     const calls = [];
     await withServer(
       {
         gemini: scriptedProvider(c, calls),
-        wholeQuestion: variant === "switch-off" ? "off" : undefined,
+        wholeQuestion:
+          variant === "switch-off"
+            ? "off"
+            : variant === "no-consent-on"
+              ? "on"
+              : undefined,
       },
       async ({ upload, ask }) => {
         const ws = await upload(scripted.fileName, scripted.document);
-        const b = await ask(ws, c.question, variant !== "no-consent");
+        const b = await ask(
+          ws,
+          c.question,
+          variant !== "no-consent" && variant !== "no-consent-on",
+        );
         assertHonest(b, variant);
         assert.equal(b.wholeQuestion.state, "unverified");
         assert.ok(

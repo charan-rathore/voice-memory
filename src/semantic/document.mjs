@@ -88,9 +88,19 @@ export async function readDocumentQuestion({
   let plan,
     independentPlan = null;
   try {
+    const primaryP = gemini.documentRead(requestPlan, documents, { ip });
+    // Recheck currency between launches: the independent read must not start
+    // once the source has changed under the primary read.
+    if (blind && !current()) {
+      primaryP.catch(() => {});
+      return null;
+    }
+    const independentP = blind
+      ? gemini.documentCoverage(requestPlan, documents, { ip })
+      : null;
     const [primaryRaw, independentRaw] = await Promise.all([
-      gemini.documentRead(requestPlan, documents, { ip }),
-      blind ? gemini.documentCoverage(requestPlan, documents, { ip }) : null,
+      primaryP,
+      independentP,
     ]);
     plan = validateDocumentResponse(primaryRaw, { requestPlan, scope });
     if (blind)

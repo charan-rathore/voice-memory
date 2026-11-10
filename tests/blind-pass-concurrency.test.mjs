@@ -171,5 +171,6 @@ test("a source invalidated synchronously by the first blind pass yields no decom
     },
   });
   assert.equal(decomposition, null);
-  assert.equal(started.length >= 1, true);
+  // The second provider call must not start after the source changed.
+  assert.deepEqual(started, ["proposal"]);
 });

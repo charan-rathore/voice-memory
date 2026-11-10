@@ -37,12 +37,27 @@ export async function understandDocumentQuestion({
   isCurrent = () => true,
 }) {
   if (!gemini?.questionRequirements || !isCurrent()) return null;
-  // Two blind reconstructions. Neither sees the other, so they run
-  // concurrently (one round trip, not two); both must still partition the
-  // unchanged question identically.
+  // Two blind reconstructions. Neither sees the other, so they overlap (one
+  // round trip, not two); both must still partition the unchanged question
+  // identically. Currency is rechecked between the launches so a second
+  // provider call never starts after the source has been invalidated; a
+  // change that lands while both calls are in flight is caught by the
+  // post-await check below.
+  const proposalP = gemini.questionRequirements(question, {
+    ip,
+    pass: "proposal",
+  });
+  if (!isCurrent()) {
+    proposalP.catch(() => {});
+    return null;
+  }
+  const reconstructionP = gemini.questionRequirements(question, {
+    ip,
+    pass: "reconstruction",
+  });
   const [proposal, reconstruction] = await Promise.all([
-    gemini.questionRequirements(question, { ip, pass: "proposal" }),
-    gemini.questionRequirements(question, { ip, pass: "reconstruction" }),
+    proposalP,
+    reconstructionP,
   ]);
   const first = sourceExactRequirements(question, proposal);
   const second = sourceExactRequirements(question, reconstruction);
