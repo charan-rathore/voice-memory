@@ -152,11 +152,13 @@ function contractKind(turn) {
  * remembered at once; each call's own state is bounded by the contract.
  */
 export function createConversationShadow({ maxCalls = 64 } = {}) {
-  const calls = new Map();
+  const calls = new Map(); // key -> { state, seq } last committed turn
+  const staged = new Map(); // key -> { seq, state, turnId } awaiting delivery
+  let seqCounter = 0;
   return {
     observe({ key, bundle, version, heard, legacy, mode = "voice" }) {
       if (!key) return null;
-      const prior = calls.get(key) ?? null;
+      const prior = calls.get(key)?.state ?? null;
       const { turn, state } = resolveConversationTurn(
         {
           utterance: heard,
@@ -169,14 +171,14 @@ export function createConversationShadow({ maxCalls = 64 } = {}) {
         },
         prior,
       );
-      // Bolna reports a barge-in as the next request, not as an event, so
-      // the turn counts as delivered once its stream is produced.
-      const next = commitConversationTurn(state, turn.turnId, {
-        completed: true,
-      });
-      calls.delete(key);
-      calls.set(key, next);
-      while (calls.size > maxCalls) calls.delete(calls.keys().next().value);
+      // A turn becomes memory only through the returned commit(), after
+      // the response stream carrying it has been produced. Bolna reports a
+      // barge-in as the next request, not as an event, so stream production
+      // is the delivery boundary this transport can attest.
+      const seq = ++seqCounter;
+      staged.delete(key);
+      staged.set(key, { seq, state, turnId: turn.turnId });
+      while (staged.size > maxCalls) staged.delete(staged.keys().next().value);
       const u = turn.understanding ?? {};
       const decision = {
         legacy: legacyKind(legacy),
@@ -196,10 +198,29 @@ export function createConversationShadow({ maxCalls = 64 } = {}) {
         wouldSay: turn.answer.spoken,
         decision,
         diverges: decision.legacy !== decision.contract,
+        // Delivery acknowledgement, exactly once per observation. A turn
+        // superseded by a newer observation, committed twice, or committed
+        // after a newer turn of the same call never becomes memory.
+        commit({ completed = true } = {}) {
+          const s = staged.get(key);
+          if (!s || s.seq !== seq) return false;
+          staged.delete(key);
+          if (seq <= (calls.get(key)?.seq ?? 0)) return false;
+          const next = commitConversationTurn(s.state, s.turnId, {
+            completed,
+          });
+          calls.delete(key);
+          calls.set(key, { state: next, seq });
+          while (calls.size > maxCalls) calls.delete(calls.keys().next().value);
+          return true;
+        },
       };
     },
     forget(key) {
-      if (key) calls.delete(key);
+      if (key) {
+        calls.delete(key);
+        staged.delete(key);
+      }
     },
     size: () => calls.size,
   };

@@ -402,10 +402,14 @@ export function createVoiceAdapter({
           ]),
         ]);
       const startingVersion = versionOf(bundle);
-      // One conversation per call. A fixed bearer is shared by callers, so
-      // without a per-call handle there is no safe conversation to keep.
+      // One conversation per authenticated grant AND per-call handle. A
+      // fixed bearer is shared by callers, so without a per-call handle
+      // there is no safe conversation to keep; and two grants presenting
+      // the same external call tag must never share state either, so the
+      // capability itself is part of the key. The key never leaves this
+      // process - the shadow exposes only its digest as the call id.
       const shadowKey = callTag
-        ? JSON.stringify(["call", callTag])
+        ? JSON.stringify(["call", token, callTag])
         : credentials.has(token)
           ? null
           : JSON.stringify(["token", token]);
@@ -1579,12 +1583,16 @@ export function createVoiceAdapter({
           while (cache.size > 16) cache.delete(cache.keys().next().value);
         }
         let conversation = null;
+        let observation = null;
         try {
-          conversation = shadow.observe({
+          observation = shadow.observe({
             key: shadowKey,
             bundle,
             version: startingVersion,
             heard: askedRaw,
+            // The final admitted answer: shared rendering, the coverage
+            // disclosure and any scope-change replacement all happen
+            // above, so the shadow never sees a preliminary candidate.
             legacy: {
               spoken,
               verdict: turn?.spokenTurn?.verdict ?? null,
@@ -1593,6 +1601,11 @@ export function createVoiceAdapter({
               evidence: turn?.result?.evidence?.length ?? 0,
             },
           });
+          // The page and grant memory see the payload only; the delivery
+          // acknowledgement (commit) is not part of it.
+          conversation = observation
+            ? (({ commit, ...payload }) => payload)(observation)
+            : null;
           grant.conversation = conversation;
         } catch {
           /* the shadow never breaks a call */
@@ -1667,7 +1680,24 @@ export function createVoiceAdapter({
             );
             controller.close();
           },
+          cancel() {
+            // The caller went away before the answer was produced; an
+            // interrupted turn never becomes memory.
+            try {
+              observation?.commit({ completed: false });
+            } catch {
+              /* the shadow never breaks a call */
+            }
+          },
         });
+        // The turn's stream is produced; only now does the turn become
+        // conversation memory. A superseded or out-of-order commit is
+        // rejected inside the shadow.
+        try {
+          observation?.commit({ completed: true });
+        } catch {
+          /* the shadow never breaks a call */
+        }
         grant.turn = turn;
         return new Response(stream, {
           headers: {

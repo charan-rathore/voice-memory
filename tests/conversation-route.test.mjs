@@ -191,7 +191,85 @@ test("shadow state is bounded by call count", () => {
       version: "v",
       heard: "thanks",
       legacy: null,
-    });
+    }).commit({ completed: true });
   assert.equal(s.size(), 2);
   assert.equal(s.observe({ key: null, heard: "x" }), null, "no key, no state");
+});
+
+test("route: two grants with the same external call tag never share conversation state", async () => {
+  const a = createVoiceAdapter();
+  const t1 = a.bind(northstar);
+  const t2 = a.bind(northstar);
+  // Both capabilities present the same per-call handle and identical
+  // sources; the authenticated grant still separates their conversations.
+  a.setBundleResolver(() => ({
+    bundle: northstar,
+    call: "call-1",
+    caseId: "deal",
+  }));
+  const callA = bolnaCall(a, t1);
+  await callA.ask("What is the engagement fee?");
+  const callB = bolnaCall(a, t2);
+  const b = await callB.ask("say that again");
+  assert.equal(b.conversation.outcome, "repeat");
+  assert.match(b.conversation.wouldSay, /don't have a verified answer/);
+  assert.doesNotMatch(b.conversation.wouldSay, /\$42,000/);
+  assert.equal(b.conversation.referencedTurnId, null);
+});
+
+test("shadow: a superseded or out-of-order commit never becomes memory", () => {
+  const s = createConversationShadow();
+  const key = "call-x";
+  // Two overlapping turns of one call, resolved in request order...
+  const first = s.observe({
+    key,
+    bundle: northstar,
+    version: "v",
+    heard: "What is the engagement fee?",
+    legacy: null,
+  });
+  const second = s.observe({
+    key,
+    bundle: northstar,
+    version: "v",
+    heard: "and the deadline?",
+    legacy: null,
+  });
+  // ...but delivered in reverse order: the newer turn commits, the older
+  // one is rejected and never becomes the latest memory.
+  assert.equal(second.commit({ completed: true }), true);
+  assert.equal(first.commit({ completed: true }), false);
+  assert.equal(
+    second.commit({ completed: true }),
+    false,
+    "commit is once-only",
+  );
+  const again = s.observe({
+    key,
+    bundle: northstar,
+    version: "v",
+    heard: "say that again",
+    legacy: null,
+  });
+  assert.doesNotMatch(again.wouldSay, /\$42,000/);
+});
+
+test("shadow: an abandoned delivery leaves no memory to repeat", () => {
+  const s = createConversationShadow();
+  const key = "call-y";
+  s.observe({
+    key,
+    bundle: northstar,
+    version: "v",
+    heard: "What is the engagement fee?",
+    legacy: null,
+  }).commit({ completed: false });
+  const again = s.observe({
+    key,
+    bundle: northstar,
+    version: "v",
+    heard: "say that again",
+    legacy: null,
+  });
+  assert.match(again.wouldSay, /don't have a verified answer/);
 });
