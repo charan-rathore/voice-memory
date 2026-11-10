@@ -20,6 +20,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Temporary formatting diff
+        run: |
+          ./node_modules/.bin/prettier --write src/conversation-turn.mjs
+          git diff -- src/conversation-turn.mjs
       - run: npm run build
       - run: npm run format:check
       - run: npm run typecheck
