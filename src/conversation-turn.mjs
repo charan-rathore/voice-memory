@@ -339,7 +339,9 @@ export function splitParts(text, vocabulary = []) {
 // certified complete when a later clause carries a separate answer obligation
 // but does not repeat the subject. This is not a general language parser.
 function unresolvedCompound(text) {
-  return /(?:\b(?:and|also|aur)\s+|\?\s+)(?:when|what|why|how|who|which|where|is|was|were|are|do|did|does|has|have|can|could)\b|\b(?:and|also)\s+(?:the\s+)?(?:approval\s+(?:date|status)|status|deadline|reason|history)\b/i.test(text);
+  return /(?:\b(?:and|also|aur)\s+|\?\s+)(?:when|what|why|how|who|which|where|is|was|were|are|do|did|does|has|have|can|could)\b|\b(?:and|also)\s+(?:the\s+)?(?:approval\s+(?:date|status)|status|deadline|reason|history)\b/i.test(
+    text,
+  );
 }
 
 /** The structured frame for one (already repaired) utterance. */
