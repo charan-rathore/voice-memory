@@ -1,0 +1,29 @@
+{
+  "description": "Synthetic, developer-authored. A maintenance engagement with two proposals, one signed agreement that states who pays what and who signed, and two invoices that share one amount under different records. No real organisation or person.",
+  "docs": [
+    {
+      "name": "01_proposal_v1.txt",
+      "text": "Harbor Logistics - Maintenance Proposal v1\nDate: 2026-03-02. Type: proposal.\nHarbor Logistics proposes a maintenance retainer of $18,000 per quarter for Calder Foods.\nThis proposal is an offer, not an agreement."
+    },
+    {
+      "name": "02_proposal_v2.txt",
+      "text": "Harbor Logistics - Maintenance Proposal v2\nDate: 2026-03-20. Type: revised proposal.\nThe revised maintenance retainer is $15,500 per quarter.\nThe revised retainer is subject to Calder Foods finance approval and is not yet approved."
+    },
+    {
+      "name": "03_signed_agreement.txt",
+      "text": "Maintenance Agreement - Harbor Logistics and Calder Foods\nDate: 2026-04-10. Type: signed agreement.\nThe agreed maintenance retainer is $16,200 per quarter.\nCalder Foods pays the maintenance retainer to Harbor Logistics.\nHarbor Logistics pays its own travel costs.\nMira Okafor signed this agreement for Calder Foods on 2026-04-10."
+    },
+    {
+      "name": "04_invoice_leeds.txt",
+      "text": "Invoice INV-1001\nDate: 2026-05-01. Type: invoice.\nSite: Leeds depot.\nAmount due: $4,750 for conveyor servicing."
+    },
+    {
+      "name": "05_invoice_bristol.txt",
+      "text": "Invoice INV-1002\nDate: 2026-05-03. Type: invoice.\nSite: Bristol depot.\nAmount due: $4,750 for forklift servicing."
+    }
+  ],
+  "replacement": {
+    "name": "06_amendment.txt",
+    "text": "Amendment to the Maintenance Agreement\nDate: 2026-06-01. Type: signed amendment.\nFrom 1 July 2026, Calder Foods pays the travel costs of Harbor Logistics.\nMira Okafor signed this amendment for Calder Foods on 2026-06-01."
+  }
+}

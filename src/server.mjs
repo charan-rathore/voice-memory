@@ -114,6 +114,8 @@ import { documentScope, evidencePermission } from "./document-scope.mjs";
 import { ownerView, originalCitation } from "./owner-view.mjs";
 import { readDocumentQuestion } from "./semantic/document.mjs";
 import { questionPlan } from "./question-plan.mjs";
+import { admitRequest } from "./answer-admission.mjs";
+import { sourceVersionOf } from "./source-version.mjs";
 import { createDecomposition } from "./question-decomposition.mjs";
 import { understandDocumentQuestion } from "./semantic/question-understanding.mjs";
 import {
@@ -786,6 +788,15 @@ export function createLocalServer({
         lead,
         call: t.call ?? null,
         case: t.caseId ?? "demo",
+        // The canonical answer contract of this spoken turn (the same
+        // shape typed answers return as `final`), with citations located
+        // for this case. The page reads it; it never re-derives a verdict.
+        contract: t.contract
+          ? {
+              ...t.contract,
+              citations: lead?.citations ?? [],
+            }
+          : null,
       });
       if (publicTurns.length > 200) publicTurns.shift();
     }
@@ -974,6 +985,10 @@ export function createLocalServer({
       originalQuestion: requestOriginal,
       selectedOwners: opts.patient ? [opts.patient] : [],
       sourceGeneration: answerGenerations.get(bundle),
+      // The document scope and its immutable version (source-version.mjs):
+      // every consumer can tell which documents this answer was made from.
+      scope: { key: bundle.scope ?? null, version: sourceVersionOf(bundle) },
+      followUp: opts.followUp ?? null,
       normalizationCandidates:
         question === requestOriginal
           ? []
@@ -2198,6 +2213,43 @@ export function createLocalServer({
         semantic: { steps: ["source_changed_before_response"] },
       };
     }
+    const stale = value.shown.admission?.reason === "stale_or_wrong_request";
+    // Request admission (answer-admission.mjs), the one place an answer is
+    // checked against the request that was made, for typed and spoken
+    // requests alike. Runs after the cache, like coverage below, so it is
+    // never stored and always judged against the caller's own wording.
+    if (!stale) {
+      const decorate = (evidence) =>
+        decorateResult({ question: requestOriginal, evidence }, s).evidence;
+      // Identity (plan key, requirement id and text) follows the plan the
+      // answer was computed under, exactly as coverage does, so a cached
+      // answer and a computed one are the same answer. The request slots
+      // are always read from THIS caller's own wording.
+      const computedPlan =
+        value.shown.questionPlan?.requirementSource === "opaque-lossless"
+          ? value.shown.questionPlan
+          : immutableRequest;
+      const before = value.shown.lead;
+      admitRequest({
+        plan: {
+          ...immutableRequest,
+          key: computedPlan.key,
+          originalQuestion: computedPlan.originalQuestion,
+          requirements: computedPlan.requirements,
+        },
+        shown: value.shown,
+        bundle,
+        decorate,
+      });
+      if (value.shown.lead !== before) {
+        // The admitted lead is a different answer: nothing computed for
+        // the replaced one (draft material, certificates) may ride along.
+        value.raw = null;
+        if (computedPlan === immutableRequest)
+          value.shown.questionPlan = immutableRequest;
+        delete value.shown.admission;
+      }
+    }
     // Whole-question coverage (whole-question-coverage.mjs): every answer
     // leaves with its coverage provenance, and an answer whose plan records
     // unverified whole coverage discloses that in the same words on screen,
@@ -2615,8 +2667,11 @@ export function createLocalServer({
     })();
     if (bindVoice)
       casesReady.then(() => {
-        // The fixed Bolna credential answers every fictional case.
-        if (!fixedCap || !voiceCase.bundle) return;
+        // The fixed Bolna credential answers every fictional case. A
+        // credential boot-pinned to the demo corpus (VM_DEMO_BUNDLE) stays
+        // pinned: retargeting it here, seconds after boot, changed which
+        // documents and which answer path a call got mid-run.
+        if (!fixedCap || !voiceCase.bundle || demoBundle) return;
         if (voice.retarget(fixedCap, voiceCase.bundle)) return;
         try {
           voice.bind(voiceCase.bundle, fixedCap);
@@ -3049,12 +3104,16 @@ export function createLocalServer({
     eleven: createElevenStt(),
     fallback: gemini,
   });
-  if (process.env.VM_SHARED_VOICE_REASONING === "on") {
+  // The canonical resolver is the factual authority for voice as it is for
+  // typed requests. VM_SHARED_VOICE_REASONING=off is an operator rollback
+  // to the adapter's own renderers, not a supported second mode.
+  if (process.env.VM_SHARED_VOICE_REASONING !== "off") {
     const sharedVoiceAnswer = async ({
       question,
       originalQuestion = question,
       bundle,
       exactSchemaOnly = false,
+      followUp = null,
     }) => {
       const candidates = [
         voiceCase,
@@ -3080,9 +3139,16 @@ export function createLocalServer({
       // Voice has no trusted per-turn document-provider consent yet. A typed
       // checkbox or a caller's system/history content cannot authorize egress.
       // Explicitly prevent model calls even for synthetic source sessions.
+      // The typed route normalises spoken number words at its edge
+      // ("forty two thousand dollars" -> "$42,000") before the request is
+      // planned. The call does the same here, so one request is one plan
+      // on both routes; nothing else about the caller's wording changes.
+      const requestWords =
+        normalizeSpoken(originalQuestion) || originalQuestion;
       const result = await resolveAnswer(sourceSession, question, "", {
         noModel: true,
-        originalQuestion,
+        originalQuestion: requestWords,
+        followUp,
       });
       const value = JSON.parse(result.json);
       if (sourceSession.bundle !== bundle)

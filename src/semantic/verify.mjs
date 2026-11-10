@@ -195,3 +195,137 @@ export function auditLead(intent, lead) {
     return { ok: false, reason: `unsupported_number:${unsupported[0]}` };
   return { ok: true };
 }
+
+// ------------------------------------------------------------ relations
+// Does a source sentence STATE the relationship a question asks about?
+// Sharing words with the question is not support: "40% payable upfront"
+// says nothing about who pays, and "Site: Leeds depot" says nothing about
+// who owns it. A sentence supports a relation only when a form of the
+// relation's verb is asserted (not negated, not pending) with a named
+// agent, and the sentence (or its document heading) is about the object
+// that was asked for.
+import { RELATIONS, objectTerms } from "./intent.mjs";
+
+const AGENT =
+  "(?:[A-Z][\\w.&'’-]*(?:\\s+(?:[A-Z][\\w.&'’-]*|of|and|&))*|[Tt]he\\s+(?:client|customer|vendor|supplier|contractor|tenant|landlord|buyer|seller|company|committee|board|bank|insurer|employer|lender|borrower)(?:'s\\s+\\w+(?:\\s+\\w+)?)?|(?:[Cc]lient\\s+)?[Ff]inance)";
+const NOT_AGENT =
+  /^(?:The|A|An|It|Its|This|That|These|Those|There|They|Their|He|His|She|Her|We|Our|You|Your|I|My|Who|Which|What|If|When|Once|Until|Unless|No|None|Nobody|Neither|Any|Each|Every|Both|All|Following|After|Before|Per|Subject|Pending|Revised|Original|Proposed|Signed|Approved|Agreed|Final|Draft|Not|Also|And|Or|But|As|Is|Was|Has|Have|Had|Will|Date|Type|Author|Note|Amount|Total)$/;
+const ROLE_PARTY =
+  /^the\s+(?:client|customer|vendor|supplier|contractor|tenant|landlord|buyer|seller|company|committee|board|bank|insurer|employer|lender|borrower)\b/i;
+// A sentence opener or an adjective is not a party; "The committee" is.
+const notParty = (agent) =>
+  NOT_AGENT.test(String(agent).split(/\s+/)[0]) && !ROLE_PARTY.test(agent);
+const NEGATED_NEAR =
+  /\b(?:not|never|no|none|without|neither|nor|yet to|to be|unless|until|pending|awaiting|subject to|if|whether|should|must|needs?|requires?)\b[^.;:]{0,60}$/i;
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const has = (hay, term) =>
+  /^\$?\d/.test(term)
+    ? new RegExp(
+        `(?<![\\d$])${escapeRe(term.replace(/^\$/, ""))}(?![\\d])`,
+      ).test(
+        hay.replace(/,(?=\d{3})/g, "").replace(/\$/g, "") +
+          " " +
+          hay.replace(/\$/g, ""),
+      ) || hay.includes(term)
+    : new RegExp(
+        `(?<![a-z0-9])${escapeRe(term)}(?:e?s)?(?![a-z0-9])`,
+        "i",
+      ).test(hay);
+
+/**
+ * The agent a sentence asserts for a relation family, or null.
+ * @param {string} family key of RELATIONS
+ * @param {string} sentence one source sentence, verbatim
+ * @returns {null | {agent: string, form: "active"|"passive"}}
+ */
+export function assertedAgent(family, sentence) {
+  const r = RELATIONS[family];
+  if (!r) return null;
+  const s = String(sentence ?? "");
+  // The agent itself is matched case-sensitively: a name is capitalised.
+  const agentAt = new RegExp(`^(${AGENT})`);
+  // "The budget was approved by the board". A bare label ("Approved by:
+  // Priya Nair", "Approver: ...") is a recorded field, not an assertion
+  // that the event happened: the field route reports those as observations
+  // and they are never taken as support here.
+  const m = new RegExp(
+    `\\b(?:is|are|was|were|been|be)\\s+(?:\\w+\\s+)?(?:${r.participle})\\s+by\\s+`,
+    "i",
+  ).exec(s);
+  if (m && !NEGATED_NEAR.test(s.slice(0, m.index + 1))) {
+    const a = agentAt.exec(s.slice(m.index + m[0].length));
+    if (a && !notParty(a[1])) return { agent: a[1].trim(), form: "passive" };
+  }
+  // "Calder Foods pays the retainer", "Northstar has approved the scope"
+  const active = new RegExp(
+    `(${AGENT})\\s+(?:(?:has|have|had|will|shall)\\s+)?(?:${r.verb})\\b`,
+    "g",
+  );
+  for (let a; (a = active.exec(s)); ) {
+    const agent = a[1].trim();
+    if (notParty(agent)) continue;
+    // a negation or condition governing the clause voids the assertion
+    const before =
+      s
+        .slice(0, a.index)
+        .split(/[.;:]\s+/)
+        .pop() ?? "";
+    if (NEGATED_NEAR.test(before)) continue;
+    return { agent, form: "active" };
+  }
+  return null;
+}
+
+/** Any form of the family at all (asserted or not): "payable", "approval". */
+export function mentionsRelation(family, text) {
+  const r = RELATIONS[family];
+  if (!r) return false;
+  return new RegExp(
+    `\\b(?:${r.verb}|${r.participle}|${r.role}|${r.event}s?|${r.noun}\\w*)\\b`,
+    "i",
+  ).test(String(text ?? ""));
+}
+
+/** A relation the text denies or leaves pending: "not approved", "no signed agreement". */
+export function deniesRelation(family, text) {
+  const r = RELATIONS[family];
+  if (!r) return false;
+  const forms = `(?:${r.verb}|${r.participle}|${r.event}|${r.noun}\\w*)`;
+  return new RegExp(
+    `\\b(?:not|never|no|without|pending|awaiting)\\b[^.;]{0,40}\\b${forms}\\b|\\b${forms}\\b[^.;]{0,30}\\b(?:is|are|was|were|remains?)\\s+(?:not|pending|outstanding)\\b|\\b${forms}\\b\\s+(?:is|are|was|were)\\s+not\\b`,
+    "i",
+  ).test(String(text ?? ""));
+}
+
+/**
+ * Check candidate sentences against a requested relation.
+ * @param {{family: string, terms: string[], object?: string}} relation from requestOf()
+ * @param {{text: string, context?: string}[]} candidates source sentences (verbatim) with their document heading/type
+ * @returns {{supported: {index: number, agent: string, form: string}[], related: number[]}}
+ *   `supported`: the sentence asserts the relation with an agent AND binds
+ *   every object term. `related`: it mentions the relation or the object
+ *   but does not establish the requested claim.
+ */
+export function relationSupport(relation, candidates) {
+  const terms = relation?.terms?.length
+    ? relation.terms
+    : objectTerms(relation?.object ?? "");
+  const supported = [];
+  const related = [];
+  (candidates ?? []).forEach((c, index) => {
+    const text = String(c?.text ?? "");
+    const scope = `${text}\n${c?.context ?? ""}`;
+    const bound = terms.length > 0 && terms.every((t) => has(scope, t));
+    const inSentence = terms.filter((t) => has(text, t)).length;
+    const a = assertedAgent(relation.family, text);
+    if (a && bound) supported.push({ index, agent: a.agent, form: a.form });
+    else if (
+      (a && inSentence > 0) ||
+      (mentionsRelation(relation.family, text) && inSentence > 0) ||
+      (terms.length > 0 && terms.every((t) => has(text, t)))
+    )
+      related.push(index);
+  });
+  return { supported, related };
+}

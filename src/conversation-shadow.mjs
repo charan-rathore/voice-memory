@@ -217,6 +217,36 @@ export function createConversationShadow({ maxCalls = 64 } = {}) {
         },
       };
     },
+    /**
+     * The contract's reading of an utterance BEFORE any answer exists:
+     * follow-up, referenced turn, subject and self-correction. Reads the
+     * committed state only; stages and commits nothing.
+     */
+    preview({ key, bundle, version, heard, mode = "voice" }) {
+      if (!key) return null;
+      const { turn } = resolveConversationTurn(
+        {
+          utterance: heard,
+          callId: createHash("sha256").update(key).digest("hex").slice(0, 16),
+          sourceVersion: version,
+          mode,
+          records: {
+            vocabulary: contractVocabulary(bundle),
+            resolve: () => ({ status: "unanswered" }),
+          },
+        },
+        calls.get(key)?.state ?? null,
+      );
+      const u = turn.understanding ?? {};
+      return {
+        intent: u.intent ?? null,
+        subject: u.subject ?? null,
+        followUp: u.followUp === true,
+        referencedTurnId: u.referencedTurnId ?? null,
+        correction: u.changedMeaning === true && u.followUp !== true,
+        understoodAs: u.changedMeaning ? (u.understoodAs ?? null) : null,
+      };
+    },
     forget(key) {
       if (key) {
         calls.delete(key);
