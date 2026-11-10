@@ -1,0 +1,71 @@
+{
+  "description": "A first-time caller from greeting through a corrected result, a follow-up, a clarification, an interruption and a repeat. Each step goes through the shared conversation contract in voice mode. `deliver` is what the transport reports after the answer: completed, or cut off by the caller.",
+  "callId": "journey-1",
+  "sourceVersion": "bundle-v1",
+  "steps": [
+    {
+      "say": "hello",
+      "expect": { "outcome": "answered", "intent": "social", "records": 0 }
+    },
+    {
+      "say": "what is the creatinine, sorry, ferritin",
+      "expect": {
+        "outcome": "answered",
+        "subject": "ferritin",
+        "dimension": "value",
+        "changedMeaning": true,
+        "includes": ["50 ng/mL"],
+        "excludes": ["Creatinine"]
+      }
+    },
+    {
+      "say": "why was it changed?",
+      "expect": {
+        "outcome": "answered",
+        "subject": "ferritin",
+        "dimension": "reason",
+        "includes": ["transcription error"],
+        "excludes": ["Ferritin is 50", "general background"]
+      }
+    },
+    {
+      "say": "and before that?",
+      "expect": {
+        "outcome": "answered",
+        "subject": "ferritin",
+        "dimension": "history",
+        "includes": ["5 ng/mL"]
+      }
+    },
+    {
+      "say": "TSH?",
+      "expect": { "outcome": "clarify", "includes": ["SYN-0003", "SYN-0007"] }
+    },
+    {
+      "say": "S Y N zero zero zero three",
+      "expect": {
+        "outcome": "answered",
+        "subject": "tsh",
+        "includes": ["SYN-0003"],
+        "excludes": ["SYN-0007"]
+      }
+    },
+    {
+      "say": "what is the creatinine",
+      "deliver": "interrupted",
+      "expect": { "outcome": "answered", "subject": "creatinine" }
+    },
+    {
+      "say": "say that again",
+      "expect": {
+        "outcome": "repeat",
+        "includes": ["SYN-0003"],
+        "excludes": ["Creatinine"]
+      }
+    },
+    {
+      "say": "thanks",
+      "expect": { "outcome": "answered", "intent": "social", "records": 0 }
+    }
+  ]
+}
