@@ -414,11 +414,17 @@ export function stripRepeated(spoken, priorSpoken) {
 
 /** The first sentences that stand alone, for "say that again, shorter". */
 export function shorterOf(text) {
+  const parts = sentencesOf(text);
   let out = "";
-  for (const p of sentencesOf(text)) {
+  for (const p of parts) {
     out = (out + " " + p).trim();
     if (out.split(/\s+/).length >= 4) break;
   }
+  // An instruction to be brief never authorises dropping later correction,
+  // refusal, identity, quantity, unit or status qualifications.
+  const critical = /\d|\b(?:not|no|never|only|pending|proposed|approved|amended|corrected|superseded|different|patient|units?|refused|cannot|can't|isn't|wasn't)\b|नहीं|मंज़ूर/i;
+  if (parts.some((p) => !out.includes(p) && critical.test(p)))
+    return String(text ?? "").trim();
   return out || String(text ?? "").trim();
 }
 
@@ -446,12 +452,18 @@ const fingerprintOf = (subjectId, dimension, factIds, version) =>
 // ------------------------------------------------------------ referents
 
 // The last completed record answer in this source version, if any.
-const lastRecord = (state) =>
-  [...state.turns]
+const lastRecord = (state) => {
+  // A partial or unsupported recent answer is an ambiguity barrier. A vague
+  // follow-up must not jump over it to borrow a previous, unrelated subject.
+  const last = [...state.turns]
     .reverse()
     .find(
-      (t) => t.kind === "record" && t.sourceVersion === state.sourceVersion,
-    ) ?? null;
+      (t) =>
+        t.sourceVersion === state.sourceVersion &&
+        ["record", "partial", "abstain"].includes(t.kind),
+    );
+  return last?.kind === "record" ? last : null;
+};
 
 const recordTurns = (state) =>
   state.turns.filter(
@@ -985,7 +997,7 @@ export function resolveConversationTurn(input, prior = null) {
     factIds: [...new Set(segments.flatMap((s) => s.factIds))],
     staged: answered.length
       ? {
-          kind: "record",
+          kind: complete && single ? "record" : "partial",
           subject: single
             ? single.subject
             : segments.map((s) => s.subject).join("+"),
