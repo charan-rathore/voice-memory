@@ -192,3 +192,17 @@ test("after a multi-subject answer, 'why?' cannot inherit an older sole subject"
   assert.equal(follow.turn.answer.complete, false);
   assert.equal(h.calls.length, 3);
 });
+
+test("an unsplit multi-subject or comparative question never promotes one field", () => {
+  const h = harness();
+  for (const q of [
+    "Compare ferritin with TSH",
+    "What is the difference between ferritin and TSH?",
+    "Give ferritin versus TSH",
+  ]) {
+    const { turn } = resolveConversationTurn(h.input(q));
+    assert.equal(turn.outcome, "clarify", q);
+    assert.equal(turn.answer.complete, false, q);
+  }
+  assert.equal(h.calls.length, 0);
+});
