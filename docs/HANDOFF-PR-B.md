@@ -1,7 +1,27 @@
-# Handoff: PR B — interactive evidence journey (not started)
+# Handoff: PR B — interactive evidence journey (partly done)
 
 Base: `fix/canonical-question-plan` (PR A). Branch to create:
-`feat/interactive-evidence-journey`. Nothing for PR B is implemented yet.
+`feat/interactive-evidence-journey`.
+
+## Done in the first commit
+
+- `site/reading.js`: "2:00 budget" bar and its logic removed; decorative
+  packet removed; page strip is now `role="group"` of `<button class="rd-pg">`
+  tiles (aria-label, `aria-pressed`, ≥44 px) that dispatch
+  `vm:open-page {title, page}`; replay labelled "Replay of this completed
+  ingestion"; the index lookup frame is labelled "Example of how indexing
+  works — not your search."
+- `site/site.js`: `vm:open-page` opens the document in the viewer, scrolls to
+  page N (PDF page images) and focuses it; reduced motion respected.
+- `site/reading.css`: requested palette as `.rd` tokens; dead budget/packet/
+  scan rules removed; looping "breathe" pings removed; entrances 240 ms
+  ease-out; button press/hover/focus states; reduced-motion block.
+- `src/index-digest.mjs`: `lookup.illustrative = true` and `lookup.label`.
+- `tests/evidence-journey-ui-check.mjs`: 320/390/768/1280 px; tiles are
+  buttons, ≥44 px, Enter opens the document, no budget, example labelled.
+
+Still to do: everything under "Plan" items 3-6 below, plus converting the
+dark desk surrounding the reading panel (`site/site.css`) to the palette.
 Written so another engineer or agent can start cold.
 
 ## Defects to repair first (located)

@@ -946,6 +946,25 @@
   // the free host); visitor workspaces always POST. If the engine predates
   // GET /answer (the site deploys before the engine does), fall back to POST.
   let getAnswers = true;
+  // A page tile in the reading view opens that original page.
+  document.addEventListener("vm:open-page", async (e) => {
+    const { title, page } = e.detail ?? {};
+    if (!title) return;
+    await openDoc(title);
+    const sec = [...document.querySelectorAll("#viewer-body .rd-doc")].find(
+      (x) => x.classList.contains("focus"),
+    );
+    const target =
+      sec?.querySelectorAll(".page")[Math.max(0, (page ?? 1) - 1)] ?? sec;
+    target?.scrollIntoView({
+      block: "start",
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+    target?.setAttribute("tabindex", "-1");
+    target?.focus({ preventScroll: true });
+  });
   document.addEventListener("vm:person", (e) => {
     const id = e.detail?.id;
     if (!id || !/^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(id)) return;
@@ -1259,7 +1278,9 @@
     const c = r.wholeQuestion ?? r.final?.coverage;
     if (!c || c.state === "not_applicable") return "";
     const outcomes = r.requirementCoverage?.outcomes ?? [];
-    const named = outcomes.filter((o) => typeof o.text === "string" && o.text.trim());
+    const named = outcomes.filter(
+      (o) => typeof o.text === "string" && o.text.trim(),
+    );
     const delay = (i) => (reduced ? 0 : 120 + i * 110);
     if (c.state === "unverified")
       return `<details class="cov cov-unverified">
@@ -1270,22 +1291,41 @@
       </details>`;
     const answered = named.filter((o) => o.status === "answered").length;
     const total = named.length;
-    const title = c.state === "established"
-      ? total > 1 ? `All ${total} parts answered from the source` : "Answered from the source"
-      : total
-        ? `${answered} of ${total} parts answered`
-        : "Not every requested part was established";
-    const label = { answered: "Answered", not_established: "Not in these documents", clarify: "Readings disagreed" };
+    const title =
+      c.state === "established"
+        ? total > 1
+          ? `All ${total} parts answered from the source`
+          : "Answered from the source"
+        : total
+          ? `${answered} of ${total} parts answered`
+          : "Not every requested part was established";
+    const label = {
+      answered: "Answered",
+      not_established: "Not in these documents",
+      clarify: "Readings disagreed",
+    };
     return `<div class="cov cov-${esc(c.state)}" role="group" aria-label="${esc(title)}">
       <div class="cov-head"><span class="cov-meter" aria-hidden="true">${named
-        .map((o, i) => `<i class="cov-seg cov-seg-${esc(o.status)}" style="animation-delay:${delay(i)}ms"></i>`)
+        .map(
+          (o, i) =>
+            `<i class="cov-seg cov-seg-${esc(o.status)}" style="animation-delay:${delay(i)}ms"></i>`,
+        )
         .join("")}</span><span class="cov-title">${esc(title)}</span></div>
-      ${total ? `<ol class="cov-parts">${named
-        .map((o, i) => `<li class="cov-part cov-part-${esc(o.status)}" style="animation-delay:${delay(i) + 80}ms">
+      ${
+        total
+          ? `<ol class="cov-parts">${named
+              .map(
+                (
+                  o,
+                  i,
+                ) => `<li class="cov-part cov-part-${esc(o.status)}" style="animation-delay:${delay(i) + 80}ms">
           <span class="cov-dot" aria-hidden="true"></span>
           <q>${esc(o.text.trim().replace(/[,;:]$/, ""))}</q>
-          <span class="cov-status">${esc(label[o.status] ?? o.status)}</span></li>`)
-        .join("")}</ol>` : ""}
+          <span class="cov-status">${esc(label[o.status] ?? o.status)}</span></li>`,
+              )
+              .join("")}</ol>`
+          : ""
+      }
     </div>`;
   }
 
@@ -2359,7 +2399,8 @@
           );
           // One truthful state per answered turn, no timers.
           const asks =
-            !(t.lead?.citations?.length > 0) && /\?\s*$/.test(t.lead?.text ?? "");
+            !(t.lead?.citations?.length > 0) &&
+            /\?\s*$/.test(t.lead?.text ?? "");
           callState(
             asks
               ? "<b>Need one detail.</b> Answer the question, or ask something else."

@@ -10,7 +10,6 @@
 // No document text is ever shown or sent here: page numbers, counts and
 // timings only. Loaded on first upload (not part of the first page load).
 (() => {
-  const BUDGET_S = 120; // the promise: fully read in under two minutes
   const STEPS = [
     {
       id: "received",
@@ -359,15 +358,11 @@
             <button type="button" class="rd-hide">Hide</button>
           </div>
         </header>
-        <div class="rd-budget" aria-hidden="true">
-          <i class="rd-budget-fill"></i><i class="rd-budget-ask"></i>
-          <span class="rd-budget-l">0</span><span class="rd-budget-r">2:00 budget</span>
-        </div>
         <ol class="rd-rail">${STEPS.map(
           (st, i) =>
             `<li data-step="${st.id}" style="--i:${i}"><i class="rd-dot"></i><b>${st.plain}</b><small data-tech="${esc(st.tech)}"></small></li>`,
-        ).join("")}<i class="rd-packet" aria-hidden="true"></i></ol>
-        <div class="rd-pages" aria-hidden="true"></div>
+        ).join("")}</ol>
+        <div class="rd-pages" role="group" aria-label="Source pages: select one to open it"></div>
         <section class="rd-eng" aria-label="Inside the engine">
           <header><b>Inside the engine</b><span>how your file becomes something it can answer from</span></header>
           <ol class="rd-film"></ol>
@@ -390,6 +385,24 @@
         pref.tech = b.dataset.mode === "tech";
         paint();
       };
+    // Each page tile opens that original page in the source viewer.
+    root.querySelector(".rd-pages").addEventListener("click", (e) => {
+      const pg = e.target.closest(".rd-pg");
+      if (!pg) return;
+      const d = focus();
+      root
+        .querySelectorAll(".rd-pg[aria-pressed]")
+        .forEach((x) => x.setAttribute("aria-pressed", "false"));
+      pg.setAttribute("aria-pressed", "true");
+      document.dispatchEvent(
+        new CustomEvent("vm:open-page", {
+          detail: {
+            title: d?.title ?? d?.filename ?? null,
+            page: Number(pg.dataset.n),
+          },
+        }),
+      );
+    });
     root.querySelector(".rd-foot").addEventListener("click", (e) => {
       const b = e.target.closest("[data-replay]");
       if (!b) return;
@@ -465,17 +478,12 @@
       (docs.length > 1
         ? `${d.title ?? d.filename}`
         : (d.title ?? d.filename ?? "")) +
-      (replaying ? `  ·  replay at ${Math.round(replay.speed)}×` : "");
+      (replaying ? "  ·  Replay of this completed ingestion" : "");
     const o = off(d);
     const at = (t) => (t == null ? null : t + o);
     root.querySelector(".rd-clock").textContent = clock(tau + o);
 
-    // Budget bar: where we are against two minutes, and when asking opened.
-    const pct = (ms) => `${Math.min(100, (ms / (BUDGET_S * 1000)) * 100)}%`;
-    const fill = root.querySelector(".rd-budget-fill");
-    fill.style.width = pct(tau + o);
-    fill.classList.toggle("over", tau + o > BUDGET_S * 1000);
-    const ask = root.querySelector(".rd-budget-ask");
+    // When asking became possible (no time budget is promised).
     const askAt = at(
       s.partialAt ??
         (done && s.status !== "failed"
@@ -484,11 +492,6 @@
             : s.finalAt
           : null),
     );
-    ask.hidden = askAt == null;
-    if (askAt != null) {
-      ask.style.left = pct(askAt);
-      ask.title = `You could ask from ${fmtS(askAt)}`;
-    }
 
     // Rail: each station's state, its time stamp, and the packet position.
     let active = 0;
@@ -535,12 +538,6 @@
               ? "now"
               : "";
     });
-    root.querySelector(".rd-packet").style.setProperty("--at", String(active));
-    root.querySelector(".rd-packet").dataset.state = done
-      ? s.status === "failed"
-        ? "bad"
-        : "done"
-      : "moving";
 
     // Page filmstrip.
     const strip = root.querySelector(".rd-pages");
@@ -554,11 +551,11 @@
         shown
           .map(
             (p, i) =>
-              `<figure data-n="${i + 1}"><div class="pg"><i class="pg-fill"></i><i class="pg-scan"></i><em></em></div><figcaption>${i + 1}</figcaption></figure>`,
+              `<button type="button" class="rd-pg" data-n="${i + 1}" aria-label="Open page ${i + 1}"><span class="pg" aria-hidden="true"><i class="pg-fill"></i><em></em></span><span class="rd-pg-n">${i + 1}</span></button>`,
           )
           .join("") +
         (s.pages.length > 30
-          ? `<figure class="more"><div class="pg"></div><figcaption>+${s.pages.length - 30}</figcaption></figure>`
+          ? `<button type="button" class="rd-pg more" data-n="31" aria-label="Open page 31 and the ${s.pages.length - 30} pages after it"><span class="rd-pg-n">+${s.pages.length - 30}</span></button>`
           : "");
     }
     shown.forEach((p, i) => {
@@ -633,7 +630,7 @@
     const foot = root.querySelector(".rd-foot");
     const total = done ? s.finalAt + o : null;
     const html = done
-      ? `<span>${s.status === "failed" ? "Stopped" : "Read"} in <b>${fmtS(total)}</b>${askAt != null && s.partialAt != null ? ` · you could ask from <b>${fmtS(askAt)}</b>` : ""}${s.status !== "failed" && total <= BUDGET_S * 1000 ? " · inside the 2-minute budget" : ""}</span>${!reduced() && total > 1500 && !replaying ? `<button type="button" data-replay>Replay</button>` : ""}`
+      ? `<span>${s.status === "failed" ? "Stopped" : "Read"} in <b>${fmtS(total)}</b>${askAt != null && s.partialAt != null ? ` · you could ask from <b>${fmtS(askAt)}</b>` : ""}</span>${!reduced() && total > 1500 && !replaying ? `<button type="button" data-replay>Replay of this completed ingestion</button>` : ""}`
       : s.partialAt != null
         ? `<span class="live">Answers are live while the rest is read</span>`
         : "";
@@ -771,7 +768,7 @@
         const vec = g.passage?.vector ?? [];
         const maxW = Math.max(...vec.map((v) => v.w), 0.01);
         body =
-          `<p class="rd-q">Looking up “${esc(lk.query)}”</p>` +
+          `<p class="rd-example" role="note"><b>Example of how indexing works — not your search.</b> A term taken from this file, “${esc(lk.query)}”, scored against the index.</p>` +
           `<ul class="rd-idf">${lk.terms.map((t, i) => `<li><span class="t${i % 4}">${esc(t.t)}</span>${bar(t.idf, maxIdf, "t" + (i % 4))}<code>${t.idf.toFixed(3)}</code></li>`).join("")}</ul>` +
           `<ul class="rd-hits">${lk.hits
             .slice(0, 3)

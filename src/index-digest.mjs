@@ -137,6 +137,10 @@ export function digestFor(bundle, sourceIndex, entry, dense = null) {
       .slice(0, 4);
     if (q.length)
       lookup = {
+        // An illustration built from one of this file's own facts. It is
+        // NOT the visitor's search and must never be shown as one.
+        illustrative: true,
+        label: "Example of how indexing works — not your search.",
         query: probeLabel.slice(0, 60),
         terms: q.map((t) => ({
           t: shown(t),
