@@ -10,6 +10,7 @@
 import { tokenize, stemToken, QUERY_STOPWORDS } from "./rag-tokens.mjs";
 import { recordGraph } from "./record-graph.mjs";
 import { reportMeta } from "../clinical/observations.mjs";
+import { locate } from "../ingest/canonical.mjs";
 
 // contentTokens (the index's), keeping one printed form per stem so the view
 // can show "discharged" where the index holds "discharge".
@@ -81,6 +82,27 @@ export function digestFor(bundle, sourceIndex, entry, dense = null) {
       return null;
     }
   };
+  // Every displayed fact carries its canonical source line and original page geometry.
+  const citedFact = (f) => {
+    const focus = locate(doc, f.start, f.end);
+    return {
+      title: entry.title ?? entry.filename ?? src.title ?? "Source",
+      documentId: entry.id ?? src.id,
+      quote: src.text.slice(f.start, f.end),
+      location: { pages: focus.pages, focus },
+    };
+  };
+  const safeFact = (f) => !/patient|name|\bid\b|birth/i.test(f.label);
+  const inspectedFacts = recs
+    .flatMap((r) =>
+      r.facts.filter(safeFact).map((f) => ({
+        record: r.index,
+        label: f.label.slice(0, 100),
+        value: f.value.slice(0, 160),
+        citation: citedFact(f),
+      })),
+    )
+    .slice(0, 36);
   const records = recs.map((r) => ({
     n: r.index,
     pages: r.pages,
@@ -93,12 +115,13 @@ export function digestFor(bundle, sourceIndex, entry, dense = null) {
     // The facts that say something: ones with a concept (a discharge, a
     // balance, a charge) before header fields.
     sample: r.facts
-      .filter((f) => !/patient|name|\bid\b|birth/i.test(f.label))
+      .filter(safeFact)
       .sort((a, b) => (b.concept ? 1 : 0) - (a.concept ? 1 : 0))
       .slice(0, 2)
       .map((f) => ({
         label: f.label.slice(0, 40),
         value: f.value.slice(0, 48),
+        citation: citedFact(f),
       })),
   }));
 
@@ -270,6 +293,7 @@ export function digestFor(bundle, sourceIndex, entry, dense = null) {
   return {
     layout,
     records,
+    inspectedFacts,
     index: {
       passages: mine.length,
       bundlePassages: st.n,
