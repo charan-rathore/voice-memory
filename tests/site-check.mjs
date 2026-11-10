@@ -8,6 +8,12 @@
 //   3. the source viewer marks only the focused line, not the whole page.
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+const shots =
+  process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-site-check-shots");
+mkdirSync(shots, { recursive: true });
 // Synthetic catering agreement as a real PDF, generated deterministically
 // with the repo's declared pdf-lib: each visual line is drawn separately with
 // paragraph-like spacing, so the text layer wraps the deadline sentence
@@ -107,10 +113,16 @@ try {
     throw error;
   });
   const leadText = await lead.innerText();
-  if (!leadText.includes("27 March 2027"))
-    fail(`answer missing the deadline: ${leadText.slice(0, 200)}`);
-  if (!leadText.includes("18,000"))
-    fail(`answer missing the fee: ${leadText.slice(0, 200)}`);
+  if (!leadText.includes("not established an answer"))
+    fail(`unadmitted evidence was promoted: ${leadText.slice(0, 200)}`);
+  await page
+    .locator("#answer .a-understood", {
+      hasText: "Related evidence, not an answer",
+    })
+    .waitFor();
+  const related = await page.locator("#answer .cites").innerText();
+  if (!related.includes("27 March 2027") || !related.includes("18,000"))
+    fail(`related source evidence incomplete: ${related.slice(0, 200)}`);
   // The viewer must mark only the focused line(s), not the whole document.
   // A PDF with a text layer opens as its rendered page with a box over the
   // cited line; a text document opens as text with <mark>. Either way the
@@ -137,6 +149,20 @@ try {
         `the boxed citation is not the deadline line: ${cite.slice(0, 200)}`,
       );
   }
+  await page.waitForTimeout(1800); // completed answer-reveal animation, not data readiness
+  await page.locator("#answer").screenshot({
+    path: join(shots, "voice-memory-related-evidence-answer.png"),
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  if (
+    !(await page
+      .locator("#answer")
+      .evaluate((e) => e.scrollWidth <= e.clientWidth))
+  )
+    fail("related evidence answer overflows mobile");
+  await page.locator("#answer").screenshot({
+    path: join(shots, "voice-memory-related-evidence-answer-mobile.png"),
+  });
   await page.screenshot({ path: "/tmp/site-check-answer.png" });
 
   // Path B: fresh page, upload without touching the tab (drag/direct path);
@@ -200,8 +226,11 @@ try {
   const lead3 = page3.locator("#answer .a-lead");
   await lead3.waitFor({ timeout: 60000 });
   const lead3Text = await lead3.innerText();
-  if (!lead3Text.includes("27 March 2027") || !lead3Text.includes("18,000"))
-    fail(`cold-boot own ask did not answer: ${lead3Text.slice(0, 200)}`);
+  if (!lead3Text.includes("not established an answer"))
+    fail(`cold-boot promoted evidence: ${lead3Text.slice(0, 200)}`);
+  const related3 = await page3.locator("#answer .cites").innerText();
+  if (!related3.includes("27 March 2027") || !related3.includes("18,000"))
+    fail(`cold-boot related evidence incomplete: ${related3.slice(0, 200)}`);
   // Path D: voice gate off (the harness never configures voice) - no call
   // entry point may be visible, and invoking the call path must never ask
   // for the microphone. Regression for the static call buttons that used to
@@ -245,7 +274,7 @@ try {
   if (micCalls !== 0)
     fail(`getUserMedia invoked while voice is gated off (${micCalls}x)`);
   console.log(
-    "site-check OK: own-case selection, deadline+fee answer, focused highlight, cold-boot ask, voice-gated call buttons",
+    "site-check OK: own-case selection, deadline+fee related evidence with honest abstention, focused highlight, cold-boot ask, voice-gated call buttons",
   );
 } finally {
   await browser?.close();

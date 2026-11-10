@@ -38,8 +38,10 @@ test("cases load with no cookie, key or session", async () => {
   assert.equal(cases.find((c) => c.id === "deal").documents.length, 7);
 });
 
-test("speech-misrecognised analyte: 'ferrite in' routes to ferritin, not a generic overview", async () => {
-  const { status, body } = await ask("health", "what is my ferrite in level");
+test("selected-context speech-misrecognised analyte preserves the original positive result", async () => {
+  const { status, body } = await ask("health", "what is my ferrite in level", {
+    patient: "SYN-0001",
+  });
   assert.equal(status, 200);
   assert.equal(body.lead.verdict, "LATEST");
   assert.match(body.lead.text, /Ferritin result is 50 ng\/mL/);
@@ -49,8 +51,10 @@ test("speech-misrecognised analyte: 'ferrite in' routes to ferritin, not a gener
   );
 });
 
-test("unmatched analyte in a test-shaped question clarifies, never a generic overview", async () => {
-  const { status, body } = await ask("health", "what is my heritage level");
+test("selected-context unmatched analyte clarifies the test, never a generic overview", async () => {
+  const { status, body } = await ask("health", "what is my heritage level", {
+    patient: "SYN-0001",
+  });
   assert.equal(status, 200);
   assert.equal(body.lead.verdict, "CLARIFY");
   assert.match(body.lead.text, /couldn't find a "heritage" test/i);
@@ -80,8 +84,15 @@ test("a generic 'my blood levels' phrasing also keeps each person apart", async 
   const { status, body } = await ask("health", "what are my blood levels");
   assert.equal(status, 200);
   assert.notEqual(body.lead.verdict, "LATEST");
-  assert.match(body.lead.text, /for 2 people/);
-  assert.match(body.lead.text, /which of these is you/);
+  assert.equal(body.lead.verdict, "AMBIGUOUS_PATIENT");
+  assert.match(body.lead.text, /SYN-0001/);
+  assert.match(body.lead.text, /SYN-0003/);
+  assert.deepEqual(body.lead.citations, []);
+  const selected = await ask("health", "what are my blood levels", {
+    patient: "SYN-0001",
+  });
+  assert.equal(selected.body.lead.verdict, "OVERVIEW");
+  assert.match(selected.body.lead.text, /SYN-0001/);
 });
 
 test("an overview naming the patient still answers for that patient", async () => {
@@ -628,10 +639,20 @@ test("bring-your-own answers complete wrapped sentences and keep one supporting 
   assert.ok(occurrences <= 2, `deadline repeated ${occurrences} times`);
   // Continuation must not swallow the following unrelated block.
   assert.doesNotMatch(excerpt.split("[Source 1]")[0], /Allergens/);
-  // The one shown answer quotes that excerpt, not the whole document.
-  assert.match(a.body.final.text, /27 March 2027/);
-  assert.match(a.body.final.text, /Rs 18,000/);
-  assert.doesNotMatch(a.body.final.text, /Allergens/);
+  // Source completeness is a retrieval invariant, not proof that both
+  // requested obligations were independently admitted. Preserve the complete
+  // excerpt separately rather than turning it into an apparent answer.
+  assert.equal(a.body.final.kind, "abstained");
+  assert.equal(a.body.final.verdict, "UNKNOWN");
+  assert.ok(a.body.final.relatedEvidence.length > 0);
+  assert.match(
+    a.body.final.relatedEvidence.map((c) => c.quote).join(" "),
+    /27 March 2027/,
+  );
+  assert.match(
+    a.body.final.relatedEvidence.map((c) => c.quote).join(" "),
+    /Rs 18,000/,
+  );
   assert.equal(a.body.answer, a.body.final.text);
 });
 
@@ -665,7 +686,7 @@ const saveEnv = () => {
   };
 };
 
-async function voiceFactory({ env = {}, mintVoice, workspaces } = {}) {
+async function voiceFactory({ env = {}, mintVoice, workspaces, now } = {}) {
   const { createPublicApi } = await import("../src/public-api.mjs");
   const dir = mkdtempSync(path.join(tmpdir(), "vm-counters-"));
   process.env.BOLNA_API_KEY = "test-dummy";
@@ -688,6 +709,7 @@ async function voiceFactory({ env = {}, mintVoice, workspaces } = {}) {
     voiceTurns: () => [],
     voiceState: () => ({ configured: true, ready: true }),
     ...(workspaces ? { workspaces } : {}),
+    ...(now ? { now } : {}),
   });
   const srv = createServer((req, res) => api(req, res));
   await new Promise((r) => srv.listen(0, "127.0.0.1", r));
@@ -793,16 +815,32 @@ test("counter store failure fails closed (no mint, 503)", async () => {
   }
 });
 
-test("per-call max duration: ticket dies and vendor stop is attempted", async () => {
+test("per-call max duration: ticket dies and vendor stop is attempted", async (t) => {
   const restore = saveEnv();
-  const f = await voiceFactory({ env: { VM_PUBLIC_CALL_MAX_MS: "60" } });
+  // Freeze both clocks. Injecting validity time alone still left the real
+  // cutoff timer racing the initial HTTP assertion on a loaded CI runner.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let clock = Date.now();
+  const f = await voiceFactory({
+    env: { VM_PUBLIC_CALL_MAX_MS: "60" },
+    now: () => clock,
+  });
   try {
     const mint = await f.mint("10.0.3.1");
     assert.equal(mint.status, 200);
     const { vm_ticket } = await mint.json();
     const ok = await fetch(f.b + `/api/public/voice/turns?ticket=${vm_ticket}`);
     assert.equal(ok.status, 200);
-    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(f.stops(), 0);
+    clock += 59;
+    t.mock.timers.tick(59);
+    const beforeCutoff = await fetch(
+      f.b + `/api/public/voice/turns?ticket=${vm_ticket}`,
+    );
+    assert.equal(beforeCutoff.status, 200);
+    assert.equal(f.stops(), 0);
+    clock += 2;
+    t.mock.timers.tick(2);
     const gone = await fetch(
       f.b + `/api/public/voice/turns?ticket=${vm_ticket}`,
     );
@@ -1435,5 +1473,114 @@ test("same-file HTTP retry keeps one workspace upload and isolates another works
     );
   } finally {
     await new Promise((r) => isolated.close(r));
+  }
+});
+
+test("GET selected-patient answers and final citation ownership survive both cache orders", async () => {
+  for (const order of [
+    ["SYN-0003", "SYN-0001"],
+    ["SYN-0001", "SYN-0003"],
+  ]) {
+    for (const patient of [...order, ...order]) {
+      const q = new URLSearchParams({
+        case: "health",
+        q: "What is my hemoglobin?",
+        patient,
+      });
+      const res = await fetch(base + "/api/public/answer?" + q);
+      assert.equal(res.status, 200);
+      const a = await res.json();
+      assert.ok(a.final.citations.length);
+      assert.ok(
+        a.final.citations.every(
+          (c) => c.record?.patientId === patient && c.contextOnly === false,
+        ),
+        JSON.stringify(a.final),
+      );
+      if (patient === "SYN-0003")
+        assert.match(a.final.text, /15(?:\.0)? g\/dL/);
+      else assert.doesNotMatch(a.final.text, /15(?:\.0)? g\/dL/);
+    }
+  }
+});
+
+// Post-exposure identity contract, separate from the selected positive checks.
+test("unselected first-person analyte requests clarify identity before retrieval repair", async () => {
+  for (const q of [
+    "what is my ferrite in level",
+    "what is my heritage level",
+  ]) {
+    const { body } = await ask("health", q);
+    assert.equal(body.final.verdict, "AMBIGUOUS_PATIENT");
+    assert.match(body.final.text, /SYN-0001/);
+    assert.match(body.final.text, /SYN-0003/);
+    assert.deepEqual(body.final.citations, []);
+    assert.ok(body.evidence.every((e) => e.contextOnly));
+  }
+});
+
+test("synthetic conflicting approved fees clarify without rewriting the supported conflict", async () => {
+  const server = createLocalServer({
+    port: 0,
+    gemini: { enabled: () => false, searchEnabled: () => false },
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const root = `http://127.0.0.1:${server.address().port}/api/public`;
+  try {
+    const ws = await fetch(root + "/workspace", { method: "POST" }).then((r) =>
+      r.json(),
+    );
+    for (const [name, text] of [
+      ["approved-a.txt", "The client approved the engagement fee of $30,000."],
+      ["approved-b.txt", "The client approved the engagement fee of $45,000."],
+    ]) {
+      const upload = await fetch(`${root}/workspace/${ws.id}/upload`, {
+        method: "POST",
+        headers: { "x-file-name": name },
+        body: text,
+      });
+      assert.equal(upload.status, 202);
+    }
+    let state;
+    for (let i = 0; i < 200; i++) {
+      state = await fetch(`${root}/workspace/${ws.id}`).then((r) => r.json());
+      if (state.ready && state.documents?.length === 2) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.ok(state.ready);
+    assert.equal(state.documents.length, 2);
+    const response = await fetch(root + "/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        case: ws.id,
+        question: "What is the engagement fee?",
+        semantic: false,
+      }),
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.lead.verdict, "AMBIGUOUS");
+    assert.equal(
+      body.lead.text,
+      "The approved records conflict: $30,000 versus $45,000. I can't pick one without knowing which you mean.",
+    );
+    assert.equal(body.final.kind, "clarify");
+    assert.equal(body.status, "clarify");
+    assert.equal(body.answer, body.lead.text);
+    assert.equal(body.final.text, body.lead.text);
+    assert.deepEqual(body.final.citations, body.lead.citations);
+    assert.equal(
+      new Set(body.final.citations.map((c) => c.documentId)).size,
+      2,
+    );
+    for (const c of body.final.citations) {
+      assert.equal(c.status, "approved");
+      assert.match(c.quote, /approved the engagement fee/);
+      assert.ok(c.documentId);
+    }
+  } finally {
+    server.closeAllConnections();
+    await new Promise((r) => server.close(r));
   }
 });

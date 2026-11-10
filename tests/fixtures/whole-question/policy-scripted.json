@@ -1,0 +1,60 @@
+{
+  "provenance": "SCRIPTED provider-shaped responses written by hand for these tests. NOT captured model output and NOT evidence of model quality. They exercise the whole-question admission contract: complete only with BOTH plan qualification and per-requirement source proof.",
+  "fileName": "policy.txt",
+  "document": "Maya owns the security review. The retention window is 17 days.",
+  "cases": {
+    "ownerRetention": {
+      "question": "Who owns the security review, and what is the retention window?",
+      "proposal": ["Who owns the security review,", "and what is the retention window?"],
+      "reconstruction": ["Who owns the security review,", "and what is the retention window?"],
+      "read": [
+        { "status": "answered", "claims": [{ "statement": "Maya owns the security review.", "evidence": [{ "document": 0, "quote": "Maya owns the security review." }] }] },
+        { "status": "answered", "claims": [{ "statement": "The retention window is 17 days.", "evidence": [{ "document": 0, "quote": "The retention window is 17 days." }] }] }
+      ],
+      "audit": "accept",
+      "expect": "established"
+    },
+    "ownerLunar": {
+      "question": "Who owns the security review, and what is the lunar permit code?",
+      "proposal": ["Who owns the security review,", "and what is the lunar permit code?"],
+      "reconstruction": ["Who owns the security review,", "and what is the lunar permit code?"],
+      "read": [
+        { "status": "answered", "claims": [{ "statement": "Maya owns the security review.", "evidence": [{ "document": 0, "quote": "Maya owns the security review." }] }] },
+        { "status": "not_established" }
+      ],
+      "audit": "accept",
+      "expect": "incomplete",
+      "unestablished": ["and what is the lunar permit code?"]
+    },
+    "reconstructionDisagrees": {
+      "question": "Who owns the security review, and what is the retention window?",
+      "proposal": ["Who owns the security review,", "and what is the retention window?"],
+      "reconstruction": ["Who owns the security review, and what is the retention window?"],
+      "read": null,
+      "audit": "accept",
+      "expect": "unverified"
+    },
+    "missingSourceProof": {
+      "question": "Who owns the security review, and what is the retention window?",
+      "proposal": ["Who owns the security review,", "and what is the retention window?"],
+      "reconstruction": ["Who owns the security review,", "and what is the retention window?"],
+      "read": [
+        { "status": "answered", "claims": [{ "statement": "Maya owns the security review.", "evidence": [{ "document": 0, "quote": "Maya owns the security review." }] }] },
+        { "status": "answered", "claims": [{ "statement": "The retention window is 30 days.", "evidence": [{ "document": 0, "quote": "The retention window is 30 days." }] }] }
+      ],
+      "audit": "accept",
+      "expect": "unverified"
+    },
+    "auditRejects": {
+      "question": "Who owns the security review, and what is the retention window?",
+      "proposal": ["Who owns the security review,", "and what is the retention window?"],
+      "reconstruction": ["Who owns the security review,", "and what is the retention window?"],
+      "read": [
+        { "status": "answered", "claims": [{ "statement": "Maya owns the security review.", "evidence": [{ "document": 0, "quote": "Maya owns the security review." }] }] },
+        { "status": "answered", "claims": [{ "statement": "The retention window is 17 days.", "evidence": [{ "document": 0, "quote": "The retention window is 17 days." }] }] }
+      ],
+      "audit": "reject",
+      "expect": "unverified"
+    }
+  }
+}

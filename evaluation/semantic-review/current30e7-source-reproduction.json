@@ -1,0 +1,71 @@
+{
+  "sourceSha": "30e7b4cf42652d713ac19a45db7a14aab95ccc9d",
+  "classification": "source-function reproduction and source inspection only; no HTTP/provider/embedding/audio calls",
+  "exposedDevelopmentCases": true,
+  "frozenHoldoutRun": false,
+  "claims": {
+    "accepted": [
+      {
+        "statement": "Nimbus owes $1,500.",
+        "evidence": {
+          "sourceId": "public-synthetic-role",
+          "title": "Synthetic role fixture",
+          "hash": "ea3cbfcd23b00a557e2702ed2677f01044d63b489fa30c0e0e4cccac36e2c632",
+          "start": 0,
+          "end": 18,
+          "quote": "Arjun owes $1,500."
+        }
+      },
+      {
+        "statement": "Arjun paid $1,500.",
+        "evidence": {
+          "sourceId": "public-synthetic-role",
+          "title": "Synthetic role fixture",
+          "hash": "ea3cbfcd23b00a557e2702ed2677f01044d63b489fa30c0e0e4cccac36e2c632",
+          "start": 0,
+          "end": 18,
+          "quote": "Arjun owes $1,500."
+        }
+      }
+    ],
+    "rejected": []
+  },
+  "rewrites": [
+    {
+      "original": "Did Nimbus pay $1,500?",
+      "rewrite": "Did Arjun pay $1,500?",
+      "accepted": true
+    },
+    {
+      "original": "Did Priya approve the commercial scope?",
+      "rewrite": "Did Kamal approve the commercial scope?",
+      "accepted": true
+    },
+    {
+      "original": "Did Priya approve the commercial scope?",
+      "rewrite": "Did Priya sign the commercial scope?",
+      "accepted": true
+    }
+  ],
+  "quoted": {
+    "text": "From the document: “Arjun owes $1,500.”",
+    "verdict": "QUOTED",
+    "kind": "quoted",
+    "citations": [
+      {
+        "sourceId": "public-synthetic-role",
+        "title": "Synthetic role fixture",
+        "hash": "ea3cbfcd23b00a557e2702ed2677f01044d63b489fa30c0e0e4cccac36e2c632",
+        "start": 0,
+        "end": 18,
+        "quote": "Arjun owes $1,500."
+      }
+    ],
+    "from": "evidence"
+  },
+  "sourceInspection": {
+    "documentPlanValidatorCalled": false,
+    "modelPartsIteration": true,
+    "requestedCheckedStillPreservedBeforeDocument": true
+  }
+}

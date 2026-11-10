@@ -1,3 +1,4 @@
+import { identityReportsFor } from "../clinical/answer.mjs";
 // Public, key-free API for the landing page. Visitors ask questions about
 // built-in fictional cases (synthetic lab reports for SYN-0001, and the
 // Northstar deal records); every answer is the same deterministic,
@@ -491,6 +492,19 @@ export function createPublicApi({
           // service and never attempts a server round trip).
           semantic: {
             enabled: !!gemini?.enabled(),
+            documentReader: {
+              enabled:
+                process.env.VM_DOCUMENT_REASONING === "on" &&
+                process.env.VM_SEMANTIC_AUDIENCE !== "demo" &&
+                !!gemini?.enabled() &&
+                typeof gemini?.documentRead === "function" &&
+                typeof gemini?.documentAudit === "function",
+              provider:
+                gemini?.status?.().provider === "openrouter"
+                  ? "OpenRouter"
+                  : "Google Gemini",
+            },
+
             search: !!gemini?.searchEnabled?.(),
             transcribe:
               !!(voiceIn?.enabled() ?? gemini?.enabled()) &&
@@ -630,6 +644,7 @@ export function createPublicApi({
               case: url.searchParams.get("case"),
               question: url.searchParams.get("q"),
               context: url.searchParams.get("context") ?? "",
+              patient: url.searchParams.get("patient"),
             }
           : await readJson(req);
         if (cacheable && !Object.hasOwn(CASES, data.case))
@@ -662,13 +677,41 @@ export function createPublicApi({
           );
         const ctx =
           typeof data.context === "string" &&
-          /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(data.context)
+          /^[A-Za-z0-9][A-Za-z0-9 .:_#/-]{0,255}$/.test(data.context)
             ? data.context
             : "";
+        // Explicit current-patient context: honored only when it names an
+        // actual subject of this case's records; anything else selects
+        // nothing, never a wrong person.
+        const patient =
+          typeof data.patient === "string" &&
+          identityReportsFor(s.bundle).some(
+            (r) => subjectOf(r) === data.patient.trim(),
+          )
+            ? data.patient.trim()
+            : null;
+        if (
+          isWs(data.case) &&
+          data.semantic === true &&
+          process.env.VM_DOCUMENT_REASONING === "on" &&
+          (data.documentConsent?.generation !== s.bundleGeneration ||
+            data.documentConsent?.provider !==
+              (gemini?.status?.().provider === "openrouter"
+                ? "OpenRouter"
+                : "Google Gemini") ||
+            data.documentConsent?.model !== (gemini?.model ?? null))
+        ) {
+          send(res, 409, {
+            error:
+              "The document set or cloud reader changed. Refresh the documents and confirm cloud reading again.",
+          });
+          return true;
+        }
         const shown = await resolve(s, q, ctx, {
           // A visitor's own passages reach the model only on their say-so.
           consent: data.semantic === true,
           ip,
+          patient,
         });
         send(
           res,
@@ -903,7 +946,7 @@ export function createPublicApi({
           return (send(res, 400, { error: "Ask a question first." }), true);
         const ctx =
           typeof data.context === "string" &&
-          /^[A-Za-z0-9][A-Za-z0-9 .:-]{0,59}$/.test(data.context)
+          /^[A-Za-z0-9][A-Za-z0-9 .:_#/-]{0,255}$/.test(data.context)
             ? data.context
             : "";
         const shown = await resolve(s, q, ctx, {
@@ -1365,6 +1408,9 @@ export function publicAnswer(shown) {
     start: c.start ?? null,
     end: c.end ?? null,
     status: c.status ?? null,
+    record: c.record ?? null,
+    binding: c.binding ?? null,
+    contextOnly: c.contextOnly ?? null,
     location: c.location
       ? {
           pages: c.location.pages ?? null,
@@ -1376,6 +1422,10 @@ export function publicAnswer(shown) {
   });
   return {
     question: shown.question,
+    questionPlan: shown.questionPlan ?? null,
+    admission: shown.admission ?? null,
+    requirementCoverage: shown.requirementCoverage ?? null,
+    transforms: shown.transforms ?? null,
     lead: shown.lead
       ? {
           text: shown.lead.text,
@@ -1443,7 +1493,14 @@ export function publicAnswer(shown) {
       kind: final.kind,
       from: final.from,
       citations: final.citations.map(cite),
+      relatedEvidence: (final.relatedEvidence ?? []).map(cite),
+      // Whole-question coverage provenance (whole-question-coverage.mjs).
+      // `complete` is true only when every requirement of a qualified
+      // request has an established outcome. Never inferred from wording.
+      complete: final.complete ?? null,
+      coverage: final.coverage ?? null,
     },
+    wholeQuestion: shown.wholeQuestion ?? null,
     answer: final.text,
     status: final.kind,
     // What retrieval alone found underneath the answer: diagnostics, never
@@ -1452,7 +1509,9 @@ export function publicAnswer(shown) {
       text: shown.answer ?? shown.text ?? null,
       status: shown.status ?? null,
     },
-    evidence: (shown.evidence ?? []).slice(0, 4).map(cite),
+    // Retrieval diagnostics, never the answer (see `retrieval`). Already
+    // Split at known source-owned boundaries, with explicit record metadata.
+    evidence: (shown.evidence ?? []).map(cite),
   };
 }
 

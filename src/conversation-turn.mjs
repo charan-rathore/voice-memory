@@ -13,7 +13,7 @@
 //   5. resolve outstanding clarification, then direct subject, then referent
 //   6. ask the record interface per part; never coverage-blind
 //   7. novelty: repeat, compact, or strip what the caller already heard
-//   8. stage the turn; the caller commits it only when delivery completed
+//   8. stage the turn; the caller commits it only once its stream is produced
 //
 // Nothing here calls a model. Interpretation is deterministic, so typed and
 // voice turns with the same words reach the same decision.
@@ -617,7 +617,8 @@ const VERB = {
  * prior: the state from the previous commitConversationTurn (or null).
  *
  * Returns { turn, state }. The turn is staged in `state`; call
- * commitConversationTurn(state, turn.turnId, { completed }) once delivery ends.
+ * commitConversationTurn(state, turn.turnId, { completed }) once its stream
+ * finishes producing (the boundary this transport attests - not a receipt).
  * No model is consulted: the decision is deterministic.
  */
 export function resolveConversationTurn(input, prior = null) {
@@ -1061,8 +1062,9 @@ function emptyTurn({
 }
 
 /**
- * Commit the staged turn once its delivery finished. A turn that was cut off
- * (completed: false) never becomes a referent, a repeat, or a clarification.
+ * Commit the staged turn once its stream finished producing. A turn whose
+ * stream was abandoned (completed: false) never becomes a referent, a repeat,
+ * or a clarification.
  */
 export function commitConversationTurn(
   state,

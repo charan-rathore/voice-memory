@@ -127,6 +127,9 @@ test("verifyClaims: literal quotes only; values, units, status, polarity, subjec
       { statement: "x", passage: 9, quote: "anything", polarity: "affirmed" },
     ],
     passages,
+    // Isolate the mechanical checks in this test. This injected verifier is
+    // NOT production evidence of semantic entailment.
+    { verifyRelation: () => ({ ok: true }) },
   );
   assert.deepEqual(
     accepted.map((a) => a.statement),
@@ -377,6 +380,7 @@ test("router: verified model claims are accepted, fabricated ones rejected, with
     "any rejected claim fails the whole model answer closed",
   );
   assert.deepEqual(out.trace.rejected.sort(), [
+    "relation_entailment_unverified",
     "status_upgraded",
     "value_not_in_quote:39000",
   ]);
@@ -398,7 +402,7 @@ test("router: verified model claims are accepted, fabricated ones rejected, with
   );
 });
 
-test("router: the model's rewrite is answered by the engine; invented numbers in a rewrite are refused", async () => {
+test("router: unqualified model rewrites remain candidates and cannot become answers", async () => {
   const bundle = northstar();
   let rewrite = "What is the engagement fee?";
   const gem = createGemini({
@@ -429,8 +433,8 @@ test("router: the model's rewrite is answered by the engine; invented numbers in
     gemini: gem,
     consent: true,
   });
-  assert.equal(out.lead.verdict, "PROPOSED");
-  assert.equal(out.lead.interpretedAs, "What is the engagement fee?");
+  assert.equal(out.lead, null);
+  assert.ok(!out.trace.steps.includes("rewrite_answered"));
 
   rewrite = "Is the fee $45,000?";
   const gem2 = createGemini({
@@ -546,7 +550,7 @@ test("openrouter: interpret translates the request and normalizes the reply", as
   assert.equal(c.body.messages[0].role, "user");
   assert.match(c.body.messages[0].content, /mera ferritin\?/);
   assert.equal(c.body.response_format.type, "json_schema");
-  assert.deepEqual(c.body.reasoning, { effort: "low" });
+  assert.deepEqual(c.body.reasoning, { effort: "low", exclude: true });
   assert.equal(c.init.headers.authorization, "Bearer sk-or-test");
   const st = gem.status();
   assert.ok(st.budget.usd > 0, "usage is charged from normalized token counts");
@@ -910,7 +914,7 @@ test("privacy: demo trial scope gates paid semantics off for visitor uploads, co
   );
 });
 
-test("router: a fully verified claim set ships with per-claim citations; failed citation validation abstains", async () => {
+test("router: source-valid model claims still need independent relation admission", async () => {
   const bundle = northstar();
   const src = bundle.sources.find((s) => /Commercial_Revision/.test(s.title));
   const i = src.text.indexOf("1. Following");
@@ -955,9 +959,8 @@ test("router: a fully verified claim set ships with per-claim citations; failed 
     gemini: gem,
     consent: true,
   });
-  assert.equal(out.lead?.origin, "model");
-  assert.equal(out.lead.text, "The revised fee is $42,000.");
-  assert.equal(out.lead.citations.length, 1);
+  assert.equal(out.lead, null);
+  assert.deepEqual(out.trace.rejected, ["relation_entailment_unverified"]);
 
   const out2 = await semanticRescue({
     question: "what is the revised fee",
@@ -1039,5 +1042,54 @@ test("router: a rewrite that flips negation or swaps the named subject is refuse
     out2.lead?.verdict,
     "APPROVED",
     "a subject-swapping rewrite is not rerun",
+  );
+});
+
+test("openrouter: document interpretation uses actual JSON mode, exact route and token-price ceilings", async () => {
+  const fetchImpl = fakeFetch(async () =>
+    orResponse('{"question":"Who paid?","requirements":["Who paid?"]}', {
+      usage: { cost: 0.004 },
+    }),
+  );
+  const gem = createGemini({
+    env: {
+      OPENROUTER_API_KEY: "sk-or-test",
+      VM_OPENROUTER_MODEL: "deepseek/deepseek-v4.1-flash-1017",
+      VM_OPENROUTER_PROVIDER: "relace",
+      VM_OPENROUTER_REASONING: "off",
+      VM_GEMINI_IN_USD_PER_M: ".006",
+      VM_GEMINI_OUT_USD_PER_M: ".50",
+    },
+    fetchImpl,
+  });
+  const result = await gem.questionRequirements("Who paid?", {
+    pass: "proposal",
+  });
+  assert.equal(result.question, "Who paid?");
+  const body = fetchImpl.calls[0].body;
+  assert.deepEqual(body.response_format, { type: "json_object" });
+  assert.deepEqual(body.reasoning, { enabled: false, exclude: true });
+  assert.deepEqual(body.provider, {
+    require_parameters: true,
+    max_price: { prompt: 0.006, completion: 0.5 },
+    only: ["relace"],
+    allow_fallbacks: false,
+  });
+  assert.equal(
+    gem.status().budget.usd,
+    0.004,
+    "provider cost is not understated by list-price estimates",
+  );
+  await gem.questionRequirements("Who paid?", { pass: "reconstruction" });
+  assert.equal(
+    fetchImpl.calls.length,
+    2,
+    "blind reconstruction has a distinct request and cache identity",
+  );
+  assert.ok(
+    !fetchImpl.calls[1].body.messages[0].content.includes(
+      '"requirements":["Who paid?"]',
+    ),
+    "first proposal is not sent to reconstruction",
   );
 });

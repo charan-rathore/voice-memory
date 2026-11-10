@@ -312,17 +312,37 @@ export function caseVisual(bundle, lang = "en") {
 }
 
 /** The visual for one answer: the tests it used, for the subject it used. */
-export function visualFor(question, bundle, lead) {
+export function visualFor(question, bundle, lead, selected = null) {
+  const owners = selected
+    ? new Set(Array.isArray(selected) ? selected : [selected])
+    : null;
+  if (owners && lead?.verdict !== "AMBIGUOUS_PATIENT")
+    bundle = {
+      ...bundle,
+      clinical: (bundle.clinical ?? []).filter((r) => owners.has(subjectOf(r))),
+    };
   const reports = bundle?.clinical ?? [];
   if (!reports.length || !lead) return null;
   const lang = detectLang(question);
   const used = (lead.used ?? []).filter((o) => o?.report);
   if (used.length) {
-    const sid = subjectOf(used[0].report);
-    const keys = [...new Set(used.map((o) => o.key))];
-    const block = subjectBlock(reports, sid, keys);
-    if (!block.tests.length) return null;
-    return { kind: "labs", focus: "answer", lang, subjects: [block] };
+    const ids = [...new Set(used.map((o) => subjectOf(o.report)))];
+    const subjects = ids
+      .map((id) =>
+        subjectBlock(reports, id, [
+          ...new Set(
+            used.filter((o) => subjectOf(o.report) === id).map((o) => o.key),
+          ),
+        ]),
+      )
+      .filter((b) => b.tests.length);
+    if (!subjects.length) return null;
+    return {
+      kind: "labs",
+      focus: subjects.length > 1 ? "overview" : "answer",
+      lang,
+      subjects,
+    };
   }
   if (["OVERVIEW", "FLAGGED", "SUMMARY"].includes(lead.verdict)) {
     const v = caseVisual(bundle, lang);

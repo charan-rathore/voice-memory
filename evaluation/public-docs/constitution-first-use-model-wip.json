@@ -1,0 +1,227 @@
+{
+  "revision": "dirty bc1244a general-reader WIP",
+  "mode": "actual local public upload/ask API, consent true, public document only",
+  "source": "https://www.archives.gov/founding-docs/constitution-transcript",
+  "sha256": "4828afac3b1dc6e0a6f694259834ef774f16e926e86cafebdca374d3efaeb80b",
+  "ms": 8016,
+  "calls": 2,
+  "status": 200,
+  "answer": {
+    "question": "According to Article I Section 7, when can a bill become law without the President signing it, and what exception can prevent that outcome? Does the text give a number for the year 2026 federal budget?",
+    "lead": {
+      "text": "According to Article I Section 7, when can a bill become law without the President signing it: A bill becomes a law without the President's signature if it is not returned by the President within ten days (excluding Sundays) after being presented to him.\n\nAccording to Article I Section 7, when can a bill become law without the President signing it: Alternatively, if the President vetoes and returns a bill with objections, it becomes a law without his signature if both the originating House and the other House reconsider and approve it by a two-thirds vote.\n\nwhat exception can prevent that outcome: An unreturned bill does not become a law if Congress, by their adjournment, prevents its return.\n\nDoes the text give a number for the year 2026 federal budget?: The provided text contains the transcript of the U.S. Constitution and does not mention or contain any figure for the year 2026 federal budget.",
+      "verdict": "DOCUMENT_ANSWER",
+      "field": null,
+      "citations": [
+        {
+          "documentId": "0496134f-e28a-4ef9-a808-48a0661cff0a",
+          "title": "US-Constitution-public-transcript.txt",
+          "quote": "If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it, unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law.",
+          "start": 8190,
+          "end": 8480,
+          "status": null,
+          "record": null,
+          "binding": null,
+          "contextOnly": null,
+          "location": {
+            "pages": [],
+            "boxes": null,
+            "focus": {
+              "elementIds": [
+                "e34"
+              ],
+              "pages": [],
+              "regions": [],
+              "text": [
+                "Every Bill which shall have passed the House of Representatives and the Senate, shall, before it become a Law, be presented to the President of the United States; If he approve he shall sign it, but if not he shall return it, with his Objections to that House in which it shall have originated, who shall enter the Objections at large on their Journal, and proceed to reconsider it. If after such Reconsideration two thirds of that House shall agree to pass the Bill, it shall be sent, together with the Objections, to the other House, by which it shall likewise be reconsidered, and if approved by two thirds of that House, it shall become a Law. But in all such Cases the Votes of both Houses shall be determined by yeas and Nays, and the Names of the Persons voting for and against the Bill shall be entered on the Journal of each House respectively. If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it, unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law."
+              ],
+              "rows": []
+            },
+            "elementIds": [
+              "e34"
+            ]
+          }
+        },
+        {
+          "documentId": "0496134f-e28a-4ef9-a808-48a0661cff0a",
+          "title": "US-Constitution-public-transcript.txt",
+          "quote": "If he approve he shall sign it, but if not he shall return it, with his Objections to that House in which it shall have originated, who shall enter the Objections at large on their Journal, and proceed to reconsider it. If after such Reconsideration two thirds of that House shall agree to pass the Bill, it shall be sent, together with the Objections, to the other House, by which it shall likewise be reconsidered, and if approved by two thirds of that House, it shall become a Law.",
+          "start": 7499,
+          "end": 7983,
+          "status": null,
+          "record": null,
+          "binding": null,
+          "contextOnly": null,
+          "location": {
+            "pages": [],
+            "boxes": null,
+            "focus": {
+              "elementIds": [
+                "e34"
+              ],
+              "pages": [],
+              "regions": [],
+              "text": [
+                "Every Bill which shall have passed the House of Representatives and the Senate, shall, before it become a Law, be presented to the President of the United States; If he approve he shall sign it, but if not he shall return it, with his Objections to that House in which it shall have originated, who shall enter the Objections at large on their Journal, and proceed to reconsider it. If after such Reconsideration two thirds of that House shall agree to pass the Bill, it shall be sent, together with the Objections, to the other House, by which it shall likewise be reconsidered, and if approved by two thirds of that House, it shall become a Law. But in all such Cases the Votes of both Houses shall be determined by yeas and Nays, and the Names of the Persons voting for and against the Bill shall be entered on the Journal of each House respectively. If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it, unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law."
+              ],
+              "rows": []
+            },
+            "elementIds": [
+              "e34"
+            ]
+          }
+        },
+        {
+          "documentId": "0496134f-e28a-4ef9-a808-48a0661cff0a",
+          "title": "US-Constitution-public-transcript.txt",
+          "quote": "unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law.",
+          "start": 8383,
+          "end": 8480,
+          "status": null,
+          "record": null,
+          "binding": null,
+          "contextOnly": null,
+          "location": {
+            "pages": [],
+            "boxes": null,
+            "focus": {
+              "elementIds": [
+                "e34"
+              ],
+              "pages": [],
+              "regions": [],
+              "text": [
+                "Every Bill which shall have passed the House of Representatives and the Senate, shall, before it become a Law, be presented to the President of the United States; If he approve he shall sign it, but if not he shall return it, with his Objections to that House in which it shall have originated, who shall enter the Objections at large on their Journal, and proceed to reconsider it. If after such Reconsideration two thirds of that House shall agree to pass the Bill, it shall be sent, together with the Objections, to the other House, by which it shall likewise be reconsidered, and if approved by two thirds of that House, it shall become a Law. But in all such Cases the Votes of both Houses shall be determined by yeas and Nays, and the Names of the Persons voting for and against the Bill shall be entered on the Journal of each House respectively. If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it, unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law."
+              ],
+              "rows": []
+            },
+            "elementIds": [
+              "e34"
+            ]
+          }
+        }
+      ],
+      "background": null,
+      "interpretedAs": null,
+      "origin": "document-model-audited",
+      "opener": null,
+      "action": null
+    },
+    "visual": null,
+    "also": [],
+    "closest": null,
+    "semantic": {
+      "intent": "DOCUMENT",
+      "lang": "en",
+      "steps": [
+        "whole_context_read_and_independent_audit"
+      ]
+    },
+    "final": {
+      "text": "According to Article I Section 7, when can a bill become law without the President signing it: A bill becomes a law without the President's signature if it is not returned by the President within ten days (excluding Sundays) after being presented to him.\n\nAccording to Article I Section 7, when can a bill become law without the President signing it: Alternatively, if the President vetoes and returns a bill with objections, it becomes a law without his signature if both the originating House and the other House reconsider and approve it by a two-thirds vote.\n\nwhat exception can prevent that outcome: An unreturned bill does not become a law if Congress, by their adjournment, prevents its return.\n\nDoes the text give a number for the year 2026 federal budget?: The provided text contains the transcript of the U.S. Constitution and does not mention or contain any figure for the year 2026 federal budget.",
+      "verdict": "DOCUMENT_ANSWER",
+      "kind": "answered",
+      "from": "lead",
+      "citations": [
+        {
+          "documentId": "0496134f-e28a-4ef9-a808-48a0661cff0a",
+          "title": "US-Constitution-public-transcript.txt",
+          "quote": "If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it, unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law.",
+          "start": 8190,
+          "end": 8480,
+          "status": null,
+          "record": null,
+          "binding": null,
+          "contextOnly": null,
+          "location": {
+            "pages": [],
+            "boxes": null,
+            "focus": {
+              "elementIds": [
+                "e34"
+              ],
+              "pages": [],
+              "regions": [],
+              "text": [
+                "Every Bill which shall have passed the House of Representatives and the Senate, shall, before it become a Law, be presented to the President of the United States; If he approve he shall sign it, but if not he shall return it, with his Objections to that House in which it shall have originated, who shall enter the Objections at large on their Journal, and proceed to reconsider it. If after such Reconsideration two thirds of that House shall agree to pass the Bill, it shall be sent, together with the Objections, to the other House, by which it shall likewise be reconsidered, and if approved by two thirds of that House, it shall become a Law. But in all such Cases the Votes of both Houses shall be determined by yeas and Nays, and the Names of the Persons voting for and against the Bill shall be entered on the Journal of each House respectively. If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it, unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law."
+              ],
+              "rows": []
+            },
+            "elementIds": [
+              "e34"
+            ]
+          }
+        },
+        {
+          "documentId": "0496134f-e28a-4ef9-a808-48a0661cff0a",
+          "title": "US-Constitution-public-transcript.txt",
+          "quote": "If he approve he shall sign it, but if not he shall return it, with his Objections to that House in which it shall have originated, who shall enter the Objections at large on their Journal, and proceed to reconsider it. If after such Reconsideration two thirds of that House shall agree to pass the Bill, it shall be sent, together with the Objections, to the other House, by which it shall likewise be reconsidered, and if approved by two thirds of that House, it shall become a Law.",
+          "start": 7499,
+          "end": 7983,
+          "status": null,
+          "record": null,
+          "binding": null,
+          "contextOnly": null,
+          "location": {
+            "pages": [],
+            "boxes": null,
+            "focus": {
+              "elementIds": [
+                "e34"
+              ],
+              "pages": [],
+              "regions": [],
+              "text": [
+                "Every Bill which shall have passed the House of Representatives and the Senate, shall, before it become a Law, be presented to the President of the United States; If he approve he shall sign it, but if not he shall return it, with his Objections to that House in which it shall have originated, who shall enter the Objections at large on their Journal, and proceed to reconsider it. If after such Reconsideration two thirds of that House shall agree to pass the Bill, it shall be sent, together with the Objections, to the other House, by which it shall likewise be reconsidered, and if approved by two thirds of that House, it shall become a Law. But in all such Cases the Votes of both Houses shall be determined by yeas and Nays, and the Names of the Persons voting for and against the Bill shall be entered on the Journal of each House respectively. If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it, unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law."
+              ],
+              "rows": []
+            },
+            "elementIds": [
+              "e34"
+            ]
+          }
+        },
+        {
+          "documentId": "0496134f-e28a-4ef9-a808-48a0661cff0a",
+          "title": "US-Constitution-public-transcript.txt",
+          "quote": "unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law.",
+          "start": 8383,
+          "end": 8480,
+          "status": null,
+          "record": null,
+          "binding": null,
+          "contextOnly": null,
+          "location": {
+            "pages": [],
+            "boxes": null,
+            "focus": {
+              "elementIds": [
+                "e34"
+              ],
+              "pages": [],
+              "regions": [],
+              "text": [
+                "Every Bill which shall have passed the House of Representatives and the Senate, shall, before it become a Law, be presented to the President of the United States; If he approve he shall sign it, but if not he shall return it, with his Objections to that House in which it shall have originated, who shall enter the Objections at large on their Journal, and proceed to reconsider it. If after such Reconsideration two thirds of that House shall agree to pass the Bill, it shall be sent, together with the Objections, to the other House, by which it shall likewise be reconsidered, and if approved by two thirds of that House, it shall become a Law. But in all such Cases the Votes of both Houses shall be determined by yeas and Nays, and the Names of the Persons voting for and against the Bill shall be entered on the Journal of each House respectively. If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it, unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law."
+              ],
+              "rows": []
+            },
+            "elementIds": [
+              "e34"
+            ]
+          }
+        }
+      ]
+    },
+    "answer": "According to Article I Section 7, when can a bill become law without the President signing it: A bill becomes a law without the President's signature if it is not returned by the President within ten days (excluding Sundays) after being presented to him.\n\nAccording to Article I Section 7, when can a bill become law without the President signing it: Alternatively, if the President vetoes and returns a bill with objections, it becomes a law without his signature if both the originating House and the other House reconsider and approve it by a two-thirds vote.\n\nwhat exception can prevent that outcome: An unreturned bill does not become a law if Congress, by their adjournment, prevents its return.\n\nDoes the text give a number for the year 2026 federal budget?: The provided text contains the transcript of the U.S. Constitution and does not mention or contain any figure for the year 2026 federal budget.",
+    "status": "answered",
+    "retrieval": {
+      "text": "The documents do not establish an answer to this question: the closest passages do not contain the asked fact. They are on screen for review.",
+      "status": null
+    },
+    "evidence": []
+  },
+  "providerUsageBefore": 0.56651753,
+  "providerUsageAfter": 0.56651753,
+  "spendSettling": true,
+  "reservedUpperBound": 0.088043175
+}

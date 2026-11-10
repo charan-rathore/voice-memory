@@ -1,3 +1,4 @@
+import { historicalOnlyForCurrentRequest } from "./source-version.mjs";
 // Deterministic spoken answer for questions OUTSIDE the claim graph's
 // commercial fields (fee, payment, scope, sign-off). Without this, every
 // other question about an uploaded document was spoken as "I don't see that
@@ -178,6 +179,7 @@ export function extractiveSpoken(
   let best = null;
   for (const ev of result.evidence) {
     for (const u of units(ev.quote)) {
+      if (historicalOnlyForCurrentRequest(question, u.text)) continue;
       // Only the main clause asserts: "readiness is targeted for 22 November,
       // provided data access arrives on time" says nothing about whether data
       // access IS on time. Words inside a conditional clause do not count.

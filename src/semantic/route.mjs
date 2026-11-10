@@ -7,7 +7,7 @@
 //            ─► deterministic engine (claim graph, clinical answers, sections, search)
 //            ─► semanticRescue, only when it can change the outcome:
 //                 - TERM not in the vetted glossary   -> grounded search (generic term only)
-//                 - SUMMARY of non-lab documents      -> cited sub-answers composed
+//                 - SUMMARY of non-lab documents      -> exact printed source headings
 //                 - low-confidence / unanswered       -> Gemini interprets, the engine
 //                                                       answers the rewrite
 //                 - still unanswered (consented)       -> Gemini claims, each verified
@@ -21,6 +21,7 @@ import { clinicalWhy, clinicalTerm } from "../../clinical/why.mjs";
 import { observationEvidence, findTest } from "../../clinical/answer.mjs";
 import { detectLang, nameOf } from "../../clinical/explain.mjs";
 import { subjectOf } from "../../clinical/observations.mjs";
+import { sourceOutline } from "../source-outline.mjs";
 
 const MISSING = {
   en: (m, have) =>
@@ -267,26 +268,11 @@ const patientIds = (bundle) =>
     .map(String);
 
 /** Does the rewrite stay inside the catalog's words (no invented values)? */
-const REWRITE_NEG =
-  /\b(not|no|never|none|without|neither|nor|isn't|wasn't|aren't|weren't|doesn't|didn't|hasn't|haven't|cannot|can't|nahi|nahin)\b|\u0928\u0939\u0940\u0902/i;
-const REWRITE_SUBJECT = /\b(SYN-\d{3,}|\[ID\d+\])/g;
-
-function safeRewrite(rewrite, original) {
-  if (!rewrite || rewrite.length > 300) return false;
-  const nums = (s) => String(s).match(/\d[\d,.]*/g) ?? [];
-  const orig = new Set(nums(original));
-  // A rewrite may restate the person's own numbers, never add new ones.
-  if (!nums(rewrite).every((n) => orig.has(n) || /^SYN-?0*\d+$/i.test(n)))
-    return false;
-  // Negation and named subjects decide what the answer means. A rewrite that
-  // flips either is a different question, and the engine's answer to a
-  // different question is not an answer to the user's.
-  if (REWRITE_NEG.test(rewrite) !== REWRITE_NEG.test(original)) return false;
-  const subs = (s) => new Set(String(s).match(REWRITE_SUBJECT) ?? []);
-  const a = subs(original);
-  const b = subs(rewrite);
-  if (a.size !== b.size || [...a].some((x) => !b.has(x))) return false;
-  return true;
+export function safeRewrite(rewrite, original) {
+  // Until an independent parser certifies every protected slot, a model
+  // rewrite cannot be promoted to the user's question. Retrieval expansions
+  // remain separate recall candidates, not authorization to change meaning.
+  return typeof rewrite === "string" && rewrite === original;
 }
 
 /**
@@ -374,29 +360,13 @@ export async function semanticRescue(a) {
     }
   }
 
-  // SUMMARY of non-lab documents: compose from cited sub-answers the engine
-  // already gives, so a summary is never less checked than its parts.
-  if (intent.intent === "SUMMARY" && !isClinical && WEAK(lead) && rerun) {
-    const probes = [
-      "What is the fee?",
-      "What is the deadline?",
-      "What's still open?",
-      "Is there a signed contract?",
-    ];
-    const parts = [];
-    for (const p of probes) {
-      const l = await rerun(p);
-      if (l && !WEAK(l) && !["UNKNOWN"].includes(l.verdict)) parts.push(l);
-    }
-    if (parts.length >= 2) {
-      trace.steps.push("composed_summary");
-      lead = {
-        text: parts.map((l) => l.text).join(" "),
-        verdict: "OVERVIEW",
-        field: null,
-        citations: parts.flatMap((l) => l.citations ?? []).slice(0, 6),
-        intent: "SUMMARY",
-      };
+  // A general source outline is a reading aid, not a contract-shaped answer.
+  // Unknown document classes must not become fee/deadline/signature probes.
+  if (intent.intent === "SUMMARY" && !isClinical && WEAK(lead)) {
+    const outline = sourceOutline(bundle, validate);
+    if (outline) {
+      lead = outline;
+      trace.steps.push("printed_headings_not_summary");
     }
   }
 

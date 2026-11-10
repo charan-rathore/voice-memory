@@ -34,6 +34,9 @@ test("a lead is the answer, whatever retrieval said underneath", () => {
 test("clarifying questions and refusals are labelled as such", () => {
   for (const [verdict, kind] of [
     ["AMBIGUOUS_PATIENT", "clarify"],
+    ["AMBIGUOUS", "clarify"],
+    ["OPEN", "answered"],
+    ["NO-RECORD", "answered"],
     ["CLARIFY", "clarify"],
     ["NOT_COMPARABLE", "refused"],
     ["DECLINE_ADVICE", "refused"],
@@ -48,13 +51,49 @@ test("clarifying questions and refusals are labelled as such", () => {
   }
 });
 
-test("no lead: the cited passage, then an honest abstention", () => {
-  const q = finalAnswer({ evidence: [cite, cite] });
-  assert.equal(q.kind, "quoted");
-  assert.match(q.text, /^From the document: “\| Ferritin \| 50/);
-  assert.match(q.text, /and 1 more cited passage\)$/);
+test("evidence-only fallback abstains and keeps related passages separate", () => {
+  const q = finalAnswer({
+    question: "Who approved the launch?",
+    evidence: [cite, cite],
+  });
+  assert.equal(q.kind, "abstained");
+  assert.equal(q.verdict, "UNKNOWN");
+  assert.deepEqual(q.citations, []);
+  assert.deepEqual(q.relatedEvidence, [cite, cite]);
+  assert.doesNotMatch(q.text, /50|From the document/);
   const none = finalAnswer({ answer: "I could not find supporting passages." });
   assert.equal(none.kind, "abstained");
   assert.equal(none.text, ABSTAIN_TEXT);
   assert.deepEqual(none.citations, []);
+});
+
+test("explicit abstention keeps retrieval context labelled related, never as answer citations", () => {
+  const evidence = [{ sourceId: "s", quote: "Tracking number: TRK-8273" }];
+  const result = finalAnswer({
+    lead: {
+      verdict: "UNKNOWN",
+      text: "Whole-question coverage remains unresolved.",
+      citations: [],
+    },
+    evidence,
+  });
+  assert.equal(result.kind, "abstained");
+  assert.deepEqual(result.citations, []);
+  assert.deepEqual(result.relatedEvidence, evidence);
+  assert.match(result.text, /coverage remains unresolved/);
+});
+
+test("ambiguous conflict preserves lead and citations across public contract fields", () => {
+  const lead = {
+    text: "The approved records conflict: $30,000 versus $45,000. I can't pick one without knowing which you mean.",
+    verdict: "AMBIGUOUS",
+    citations: [cite],
+  };
+  const p = publicAnswer({ lead, evidence: [cite] });
+  assert.equal(p.final.kind, "clarify");
+  assert.equal(p.status, "clarify");
+  assert.equal(p.answer, lead.text);
+  assert.equal(p.final.text, lead.text);
+  assert.deepEqual(p.final.citations, p.lead.citations);
+  assert.equal(p.final.citations[0].quote, cite.quote);
 });

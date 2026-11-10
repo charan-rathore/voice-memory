@@ -1,0 +1,158 @@
+{
+  "status": "Source-grounded diagnostic rubric written after baseline exposure, before any capability repair. Not a holdout or independent qualification.",
+  "source": "https://berkshirehathaway.com/2024ar/2024ar.pdf",
+  "pageConvention": "Original PDF page numbers, with printed page numbers separately noted. Excerpt is original PDF pages 5-18 without text edits.",
+  "cases": [
+    {
+      "id": "earnings-causality",
+      "baselineQuestion": 0,
+      "requires": [
+        "Investment gains/losses are excluded from operating earnings",
+        "Year-to-year investment gains/losses can swing without describing the operating businesses",
+        "Do not infer worsening operations from net earnings alone"
+      ],
+      "evidence": [
+        {
+          "pdfPage": 8,
+          "printedPage": "4",
+          "anchor": "Our measure excludes capital gains or losses"
+        }
+      ],
+      "annotationVerification": "Original page pixels inspected (PDF pages6,8,10 as applicable), with extracted text checked."
+    },
+    {
+      "id": "earnings-distinction",
+      "baselineQuestion": 1,
+      "requires": [
+        "Operating earnings recorded as $47.4 billion in 2024",
+        "Buffett emphasizes operating earnings rather than GAAP-mandated earnings",
+        "Explain investment gain/loss exclusion rather than state the topic is absent"
+      ],
+      "evidence": [
+        {
+          "pdfPage": 8,
+          "printedPage": "4",
+          "anchor": "All told, we recorded operating earnings of $47.4 billion"
+        }
+      ],
+      "annotationVerification": "Original page pixels inspected (PDF pages6,8,10 as applicable), with extracted text checked."
+    },
+    {
+      "id": "entity-motive-incentive",
+      "baselineQuestion": 2,
+      "requires": [
+        "Pete founded and managed Forest River, an RV manufacturer",
+        "He wanted to keep running the business and assure family financial security",
+        "$100000 annual salary and 10% bonus on earnings above the baseline"
+      ],
+      "evidence": [
+        {
+          "pdfPage": 6,
+          "printedPage": "2",
+          "anchor": "Pete paused as his wife, daughter and I leaned forward"
+        }
+      ],
+      "annotationVerification": "Original page pixels inspected (PDF pages6,8,10 as applicable), with extracted text checked."
+    },
+    {
+      "id": "conditional-contract",
+      "baselineQuestion": 3,
+      "requires": [
+        "Significant acquisitions lead to an adjustment for additional capital",
+        "Appropriate and significant were not defined",
+        "Do not assert an unchanged bonus or invent an adjustment formula"
+      ],
+      "evidence": [
+        {
+          "pdfPage": 6,
+          "printedPage": "2",
+          "anchor": "if Forest River makes any significant acquisitions"
+        }
+      ],
+      "annotationVerification": "Original page pixels inspected (PDF pages6,8,10 as applicable), with extracted text checked."
+    },
+    {
+      "id": "chronology-not-agreement",
+      "baselineQuestion": 4,
+      "requires": [
+        "June21 intermediary letter stated Pete wanted to sell",
+        "RV dealer checks preceded June28 Omaha meeting",
+        "Intent to sell is not proof of a completed sale agreement before meeting"
+      ],
+      "evidence": [
+        {
+          "pdfPage": 6,
+          "printedPage": "2",
+          "anchor": "I first heard of Forest River"
+        }
+      ],
+      "annotationVerification": "Original page pixels inspected (PDF pages6,8,10 as applicable), with extracted text checked."
+    },
+    {
+      "id": "succession-temporal",
+      "baselineQuestion": 5,
+      "requires": [
+        "Letter describes Greg Abel replacing Buffett in the future",
+        "Do not turn the future statement into evidence Abel was CEO during2024"
+      ],
+      "evidence": [
+        {
+          "pdfPage": 6,
+          "printedPage": "2",
+          "anchor": "it won\u2019t be long before Greg Abel replaces me as CEO"
+        }
+      ],
+      "annotationVerification": "Original page pixels inspected (PDF pages6,8,10 as applicable), with extracted text checked."
+    },
+    {
+      "id": "whole-document-summary",
+      "baselineQuestion": 6,
+      "requires": [
+        "Separate operating results, volatile investment accounting and capital allocation",
+        "Respect this is an excerpt, not all150pages",
+        "Do not use fixed fee/deadline/open-contract probes as a summary plan"
+      ],
+      "evidence": [
+        {
+          "pdfPage": 8,
+          "printedPage": "4",
+          "anchor": "Our measure excludes"
+        },
+        {
+          "pdfPage": 10,
+          "printedPage": "6",
+          "anchor": "Where Your Money Is"
+        }
+      ],
+      "annotationVerification": "Original page pixels inspected (PDF pages6,8,10 as applicable), with extracted text checked."
+    },
+    {
+      "id": "unavailable-variable",
+      "baselineQuestion": 7,
+      "requires": [
+        "The report uses X but does not give the exact threshold",
+        "Distinguish $100000 salary from earnings threshold",
+        "Do not substitute salary or invent X"
+      ],
+      "evidence": [
+        {
+          "pdfPage": 6,
+          "printedPage": "2",
+          "anchor": "we will earn X (he named a number) this year"
+        }
+      ],
+      "annotationVerification": "Original page pixels inspected (PDF pages6,8,10 as applicable), with extracted text checked."
+    }
+  ],
+  "scoring": {
+    "dimensions": [
+      "requested-subquestion completeness",
+      "claim-source support",
+      "entity ownership",
+      "temporal correctness",
+      "conditional/revision reasoning",
+      "justified uncertainty"
+    ],
+    "rule": "Require manual original-page evaluation for synthesis. Keyword presence alone is not a pass. Preserve this baseline; new unseen documents and independently authored questions are needed for qualification."
+  }
+}

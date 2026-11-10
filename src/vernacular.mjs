@@ -334,7 +334,7 @@ export function normalizeVernacular(text) {
 // make. These are declined in the visitor's language, warmly and without
 // hedging, and point at who can answer.
 const CONDITION =
-  /\b(diabet\w*|prediabet\w*|an(a)?emi\w*|hypo\w*|hyper\w*|thyroid (?:disease|problem|issue)|kidney (?:disease|failure|problem)|ckd|cancer|infection|iron deficiency|pcos|sugar ki bimari|khoon ki kami|bimari)\b|डायबिटीज|मधुमेह|एनीमिया|खून की कमी|बीमारी|थायरॉइड की समस्या/i;
+  /\b(diabet\w*|prediabet\w*|an(a)?emi\w*|hypo\w*|hyper\w*|thyroid (?:ki )?(?:disease|problem|issue)|kidney (?:disease|failure|problem)|ckd|cancer|infection|iron deficiency|pcos|sugar ki bimari|khoon ki kami|bimari)\b|डायबिटीज|मधुमेह|एनीमिया|खून की कमी|बीमारी|थायरॉइड की समस्या/i;
 const MED =
   /\b(painkillers?|pain ?relief|steroids?|antacids?|statins?|aspirin|antibiotics?|blood thinners?|drugs?|therapy|tablets?|pills?|medicines?|medication|meds|supplements?|thyroxine|levothyroxine|metformin|insulin|iron|vitamin|goli|goliyan|dawa|dawai|dawaai|injection|treatment)\b|गोली|दवा|दवाई|इंजेक्शन|इलाज/i;
 const WHO =

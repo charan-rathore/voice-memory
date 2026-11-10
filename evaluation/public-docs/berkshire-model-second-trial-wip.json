@@ -1,0 +1,35 @@
+{
+  "source": "https://berkshirehathaway.com/2024ar/2024ar.pdf",
+  "range": "original PDF pages5-18",
+  "mode": "local direct general-document reader; public source only; no deployment",
+  "calls": 2,
+  "providerUsageBefore": 0.53979758,
+  "providerUsageAfter": 0.56209958,
+  "trialSpend": 0.022302000000000044,
+  "remaining": 4.43790042,
+  "rows": [
+    {
+      "question": "What was the exact dollar earnings threshold X in Pete's bonus agreement, and how would an acquisition affect the agreement?",
+      "ms": 5162,
+      "result": {
+        "text": "the exact dollar earnings threshold X in Pete's bonus agreement: The text states that Pete named a number ('we will earn X (he named a number) this year') but does not disclose or specify the printed exact dollar amount.\n\nhow would an acquisition affect the agreement: If Forest River made any significant acquisitions, an appropriate adjustment would be made for the additional capital employed.",
+        "verdict": "DOCUMENT_ANSWER",
+        "citations": [
+          {
+            "sourceId": "1ba20d4b-c1ef-4771-9eaa-e25f548af4be",
+            "title": "Berkshire 2024 letter, original PDF pages 5-18",
+            "hash": "cdaf81f4867fed19795176bf7e195f2f21cb1b85d8180aa6e3740c304682ad51",
+            "start": 5016,
+            "end": 5173,
+            "quote": "I replied: “OK Pete, but if Forest River makes any significant\nacquisitions we will make an appropriate adjustment for the additional capital thus employed.”"
+          }
+        ],
+        "field": null,
+        "origin": "document-model-audited",
+        "limitations": [
+          "Model entailment audit is fallible; source verification is exact."
+        ]
+      }
+    }
+  ]
+}

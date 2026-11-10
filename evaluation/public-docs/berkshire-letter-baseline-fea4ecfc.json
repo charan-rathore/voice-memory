@@ -1,0 +1,1392 @@
+{
+  "revision": "fea4ecfc6efd2bb95ab5debd2980527071e31801",
+  "source": "https://berkshirehathaway.com/2024ar/2024ar.pdf",
+  "mode": "local deterministic; no model/provider calls",
+  "state": {
+    "ready": true,
+    "bundleGeneration": 1,
+    "documents": [
+      {
+        "id": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+        "filename": "berkshire-2024-letter-excerpt.pdf",
+        "kind": "pdf",
+        "bytes": 61413,
+        "status": "ready",
+        "included": true,
+        "error": null,
+        "review": [],
+        "warnings": [],
+        "stats": {
+          "characters": 36815,
+          "words": 7426,
+          "elements": 127,
+          "tables": 2,
+          "pages": 14,
+          "pagesWithText": 14,
+          "ocrPages": 0,
+          "meanOcrConfidence": null,
+          "furnitureExcluded": 0
+        },
+        "parser": {
+          "name": "pdf.js@4.10.38 standard + vm-layout/1",
+          "ocr": null,
+          "pipeline": "vm-ingest/source-lines-1"
+        },
+        "createdAt": 1794158080585,
+        "updatedAt": 1794158081059,
+        "timings": {
+          "preparing": 0,
+          "validating": 1,
+          "parsing": 1,
+          "indexing": 391,
+          "ready": 474
+        },
+        "progress": {
+          "pages": [
+            {
+              "n": 1,
+              "state": "text",
+              "chars": 2129,
+              "t": 220
+            },
+            {
+              "n": 2,
+              "state": "text",
+              "chars": 2802,
+              "t": 236
+            },
+            {
+              "n": 3,
+              "state": "text",
+              "chars": 2087,
+              "t": 240
+            },
+            {
+              "n": 4,
+              "state": "text",
+              "chars": 2321,
+              "t": 245
+            },
+            {
+              "n": 5,
+              "state": "text",
+              "chars": 2529,
+              "t": 264
+            },
+            {
+              "n": 6,
+              "state": "text",
+              "chars": 2551,
+              "t": 270
+            },
+            {
+              "n": 7,
+              "state": "text",
+              "chars": 3016,
+              "t": 276
+            },
+            {
+              "n": 8,
+              "state": "text",
+              "chars": 2794,
+              "t": 279
+            },
+            {
+              "n": 9,
+              "state": "text",
+              "chars": 2650,
+              "t": 282
+            },
+            {
+              "n": 10,
+              "state": "text",
+              "chars": 2319,
+              "t": 285
+            },
+            {
+              "n": 11,
+              "state": "text",
+              "chars": 2508,
+              "t": 288
+            },
+            {
+              "n": 12,
+              "state": "text",
+              "chars": 2636,
+              "t": 293
+            },
+            {
+              "n": 13,
+              "state": "text",
+              "chars": 1912,
+              "t": 297
+            },
+            {
+              "n": 14,
+              "state": "text",
+              "chars": 3631,
+              "t": 302
+            }
+          ],
+          "log": [
+            {
+              "t": 0,
+              "k": "status",
+              "status": "preparing"
+            },
+            {
+              "t": 1,
+              "k": "status",
+              "status": "validating"
+            },
+            {
+              "t": 1,
+              "k": "status",
+              "status": "parsing"
+            },
+            {
+              "t": 155,
+              "k": "open",
+              "pages": 14
+            },
+            {
+              "t": 220,
+              "k": "text",
+              "n": 1,
+              "lines": 31,
+              "chars": 2129
+            },
+            {
+              "t": 236,
+              "k": "text",
+              "n": 2,
+              "lines": 36,
+              "chars": 2802
+            },
+            {
+              "t": 240,
+              "k": "text",
+              "n": 3,
+              "lines": 30,
+              "chars": 2087
+            },
+            {
+              "t": 245,
+              "k": "text",
+              "n": 4,
+              "lines": 33,
+              "chars": 2321
+            },
+            {
+              "t": 264,
+              "k": "text",
+              "n": 5,
+              "lines": 36,
+              "chars": 2529
+            },
+            {
+              "t": 270,
+              "k": "text",
+              "n": 6,
+              "lines": 34,
+              "chars": 2551
+            },
+            {
+              "t": 276,
+              "k": "text",
+              "n": 7,
+              "lines": 39,
+              "chars": 3016
+            },
+            {
+              "t": 279,
+              "k": "text",
+              "n": 8,
+              "lines": 38,
+              "chars": 2794
+            },
+            {
+              "t": 282,
+              "k": "text",
+              "n": 9,
+              "lines": 37,
+              "chars": 2650
+            },
+            {
+              "t": 285,
+              "k": "text",
+              "n": 10,
+              "lines": 32,
+              "chars": 2319
+            },
+            {
+              "t": 288,
+              "k": "text",
+              "n": 11,
+              "lines": 33,
+              "chars": 2508
+            },
+            {
+              "t": 293,
+              "k": "text",
+              "n": 12,
+              "lines": 35,
+              "chars": 2636
+            },
+            {
+              "t": 297,
+              "k": "text",
+              "n": 13,
+              "lines": 26,
+              "chars": 1912
+            },
+            {
+              "t": 302,
+              "k": "text",
+              "n": 14,
+              "lines": 37,
+              "chars": 3631
+            },
+            {
+              "t": 385,
+              "k": "layout",
+              "tables": 2,
+              "headings": 0,
+              "paragraphs": 125,
+              "furniture": 0
+            },
+            {
+              "t": 385,
+              "k": "ocr-engine-stopped"
+            },
+            {
+              "t": 385,
+              "k": "parser-worker-stopped"
+            },
+            {
+              "t": 391,
+              "k": "status",
+              "status": "indexing"
+            },
+            {
+              "t": 474,
+              "k": "indexed",
+              "elements": 127,
+              "observations": 0
+            },
+            {
+              "t": 474,
+              "k": "status",
+              "status": "ready"
+            }
+          ],
+          "counts": {
+            "tables": 2,
+            "headings": 0,
+            "paragraphs": 125,
+            "furniture": 0
+          },
+          "answerableAt": null,
+          "age": 474
+        },
+        "digest": {
+          "layout": {
+            "pages": 14,
+            "headings": 0,
+            "paragraphs": 125,
+            "tables": 2,
+            "rows": 34,
+            "furniture": 0,
+            "ocr": 0,
+            "characters": 36815
+          },
+          "records": [
+            {
+              "n": 1,
+              "pages": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14
+              ],
+              "title": "BERKSHIRE HATHAWAY INC.",
+              "status": null,
+              "authority": "unknown",
+              "patient": null,
+              "facts": 11,
+              "labRows": 0,
+              "sample": [
+                {
+                  "label": "Insurance-investment income . . . . . . ",
+                  "value": "13,670 \u00b7 9,567"
+                },
+                {
+                  "label": "BNSF . . . . . . . . . . . . . . . . . .",
+                  "value": "5,031 \u00b7 5,087"
+                }
+              ]
+            }
+          ],
+          "index": {
+            "passages": 21,
+            "bundlePassages": 21,
+            "vocabulary": 1543,
+            "avgTokens": 174.7,
+            "k1": 1.5,
+            "b": 0.75
+          },
+          "lookup": {
+            "query": "Insurance-investment income . . . . . . . . . . . . . . . .",
+            "terms": [
+              {
+                "t": "insurance",
+                "df": 6,
+                "idf": 1.219
+              },
+              {
+                "t": "investment",
+                "df": 6,
+                "idf": 1.219
+              },
+              {
+                "t": "income",
+                "df": 5,
+                "idf": 1.386
+              }
+            ],
+            "hits": [
+              {
+                "heading": "",
+                "ordinal": 5,
+                "mine": true,
+                "parts": [
+                  1.832,
+                  1.309,
+                  2.083
+                ],
+                "score": 5.224
+              },
+              {
+                "heading": "",
+                "ordinal": 13,
+                "mine": true,
+                "parts": [
+                  1.913,
+                  1.913,
+                  1.247
+                ],
+                "score": 5.073
+              },
+              {
+                "heading": "",
+                "ordinal": 12,
+                "mine": true,
+                "parts": [
+                  2.143,
+                  1.134,
+                  0
+                ],
+                "score": 3.277
+              },
+              {
+                "heading": "",
+                "ordinal": 6,
+                "mine": true,
+                "parts": [
+                  0,
+                  0,
+                  2.623
+                ],
+                "score": 2.623
+              }
+            ]
+          },
+          "passage": {
+            "ordinal": 5,
+            "heading": "",
+            "tokens": 148,
+            "vector": [
+              {
+                "t": "2023",
+                "w": 4.654
+              },
+              {
+                "t": "approximately",
+                "w": 4.035
+              },
+              {
+                "t": "controlled",
+                "w": 3.267
+              },
+              {
+                "t": "non",
+                "w": 3.267
+              },
+              {
+                "t": "includes",
+                "w": 3.267
+              },
+              {
+                "t": "hese",
+                "w": 2.884
+              },
+              {
+                "t": "here",
+                "w": 2.884
+              },
+              {
+                "t": "breakdown",
+                "w": 2.884
+              },
+              {
+                "t": "24",
+                "w": 2.884
+              },
+              {
+                "t": "depreciation",
+                "w": 2.884
+              },
+              {
+                "t": "amortization",
+                "w": 2.884
+              },
+              {
+                "t": "ebitda",
+                "w": 2.884
+              },
+              {
+                "t": "flawed",
+                "w": 2.884
+              },
+              {
+                "t": "favorite",
+                "w": 2.884
+              }
+            ],
+            "embedding": null
+          },
+          "dense": {
+            "state": "off",
+            "model": "Xenova/bge-small-en-v1.5@q8",
+            "embedded": 0
+          },
+          "graph": {
+            "records": 1,
+            "patients": 0,
+            "facts": 11,
+            "labRows": 0,
+            "supersedes": 0,
+            "sameName": 0,
+            "corrections": 0,
+            "mini": {
+              "nodes": [],
+              "edges": [],
+              "replaced": []
+            }
+          }
+        },
+        "answerable": true,
+        "title": "berkshire-2024-letter-excerpt.pdf",
+        "pages": 14
+      }
+    ]
+  },
+  "rows": [
+    {
+      "question": "Why can the fall in 2024 net earnings not by itself tell me whether operating businesses got worse?",
+      "answer": {
+        "question": "Why can the fall in 2024 net earnings not by itself tell me whether operating businesses got worse?",
+        "lead": null,
+        "visual": null,
+        "also": [],
+        "closest": null,
+        "semantic": {
+          "intent": "WHY",
+          "lang": "en",
+          "steps": []
+        },
+        "final": {
+          "text": "From the document: \u201cOur insurance business also delivered a major increase in earnings, led by the performance of GEICO. In five years, Todd Combs has reshaped GEICO in a major way, increasing efficiency and bringing underwriting practices up to date. GEICO was a long-held gem that needed major rep\u2026\u201d (and 1 more cited passage)",
+          "verdict": "QUOTED",
+          "kind": "quoted",
+          "from": "evidence",
+          "citations": [
+            {
+              "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+              "title": "berkshire-2024-letter-excerpt.pdf",
+              "quote": "Our insurance business also delivered a major increase in earnings, led by the performance of GEICO. In five years, Todd Combs has reshaped GEICO in a major way, increasing efficiency and bringing underwriting practices up to date. GEICO was a long-held gem that needed major repolishing, and Todd has worked tirelessly in getting the job done. Though not yet complete, the 2024 improvement was spectacular.\n\nIn general, property-casualty (\u201cP/C\u201d) insurance pricing strengthened during 2024, reflecting a major increase in damage from convective storms. Climate change may have been announcing its arrival. However, no \u201cmonster\u201d event occurred during 2024. Someday, any day, a truly staggering insurance loss will occur \u2013 and there is no guarantee that there will be only one per annum.\n\nThe P/C business is so central to Berkshire that it warrants a further discussion that appears later in this letter.\n\nBerkshire\u2019s railroad and utility operations, our two largest businesses outside of insurance, improved their aggregate earnings. Both, however, have much left to accomplish.\n\nLate in the year we increased our ownership of the utility operation from about 92% to 100% at a cost of roughly $3.9 billion, of which $2.9 billion was paid in cash with a balance in Berkshire \u201cB\u201d shares. * * * * * * * * * * * * All told, we recorded operating earnings of $47.4 billion in 2024. We regularly \u2013 endlessly, some readers may groan \u2013 emphasize this measure rather than the GAAP-mandated earnings that are reported on page K-68.\n\nOur measure excludes capital gains or losses on the stocks and bonds we own, whether realized or unrealized. Over time, we think it highly likely that gains will prevail \u2013 why else would we buy these securities? \u2013 though the year-by-year numbers will swing wildly and unpredictably. Our horizon for such commitments is almost always far longer than a single year. In many, our thinking involves decades. These long-termers are the purchases that sometimes make the cash register ring like church bells.\n\n4",
+              "start": 7476,
+              "end": 9504,
+              "status": null,
+              "record": null,
+              "binding": "unsegmented",
+              "contextOnly": true,
+              "location": {
+                "pages": [
+                  4
+                ],
+                "boxes": null,
+                "focus": {
+                  "elementIds": [
+                    "e31",
+                    "e35"
+                  ],
+                  "pages": [
+                    4
+                  ],
+                  "regions": [
+                    {
+                      "page": 4,
+                      "bbox": [
+                        69,
+                        161.6,
+                        507.4,
+                        229.6
+                      ]
+                    },
+                    {
+                      "page": 4,
+                      "bbox": [
+                        69,
+                        405.6,
+                        515.4,
+                        505.6
+                      ]
+                    }
+                  ],
+                  "text": [
+                    "Our insurance business also delivered a major increase in earnings, led by the performance of GEICO. In five years, Todd Combs has reshaped GEICO in a major way, increasing efficiency and bringing underwriting practices up to date. GEICO was a long-held gem that needed major repolishing, and Todd has worked tirelessly in getting the job done. Though not yet complete, the 2024 improvement was spectacular.",
+                    "Late in the year we increased our ownership of the utility operation from about 92% to 100% at a cost of roughly $3.9 billion, of which $2.9 billion was paid in cash with a balance in Berkshire \u201cB\u201d shares. * * * * * * * * * * * * All told, we recorded operating earnings of $47.4 billion in 2024. We regularly \u2013 endlessly, some readers may groan \u2013 emphasize this measure rather than the GAAP-mandated earnings that are reported on page K-68."
+                  ],
+                  "rows": []
+                },
+                "elementIds": [
+                  "e31",
+                  "e32",
+                  "e33",
+                  "e34",
+                  "e35",
+                  "e36",
+                  "e37"
+                ]
+              }
+            },
+            {
+              "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+              "title": "berkshire-2024-letter-excerpt.pdf",
+              "quote": "If Berkshire had sent the Treasury a $1 million check every 20 minutes throughout all of 2024 \u2013 visualize 366 days and nights because 2024 was a leap year \u2013 we still would have owed the federal government a significant sum at yearend. Indeed, it would be well into January before the Treasury would tell us that we could take a short breather, get some sleep, and prepare for our 2025 tax payments.\n\nWhere Your Money Is\n\nBerkshire\u2019s equity activity is ambidextrous. In one hand we own control of many businesses, holding at least 80% of the investee\u2019s shares. Generally, we own 100%. These 189 subsidiaries have similarities to marketable common stocks but are far from identical. The collection is worth many hundreds of billions and includes a few rare gems, many good-but-far-from-fabulous businesses and some laggards that have been disappointments. We own nothing that is a major drag, but we have a number that I should not have purchased.\n\nIn the other hand, we own a small percentage of a dozen or so very large and highly profitable businesses with household names such as Apple, American Express, Coca-Cola and Moody\u2019s. Many of these companies earn very high returns on the net tangible equity required for their operations. At yearend, our partial-ownership holdings were valued at $272 billion. Understandably, really outstanding businesses are very seldom offered in their entirety, but small fractions of these gems can be purchased Monday through Friday on Wall Street and, very occasionally, they sell at bargain prices.\n\nWe are impartial in our choice of equity vehicles, investing in either variety based upon where we can best deploy your (and my family\u2019s) savings. Often, nothing looks compelling; very infrequently we find ourselves knee-deep in opportunities. Greg has vividly shown his ability to act at such times as did Charlie.\n\n6",
+              "start": 12888,
+              "end": 14744,
+              "status": null,
+              "record": null,
+              "binding": "unsegmented",
+              "contextOnly": true,
+              "location": {
+                "pages": [
+                  6
+                ],
+                "boxes": null,
+                "focus": {
+                  "elementIds": [
+                    "e57"
+                  ],
+                  "pages": [
+                    6
+                  ],
+                  "regions": [
+                    {
+                      "page": 6,
+                      "bbox": [
+                        69,
+                        449.6,
+                        516.4,
+                        545.7
+                      ]
+                    }
+                  ],
+                  "text": [
+                    "In the other hand, we own a small percentage of a dozen or so very large and highly profitable businesses with household names such as Apple, American Express, Coca-Cola and Moody\u2019s. Many of these companies earn very high returns on the net tangible equity required for their operations. At yearend, our partial-ownership holdings were valued at $272 billion. Understandably, really outstanding businesses are very seldom offered in their entirety, but small fractions of these gems can be purchased Monday through Friday on Wall Street and, very occasionally, they sell at bargain prices."
+                  ],
+                  "rows": []
+                },
+                "elementIds": [
+                  "e54",
+                  "e55",
+                  "e56",
+                  "e57",
+                  "e58",
+                  "e59"
+                ]
+              }
+            }
+          ]
+        },
+        "answer": "From the document: \u201cOur insurance business also delivered a major increase in earnings, led by the performance of GEICO. In five years, Todd Combs has reshaped GEICO in a major way, increasing efficiency and bringing underwriting practices up to date. GEICO was a long-held gem that needed major rep\u2026\u201d (and 1 more cited passage)",
+        "status": "quoted",
+        "retrieval": {
+          "text": "Relevant source excerpts\n\nOur insurance business also delivered a major increase in earnings, led by the performance of GEICO. In five years, Todd Combs has reshaped GEICO in a major way, increasing efficiency and bringing underwriting practices up to date. GEICO was a long-held gem that needed major repolishing, and Todd has worked tirelessly in getting the job done. Though not yet complete, the 2024 improvement was spectacular.\n\nLate in the year we increased our ownership of the utility operation from about 92% to 100% at a cost of roughly $3.9 billion, of which $2.9 billion was paid in cash with a balance in Berkshire \u201cB\u201d shares. * * * * * * * * * * * * All told, we recorded operating earnings of $47.4 billion in\u2026\n[Source 1]\n\nIf Berkshire had sent the Treasury a $1 million check every 20 minutes throughout all of 2024 \u2013 visualize 366 days and nights because 2024 was a leap year \u2013 we still would have owed the federal government a significant sum at yearend. Indeed, it would be well into January before the Treasury would tell us that we could take a short breather, get some sleep, and prepare for our 2025 tax payments.\n\nIn the other hand, we own a small percentage of a dozen or so very large and highly profitable businesses with household names such as Apple, American Express, Coca-Cola and Moody\u2019s. Many of these companies earn very high returns on the net tangible equity required for their operations. At yearend,\u2026\n[Source 2]\n\nThese are retrieved passages, not a generated recommendation.",
+          "status": null
+        },
+        "evidence": [
+          {
+            "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+            "title": "berkshire-2024-letter-excerpt.pdf",
+            "quote": "Our insurance business also delivered a major increase in earnings, led by the performance of GEICO. In five years, Todd Combs has reshaped GEICO in a major way, increasing efficiency and bringing underwriting practices up to date. GEICO was a long-held gem that needed major repolishing, and Todd has worked tirelessly in getting the job done. Though not yet complete, the 2024 improvement was spectacular.\n\nIn general, property-casualty (\u201cP/C\u201d) insurance pricing strengthened during 2024, reflecting a major increase in damage from convective storms. Climate change may have been announcing its arrival. However, no \u201cmonster\u201d event occurred during 2024. Someday, any day, a truly staggering insurance loss will occur \u2013 and there is no guarantee that there will be only one per annum.\n\nThe P/C business is so central to Berkshire that it warrants a further discussion that appears later in this letter.\n\nBerkshire\u2019s railroad and utility operations, our two largest businesses outside of insurance, improved their aggregate earnings. Both, however, have much left to accomplish.\n\nLate in the year we increased our ownership of the utility operation from about 92% to 100% at a cost of roughly $3.9 billion, of which $2.9 billion was paid in cash with a balance in Berkshire \u201cB\u201d shares. * * * * * * * * * * * * All told, we recorded operating earnings of $47.4 billion in 2024. We regularly \u2013 endlessly, some readers may groan \u2013 emphasize this measure rather than the GAAP-mandated earnings that are reported on page K-68.\n\nOur measure excludes capital gains or losses on the stocks and bonds we own, whether realized or unrealized. Over time, we think it highly likely that gains will prevail \u2013 why else would we buy these securities? \u2013 though the year-by-year numbers will swing wildly and unpredictably. Our horizon for such commitments is almost always far longer than a single year. In many, our thinking involves decades. These long-termers are the purchases that sometimes make the cash register ring like church bells.\n\n4",
+            "start": 7476,
+            "end": 9504,
+            "status": null,
+            "record": null,
+            "binding": "unsegmented",
+            "contextOnly": true,
+            "location": {
+              "pages": [
+                4
+              ],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e31",
+                  "e35"
+                ],
+                "pages": [
+                  4
+                ],
+                "regions": [
+                  {
+                    "page": 4,
+                    "bbox": [
+                      69,
+                      161.6,
+                      507.4,
+                      229.6
+                    ]
+                  },
+                  {
+                    "page": 4,
+                    "bbox": [
+                      69,
+                      405.6,
+                      515.4,
+                      505.6
+                    ]
+                  }
+                ],
+                "text": [
+                  "Our insurance business also delivered a major increase in earnings, led by the performance of GEICO. In five years, Todd Combs has reshaped GEICO in a major way, increasing efficiency and bringing underwriting practices up to date. GEICO was a long-held gem that needed major repolishing, and Todd has worked tirelessly in getting the job done. Though not yet complete, the 2024 improvement was spectacular.",
+                  "Late in the year we increased our ownership of the utility operation from about 92% to 100% at a cost of roughly $3.9 billion, of which $2.9 billion was paid in cash with a balance in Berkshire \u201cB\u201d shares. * * * * * * * * * * * * All told, we recorded operating earnings of $47.4 billion in 2024. We regularly \u2013 endlessly, some readers may groan \u2013 emphasize this measure rather than the GAAP-mandated earnings that are reported on page K-68."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e31",
+                "e32",
+                "e33",
+                "e34",
+                "e35",
+                "e36",
+                "e37"
+              ]
+            }
+          },
+          {
+            "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+            "title": "berkshire-2024-letter-excerpt.pdf",
+            "quote": "If Berkshire had sent the Treasury a $1 million check every 20 minutes throughout all of 2024 \u2013 visualize 366 days and nights because 2024 was a leap year \u2013 we still would have owed the federal government a significant sum at yearend. Indeed, it would be well into January before the Treasury would tell us that we could take a short breather, get some sleep, and prepare for our 2025 tax payments.\n\nWhere Your Money Is\n\nBerkshire\u2019s equity activity is ambidextrous. In one hand we own control of many businesses, holding at least 80% of the investee\u2019s shares. Generally, we own 100%. These 189 subsidiaries have similarities to marketable common stocks but are far from identical. The collection is worth many hundreds of billions and includes a few rare gems, many good-but-far-from-fabulous businesses and some laggards that have been disappointments. We own nothing that is a major drag, but we have a number that I should not have purchased.\n\nIn the other hand, we own a small percentage of a dozen or so very large and highly profitable businesses with household names such as Apple, American Express, Coca-Cola and Moody\u2019s. Many of these companies earn very high returns on the net tangible equity required for their operations. At yearend, our partial-ownership holdings were valued at $272 billion. Understandably, really outstanding businesses are very seldom offered in their entirety, but small fractions of these gems can be purchased Monday through Friday on Wall Street and, very occasionally, they sell at bargain prices.\n\nWe are impartial in our choice of equity vehicles, investing in either variety based upon where we can best deploy your (and my family\u2019s) savings. Often, nothing looks compelling; very infrequently we find ourselves knee-deep in opportunities. Greg has vividly shown his ability to act at such times as did Charlie.\n\n6",
+            "start": 12888,
+            "end": 14744,
+            "status": null,
+            "record": null,
+            "binding": "unsegmented",
+            "contextOnly": true,
+            "location": {
+              "pages": [
+                6
+              ],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e57"
+                ],
+                "pages": [
+                  6
+                ],
+                "regions": [
+                  {
+                    "page": 6,
+                    "bbox": [
+                      69,
+                      449.6,
+                      516.4,
+                      545.7
+                    ]
+                  }
+                ],
+                "text": [
+                  "In the other hand, we own a small percentage of a dozen or so very large and highly profitable businesses with household names such as Apple, American Express, Coca-Cola and Moody\u2019s. Many of these companies earn very high returns on the net tangible equity required for their operations. At yearend, our partial-ownership holdings were valued at $272 billion. Understandably, really outstanding businesses are very seldom offered in their entirety, but small fractions of these gems can be purchased Monday through Friday on Wall Street and, very occasionally, they sell at bargain prices."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e54",
+                "e55",
+                "e56",
+                "e57",
+                "e58",
+                "e59"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "question": "Explain the difference between net earnings and operating earnings in this report. Which one does Buffett suggest focusing on and why?",
+      "answer": {
+        "question": "Explain the difference between net earnings and operating earnings in this report. Which one does Buffett suggest focusing on and why?",
+        "lead": null,
+        "visual": null,
+        "also": [],
+        "closest": null,
+        "semantic": {
+          "intent": "WHY",
+          "lang": "en",
+          "steps": []
+        },
+        "final": {
+          "text": "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.",
+          "verdict": "UNKNOWN",
+          "kind": "abstained",
+          "from": "none",
+          "citations": []
+        },
+        "answer": "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.",
+        "status": "abstained",
+        "retrieval": {
+          "text": "The documents do not establish an answer to this question: the closest passages do not contain the asked fact. They are on screen for review.",
+          "status": null
+        },
+        "evidence": []
+      }
+    },
+    {
+      "question": "Who was Pete Liegl, why did he sell Forest River to Berkshire, and what was the incentive arrangement?",
+      "answer": {
+        "question": "Who was Pete Liegl, why did he sell Forest River to Berkshire, and what was the incentive arrangement?",
+        "lead": {
+          "text": "The writer said that Pete, the 100% owner of Forest River, specifically wanted to sell to Berkshire. That's from berkshire 2024 letter excerpt.",
+          "verdict": "QUOTED",
+          "field": null,
+          "citations": [
+            {
+              "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+              "title": "berkshire-2024-letter-excerpt.pdf",
+              "quote": "A decent batting average in personnel decisions is all that can be hoped for. The cardinal sin is delaying the correction of mistakes or what Charlie Munger called \u201cthumb-sucking.\u201d Problems, he would tell me, cannot be wished away. They require action, however uncomfortable that may be. * * * * * * * * * * * * During the 2019-23 period, I have used the words \u201cmistake\u201d or \u201cerror\u201d 16 times in my letters to you. Many other huge companies have never used either word over that span. Amazon, I should acknowledge, made some brutally candid observations in its 2021 letter. Elsewhere, it has generally been happy talk and pictures.\n\n1\n\nI have also been a director of large public companies at which \u201cmistake\u201d or \u201cwrong\u201d were forbidden words at board meetings or analyst calls. That taboo, implying managerial perfection, always made me nervous (though, at times, there could be legal issues that make limited discussion advisable. We live in a very litigious society.)\n\n* * * * * * * * * * * * At 94, it won\u2019t be long before Greg Abel replaces me as CEO and will be writing the annual letters. Greg shares the Berkshire creed that a \u201creport\u201d is what a Berkshire CEO annually owes to owners. And he also understands that if you start fooling your shareholders, you will soon believe your own baloney and be fooling yourself as well.\n\nPete Liegl \u2013 One of a Kind\n\nLet me pause to tell you the remarkable story of Pete Liegl, a man unknown to most Berkshire shareholders but one who contributed many billions to their aggregate wealth. Pete died in November, still working at 80.\n\nI first heard of Forest River \u2013 the Indiana company Pete founded and managed \u2013 on June 21, 2005. On that day I received a letter from an intermediary detailing relevant data about the company, a recreational vehicle (\u201cRV\u201d) manufacturer. The writer said that Pete, the 100% owner of Forest River, specifically wanted to sell to Berkshire. He also told me the price that Pete expected to receive. I liked this no-nonsense approach.",
+              "start": 1536,
+              "end": 3540,
+              "status": null,
+              "record": null,
+              "binding": null,
+              "contextOnly": null,
+              "location": {
+                "pages": [
+                  1,
+                  2
+                ],
+                "boxes": null,
+                "focus": {
+                  "elementIds": [
+                    "e15"
+                  ],
+                  "pages": [
+                    2
+                  ],
+                  "regions": [
+                    {
+                      "page": 2,
+                      "bbox": [
+                        69,
+                        299.6,
+                        519.3,
+                        367.6
+                      ]
+                    }
+                  ],
+                  "text": [
+                    "I first heard of Forest River \u2013 the Indiana company Pete founded and managed \u2013 on June 21, 2005. On that day I received a letter from an intermediary detailing relevant data about the company, a recreational vehicle (\u201cRV\u201d) manufacturer. The writer said that Pete, the 100% owner of Forest River, specifically wanted to sell to Berkshire. He also told me the price that Pete expected to receive. I liked this no-nonsense approach."
+                  ],
+                  "rows": []
+                },
+                "elementIds": [
+                  "e9",
+                  "e10",
+                  "e11",
+                  "e12",
+                  "e13",
+                  "e14",
+                  "e15"
+                ]
+              }
+            }
+          ],
+          "background": null,
+          "interpretedAs": null,
+          "origin": "engine",
+          "opener": "Here's the line I found.",
+          "action": null
+        },
+        "visual": null,
+        "also": [],
+        "closest": null,
+        "semantic": {
+          "intent": "WHY",
+          "lang": "en",
+          "steps": []
+        },
+        "final": {
+          "text": "The writer said that Pete, the 100% owner of Forest River, specifically wanted to sell to Berkshire. That's from berkshire 2024 letter excerpt.",
+          "verdict": "QUOTED",
+          "kind": "answered",
+          "from": "lead",
+          "citations": [
+            {
+              "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+              "title": "berkshire-2024-letter-excerpt.pdf",
+              "quote": "A decent batting average in personnel decisions is all that can be hoped for. The cardinal sin is delaying the correction of mistakes or what Charlie Munger called \u201cthumb-sucking.\u201d Problems, he would tell me, cannot be wished away. They require action, however uncomfortable that may be. * * * * * * * * * * * * During the 2019-23 period, I have used the words \u201cmistake\u201d or \u201cerror\u201d 16 times in my letters to you. Many other huge companies have never used either word over that span. Amazon, I should acknowledge, made some brutally candid observations in its 2021 letter. Elsewhere, it has generally been happy talk and pictures.\n\n1\n\nI have also been a director of large public companies at which \u201cmistake\u201d or \u201cwrong\u201d were forbidden words at board meetings or analyst calls. That taboo, implying managerial perfection, always made me nervous (though, at times, there could be legal issues that make limited discussion advisable. We live in a very litigious society.)\n\n* * * * * * * * * * * * At 94, it won\u2019t be long before Greg Abel replaces me as CEO and will be writing the annual letters. Greg shares the Berkshire creed that a \u201creport\u201d is what a Berkshire CEO annually owes to owners. And he also understands that if you start fooling your shareholders, you will soon believe your own baloney and be fooling yourself as well.\n\nPete Liegl \u2013 One of a Kind\n\nLet me pause to tell you the remarkable story of Pete Liegl, a man unknown to most Berkshire shareholders but one who contributed many billions to their aggregate wealth. Pete died in November, still working at 80.\n\nI first heard of Forest River \u2013 the Indiana company Pete founded and managed \u2013 on June 21, 2005. On that day I received a letter from an intermediary detailing relevant data about the company, a recreational vehicle (\u201cRV\u201d) manufacturer. The writer said that Pete, the 100% owner of Forest River, specifically wanted to sell to Berkshire. He also told me the price that Pete expected to receive. I liked this no-nonsense approach.",
+              "start": 1536,
+              "end": 3540,
+              "status": null,
+              "record": null,
+              "binding": null,
+              "contextOnly": null,
+              "location": {
+                "pages": [
+                  1,
+                  2
+                ],
+                "boxes": null,
+                "focus": {
+                  "elementIds": [
+                    "e15"
+                  ],
+                  "pages": [
+                    2
+                  ],
+                  "regions": [
+                    {
+                      "page": 2,
+                      "bbox": [
+                        69,
+                        299.6,
+                        519.3,
+                        367.6
+                      ]
+                    }
+                  ],
+                  "text": [
+                    "I first heard of Forest River \u2013 the Indiana company Pete founded and managed \u2013 on June 21, 2005. On that day I received a letter from an intermediary detailing relevant data about the company, a recreational vehicle (\u201cRV\u201d) manufacturer. The writer said that Pete, the 100% owner of Forest River, specifically wanted to sell to Berkshire. He also told me the price that Pete expected to receive. I liked this no-nonsense approach."
+                  ],
+                  "rows": []
+                },
+                "elementIds": [
+                  "e9",
+                  "e10",
+                  "e11",
+                  "e12",
+                  "e13",
+                  "e14",
+                  "e15"
+                ]
+              }
+            }
+          ]
+        },
+        "answer": "The writer said that Pete, the 100% owner of Forest River, specifically wanted to sell to Berkshire. That's from berkshire 2024 letter excerpt.",
+        "status": "answered",
+        "retrieval": {
+          "text": "Relevant source excerpts\n\nLet me pause to tell you the remarkable story of Pete Liegl, a man unknown to most Berkshire shareholders but one who contributed many billions to their aggregate wealth. Pete died in November, still working at 80.\n\nI first heard of Forest River \u2013 the Indiana company Pete founded and managed \u2013 on June 21, 2005. On that day I received a letter from an intermediary detailing relevant data about the company, a recreational vehicle (\u201cRV\u201d) manufacturer. The writer said that Pete, the 100% owner of Forest River, specifically wanted to sell to Berkshire. He also told me the price that Pete expected to receive. I liked this no-nonsense approach.\n[Source 1]\n\nPete next mentioned that he owned some real estate that was leased to Forest River and had not been covered in the June 21 letter. Within a few minutes, we arrived at a price for those assets as I expressed no need for appraisal by Berkshire but would simply accept his valuation.\n\nPete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK\u2026\n[Source 2]\n\nThese are retrieved passages, not a generated recommendation.",
+          "status": null
+        },
+        "evidence": [
+          {
+            "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+            "title": "berkshire-2024-letter-excerpt.pdf",
+            "quote": "A decent batting average in personnel decisions is all that can be hoped for. The cardinal sin is delaying the correction of mistakes or what Charlie Munger called \u201cthumb-sucking.\u201d Problems, he would tell me, cannot be wished away. They require action, however uncomfortable that may be. * * * * * * * * * * * * During the 2019-23 period, I have used the words \u201cmistake\u201d or \u201cerror\u201d 16 times in my letters to you. Many other huge companies have never used either word over that span. Amazon, I should acknowledge, made some brutally candid observations in its 2021 letter. Elsewhere, it has generally been happy talk and pictures.\n\n1\n\nI have also been a director of large public companies at which \u201cmistake\u201d or \u201cwrong\u201d were forbidden words at board meetings or analyst calls. That taboo, implying managerial perfection, always made me nervous (though, at times, there could be legal issues that make limited discussion advisable. We live in a very litigious society.)\n\n* * * * * * * * * * * * At 94, it won\u2019t be long before Greg Abel replaces me as CEO and will be writing the annual letters. Greg shares the Berkshire creed that a \u201creport\u201d is what a Berkshire CEO annually owes to owners. And he also understands that if you start fooling your shareholders, you will soon believe your own baloney and be fooling yourself as well.\n\nPete Liegl \u2013 One of a Kind\n\nLet me pause to tell you the remarkable story of Pete Liegl, a man unknown to most Berkshire shareholders but one who contributed many billions to their aggregate wealth. Pete died in November, still working at 80.\n\nI first heard of Forest River \u2013 the Indiana company Pete founded and managed \u2013 on June 21, 2005. On that day I received a letter from an intermediary detailing relevant data about the company, a recreational vehicle (\u201cRV\u201d) manufacturer. The writer said that Pete, the 100% owner of Forest River, specifically wanted to sell to Berkshire. He also told me the price that Pete expected to receive. I liked this no-nonsense approach.",
+            "start": 1536,
+            "end": 3540,
+            "status": null,
+            "record": null,
+            "binding": "unsegmented",
+            "contextOnly": true,
+            "location": {
+              "pages": [
+                1,
+                2
+              ],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e15"
+                ],
+                "pages": [
+                  2
+                ],
+                "regions": [
+                  {
+                    "page": 2,
+                    "bbox": [
+                      69,
+                      299.6,
+                      519.3,
+                      367.6
+                    ]
+                  }
+                ],
+                "text": [
+                  "I first heard of Forest River \u2013 the Indiana company Pete founded and managed \u2013 on June 21, 2005. On that day I received a letter from an intermediary detailing relevant data about the company, a recreational vehicle (\u201cRV\u201d) manufacturer. The writer said that Pete, the 100% owner of Forest River, specifically wanted to sell to Berkshire. He also told me the price that Pete expected to receive. I liked this no-nonsense approach."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e9",
+                "e10",
+                "e11",
+                "e12",
+                "e13",
+                "e14",
+                "e15"
+              ]
+            }
+          },
+          {
+            "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+            "title": "berkshire-2024-letter-excerpt.pdf",
+            "quote": "I did some checking with RV dealers, liked what I learned and arranged a June 28th meeting in Omaha. Pete brought along his wife, Sharon, and daughter, Lisa. When we met, Pete assured me that he wanted to keep running the business but would feel more comfortable if he could assure financial security for his family.\n\nPete next mentioned that he owned some real estate that was leased to Forest River and had not been covered in the June 21 letter. Within a few minutes, we arrived at a price for those assets as I expressed no need for appraisal by Berkshire but would simply accept his valuation.\n\nThen we arrived at the other point that needed clarity. I asked Pete what his compensation should be, adding that whatever he said, I would accept. (This, I should add, is not an approach I recommend for general use.)\n\nPete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem.\n\n2\n\nThe four of us then went to dinner at Omaha\u2019s Happy Hollow Club and lived happily ever after. During the next 19 years, Pete shot the lights out. No competitor came close to his performance. * * * * * * * * * * * * Every company doesn\u2019t have an easy-to-understand business and there are very few owners or managers like Pete. And, of course, I expect to make my share of mistakes about the businesses Berkshire buys and sometimes err in evaluating the sort of person with whom I\u2019m dealing.",
+            "start": 3542,
+            "end": 5507,
+            "status": null,
+            "record": null,
+            "binding": "unsegmented",
+            "contextOnly": true,
+            "location": {
+              "pages": [
+                2,
+                3
+              ],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e17",
+                  "e19"
+                ],
+                "pages": [
+                  2
+                ],
+                "regions": [
+                  {
+                    "page": 2,
+                    "bbox": [
+                      69,
+                      449.6,
+                      518.9,
+                      489.6
+                    ]
+                  },
+                  {
+                    "page": 2,
+                    "bbox": [
+                      69,
+                      557.6,
+                      517.4,
+                      653.6
+                    ]
+                  }
+                ],
+                "text": [
+                  "Pete next mentioned that he owned some real estate that was leased to Forest River and had not been covered in the June 21 letter. Within a few minutes, we arrived at a price for those assets as I expressed no need for appraisal by Berkshire but would simply accept his valuation.",
+                  "Pete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e16",
+                "e17",
+                "e18",
+                "e19",
+                "e20",
+                "e21"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "question": "If Forest River made a major acquisition, would Pete automatically keep the same bonus calculation? What does the document establish and leave undefined?",
+      "answer": {
+        "question": "If Forest River made a major acquisition, would Pete automatically keep the same bonus calculation? What does the document establish and leave undefined?",
+        "lead": null,
+        "visual": null,
+        "also": [],
+        "closest": null,
+        "semantic": {
+          "intent": "LOOKUP",
+          "lang": "en",
+          "steps": []
+        },
+        "final": {
+          "text": "From the document: \u201cPete next mentioned that he owned some real estate that was leased to Forest River and had not been covered in the June 21 letter. Within a few minutes, we arrived at a price for those assets as I expressed no need for appraisal by Berkshire but would simply accept his valuation\u2026\u201d",
+          "verdict": "QUOTED",
+          "kind": "quoted",
+          "from": "evidence",
+          "citations": [
+            {
+              "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+              "title": "berkshire-2024-letter-excerpt.pdf",
+              "quote": "I did some checking with RV dealers, liked what I learned and arranged a June 28th meeting in Omaha. Pete brought along his wife, Sharon, and daughter, Lisa. When we met, Pete assured me that he wanted to keep running the business but would feel more comfortable if he could assure financial security for his family.\n\nPete next mentioned that he owned some real estate that was leased to Forest River and had not been covered in the June 21 letter. Within a few minutes, we arrived at a price for those assets as I expressed no need for appraisal by Berkshire but would simply accept his valuation.\n\nThen we arrived at the other point that needed clarity. I asked Pete what his compensation should be, adding that whatever he said, I would accept. (This, I should add, is not an approach I recommend for general use.)\n\nPete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem.\n\n2\n\nThe four of us then went to dinner at Omaha\u2019s Happy Hollow Club and lived happily ever after. During the next 19 years, Pete shot the lights out. No competitor came close to his performance. * * * * * * * * * * * * Every company doesn\u2019t have an easy-to-understand business and there are very few owners or managers like Pete. And, of course, I expect to make my share of mistakes about the businesses Berkshire buys and sometimes err in evaluating the sort of person with whom I\u2019m dealing.",
+              "start": 3542,
+              "end": 5507,
+              "status": null,
+              "record": null,
+              "binding": "unsegmented",
+              "contextOnly": true,
+              "location": {
+                "pages": [
+                  2,
+                  3
+                ],
+                "boxes": null,
+                "focus": {
+                  "elementIds": [
+                    "e19"
+                  ],
+                  "pages": [
+                    2
+                  ],
+                  "regions": [
+                    {
+                      "page": 2,
+                      "bbox": [
+                        69,
+                        557.6,
+                        517.4,
+                        653.6
+                      ]
+                    }
+                  ],
+                  "text": [
+                    "Pete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem."
+                  ],
+                  "rows": []
+                },
+                "elementIds": [
+                  "e16",
+                  "e17",
+                  "e18",
+                  "e19",
+                  "e20",
+                  "e21"
+                ]
+              }
+            }
+          ]
+        },
+        "answer": "From the document: \u201cPete next mentioned that he owned some real estate that was leased to Forest River and had not been covered in the June 21 letter. Within a few minutes, we arrived at a price for those assets as I expressed no need for appraisal by Berkshire but would simply accept his valuation\u2026\u201d",
+        "status": "quoted",
+        "retrieval": {
+          "text": "Relevant source excerpts\n\nPete next mentioned that he owned some real estate that was leased to Forest River and had not been covered in the June 21 letter. Within a few minutes, we arrived at a price for those assets as I expressed no need for appraisal by Berkshire but would simply accept his valuation.\n\nPete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK\u2026\n[Source 1]\n\nThese are retrieved passages, not a generated recommendation.",
+          "status": null
+        },
+        "evidence": [
+          {
+            "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+            "title": "berkshire-2024-letter-excerpt.pdf",
+            "quote": "I did some checking with RV dealers, liked what I learned and arranged a June 28th meeting in Omaha. Pete brought along his wife, Sharon, and daughter, Lisa. When we met, Pete assured me that he wanted to keep running the business but would feel more comfortable if he could assure financial security for his family.\n\nPete next mentioned that he owned some real estate that was leased to Forest River and had not been covered in the June 21 letter. Within a few minutes, we arrived at a price for those assets as I expressed no need for appraisal by Berkshire but would simply accept his valuation.\n\nThen we arrived at the other point that needed clarity. I asked Pete what his compensation should be, adding that whatever he said, I would accept. (This, I should add, is not an approach I recommend for general use.)\n\nPete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem.\n\n2\n\nThe four of us then went to dinner at Omaha\u2019s Happy Hollow Club and lived happily ever after. During the next 19 years, Pete shot the lights out. No competitor came close to his performance. * * * * * * * * * * * * Every company doesn\u2019t have an easy-to-understand business and there are very few owners or managers like Pete. And, of course, I expect to make my share of mistakes about the businesses Berkshire buys and sometimes err in evaluating the sort of person with whom I\u2019m dealing.",
+            "start": 3542,
+            "end": 5507,
+            "status": null,
+            "record": null,
+            "binding": "unsegmented",
+            "contextOnly": true,
+            "location": {
+              "pages": [
+                2,
+                3
+              ],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e19"
+                ],
+                "pages": [
+                  2
+                ],
+                "regions": [
+                  {
+                    "page": 2,
+                    "bbox": [
+                      69,
+                      557.6,
+                      517.4,
+                      653.6
+                    ]
+                  }
+                ],
+                "text": [
+                  "Pete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e16",
+                "e17",
+                "e18",
+                "e19",
+                "e20",
+                "e21"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "question": "Did Pete agree to sell before Buffett first met him? Walk through the sequence and distinguish what is known from what is not stated.",
+      "answer": {
+        "question": "Did Pete agree to sell before Buffett first met him? Walk through the sequence and distinguish what is known from what is not stated.",
+        "lead": null,
+        "visual": null,
+        "also": [],
+        "closest": null,
+        "semantic": {
+          "intent": "COMPARE",
+          "lang": "en",
+          "steps": []
+        },
+        "final": {
+          "text": "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.",
+          "verdict": "UNKNOWN",
+          "kind": "abstained",
+          "from": "none",
+          "citations": []
+        },
+        "answer": "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.",
+        "status": "abstained",
+        "retrieval": {
+          "text": "The documents do not establish an answer to this question: the closest passages do not contain the asked fact. They are on screen for review.",
+          "status": null
+        },
+        "evidence": []
+      }
+    },
+    {
+      "question": "Does this report establish that Greg Abel was already CEO during 2024, or was Buffett describing a future succession?",
+      "answer": {
+        "question": "Does this report establish that Greg Abel was already CEO during 2024, or was Buffett describing a future succession?",
+        "lead": null,
+        "visual": null,
+        "also": [],
+        "closest": null,
+        "semantic": {
+          "intent": "LOOKUP",
+          "lang": "en",
+          "steps": []
+        },
+        "final": {
+          "text": "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.",
+          "verdict": "UNKNOWN",
+          "kind": "abstained",
+          "from": "none",
+          "citations": []
+        },
+        "answer": "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.",
+        "status": "abstained",
+        "retrieval": {
+          "text": "The documents do not establish an answer to this question: the closest passages do not contain the asked fact. They are on screen for review.",
+          "status": null
+        },
+        "evidence": []
+      }
+    },
+    {
+      "question": "Summarize this annual report for an owner, separating operating results, investment accounting and capital allocation.",
+      "answer": {
+        "question": "Summarize this annual report for an owner, separating operating results, investment accounting and capital allocation.",
+        "lead": null,
+        "visual": null,
+        "also": [],
+        "closest": null,
+        "semantic": {
+          "intent": "SUMMARY",
+          "lang": "en",
+          "steps": []
+        },
+        "final": {
+          "text": "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.",
+          "verdict": "UNKNOWN",
+          "kind": "abstained",
+          "from": "none",
+          "citations": []
+        },
+        "answer": "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.",
+        "status": "abstained",
+        "retrieval": {
+          "text": "The documents do not establish an answer to this question: the closest passages do not contain the asked fact. They are on screen for review.",
+          "status": null
+        },
+        "evidence": []
+      }
+    },
+    {
+      "question": "What was the exact dollar earnings threshold X in Pete\u2019s bonus agreement?",
+      "answer": {
+        "question": "What was the exact dollar earnings threshold X in Pete\u2019s bonus agreement?",
+        "lead": null,
+        "visual": null,
+        "also": [],
+        "closest": null,
+        "semantic": {
+          "intent": "LOOKUP",
+          "lang": "en",
+          "steps": []
+        },
+        "final": {
+          "text": "From the document: \u201cPete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he name\u2026\u201d",
+          "verdict": "QUOTED",
+          "kind": "quoted",
+          "from": "evidence",
+          "citations": [
+            {
+              "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+              "title": "berkshire-2024-letter-excerpt.pdf",
+              "quote": "I did some checking with RV dealers, liked what I learned and arranged a June 28th meeting in Omaha. Pete brought along his wife, Sharon, and daughter, Lisa. When we met, Pete assured me that he wanted to keep running the business but would feel more comfortable if he could assure financial security for his family.\n\nPete next mentioned that he owned some real estate that was leased to Forest River and had not been covered in the June 21 letter. Within a few minutes, we arrived at a price for those assets as I expressed no need for appraisal by Berkshire but would simply accept his valuation.\n\nThen we arrived at the other point that needed clarity. I asked Pete what his compensation should be, adding that whatever he said, I would accept. (This, I should add, is not an approach I recommend for general use.)\n\nPete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem.\n\n2\n\nThe four of us then went to dinner at Omaha\u2019s Happy Hollow Club and lived happily ever after. During the next 19 years, Pete shot the lights out. No competitor came close to his performance. * * * * * * * * * * * * Every company doesn\u2019t have an easy-to-understand business and there are very few owners or managers like Pete. And, of course, I expect to make my share of mistakes about the businesses Berkshire buys and sometimes err in evaluating the sort of person with whom I\u2019m dealing.",
+              "start": 3542,
+              "end": 5507,
+              "status": null,
+              "record": null,
+              "binding": "unsegmented",
+              "contextOnly": true,
+              "location": {
+                "pages": [
+                  2,
+                  3
+                ],
+                "boxes": null,
+                "focus": {
+                  "elementIds": [
+                    "e19"
+                  ],
+                  "pages": [
+                    2
+                  ],
+                  "regions": [
+                    {
+                      "page": 2,
+                      "bbox": [
+                        69,
+                        557.6,
+                        517.4,
+                        653.6
+                      ]
+                    }
+                  ],
+                  "text": [
+                    "Pete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem."
+                  ],
+                  "rows": []
+                },
+                "elementIds": [
+                  "e16",
+                  "e17",
+                  "e18",
+                  "e19",
+                  "e20",
+                  "e21"
+                ]
+              }
+            }
+          ]
+        },
+        "answer": "From the document: \u201cPete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he name\u2026\u201d",
+        "status": "quoted",
+        "retrieval": {
+          "text": "Relevant source excerpts\n\nPete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem.\n\nThe four of us then went to dinner at Omaha\u2019s\u2026\n[Source 1]\n\nThese are retrieved passages, not a generated recommendation.",
+          "status": null
+        },
+        "evidence": [
+          {
+            "documentId": "dc88f9d6-518f-453e-95b3-c79a10e8e5bf",
+            "title": "berkshire-2024-letter-excerpt.pdf",
+            "quote": "I did some checking with RV dealers, liked what I learned and arranged a June 28th meeting in Omaha. Pete brought along his wife, Sharon, and daughter, Lisa. When we met, Pete assured me that he wanted to keep running the business but would feel more comfortable if he could assure financial security for his family.\n\nPete next mentioned that he owned some real estate that was leased to Forest River and had not been covered in the June 21 letter. Within a few minutes, we arrived at a price for those assets as I expressed no need for appraisal by Berkshire but would simply accept his valuation.\n\nThen we arrived at the other point that needed clarity. I asked Pete what his compensation should be, adding that whatever he said, I would accept. (This, I should add, is not an approach I recommend for general use.)\n\nPete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem.\n\n2\n\nThe four of us then went to dinner at Omaha\u2019s Happy Hollow Club and lived happily ever after. During the next 19 years, Pete shot the lights out. No competitor came close to his performance. * * * * * * * * * * * * Every company doesn\u2019t have an easy-to-understand business and there are very few owners or managers like Pete. And, of course, I expect to make my share of mistakes about the businesses Berkshire buys and sometimes err in evaluating the sort of person with whom I\u2019m dealing.",
+            "start": 3542,
+            "end": 5507,
+            "status": null,
+            "record": null,
+            "binding": "unsegmented",
+            "contextOnly": true,
+            "location": {
+              "pages": [
+                2,
+                3
+              ],
+              "boxes": null,
+              "focus": {
+                "elementIds": [
+                  "e19"
+                ],
+                "pages": [
+                  2
+                ],
+                "regions": [
+                  {
+                    "page": 2,
+                    "bbox": [
+                      69,
+                      557.6,
+                      517.4,
+                      653.6
+                    ]
+                  }
+                ],
+                "text": [
+                  "Pete paused as his wife, daughter and I leaned forward. Then he surprised us: \u201cWell, I looked at Berkshire\u2019s proxy statement and I wouldn\u2019t want to make more than my boss, so pay me $100,000 per year.\u201d After I picked myself off the floor, Pete added: \u201cBut we will earn X (he named a number) this year, and I would like an annual bonus of 10% of any earnings above what the company is now delivering.\u201d I replied: \u201cOK Pete, but if Forest River makes any significant acquisitions we will make an appropriate adjustment for the additional capital thus employed.\u201d I didn\u2019t define \u201cappropriate\u201d or \u201csignificant,\u201d but those vague terms never caused a problem."
+                ],
+                "rows": []
+              },
+              "elementIds": [
+                "e16",
+                "e17",
+                "e18",
+                "e19",
+                "e20",
+                "e21"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "provenance": {
+    "originalSha256": "6aa0a501680c50a57e0a1a2e841b46800e1fed828a8a7889d83d8eae7953e4bb",
+    "originalPages": 150,
+    "testedOriginalPages": [
+      5,
+      18
+    ],
+    "excerptPages": 14,
+    "excerptSha256": "8b46291c6e70d4293388b7ffac60dbc10fc34f683dfe0ee153feebfe117bc5ee",
+    "fullFileOutcome": "rejected too_many_pages (150 exceeds 60)",
+    "mode": "local deterministic with VM_GEMINI=off and VM_DENSE=off; no paid inference",
+    "classification": "first public-document diagnostic; questions exposed; not independent holdout"
+  }
+}

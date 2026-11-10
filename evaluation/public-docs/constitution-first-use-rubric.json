@@ -1,0 +1,12 @@
+{
+  "source": "https://www.archives.gov/founding-docs/constitution-transcript",
+  "sha256": "4828afac3b1dc6e0a6f694259834ef774f16e926e86cafebdca374d3efaeb80b",
+  "stage": "frozen before model run; first use in this implementation, not independent hidden evaluation",
+  "question": "According to Article I Section 7, when can a bill become law without the President signing it, and what exception can prevent that outcome? Does the text give a number for the year 2026 federal budget?",
+  "required": [
+    "ten Days, Sundays excepted, after presentation without return",
+    "unless Congress adjournment prevents return, then not law",
+    "the supplied constitutional text does not establish 2026 federal budget amount"
+  ],
+  "source_evidence": "If any Bill shall not be returned by the President within ten Days (Sundays excepted) after it shall have been presented to him, the Same shall be a Law, in like Manner as if he had signed it, unless the Congress by their Adjournment prevent its Return, in which Case it shall not be a Law."
+}

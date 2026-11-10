@@ -5,13 +5,17 @@
 // retrieval result underneath it. The public response used to expose both
 // as peers, so an agent reading `answer` could get "unresolved" while the
 // lead correctly said "50 ng/mL, corrected from 5". This module decides, in
-// one place, what the answer IS: the lead when there is one, otherwise the
-// cited passage, otherwise an honest abstention. Everything a person or an
+// one place, what the answer IS: the lead when there is one, otherwise an honest abstention
+// with related evidence kept separate. Everything a person or an
 // agent sees - typed text, spoken sentence, chart caption - derives from it.
 
 // What kind of answer each verdict is. Anything not listed is "answered".
 const KIND = {
+  PARTIAL_FIELDS: "partial",
+  PARTIAL_DOCUMENT: "partial",
+  SOURCE_OUTLINE: "partial",
   AMBIGUOUS_PATIENT: "clarify",
+  AMBIGUOUS: "clarify",
   CLARIFY: "clarify",
   NOT_COMPARABLE: "refused",
   UNBOUND_OWNER: "refused",
@@ -24,48 +28,64 @@ const KIND = {
   HOW_TO: "social",
 };
 
-const RETRIEVED = /Relevant source excerpts\n\n([\s\S]*?)\n\[Source 1\]/;
-
 export const ABSTAIN_TEXT =
-  "I don't see a supported answer to that in these documents.";
+  "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.";
 
-/** @typedef {"answered"|"clarify"|"refused"|"abstained"|"social"|"quoted"} FinalKind */
+/** @typedef {"answered"|"clarify"|"refused"|"abstained"|"social"|"quoted"|"partial"} FinalKind */
 
 /**
  * The single answer for a resolved question.
  * @param {{lead?: any, evidence?: any[]}} shown
  * @returns {{text: string, verdict: string, kind: FinalKind,
- *   citations: any[], from: "lead"|"evidence"|"none"}}
+ *   citations: any[], relatedEvidence?: any[], from: "lead"|"evidence"|"none",
+ *   coverage?: any, complete?: boolean}}
+ *
+ * `coverage` and `complete` are additive (whole-question-coverage.mjs). They
+ * do not change what `kind` means: an "answered" kind says the lead asserts
+ * a source-backed answer; `complete` says whether it was ESTABLISHED to
+ * cover the whole question. `complete: false` with coverage state
+ * "unverified" means coverage was not checked, not that an answer is wrong.
  */
 export function finalAnswer(shown) {
+  const result = finalAnswerCore(shown);
+  if (shown?.wholeQuestion)
+    return {
+      ...result,
+      coverage: shown.wholeQuestion,
+      complete: shown.wholeQuestion.complete === true,
+    };
+  return result;
+}
+
+function finalAnswerCore(shown) {
   const lead = shown?.lead ?? null;
   if (lead?.text) {
     const verdict = lead.verdict ?? "UNKNOWN";
+    const kind = KIND[verdict] ?? "answered";
+    const relatedEvidence =
+      kind === "abstained"
+        ? (shown?.evidence ?? []).filter((c) => c?.quote)
+        : [];
     return {
       text: lead.text,
       verdict,
-      kind: KIND[verdict] ?? "answered",
+      kind,
       citations: lead.citations ?? [],
+      ...(relatedEvidence.length ? { relatedEvidence } : {}),
       from: "lead",
     };
   }
   const ev = (shown?.evidence ?? []).filter((c) => c?.quote);
-  if (ev.length) {
-    // A citation quote can span a whole uploaded document; the retrieved
-    // passage names the lines the answer actually rests on, so prefer it.
-    const retrieved = RETRIEVED.exec(shown?.answer ?? "")?.[1]?.trim();
-    const q = String(retrieved || ev[0].quote)
-      .replace(/\s+/g, " ")
-      .trim();
-    const more = ev.length - 1;
+  if (ev.length)
     return {
-      text: `From the document: “${q.length > 280 ? q.slice(0, 279) + "…" : q}”${more ? ` (and ${more} more cited passage${more > 1 ? "s" : ""})` : ""}`,
-      verdict: "QUOTED",
-      kind: "quoted",
-      citations: ev,
+      text: "I found related source passages, but have not established an answer to the full question.",
+      verdict: "UNKNOWN",
+      kind: "abstained",
+      citations: [],
+      relatedEvidence: ev,
       from: "evidence",
     };
-  }
+
   return {
     text: ABSTAIN_TEXT,
     verdict: "UNKNOWN",

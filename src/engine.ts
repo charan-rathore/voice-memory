@@ -3,6 +3,7 @@ export { identifierRequest, lookupIdentifier } from "./identifier-support";
 export { explicitRecordRequest } from "./requested-support";
 import {
   missingRequestedSupport,
+  requestedCoverage,
   requestedSupportSpans,
   explicitRequestedRoots,
   explicitRecordRequest,
@@ -1468,7 +1469,27 @@ export function constrainRequestedEvidence(
   result: ReturnType<typeof answerFromRetrieval>,
 ) {
   result.requestedChecked = requestedSupportSpans(question, "") !== null;
+  result.requestedCoverage = requestedCoverage(question);
   if (!result.requestedChecked) return result;
+  if (result.requestedCoverage === "coordination_unresolved") {
+    // The complete original request outranks a positive single-field match,
+    // including requestedChecked callers that bypass semantic rescue.
+    result.reviewEvidence = result.evidence.length
+      ? result.evidence
+      : result.reviewEvidence;
+    result.evidence = [];
+    result.refused = true;
+    result.supported = false;
+    result.unresolved = true;
+    result.evidenceStatus = "insufficient";
+    result.requestedScoped = false;
+    result.partial = false;
+    result.partialNotice = null;
+    result.answer =
+      "I could not establish coverage of the whole request. The single-field lookup cannot settle coordinated requirements; inspect the related passages or ask each requirement separately.";
+    result.spoken = result.answer;
+    return result;
+  }
   const roots = bundle.sources.flatMap((source) =>
     explicitRequestedRoots(source.text),
   );
@@ -1640,6 +1661,10 @@ export function answerFromRetrieval(
     spoken: null as string | null,
     requestedScoped: false,
     requestedChecked: false,
+    requestedCoverage: "not_applicable" as
+      | "not_applicable"
+      | "single_field_only"
+      | "coordination_unresolved",
   };
 }
 export function draft(

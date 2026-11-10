@@ -1,0 +1,64 @@
+{
+  "source": "https://berkshirehathaway.com/2024ar/2024ar.pdf",
+  "range": "original PDF pages5-18",
+  "mode": "local direct general-document reader; public source only; no deployment",
+  "calls": 3,
+  "providerUsageBefore": 0.53979758,
+  "providerUsageAfter": 0.53979758,
+  "trialSpend": 0,
+  "remaining": 4.46020242,
+  "rows": [
+    {
+      "question": "Who was Pete Liegl, why did he sell Forest River to Berkshire, and what was the incentive arrangement?",
+      "ms": 9124,
+      "result": {
+        "text": "Who was Pete Liegl: Pete Liegl was the founder, manager, and 100% owner of Forest River, an Indiana recreational vehicle (RV) manufacturer.\n\nWho was Pete Liegl: He died in November at age 80 while still working, having contributed billions of dollars to Berkshire shareholders' wealth.\n\nwhy did he sell Forest River to Berkshire: Pete Liegl sold Forest River because he wanted to keep running the business while ensuring financial security for his family.\n\nwhat was the incentive arrangement: The incentive arrangement provided Pete Liegl with a base salary of $100,000 per year, an annual bonus of 10% on any earnings above what Forest River was delivering at the time, and an appropriate adjustment to capital if Forest River made significant acquisitions.",
+        "verdict": "DOCUMENT_ANSWER",
+        "citations": [
+          {
+            "sourceId": "b39f3f37-e289-4b00-9630-6d88ebe62ee5",
+            "title": "Berkshire 2024 letter, original PDF pages 5-18",
+            "hash": "cdaf81f4867fed19795176bf7e195f2f21cb1b85d8180aa6e3740c304682ad51",
+            "start": 3335,
+            "end": 3672,
+            "quote": "I first heard of Forest River – the Indiana company Pete founded and managed – on\nJune 21, 2005. On that day I received a letter from an intermediary detailing relevant data about\nthe company, a recreational vehicle (“RV”) manufacturer. The writer said that Pete, the 100%\nowner of Forest River, specifically wanted to sell to Berkshire."
+          },
+          {
+            "sourceId": "b39f3f37-e289-4b00-9630-6d88ebe62ee5",
+            "title": "Berkshire 2024 letter, original PDF pages 5-18",
+            "hash": "cdaf81f4867fed19795176bf7e195f2f21cb1b85d8180aa6e3740c304682ad51",
+            "start": 3112,
+            "end": 3326,
+            "quote": "Let me pause to tell you the remarkable story of Pete Liegl, a man unknown to most\nBerkshire shareholders but one who contributed many billions to their aggregate wealth. Pete\ndied in November, still working at 80."
+          },
+          {
+            "sourceId": "b39f3f37-e289-4b00-9630-6d88ebe62ee5",
+            "title": "Berkshire 2024 letter, original PDF pages 5-18",
+            "hash": "cdaf81f4867fed19795176bf7e195f2f21cb1b85d8180aa6e3740c304682ad51",
+            "start": 3931,
+            "end": 4089,
+            "quote": "When we met, Pete\nassured me that he wanted to keep running the business but would feel more comfortable if he\ncould assure financial security for his family."
+          },
+          {
+            "sourceId": "b39f3f37-e289-4b00-9630-6d88ebe62ee5",
+            "title": "Berkshire 2024 letter, original PDF pages 5-18",
+            "hash": "cdaf81f4867fed19795176bf7e195f2f21cb1b85d8180aa6e3740c304682ad51",
+            "start": 4671,
+            "end": 5173,
+            "quote": "Then he surprised us: “Well, I\nlooked at Berkshire’s proxy statement and I wouldn’t want to make more than my boss, so pay\nme $100,000 per year.” After I picked myself off the floor, Pete added: “But we will earn X (he\nnamed a number) this year, and I would like an annual bonus of 10% of any earnings above what\nthe company is now delivering.” I replied: “OK Pete, but if Forest River makes any significant\nacquisitions we will make an appropriate adjustment for the additional capital thus employed.”"
+          }
+        ],
+        "field": null,
+        "origin": "document-model-audited",
+        "limitations": [
+          "Model entailment audit is fallible; source verification is exact."
+        ]
+      }
+    },
+    {
+      "question": "What was the exact dollar earnings threshold X in Pete's bonus agreement, and how would an acquisition affect the agreement?",
+      "ms": 3004,
+      "result": null
+    }
+  ]
+}
