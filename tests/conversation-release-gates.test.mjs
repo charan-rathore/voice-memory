@@ -169,7 +169,10 @@ test("a shorter repeat never drops a later 'not approved' qualification", () => 
   const h = harness();
   const first = resolveConversationTurn(h.input("What is the fee?"));
   const state = commitConversationTurn(first.state, first.turn.turnId);
-  const repeat = resolveConversationTurn(h.input("say that again shorter"), state);
+  const repeat = resolveConversationTurn(
+    h.input("say that again shorter"),
+    state,
+  );
   assert.equal(repeat.turn.outcome, "repeat");
   assert.match(repeat.turn.answer.spoken, /fee is \$42,000/);
   assert.match(repeat.turn.answer.spoken, /not approved/i);
