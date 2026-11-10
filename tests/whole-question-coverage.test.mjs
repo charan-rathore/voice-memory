@@ -111,6 +111,18 @@ test("a certified schema plan uses its admission, not the answer's tone", () => 
     wholeQuestionCoverage({ questionPlan: forged }, "answered").state,
     "unverified",
   );
+  // An absent admission never certifies completeness (fail closed):
+  // missing, null and malformed admission records are all unverified,
+  // even when the answer kind is "answered".
+  for (const admission of [undefined, null, {}, { complete: "yes" }]) {
+    const c = wholeQuestionCoverage(
+      { questionPlan: plan, admission },
+      "answered",
+    );
+    assert.equal(c.state, "unverified", JSON.stringify(admission));
+    assert.equal(c.complete, false);
+    assert.equal(c.source, "certified-operation");
+  }
 });
 
 test("qualified document coverage requires BOTH plan qualification and per-requirement outcomes", () => {

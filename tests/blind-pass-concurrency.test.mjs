@@ -152,3 +152,24 @@ test("blind document reads run concurrently; the audit still gates the answer", 
   });
   assert.equal(rejected, null);
 });
+
+test("a source invalidated synchronously by the first blind pass yields no decomposition", async () => {
+  // The first provider callback flips the source generation before the
+  // second callback starts (array elements evaluate in order): the result
+  // must fail closed regardless of when the second pass begins.
+  let current = true;
+  const started = [];
+  const decomposition = await understandDocumentQuestion({
+    question: QUESTION,
+    isCurrent: () => current,
+    gemini: {
+      questionRequirements: async (question, opts) => {
+        started.push(opts?.pass);
+        if (started.length === 1) current = false;
+        return { question, requirements: PARTS };
+      },
+    },
+  });
+  assert.equal(decomposition, null);
+  assert.equal(started.length >= 1, true);
+});

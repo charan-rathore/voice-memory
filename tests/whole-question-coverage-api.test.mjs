@@ -284,7 +284,7 @@ for (const [name, c] of Object.entries(scripted.cases))
   test(`QUALIFIED PATH (scripted replay) ${name}: expected ${c.expect}`, async () => {
     const calls = [];
     await withServer(
-      { gemini: scriptedProvider(c, calls) },
+      { gemini: scriptedProvider(c, calls), wholeQuestion: "on" },
       async ({ upload, ask }) => {
         const ws = await upload(scripted.fileName, scripted.document);
         const b = await ask(ws, c.question, true);
@@ -338,7 +338,7 @@ for (const [name, c] of Object.entries(scripted.cases))
 
 test("QUALIFIED PATH respects consent and the kill switch: zero provider calls", async () => {
   const c = scripted.cases.ownerRetention;
-  for (const variant of ["no-consent", "switch-off"]) {
+  for (const variant of ["no-consent", "switch-off", "default-off"]) {
     const calls = [];
     await withServer(
       {
@@ -417,7 +417,7 @@ test("QUALIFIED PATH (actual saved provider content): real disagreement stays in
       ),
     }),
   };
-  await withServer({ gemini }, async ({ upload, ask }) => {
+  await withServer({ gemini, wholeQuestion: "on" }, async ({ upload, ask }) => {
     const ws = await upload("constitution.txt", text);
     const b = await ask(ws, fixture.question, true);
     assert.equal(b.wholeQuestion.state, "incomplete");

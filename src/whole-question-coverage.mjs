@@ -119,10 +119,26 @@ export function wholeQuestionCoverage(shown, kind) {
     Array.isArray(plan.requirements) &&
     plan.requirements.length
   ) {
-    const complete =
-      typeof shown.admission?.complete === "boolean"
-        ? shown.admission.complete
-        : kind === "answered";
+    // An absent admission never certifies completeness: fail closed to
+    // unverified rather than inferring coverage from an answered kind.
+    if (typeof shown.admission?.complete !== "boolean")
+      return freeze({
+        ...base,
+        state: "unverified",
+        complete: false,
+        source: "certified-operation",
+        scope: null,
+        reason:
+          "A certified source operation recorded no admission outcome, so whether it covered its plan is not certified.",
+        questionPlanKey: plan.key ?? null,
+        requirements: plan.requirements.map((r) => ({
+          requirementId: r.id ?? null,
+          text: typeof r.text === "string" ? r.text : null,
+          status: null,
+        })),
+        unaddressedPartsNamed: true,
+      });
+    const complete = shown.admission.complete;
     return freeze({
       ...base,
       state: complete ? "established" : "incomplete",

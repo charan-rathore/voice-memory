@@ -2055,8 +2055,11 @@ export function createLocalServer({
           ip: opts.ip,
           validate,
         }).catch(() => null);
-      // Tier 2 (whole-question answering): when the provider is enabled and
-      // the visitor consented, a general answer is replaced by per-requirement
+      // Tier 2 (whole-question answering): OPT-IN only, off by default -
+      // this release is disclosure-only, so automatic per-requirement
+      // answering runs only with VM_WHOLE_QUESTION_COVERAGE=on. When on and
+      // the provider is enabled and the visitor consented, a general answer
+      // is replaced by per-requirement
       // answers ONLY if the decomposition qualifies and every requirement
       // carries a source-proven outcome. Otherwise the deterministic lead
       // stays, with unverified coverage disclosed at the final boundary.
@@ -2075,7 +2078,7 @@ export function createLocalServer({
         gemini.enabled() &&
         gemini.documentRead &&
         gemini.documentAudit &&
-        process.env.VM_WHOLE_QUESTION_COVERAGE !== "off"
+        process.env.VM_WHOLE_QUESTION_COVERAGE === "on"
       ) {
         const qualified = await readQualified();
         const coverage = documentRequirementCoverage(qualified);
