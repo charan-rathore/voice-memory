@@ -169,8 +169,9 @@ export function createConversationShadow({ maxCalls = 64 } = {}) {
         },
         prior,
       );
-      // Bolna reports a barge-in as the next request, not as an event, so
-      // the turn counts as delivered once its stream is produced.
+      // This is SHADOW observation at SSE emission, NOT proof of audio
+      // playback or caller receipt. A future active cut-over must use a real
+      // delivery/interrupt acknowledgement before committing memory.
       const next = commitConversationTurn(state, turn.turnId, {
         completed: true,
       });
