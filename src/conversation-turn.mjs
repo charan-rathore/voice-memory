@@ -422,7 +422,8 @@ export function shorterOf(text) {
   }
   // An instruction to be brief never authorises dropping later correction,
   // refusal, identity, quantity, unit or status qualifications.
-  const critical = /\d|\b(?:not|no|never|only|pending|proposed|approved|amended|corrected|superseded|different|patient|units?|refused|cannot|can't|isn't|wasn't)\b|नहीं|मंज़ूर/i;
+  const critical =
+    /\d|\b(?:not|no|never|only|pending|proposed|approved|amended|corrected|superseded|different|patient|units?|refused|cannot|can't|isn't|wasn't)\b|नहीं|मंज़ूर/i;
   if (parts.some((p) => !out.includes(p) && critical.test(p)))
     return String(text ?? "").trim();
   return out || String(text ?? "").trim();
