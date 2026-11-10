@@ -149,6 +149,9 @@ delivery of one utterance returns no answer and commits nothing.
   facts still come from the engine.
 - the result is attached to `onTurn(...).conversation` and returned by
   `adapter.lastConversation(token)`. Nothing spoken changes.
+- **Shadow's `completed: true` means response emission only**. This is not
+  a Bolna audio-delivery acknowledgement; playback could be cut off. Never
+  use shadow-committed memory as proof of a heard answer at cut-over.
 
 Each observation reports `decision: { legacy, contract }` and `diverges`. The
 first known divergence: on a noise fragment ("uh"), the legacy path says "I
