@@ -113,7 +113,11 @@ test("route: workspace expiry forgets the call's conversation", async () => {
   expired = true;
   const gone = await c.ask("why?");
   assert.match(gone.spoken, /expired/);
-  assert.equal(a.lastConversation(t), null, "expired scope clears stale diagnostic");
+  assert.equal(
+    a.lastConversation(t),
+    null,
+    "expired scope clears stale diagnostic",
+  );
   expired = false;
   const after = await c.ask("say that again");
   assert.match(after.conversation.wouldSay, /don't have a verified answer/);
