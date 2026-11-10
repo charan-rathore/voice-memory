@@ -20,10 +20,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Temporary formatting diagnosis for review
-        run: |
-          ./node_modules/.bin/prettier --write src/conversation-turn.mjs src/voice-adapter.mjs tests/conversation-release-gates.test.mjs tests/conversation-turn.test.mjs
-          git diff -- src/conversation-turn.mjs src/voice-adapter.mjs tests/conversation-release-gates.test.mjs tests/conversation-turn.test.mjs
       - run: npm run build
       - run: npm run format:check
       - run: npm run typecheck
