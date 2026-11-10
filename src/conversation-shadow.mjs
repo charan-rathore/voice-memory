@@ -153,7 +153,7 @@ function contractKind(turn) {
  */
 export function createConversationShadow({ maxCalls = 64 } = {}) {
   const calls = new Map(); // key -> { state, seq } last committed turn
-  const staged = new Map(); // key -> { seq, state, turnId } awaiting delivery
+  const staged = new Map(); // key -> { seq, state, turnId } awaiting stream production
   let seqCounter = 0;
   return {
     observe({ key, bundle, version, heard, legacy, mode = "voice" }) {
@@ -174,7 +174,8 @@ export function createConversationShadow({ maxCalls = 64 } = {}) {
       // A turn becomes memory only through the returned commit(), after
       // the response stream carrying it has been produced. Bolna reports a
       // barge-in as the next request, not as an event, so stream production
-      // is the delivery boundary this transport can attest.
+      // is the completion boundary this transport can attest: it establishes
+      // that the answer stream was produced, never that the caller heard it.
       const seq = ++seqCounter;
       staged.delete(key);
       staged.set(key, { seq, state, turnId: turn.turnId });
@@ -198,9 +199,9 @@ export function createConversationShadow({ maxCalls = 64 } = {}) {
         wouldSay: turn.answer.spoken,
         decision,
         diverges: decision.legacy !== decision.contract,
-        // Delivery acknowledgement, exactly once per observation. A turn
-        // superseded by a newer observation, committed twice, or committed
-        // after a newer turn of the same call never becomes memory.
+        // Stream-production acknowledgement, exactly once per observation.
+        // A turn superseded by a newer observation, committed twice, or
+        // committed after a newer turn of the same call never becomes memory.
         commit({ completed = true } = {}) {
           const s = staged.get(key);
           if (!s || s.seq !== seq) return false;

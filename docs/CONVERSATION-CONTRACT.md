@@ -103,7 +103,9 @@ delivery of one utterance returns no answer and commits nothing.
    `complete: false`.
 8. Novelty (below).
 9. Stage the turn. The server commits it with `commitConversationTurn` only
-   once delivery completed; `completed: false` drops it.
+   once its response stream has been fully produced; `completed: false`
+   (stream abandoned) drops it. Production is the boundary the transport
+   attests - it does not establish that the caller heard the answer.
 
 ## Referents
 
@@ -118,13 +120,13 @@ delivery of one utterance returns no answer and commits nothing.
 
 ## Novelty
 
-| Situation | Behaviour |
-| --- | --- |
-| "Say that again" | The last committed record answer, word for word, no record call |
-| "Say that again, shorter" | Its opening, at least four words ("No." alone is never a short answer) |
-| Same subject, same dimension, same facts | One compact answer: the self-contained opening plus sentences carrying a value, unit, refusal or status |
-| Same subject, new dimension | Sentences already heard are dropped, except corrections, refusals, unit, identity and status distinctions |
-| New fact for a subject | Full answer (the fingerprint changed) |
+| Situation                                | Behaviour                                                                                                 |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| "Say that again"                         | The last committed record answer, word for word, no record call                                           |
+| "Say that again, shorter"                | Its opening, at least four words ("No." alone is never a short answer)                                    |
+| Same subject, same dimension, same facts | One compact answer: the self-contained opening plus sentences carrying a value, unit, refusal or status   |
+| Same subject, new dimension              | Sentences already heard are dropped, except corrections, refusals, unit, identity and status distinctions |
+| New fact for a subject                   | Full answer (the fingerprint changed)                                                                     |
 
 ## State lifecycle and bounds
 

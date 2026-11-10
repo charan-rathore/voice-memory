@@ -235,7 +235,7 @@ test("shadow: a superseded or out-of-order commit never becomes memory", () => {
     heard: "and the deadline?",
     legacy: null,
   });
-  // ...but delivered in reverse order: the newer turn commits, the older
+  // ...but produced in reverse order: the newer turn commits, the older
   // one is rejected and never becomes the latest memory.
   assert.equal(second.commit({ completed: true }), true);
   assert.equal(first.commit({ completed: true }), false);
@@ -254,7 +254,7 @@ test("shadow: a superseded or out-of-order commit never becomes memory", () => {
   assert.doesNotMatch(again.wouldSay, /\$42,000/);
 });
 
-test("shadow: an abandoned delivery leaves no memory to repeat", () => {
+test("shadow: an abandoned stream leaves no memory to repeat", () => {
   const s = createConversationShadow();
   const key = "call-y";
   s.observe({
