@@ -816,6 +816,14 @@ function render({
       }
       if (current?.status === "internal-target")
         return `${cap(value ?? "It")} is the current internal target, not an approved or contractual ${field === "deadline" ? "date" : field === "fee" ? "fee" : field === "paymentSplit" ? "split" : "figure"}.`;
+      // Mention-only or unresolved record ("a fee of $3,200 was mentioned",
+      // "no go-ahead yet"): report what is on record without upgrading it
+      // to a proposal.
+      if (
+        (current?.status === "discussed" || current?.status === "unresolved") &&
+        value
+      )
+        return `${cap(value)} is the figure on record; no approval is recorded.`;
       return value
         ? latestProposalPhrase(value)
         : `It is the latest proposal, and it is not approved.`;
@@ -953,7 +961,9 @@ function render({
       if (verdict === "PROPOSED" && value)
         return current?.status === "internal-target"
           ? `${cap(value)} is the current internal target, not an approved or contractual ${field === "deadline" ? "date" : field === "fee" ? "fee" : field === "paymentSplit" ? "split" : "figure"}.`
-          : `${cap(value)} is the current proposal; approval is not recorded.`;
+          : current?.status === "discussed" || current?.status === "unresolved"
+            ? `${cap(value)} is the figure on record; approval is not recorded.`
+            : `${cap(value)} is the current proposal; approval is not recorded.`;
       if (verdict === "CONFIRMED" && value)
         return `${cap(value)} is approved, per ${label}.`;
       return null;

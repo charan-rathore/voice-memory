@@ -31,7 +31,10 @@ test("a named proposed subject answers its amount with its true status", () => {
   const a = ask(bundleOf(PROPOSED_AB), "What is the Alpha migration fee?");
   assert.match(a, /20,000/);
   assert.doesNotMatch(a, /30,000/);
-  assert.match(a, /not approved/); // proposed stays proposed - no invented approval
+  // The record carries no status language, so it is mention-only: the answer
+  // reports it as on record without inventing either a proposal or an
+  // approval (previously rendered as "latest proposal" - an over-claim).
+  assert.match(a, /no approval is recorded/);
 });
 
 test("a named APPROVED subject answers with the approval, never erased", () => {

@@ -65,28 +65,228 @@ export type Claim = {
   scopeEntities: string[];
 };
 
+/** Calendar validity: an impossible date (September 31, February 31) is
+ * not a date at all - it must stay undated rather than order records. */
+function validCalendarDay(y: number, mo: number, d: number): boolean {
+  if (mo < 1 || mo > 12 || d < 1) return false;
+  const DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const max = mo === 2 ? (leap ? 29 : 28) : DAYS[mo - 1];
+  return d <= max;
+}
+
+/** Normalize the accepted "Date:" header forms to ISO; unparseable or
+ * impossible stays "". */
+function isoDateOf(raw: string): string {
+  const emit = (y: string, mo: string, d: string): string =>
+    validCalendarDay(Number(y), Number(mo), Number(d))
+      ? `${y}-${mo}-${d.padStart(2, "0")}`
+      : "";
+  const iso = raw.match(/^(20\d{2})-(\d{2})-(\d{2})$/);
+  if (iso) return emit(iso[1], iso[2], iso[3]);
+  const m1 = raw.match(/^([A-Z][a-z]+)\s+(\d{1,2}),\s*(20\d{2})$/);
+  if (m1) {
+    const mon = MONTH_ABBR[m1[1].slice(0, 3).toLowerCase()];
+    return mon ? emit(m1[3], mon, m1[2]) : "";
+  }
+  const m2 = raw.match(/^(\d{1,2})\s+([A-Z][a-z]+)\s+(20\d{2})$/);
+  if (m2) {
+    const mon = MONTH_ABBR[m2[2].slice(0, 3).toLowerCase()];
+    return mon ? emit(m2[3], mon, m2[1]) : "";
+  }
+  return "";
+}
+
+// A condition binds the authorization event wherever it sits in the
+// claim-bearing clause ("When the board signs, you have the go-ahead" no
+// less than "go-ahead ... if the board signs"). The phrase counts as given
+// only when the condition is recorded as satisfied: an active simple-past
+// event with its own subject ("when the board signed") or a recorded
+// auxiliary ("was signed", "had signed"). A bare participle ("once
+// approved"), a present or modal auxiliary ("is completed", "has been
+// completed", "will sign") leaves the prerequisite unproven - "is
+// completed" and "was completed" establish different states.
+const CONDITION_MARK =
+  /\b(?:if|when|whenever|once|unless|until|after|upon|pending|subject to|provided that|conditional|contingent|as soon as)\b/i;
+const CONDITION_EVENT =
+  /\b(?:signed|countersigned|executed|approved|ratified|agreed|confirmed|met|voted|passed|concluded|completed|accepted|recorded|given|gave|granted|issued|received|got)\b/i;
+const UNREALIZED_AUX =
+  /\b(?:is|are|has|have|will|would|may|might|shall|should|must|to|being|gets?|be)\b/i;
+const HYPOTHETICAL_MARK =
+  /^(?:if|unless|upon|pending|subject to|provided that|conditional|contingent)$/i;
+const conditionPrecedes = (prefix: string): boolean => {
+  const mark = prefix.match(CONDITION_MARK);
+  if (!mark || mark.index === undefined) return false;
+  // A hypothetical mark never establishes its condition: an if-clause in
+  // the past tense is a conditional assertion, not a recorded event ("if
+  // the board approved the fee" does not establish that it did). Only
+  // temporal marks (when/once/until/after) can carry recorded satisfaction.
+  if (HYPOTHETICAL_MARK.test(mark[0])) return true;
+  const after = prefix.slice(mark.index + mark[0].length);
+  const ev = after.match(CONDITION_EVENT);
+  if (!ev || ev.index === undefined) return true;
+  const middle = after.slice(0, ev.index);
+  if (UNREALIZED_AUX.test(middle)) return true;
+  if (/\b(?:was|were|had)\b/i.test(middle)) return false;
+  // No auxiliary: realized only with an explicit subject in between.
+  return middle.trim().length === 0;
+};
+
+// A trailing condition governs the event only when it introduces a clause
+// of its own. Hypothetical marks govern regardless; a temporal mark
+// followed by a bare noun phrase qualifies the value, not the
+// authorization ("a 30/70 after acceptance split", "after the board
+// meeting"), so it never demotes an otherwise unconditional approval.
+// Present-tense forms of the same bounded event vocabulary: evidence that
+// a temporal mark introduces a clause ("once the board signs"). A word
+// merely ending in -s is not evidence ("after discussions" is a noun
+// phrase, not a predicate).
+const CONDITION_EVENT_PRESENT =
+  /\b(?:signs|countersigns|executes|approves|ratifies|agrees|confirms|meets|votes|passes|concludes|completes|accepts|records|gives|grants|issues|receives|gets|pays|arrives)\b/i;
+const conditionFollows = (tail: string): boolean => {
+  const mark = tail.match(CONDITION_MARK);
+  if (!mark || mark.index === undefined) return false;
+  if (HYPOTHETICAL_MARK.test(mark[0])) return true;
+  const phrase = tail.slice(
+    mark.index + mark[0].length,
+    mark.index + mark[0].length + 60,
+  );
+  // An explicit prerequisite operator ("approved only after payment",
+  // "only after the meeting") makes the approval contingent even when the
+  // phrase itself is nominal: recorded satisfaction is required, the
+  // nominal exemption never applies.
+  const onlyGoverns = /\bonly\s*$/i.test(tail.slice(0, mark.index));
+  const clausal =
+    CONDITION_EVENT.test(phrase) ||
+    CONDITION_EVENT_PRESENT.test(phrase) ||
+    /\b(?:is|are|was|were|had|has|have|will|would|gets?)\b/i.test(phrase);
+  if (onlyGoverns || clausal) return conditionPrecedes(tail);
+  // Without bounded event or auxiliary evidence, exemption requires an
+  // UNAMBIGUOUS nominal construction, never token counts or a bare
+  // spelling guess:
+  // - a single token whose form no finite verb can take: a noun-only
+  //   suffix (-ing, -tion/-sion, -ment, -ness, -ity, -ance/-ence, -al,
+  //   -ure, -age, -ery, -ism, -ship), including its plural ("meetings",
+  //   "discussions", "payment", "completion"); a bare -s is NOT proof
+  //   ("releases"/"signs" are verbs), and a bare participle ("once
+  //   paid", "once done") is a clause with an elided subject;
+  // - a determiner + one token ("after the meeting") - a determiner
+  //   selects a noun phrase by grammar;
+  // - the exact split-stage phrase "after acceptance (split)" from the
+  //   payment-split value vocabulary ("70 percent after acceptance
+  //   split").
+  // Everything else - base-form verbs ("when staff pay"), unrecognized
+  // predicates, modified phrases ("after lengthy discussions") - is an
+  // UNPROVEN condition: unknown syntax never becomes an unconditional
+  // approval, even when the likely reading is innocent.
+  const tokens = phrase
+    .trim()
+    .replace(/[.,;!]+$/, "")
+    .split(/\s+/)
+    .filter(Boolean);
+  const NOUN_ONLY =
+    /(?:ing|tion|sion|ment|ness|ity|ance|ence|al|ure|age|ery|ism|ship)$/i;
+  const PARTICIPLE =
+    /(?:ed|en)$|^(?:done|sent|made|paid|taken|given|written|met|left|kept)$/i;
+  const DETERMINER = /^(?:the|a|an|some|our|their|its|his|her|your)$/i;
+  const singleNominal = (w: string): boolean => {
+    const stem = w.replace(/s$/i, "");
+    return (
+      !PARTICIPLE.test(w) &&
+      !CONDITION_EVENT_PRESENT.test(w) &&
+      (NOUN_ONLY.test(w) || (w !== stem && NOUN_ONLY.test(stem)))
+    );
+  };
+  const clearNounPhrase =
+    (tokens.length === 1 && singleNominal(tokens[0])) ||
+    (tokens.length === 2 && DETERMINER.test(tokens[0])) ||
+    /^acceptance\s+split$/i.test(tokens.join(" "));
+  return !clearNounPhrase;
+};
+
 function statusOf(line: string): ClaimStatus {
+  // Every route capable of returning "approved" applies the same
+  // unresolved-condition admission, bound to the route's own affirmative
+  // event: conditionality is evaluated across the clause up to and
+  // including the event itself ("if the board accepted" is hypothetical;
+  // "when the board accepted" records satisfaction).
+  const unconditional = (m: RegExpMatchArray | null): boolean =>
+    !!m &&
+    m.index !== undefined &&
+    !conditionPrecedes(line.slice(0, m.index + m[0].length)) &&
+    // A condition trailing the event governs it just as a preceding one
+    // ("approved the fee if the client pays"); the same recorded-
+    // satisfaction rule applies, so "approved the fee when the client
+    // countersigned" stays a realized approval.
+    !conditionFollows(line.slice(m.index + m[0].length));
   if (
-    /pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) (approved|agreed)|no decision (was )?taken|no vote or agreement|not [^.;]{0,20}(approved|signed|countersign|confirmed|accepted|agreed|authorized|executed)|no\s+(signed|countersigned|executed)\s|\bno\s+(?:[a-z-]+\s+){0,2}[a-z-]*(?:signed|countersigned|executed)\b|does not (constitute|establish)|does not mean [^.;]{0,50}(accept|sign|approv|agree)|has not accepted|not been accepted/i.test(
+    /pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) (approved|agreed)|no decision (was )?taken|no vote or agreement|not (?!only\b)[^.;]{0,20}(approved|signed|countersign|confirmed|accepted|agreed|authorized|executed|ratif\w*)|no\s+(signed|countersigned|executed)\s|\bno\s+(?:[a-z-]+\s+){0,2}[a-z-]*(?:signed|countersigned|executed)\b|does not (constitute|establish)|does not mean [^.;]{0,50}(accept|sign|approv|agree)|has not accepted|not been accepted|not (yet )?ratified|ratification (is )?pending|pending ratification|no ratification|yet to (be )?ratif|to be ratified|no (formal |written )?go-?ahead|awaiting (the )?go-?ahead|without (the )?go-?ahead|go-?ahead[^.;]{0,20}not (?:yet )?(?:been )?(?:given|granted|issued|received|confirmed)|not (?:yet )?(?:given|granted|issued|received|confirmed)[^.;]{0,20}go-?ahead|approval[^.;]{0,30}not (?:yet )?(?:given|recorded|received|granted|confirmed|issued)|not (?:yet )?(?:given|recorded|received|granted|confirmed|issued)[^.;]{0,20}approval|approval (?:is |was )?(?:still )?pending|awaiting (?:the )?approval|pending (?:the )?approval|not (been )?green-?lit/i.test(
       line,
     )
   )
     return "unresolved";
-  if (/subject to|provided that|conditional|only when/i.test(line))
+  if (
+    /subject to|provided that|conditional|only when|only if|if and when|unless|\b(?:if|when|whenever|once|until|after)\b[^.;]{0,30}\b(?:signs?|sign-?off|approves?|ratif(?:y|ies|ied)|agrees?|countersigns?)\b/i.test(
+      line,
+    )
+  )
     return "proposed";
   // Approval wording is authoritative over revision/proposal wording in the
   // same sentence; check it BEFORE propos|revis. A modal "accept" states
   // capability or willingness ("we can accept delivery"), never approval.
   const acceptVerb =
-    /\baccept(?:s|ed)?\b/i.test(line) &&
+    unconditional(line.match(/\baccept(?:s|ed)?\b/i)) &&
     !/\b(?:can|could|may|might|shall|should|will|would|must|willing|ready|prepared|able)\s+(?:to\s+)?(?:[a-z-]+\s+){0,2}accept(?:s|ed)?\b/i.test(
       line,
     );
-  if (
-    /\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\bagreed\b|\bauthoriz(?:e|es|ed)\b/i.test(
+  // Ratification counts only as an actual decision: a future, modal or
+  // proposed ratification ("will ratify", "to ratify", "expected to
+  // ratify", "vote on whether to ratify") is not one. Negated and pending
+  // ratification is already held unresolved above.
+  // Nominal ratification affirmatively recorded ("the board's
+  // ratification of the fee was recorded"); pending forms are held
+  // unresolved above.
+  const ratificationRecorded = unconditional(
+    line.match(
+      /\bratification\s+(?:of|for)\b[^.;]{0,40}\b(?:was|is|has been)\s+(?:recorded|given|granted|confirmed|completed|issued)\b|\b(?:recorded|confirmed|completed)\s+(?:the\s+)?ratification\b/i,
+    ),
+  );
+  const ratified =
+    (unconditional(line.match(/\bratif(?:y|ies|ied)\b/i)) ||
+      ratificationRecorded) &&
+    !/\b(?:to|will|would|may|might|shall|should|must|did not|didn't|does not|doesn't|do not|don't|has not|hasn't|have not|haven't|had not|hadn't|will not|won't|would not|cannot|can't|never|expected to|yet to|decides? whether to|decided whether to|vote[sd]? (on )?whether to|recommends? (that )?\w{0,20}\s?)\s+(?:[a-z-]+\s+){0,2}ratif(?:y|ies|ied)\b/i.test(
       line,
-    ) ||
-    acceptVerb
+    );
+  // A go-ahead or an "approval" noun counts only when an affirmative event
+  // binds it ("you have the go-ahead", "approval of the fee was recorded").
+  // The noun alone - requested, awaited, denied, pending - is not approval;
+  // those forms are held unresolved above.
+  // Tightly bound affirmative events only: no arbitrary intervening words,
+  // so "we have requested/been denied a go-ahead" cannot pass; and no
+  // conditional tail in the same sentence ("go-ahead ... if the board
+  // signs").
+  const goAheadMatch = line.match(
+    /\b(?:you|we)\s+(?:have|got)\s+the\s+go-?ahead\b|\b(?:gives?|gave|grants?|granted|issued|provides?|provided|confirmed)\s+(?:us|them|the client|the)\s+go-?ahead\b|\bgo-?ahead\s+(?:was|is|has been|had been|is hereby)\s+(?:given|granted|issued|received|confirmed|provided)\b|\b(?:received|got|obtained)\s+the\s+go-?ahead\b/i,
+  );
+  const goAheadGiven = unconditional(goAheadMatch);
+  const approvalRecorded = unconditional(
+    line.match(
+      /\bapproval\s+(?:of|for)\b[^.;]{0,40}\b(?:was|is|has been|had been)\s+(?:recorded|given|granted|confirmed|received|issued)\b|\b(?:recorded|gave|given|granted|received|confirmed|issued|signaled|signalled)\s+(?:their|the|its|his|her|formal|written|final|board|client'?s?)\s+(?:[a-z-]+\s+){0,2}approval\b/i,
+    ),
+  );
+  // An approval verb under an unrealized preceding condition states no
+  // decision: "when the fee is approved" is not approval, while "when the
+  // board approved the fee" records one.
+  const approvalVerb = line.match(
+    /\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\bagreed\b|\bauthoriz(?:e|es|ed)\b|\bgreen-?lit\b|\bgreenlight(?:ed|s)?\b/i,
+  );
+  const verbApproved = unconditional(approvalVerb);
+  if (
+    verbApproved ||
+    acceptVerb ||
+    ratified ||
+    goAheadGiven ||
+    approvalRecorded
   )
     return "approved";
   if (
@@ -181,7 +381,7 @@ export function questionFields(q: string): ClaimField[] {
 }
 
 const GENERIC_HEADING_WORDS = new Set(
-  `proposal proposals note notes revision memo memorandum kickoff committee steering client email extract action log update delivery project commercial internal signed amendment budget final engagement pilot plan report summary minutes brief document file page draft version md txt author date type title subject approved approval terms record records discussion meeting first second later new original current`.split(
+  `proposal proposals note notes revision memo memorandum kickoff committee steering client email extract action log update delivery project commercial internal signed amendment budget final engagement pilot plan report summary minutes brief document file page draft version md txt author date type title subject approved approval terms record records discussion meeting first second later new original current agreement agreements contract contracts retainer retainers decision decisions mail board addendum addenda`.split(
     /\s+/,
   ),
 );
@@ -365,8 +565,18 @@ export function extractClaims(
 ): Claim[] {
   let claims: Claim[] = [];
   for (const source of bundle.sources) {
-    const dateMatch = source.text.match(/Date:\s*([0-9-]+)/);
-    const docDateHeader = dateMatch ? dateMatch[1] : "";
+    // Document date: an explicit "Date:" header. ISO (2026-09-05) and the
+    // unambiguous month-name forms ("September 5, 2026", "5 September 2026")
+    // are read; anything else stays undated rather than guessed, because the
+    // date orders records for supersession.
+    // "Date:" counts only as a header: start of a line or after a
+    // sentence boundary ("Author: X. Date: 2026-08-02."). A "Due Date",
+    // "Review Date" or a date quoted mid-sentence is never the version
+    // date.
+    const dateMatch = source.text.match(
+      /(?:^|[.;]\s*|\n)\s*Date:\s*(20\d{2}-\d{2}-\d{2}|[A-Z][a-z]+\s+\d{1,2},\s*20\d{2}|\d{1,2}\s+[A-Z][a-z]+\s+20\d{2})/m,
+    );
+    const docDateHeader = dateMatch ? isoDateOf(dateMatch[1]) : "";
     // H1 heading only - never the Author line, which is shared across
     // engagements and would falsely mark everything as one engagement.
     const h1 =
@@ -384,6 +594,102 @@ export function extractClaims(
       ) &&
         /\bin force\b/i.test(source.text) &&
         !/\bnot (?:been )?(?:counter)?signed\b/i.test(source.text));
+    // A document-level replacement declaration ("this document replaces our
+    // earlier terms in full") applies to the claim fields the document
+    // mints, except fields the declaration itself carves out ("except for
+    // fees") and fields a sibling statement expressly preserves ("it does
+    // not replace the fee terms"). The declaration must sit in its own
+    // sentence, away from the value clauses, and be positively effective:
+    // conditional, pending or signature-dependent declarations ("if",
+    // "upon signing", "pending approval") establish nothing. When the
+    // declaration's coverage of a field cannot be established, competing
+    // records are retained rather than asserting supersession. The
+    // resolution guards still decide what may be demoted (dates,
+    // engagement, status); this only carries the document's own intent.
+    const DECL_POSITIVE =
+      /\bthis\s+(?:document|agreement|memo|note|version|addendum)\s+(?:replaces|supersedes)\b[^.;]{0,60}\b(?:in full|entirely|in their entirety)\b|\b(?:replaces|supersedes)\s+all\s+(?:our|the|any)\s+(?:earlier|prior|previous)\s+(?:terms|agreements?|proposals?|versions?|quotes?|offers?)\b/i;
+    const DECL_CONDITIONAL =
+      /(?:replaces|supersedes)[^.;]{0,80}\b(?:only if|provided that|if and when|if|when|unless|subject to|on condition|upon|pending)\b/i;
+    const DECL_FIELD_WORDS: Array<[RegExp, ClaimField]> = [
+      [/fee|commercial|price|pricing|cost|rate|retainer/i, "fee"],
+      [/payment|split|installment|billing|invoic/i, "paymentSplit"],
+      [/scope|site|region|depot|store|location|deliverable/i, "scope"],
+      [/deadline|launch|go-?live|timeline|date/i, "deadline"],
+      [/report|cadence/i, "reporting"],
+    ];
+    const GENERIC_SCOPE =
+      /^(?:the\s+|our\s+|any\s+|its\s+)?(?:(?:earlier|prior|previous|existing|current|old)\s+)?(?:terms|agreements?|contracts?|arrangements?|proposals?|versions?|quotes?|offers?)$/i;
+    const declSentences = source.text.split(/\n+|(?<=[.;])\s+/);
+    // A condition anywhere in the declaration sentence ("If the client
+    // signs, this document replaces our earlier terms in full") defeats
+    // effectiveness, not only a condition trailing the verb: the
+    // declaration is evaluated as a whole.
+    const declSentence = declSentences.find(
+      (s) =>
+        DECL_POSITIVE.test(s) &&
+        !DECL_CONDITIONAL.test(s) &&
+        !CONDITION_MARK.test(s),
+    );
+    const declExcludedFields = new Set<ClaimField>();
+    let declVeto = false;
+    const carveDeclFields = (raw: string) => {
+      const text = raw
+        .replace(/\b(?:in full|entirely|in their entirety)\s*$/i, "")
+        .trim();
+      let named = false;
+      for (const [re, f] of DECL_FIELD_WORDS)
+        if (re.test(text)) {
+          declExcludedFields.add(f);
+          named = true;
+        }
+      // A carve-out naming an untracked provision ("the confidentiality
+      // terms") preserves only what it names; a purely generic one ("the
+      // earlier terms") vetoes the declaration outright.
+      if (!named && GENERIC_SCOPE.test(text)) declVeto = true;
+    };
+    if (declSentence) {
+      const exc = declSentence.match(
+        /\b(?:except|excluding|other than|save)\s+(?:for\s+)?([^.;]{0,60})/i,
+      );
+      if (exc) carveDeclFields(exc[1]);
+    }
+    // Bounded affirmative preservation events, the same shape as the
+    // bounded replacement events: "the fee terms remain unchanged", "no
+    // change to the fee", "the payment terms stay in effect" expressly
+    // keep a field, so a replacement declaration never propagates to it.
+    const PRESERVATION: Array<[RegExp, ClaimField]> = [
+      [
+        /\b(?:fees?|commercial terms|price|pricing|cost|rate|retainer)(?:\s+terms)?\s+(?:remain|remains|stay|stays|stand|stands|continue|continues)\s+(?:unchanged|in effect|in force|as previously agreed|as agreed|to apply)\b|\bfees?(?:\s+terms)?\s+(?:is|are)\s+unchanged\b|\bno\s+(?:change|changes)\s+to\s+(?:the\s+)?(?:fees?|commercial terms|price|pricing|cost|rate|retainer)\b/i,
+        "fee",
+      ],
+      [
+        /\b(?:payment|payment terms|split|installments?|billing)(?:\s+terms)?\s+(?:remain|remains|stay|stays|stand|stands|continue|continues)\s+(?:unchanged|in effect|in force|as previously agreed|as agreed|to apply)\b|\bno\s+(?:change|changes)\s+to\s+(?:the\s+)?payment\b/i,
+        "paymentSplit",
+      ],
+      [
+        /\b(?:scope|sites?|regions?|locations?|deliverables?)\s+(?:remain|remains|stay|stays|stand|stands|continue|continues)\s+(?:unchanged|in effect|in force|as previously agreed|as agreed|to apply)\b|\bno\s+(?:change|changes)\s+to\s+(?:the\s+)?scope\b/i,
+        "scope",
+      ],
+      [
+        /\b(?:deadline|launch|timeline|go-?live date)\s+(?:remain|remains|stay|stays|stand|stands|continue|continues)\s+(?:unchanged|in effect|in force|as previously agreed|as agreed|to apply)\b|\bno\s+(?:change|changes)\s+to\s+(?:the\s+)?(?:deadline|timeline|launch)\b/i,
+        "deadline",
+      ],
+      [
+        /\b(?:reporting|cadence)\s+(?:remain|remains|stay|stays|stand|stands|continue|continues)\s+(?:unchanged|in effect|in force|as previously agreed|as agreed|to apply)\b|\bno\s+(?:change|changes)\s+to\s+(?:the\s+)?(?:reporting|cadence)\b/i,
+        "reporting",
+      ],
+    ];
+    for (const s of declSentences) {
+      const neg = s.match(/\bnot\s+(?:replace|supersede)\s+([^.;]{0,60})/i);
+      if (neg) carveDeclFields(neg[1]);
+      if (/(?:replaces|supersedes)\s+no\s+(?:earlier|prior|previous)/i.test(s))
+        declVeto = true;
+      for (const [re, f] of PRESERVATION)
+        if (re.test(s)) declExcludedFields.add(f);
+    }
+    const docDeclaresReplacement = !!declSentence && !declVeto;
+    const docReplacementApplies = (field: ClaimField): boolean =>
+      docDeclaresReplacement && !declExcludedFields.has(field);
     let offset = 0;
     let lineNo = 0;
     let sectionDate: string | null = null;
@@ -457,9 +763,10 @@ export function extractClaims(
           // never supersedes anything; neither does a line listing alternatives.
           const supersedes =
             force?.supersedes ??
-            (/revis|supersed|replaces|narrow|instead of|\bcurrent\b/i.test(
+            ((/revis|supersed|replaces|narrow|instead of|\bcurrent\b/i.test(
               clause,
-            ) &&
+            ) ||
+              docReplacementApplies(field)) &&
               !supersededByWording &&
               status !== "unresolved" &&
               !/\bvs\b|open decision|disput/i.test(clause));
@@ -1073,6 +1380,10 @@ export function resolveClaims(claims: Claim[]): {
         if (ambiguous) continue;
         if (supDate && c.docDate && c.docDate >= supDate) continue; // not older
         if (!c.docDate) continue; // undated records are never silently demoted
+        // An approved or contractual record is never demoted by a revision
+        // stage below it: a proposal declaring "replaces the earlier terms"
+        // demotes proposals, not the approval the client actually issued.
+        if (c.status === "approved" && sup.status !== "approved") continue;
         superseded.push(c);
       }
     }
