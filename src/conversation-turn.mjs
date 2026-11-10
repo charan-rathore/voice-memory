@@ -860,7 +860,17 @@ export function resolveConversationTurn(input, prior = null) {
   if (!parts) {
     if (frame.subjects.length) {
       const pieces = splitParts(text, vocabulary);
-      if (pieces.length === 1 && unresolvedCompound(text)) {
+      // Two explicitly named subjects do not prove a comparison is answered
+      // by returning two independent values. An unsplit multi-subject query
+      // is likewise not a certified single-subject lookup.
+      const unsupportedComparison =
+        frame.subjects.length > 1 &&
+        /\b(?:compare|comparison|difference|differences|versus|vs\.?|between)\b|तुलना|अंतर/i.test(text);
+      if (
+        unsupportedComparison ||
+        (pieces.length === 1 &&
+          (unresolvedCompound(text) || frame.subjects.length > 1))
+      ) {
         understanding.confidence = "low";
         understanding.needsClarification = true;
         return finish({
