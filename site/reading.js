@@ -363,10 +363,11 @@
             `<li data-step="${st.id}" style="--i:${i}"><i class="rd-dot"></i><b>${st.plain}</b><small data-tech="${esc(st.tech)}"></small></li>`,
         ).join("")}</ol>
         <div class="rd-pages" role="group" aria-label="Source pages: select one to open it"></div>
-        <section class="rd-eng" aria-label="Inside the engine">
-          <header><b>Inside the engine</b><span>how your file becomes something it can answer from</span></header>
+        <section class="rd-eng" aria-label="Recorded evidence journey">
+          <header><b>How this file became evidence</b><span>Expand any stage to inspect its recorded data</span></header>
           <ol class="rd-film"></ol>
         </section>
+        <section class="rd-query" hidden aria-label="Evidence behind your latest question"></section>
         <p class="rd-say" aria-live="polite"></p>
         <ol class="rd-log"></ol>
         <footer class="rd-foot"></footer>
@@ -387,6 +388,8 @@
       };
     // Each page tile opens that original page in the source viewer.
     root.querySelector(".rd-pages").addEventListener("click", (e) => {
+      const more = e.target.closest("[data-expand-pages]");
+      if (more) { pageLimit += 30; engineKey = ""; paint(); return; }
       const pg = e.target.closest(".rd-pg");
       if (!pg) return;
       const d = focus();
@@ -402,6 +405,24 @@
           },
         }),
       );
+    });
+    // Loaded only with uploads: source navigation does not inflate first paint.
+    document.addEventListener("vm:open-page", async (e) => {
+      const { title, page, citation } = e.detail ?? {};
+      if (!title || !openSource) return;
+      await openSource(title, citation ? [citation] : [], citation ?? null);
+      const sec = document.querySelector("#viewer-body .rd-doc.focus");
+      const target = sec?.querySelectorAll(".rd-page")[Math.max(0, Number(page || 1) - 1)] ?? sec;
+      target?.scrollIntoView({ block: "start", behavior: reduced() ? "auto" : "smooth" });
+      target?.setAttribute("tabindex", "-1");
+      target?.focus({ preventScroll: true });
+    });
+    document.addEventListener("vm:answer", (e) => {
+      const payload = e.detail ?? {};
+      if (payload.caseId !== "own" || !payload.final) return;
+      latestQuery = { ...payload, id: ++querySerial, workspace: workspaceId };
+      engineKey = "";
+      paint();
     });
     root.querySelector(".rd-foot").addEventListener("click", (e) => {
       const b = e.target.closest("[data-replay]");
@@ -451,6 +472,11 @@
     const sec = root.querySelector(".rd");
     const show = root.querySelector(".rd-show");
     const d = focus();
+    if (d && d.id !== stripDocId) {
+      stripDocId = d.id;
+      pageLimit = 30;
+      engineKey = "";
+    }
     if (!d) {
       root.hidden = true;
       return;
@@ -542,10 +568,10 @@
     // Page filmstrip.
     const strip = root.querySelector(".rd-pages");
     const maxChars = Math.max(1, ...s.pages.map((p) => p?.chars ?? 0));
-    const shown = s.pages.slice(0, 30);
+    const shown = s.pages.slice(0, pageLimit);
     if (
       strip.childElementCount !==
-      shown.length + (s.pages.length > 30 ? 1 : 0)
+      shown.length + (s.pages.length > pageLimit ? 1 : 0)
     ) {
       strip.innerHTML =
         shown
@@ -554,8 +580,8 @@
               `<button type="button" class="rd-pg" data-n="${i + 1}" aria-label="Open page ${i + 1}"><span class="pg" aria-hidden="true"><i class="pg-fill"></i><em></em></span><span class="rd-pg-n">${i + 1}</span></button>`,
           )
           .join("") +
-        (s.pages.length > 30
-          ? `<button type="button" class="rd-pg more" data-n="31" aria-label="Open page 31 and the ${s.pages.length - 30} pages after it"><span class="rd-pg-n">+${s.pages.length - 30}</span></button>`
+        (s.pages.length > pageLimit
+          ? `<button type="button" class="rd-pg more" data-expand-pages aria-label="Show more pages"><span class="rd-pg-n">+${s.pages.length - pageLimit} pages</span></button>`
           : "");
     }
     shown.forEach((p, i) => {
@@ -642,161 +668,272 @@
       : "live";
   }
 
-  // ------------------------------------------------- inside the engine
-  // Five frames, each shown only when the data for it exists (digest =
-  // what the server computed from this document after indexing it).
-  const FRAMES = [
-    {
-      id: "structure",
-      n: "1",
-      plain: "Pages become structure",
-      tech: "layout → typed blocks",
-    },
-    {
-      id: "records",
-      n: "2",
-      plain: "Structure becomes records",
-      tech: "packet segments + authority",
-    },
-    {
-      id: "facts",
-      n: "3",
-      plain: "Records become facts",
-      tech: "table facts, lab rows, supersession",
-    },
-    {
-      id: "numbers",
-      n: "4",
-      plain: "Words become numbers",
-      tech: "BM25 term weights (k1 1.5, b 0.75)",
-    },
-    {
-      id: "graph",
-      n: "5",
-      plain: "Numbers become a graph",
-      tech: "evidence graph (grounded edges)",
-    },
-  ];
-  const bar = (v, max, cls = "") =>
-    `<i class="rd-b ${cls}" style="--w:${Math.max(2, Math.min(100, (v / (max || 1)) * 100)).toFixed(1)}%"></i>`;
-  const AUTH = { authoritative: "auth", provisional: "prov", unknown: "unk" };
+  // ------------------------------------------------- source-linked evidence disclosures
   let engineKey = "";
+  let latestQuery = null;
+  let querySerial = 0;
+  let openSource = null;
+  let workspaceId = null;
+  let scopeGeneration = null;
+  let pageLimit = 30;
+  let stripDocId = null;
+
+  function make(tag, cls = "", value = null) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (value !== null && value !== undefined) node.textContent = String(value);
+    return node;
+  }
+  const sourceTitle = (d) => d?.title ?? d?.filename ?? null;
+  function openPage(title, page, citation = null) {
+    if (!title || !Number.isInteger(Number(page)) || Number(page) < 1) return;
+    document.dispatchEvent(new CustomEvent("vm:open-page", {
+      detail: { title, page: Number(page), citation },
+    }));
+  }
+  function openQuoted(c) {
+    if (!c?.title || typeof c.quote !== "string" || !c.quote.trim()) return;
+    openPage(c.title, c.location?.pages?.[0] ?? 1, c);
+  }
+  function row(parent, text, subtext, citation, pageTitle, pageNumber) {
+    const li = make("li", "rd-data-row");
+    li.append(make("span", "", text));
+    if (subtext) li.append(make("small", "", subtext));
+    if (citation?.quote) {
+      const b = make("button", "", "Open exact source line");
+      b.type = "button";
+      b.onclick = () => openQuoted(citation);
+      li.append(b);
+    } else if (pageTitle && pageNumber > 0) {
+      const b = make("button", "", "Open page " + pageNumber);
+      b.type = "button";
+      b.onclick = () => openPage(pageTitle, pageNumber);
+      li.append(b);
+    }
+    parent.append(li);
+    return li;
+  }
+  function evidenceList(parent, label, citations, related = false) {
+    if (!citations?.length) return;
+    parent.append(make("h4", "", label));
+    const list = make("ul", "rd-data-list");
+    for (const c of citations) {
+      const pg = c.location?.pages?.[0];
+      const li = row(
+        list,
+        c.quote ?? "",
+        (c.title ?? "Source") + (pg ? " · page " + pg : "") +
+          (related ? " · related only; not an answer" : " · admitted evidence"),
+        c,
+      );
+      if (related) li.classList.add("related");
+    }
+    parent.append(list);
+  }
+  function labExplanation(host, d, q) {
+    const f = q?.final;
+    if (!(d.digest?.graph?.labRows > 0) ||
+        typeof f?.admittedText !== "string" || !f.citations?.length) return;
+    const first = f.citations[0];
+    const revised = f.citations.find((c) =>
+      /amended|corrected|correction/i.test(c.title ?? "") ||
+      /amended|corrected|correction/i.test(c.quote ?? "")
+    );
+    const lab = make("section", "rd-lab");
+    lab.setAttribute("aria-label", "Lab result explanation");
+    lab.append(make("h3", "", "Understanding this result"));
+    const general = make("div", "rd-education");
+    general.append(make("h4", "", "What is this"));
+    row(general, q.lead?.field ?? "The test named in your question", "Printed test identity: open the original line.", first);
+    general.append(make("h4", "", "What it measures"));
+    general.append(make("p", "", "General education is separate from the document's findings."));
+    const sources = (q.background?.sources ?? []).filter((x) => /^https:\/\//.test(x?.uri ?? ""));
+    if (sources.length) for (const x of sources) {
+      const link = make("a", "", x.title ?? "General reference");
+      link.href = x.uri;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      general.append(link);
+    } else general.append(make("p", "", "No independently sourced general description was supplied."));
+    row(general, "Printed test name", "The record does not establish a general medical definition.", first);
+    lab.append(general);
+    lab.append(make("h4", "", "What this report showed"));
+    row(lab, first.quote, "Admitted line from the document; no medical conclusion.", first);
+    lab.append(make("h4", "", "Against this lab's printed interval only"));
+    row(lab, "Open the printed interval in this report if present. No external threshold is used.",
+      "The original line, rather than a severity assessment.", first);
+    lab.append(make("h4", "", "What changed"));
+    row(lab, revised
+      ? "The document records a correction; this is not evidence of a change in the body."
+      : "No correction is established by these cited lines.",
+      "Verify the original report status and value.", revised ?? first);
+    lab.append(make("h4", "", "Why we trust this record"));
+    row(lab, "The result is linked to the admitted source passage. The document is not clinically validated by this interface.",
+      "Open the original line and printed status.", first);
+    host.append(lab);
+  }
+  function paintQuery(d) {
+    const host = root.querySelector(".rd-query");
+    if (!host) return;
+    host.replaceChildren();
+    const q = latestQuery;
+    if (!q?.final || (q.workspace && workspaceId && q.workspace !== workspaceId)) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    const f = q.final;
+    const supported = typeof f.admittedText === "string";
+    host.append(make("h3", "", "What your question established"));
+    host.append(make("p", "rd-query-question", q.question ?? ""));
+    const verdict = make("div", "rd-query-verdict");
+    verdict.dataset.kind = f.kind ?? "unknown";
+    verdict.append(make("b", "", supported ? f.kind === "partial" ? "Partially supported" : "Admitted answer" : "No supported answer"));
+    verdict.append(make("p", "", supported ? f.admittedText : f.text ?? "These documents did not establish an answer."));
+    host.append(verdict);
+    if (f.scope) host.append(make("p", "rd-scope",
+      "Source scope " + (f.scope.key ?? "unknown") + " · version " + (f.scope.version ?? "unknown")));
+    evidenceList(host, "Admitted evidence", Array.isArray(f.citations) ? f.citations : []);
+    const unresolved = Array.isArray(f.unresolvedRequirements) ? f.unresolvedRequirements : [];
+    if (unresolved.length) {
+      host.append(make("h4", "", "Unresolved parts"));
+      const list = make("ul", "rd-data-list");
+      for (const r of unresolved) row(list, r.text ?? "Requested part", r.reason ?? r.status ?? "Not established");
+      host.append(list);
+    }
+    evidenceList(host, "Related evidence — not an answer",
+      Array.isArray(f.relatedEvidence) ? f.relatedEvidence : [], true);
+    labExplanation(host, d, q);
+  }
   function paintEngine(d, s, tech, replayTau) {
     const film = root.querySelector(".rd-film");
     const eng = root.querySelector(".rd-eng");
+    if (!film || !eng) return;
+    eng.hidden = false;
     const g = d.digest;
-    // During a replay, a frame appears at the moment its data was produced.
-    const ready = {
-      structure: !!(s.counts || g),
-      records:
-        !!g && (replayTau == null || (s.evidence && s.evidence.t <= replayTau)),
-      facts:
-        !!g && (replayTau == null || (s.evidence && s.evidence.t <= replayTau)),
-      numbers:
-        !!g?.lookup &&
-        (replayTau == null || s.finalAt != null || s.partialAt != null),
-      graph: !!g && (replayTau == null || s.finalAt != null),
-    };
-    eng.hidden = !ready.structure;
-    if (eng.hidden) return;
+    const pages = Array.isArray(s.pages) ? s.pages : [];
+    const count = d.pages ?? g?.layout?.pages ?? (pages.length || null);
+    const readable = pages.filter((p) => p.state === "text" || p.state === "ocr-done").length;
+    const records = g?.records ?? [];
+    const facts = g?.inspectedFacts ?? [];
+    const index = g?.index ?? null;
     const key = JSON.stringify([
-      d.id,
-      ready,
-      tech,
-      !!g,
-      s.counts,
-      g?.graph?.facts,
+      d.id, d.status, d.answerable, d.createdAt, d.bytes, count,
+      pages.map((p) => [p.n, p.state, p.uncertain]),
+      records.length, facts.length, index?.passages, s.evidence?.t,
+      tech, pageLimit, workspaceId, latestQuery?.id,
     ]);
     if (key === engineKey) return;
     engineKey = key;
-    const L = g?.layout ?? s.counts ?? {};
-    const html = FRAMES.map((f) => {
-      if (!ready[f.id])
-        return `<li class="rd-fr wait" data-f="${f.id}"><em>${f.n}</em><b>${tech ? f.tech : f.plain}</b><p class="rd-dim">waiting</p></li>`;
-      let body = "";
-      if (f.id === "structure") {
-        const parts = [
-          ["h", L.headings ?? 0, "headings"],
-          ["t", L.tables ?? 0, "tables"],
-          ["p", L.paragraphs ?? 0, "paragraphs"],
-          ["o", L.ocr ?? 0, "read by OCR"],
-        ];
-        const total = parts.reduce((a, p) => a + p[1], 0) || 1;
-        body =
-          `<div class="rd-mix">${parts.map(([c, v]) => `<i class="m-${c}" style="flex:${v || 0}"></i>`).join("")}</div>` +
-          `<ul class="rd-kv">${parts
-            .filter((p) => p[1])
-            .map(([c, v, l]) => `<li><i class="m-${c}"></i>${n0(v)} ${l}</li>`)
-            .join("")}` +
-          (L.furniture
-            ? `<li class="rd-dim"><i class="m-f"></i>${n0(L.furniture)} headers and footers set aside</li>`
-            : "") +
-          `</ul>` +
-          (tech && L.rows
-            ? `<p class="rd-mono">${n0(L.rows)} table rows · ${n0(L.characters)} chars</p>`
-            : "") +
-          `<p class="rd-cap">${tech ? "Columns found by their grid; repeated page furniture excluded from the index." : "Tables stay tables, so a label keeps its value."}</p>`;
-        void total;
+    const opened = new Set([...film.querySelectorAll("details[open]")].map(
+      (el) => el.closest("[data-stage]")?.dataset.stage
+    ));
+    if (!film.querySelector("details")) opened.add("received");
+    film.replaceChildren();
+    function stage(id, title, summary, fill) {
+      const li = make("li", "rd-stage");
+      li.dataset.stage = id;
+      const details = make("details");
+      details.open = opened.has(id);
+      const heading = make("summary");
+      heading.append(make("span", "rd-stage-mark", "▸"));
+      heading.append(make("b", "", title));
+      heading.append(make("small", "", summary));
+      const body = make("div", "rd-stage-body");
+      fill(body);
+      details.append(heading, body);
+      li.append(details);
+      film.append(li);
+    }
+    stage("received", "File received", d.status === "failed" ? "failed" : "receipt recorded", (body) => {
+      const list = make("dl", "rd-meta");
+      for (const [label, value] of [
+        ["Name", d.filename ?? d.title ?? "Not reported"],
+        ["Type", d.kind ?? "Not reported"],
+        ["Bytes", d.bytes == null ? "Not reported" : n0(d.bytes)],
+        ["Received", d.createdAt == null ? "Not reported" : new Date(d.createdAt).toLocaleString()],
+      ]) {
+        const box = make("div");
+        box.append(make("dt", "", label), make("dd", "", value));
+        list.append(box);
       }
-      if (f.id === "records") {
-        const recs = g.records ?? [];
-        body =
-          `<ul class="rd-recs">${recs
-            .slice(0, 9)
-            .map(
-              (r) =>
-                `<li class="a-${AUTH[r.authority] ?? "unk"}"><span>p.${esc(r.pages?.join("-") ?? r.n)}</span><b>${esc(r.title.toLowerCase())}</b>${r.status ? `<small>${esc(r.status)}</small>` : ""}${r.patient ? `<code>${esc(r.patient)}</code>` : ""}</li>`,
-            )
-            .join("")}</ul>` +
-          `<p class="rd-cap">${recs.length > 1 ? `${recs.length} records in one file` : "One record"}${g.graph.patients ? ` · ${g.graph.patients} patient${g.graph.patients > 1 ? "s" : ""}` : ""}${g.graph.sameName ? " · same name, different ID: kept apart" : ""}. ${tech ? "Teal: signed/final/posted. Amber: estimate/draft/preliminary." : "Signed and final records outrank estimates and drafts."}</p>`;
+      body.append(list);
+      if (d.error) body.append(make("p", "rd-uncertain", d.error.message ?? "Upload failed"));
+    });
+    stage("pages", "Pages read", count == null ? "count not reported" : n0(count) + " pages", (body) => {
+      body.append(make("p", "", count == null ? "Page count not reported." :
+        n0(count) + " pages recorded; " + readable + " have reported readable text."));
+      const ul = make("ul", "rd-data-list");
+      for (const p of pages.slice(0, pageLimit)) {
+        const uncertain = Number(p.uncertain) > 0;
+        const unread = p.state === "unread";
+        const reason = uncertain
+          ? "OCR uncertainty: " + n0(p.uncertain) + " number(s) need checking."
+          : unread ? "Page could not be read reliably." : "";
+        const name = p.state === "text" ? "Text layer read" :
+          p.state === "ocr-done" ? "Scanned text read" :
+          p.state === "ocr" ? "OCR in progress" :
+          p.state === "scan" ? "Scan detected" :
+          unread ? "Unreadable" : "State not reported";
+        const li = row(ul, "Page " + n0(p.n) + " · " + name, reason,
+          null, sourceTitle(d), p.n);
+        if (reason) {
+          li.classList.add("warn");
+          const btn = li.querySelector("button");
+          if (btn) btn.textContent = "Open page to review";
+        }
       }
-      if (f.id === "facts") {
-        const samples = (g.records ?? [])
-          .filter((r) => r.authority === "authoritative")
-          .sort((a, b) => b.n - a.n)
-          .flatMap((r) => r.sample)
-          .slice(0, 3);
-        body =
-          `<div class="rd-big"><span><b>${n0(g.graph.facts)}</b>facts</span><span><b>${n0(g.graph.labRows)}</b>lab rows</span><span><b>${n0(g.graph.supersedes + g.graph.corrections)}</b>replaced</span></div>` +
-          `<ul class="rd-facts">${samples.map((x) => `<li><span>${esc(x.label)}</span><b>${esc(x.value)}</b></li>`).join("")}</ul>` +
-          `<p class="rd-cap">${g.graph.corrections ? `${g.graph.corrections} lab value corrected by an amendment. ` : ""}${g.graph.supersedes ? `${g.graph.supersedes} earlier value${g.graph.supersedes > 1 ? "s" : ""} replaced by a signed or final record.` : "Every fact keeps the exact line it came from."}</p>`;
+      if (pages.length) body.append(ul);
+      if (pages.length > pageLimit) {
+        const more = make("button", "rd-more", "Show next " + Math.min(30, pages.length - pageLimit) + " pages");
+        more.type = "button";
+        more.onclick = () => { pageLimit += 30; engineKey = ""; paint(); };
+        body.append(more);
       }
-      if (f.id === "numbers") {
-        const lk = g.lookup;
-        const maxIdf = Math.max(...lk.terms.map((t) => t.idf), 0.01);
-        const maxScore = Math.max(...lk.hits.map((h) => h.score), 0.01);
-        const vec = g.passage?.vector ?? [];
-        const maxW = Math.max(...vec.map((v) => v.w), 0.01);
-        body =
-          `<p class="rd-example" role="note"><b>Example of how indexing works — not your search.</b> A term taken from this file, “${esc(lk.query)}”, scored against the index.</p>` +
-          `<ul class="rd-idf">${lk.terms.map((t, i) => `<li><span class="t${i % 4}">${esc(t.t)}</span>${bar(t.idf, maxIdf, "t" + (i % 4))}<code>${t.idf.toFixed(3)}</code></li>`).join("")}</ul>` +
-          `<ul class="rd-hits">${lk.hits
-            .slice(0, 3)
-            .map(
-              (h) =>
-                `<li><span>${esc((h.heading || "passage " + h.ordinal).toLowerCase())}</span><i class="rd-stack" style="--w:${((h.score / maxScore) * 100).toFixed(1)}%">${h.parts.map((p, i) => (p ? `<i class="t${i % 4}" style="flex:${p}"></i>` : "")).join("")}</i><code>${h.score.toFixed(2)}</code></li>`,
-            )
-            .join("")}</ul>` +
-          (vec.length
-            ? `<div class="rd-vec" title="The top passage as numbers: one weight per word">${vec.map((v) => `<i style="--h:${((v.w / maxW) * 100).toFixed(0)}%" title="${esc(v.t)} ${v.w}"></i>`).join("")}</div>`
-            : "") +
-          `<p class="rd-cap">${
-            tech
-              ? `idf = ln(1 + (N − df + 0.5)/(df + 0.5)), N = ${g.index.bundlePassages} passages · ${n0(g.index.vocabulary)} terms here. Meaning vectors: ${g.dense.state === "on" ? `${g.passage?.embedding?.dims ?? ""}-d, ${g.dense.embedded} passages` : g.dense.state === "pending" ? "computing in the background" : "off on this host (memory)"}.`
-              : `Every word gets a weight. Rare words decide; words found everywhere (${esc(lk.terms.reduce((a, t) => (t.idf < a.idf ? t : a), lk.terms[0])?.t ?? "")}) count for almost nothing. The best-scoring passage is what an answer is read from.`
-          }</p>`;
-      }
-      if (f.id === "graph") body = miniGraph(g.graph.mini, tech, g.graph);
-      return `<li class="rd-fr" data-f="${f.id}"><em>${f.n}</em><b>${tech ? f.tech : f.plain}</b>${body}</li>`;
-    }).join("");
-    film.innerHTML = html;
-    // Follow the newest frame, like a film advancing.
-    const last = [...film.querySelectorAll(".rd-fr:not(.wait)")].pop();
-    if (last && !reduced())
-      film.scrollTo({
-        left: last.offsetLeft - film.offsetLeft - 8,
-        behavior: "smooth",
-      });
+      if (!pages.length && count === 0) body.append(make("p", "rd-uncertain", "Zero readable pages reported. No page link is invented."));
+      for (const w of d.warnings ?? []) body.append(make("p", "rd-uncertain", w.message ?? "Page reading warning"));
+    });
+    stage("records", "Records identified", records.length + " records", (body) => {
+      if (!records.length) body.append(make("p", "", "No record boundaries established yet."));
+      const list = make("ul", "rd-data-list");
+      for (const r of records) row(list,
+        (r.title ?? "Record") + " · subject " + (r.patient ?? "ID not verified"),
+        "Printed status: " + (r.status ?? "not reported") + " · pages " +
+          ((r.pages ?? []).join(", ") || "not reported"),
+        null, sourceTitle(d), r.pages?.[0]);
+      body.append(list);
+    });
+    stage("facts", "Facts extracted", facts.length + " cited rows shown", (body) => {
+      if (!facts.length) body.append(make("p", "", "No exact source-linked fact rows reported; nothing was invented."));
+      else body.append(make("p", "", "Showing " + facts.length + " source-linked rows of " +
+        n0(g?.graph?.facts ?? facts.length) + " recorded facts."));
+      const list = make("ul", "rd-data-list");
+      for (const f of facts) row(list, f.label + ": " + f.value,
+        "Recorded in " + (f.citation?.title ?? "source"), f.citation);
+      body.append(list);
+    });
+    stage("indexed", "Evidence indexed", index ? n0(index.passages) + " passages" : "not indexed yet", (body) => {
+      if (!index) { body.append(make("p", "", "Index counts have not been reported yet.")); return; }
+      body.append(make("p", "", n0(index.passages) + " passages from this file; " +
+        n0(index.bundlePassages) + " in the workspace."));
+      body.append(make("p", "", readable + " pages with reported readable text of " +
+        (count == null ? "unknown" : n0(count)) + ". Coverage counts, not confidence or accuracy scores."));
+      if (g.lookup?.illustrative === true) body.append(make("p", "rd-example",
+        (g.lookup.label ?? "Example of indexing — not your search.") +
+        " Term: " + (g.lookup.query ?? "") + ". Not a response to the visitor."));
+    });
+    stage("ready", "Ready", d.answerable === true ? "ask enabled" : "not ready", (body) => {
+      body.append(make("p", "", d.answerable === true
+        ? "This document can be questioned with source verification."
+        : "No supported query can be made from this document yet."));
+      body.append(make("p", "", "Workspace: " + (workspaceId ?? "not established")));
+      const b = make("button", "rd-ready-button", "Ask about this workspace");
+      b.type = "button";
+      b.disabled = d.answerable !== true;
+      b.onclick = () => document.getElementById("q")?.focus();
+      body.append(b);
+    });
+    paintQuery(d);
   }
 
   function miniGraph(mini, tech, gg) {
@@ -941,8 +1078,15 @@
 
   window.VMReading = {
     /** Render into `container` from the latest workspace status. */
-    render(container, list, { focus: id, drops = [] } = {}) {
-      if (root !== container) {
+    render(container, list, { focus: id, drops = [], workspace = null, generation = null, openSource: opener = null } = {}) {
+      if (workspaceId !== workspace || (scopeGeneration !== null && generation !== scopeGeneration)) {
+        latestQuery = null;
+        engineKey = "";
+      }
+      workspaceId = workspace;
+      scopeGeneration = generation;
+      openSource = opener;
+      if (root !== container || !container.querySelector(".rd")) {
         root = container;
         skeleton();
       }
