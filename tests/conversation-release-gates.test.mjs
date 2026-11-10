@@ -164,3 +164,28 @@ test("one oversized turn is evicted rather than exceeding the state byte budget"
   assert.ok(describeState(committed).bytes <= 500);
   assert.equal(committed.turns.length, 0);
 });
+
+test("a shorter repeat never drops a later 'not approved' qualification", () => {
+  const h = harness();
+  const first = resolveConversationTurn(h.input("What is the fee?"));
+  const state = commitConversationTurn(first.state, first.turn.turnId);
+  const repeat = resolveConversationTurn(h.input("say that again shorter"), state);
+  assert.equal(repeat.turn.outcome, "repeat");
+  assert.match(repeat.turn.answer.spoken, /fee is \$42,000/);
+  assert.match(repeat.turn.answer.spoken, /not approved/i);
+});
+
+test("after a multi-subject answer, 'why?' cannot inherit an older sole subject", () => {
+  const h = harness();
+  const first = resolveConversationTurn(h.input("What is the fee?"));
+  let state = commitConversationTurn(first.state, first.turn.turnId);
+  const both = resolveConversationTurn(
+    h.input("What is the ferritin and what is the TSH?"),
+    state,
+  );
+  state = commitConversationTurn(both.state, both.turn.turnId);
+  const follow = resolveConversationTurn(h.input("why?"), state);
+  assert.equal(follow.turn.outcome, "clarify");
+  assert.equal(follow.turn.answer.complete, false);
+  assert.equal(h.calls.length, 3);
+});
