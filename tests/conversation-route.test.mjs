@@ -113,6 +113,11 @@ test("route: workspace expiry forgets the call's conversation", async () => {
   expired = true;
   const gone = await c.ask("why?");
   assert.match(gone.spoken, /expired/);
+  assert.equal(
+    a.lastConversation(t),
+    null,
+    "expired scope clears stale diagnostic",
+  );
   expired = false;
   const after = await c.ask("say that again");
   assert.match(after.conversation.wouldSay, /don't have a verified answer/);
@@ -151,7 +156,16 @@ test("route: voice and typed reach the same decision on the same words", async (
         callId: "typed",
         sourceVersion: "v",
         mode: "typed",
-        records: { vocabulary, resolve: () => ({ status: "unanswered" }) },
+        records: {
+          vocabulary,
+          resolve: () => ({
+            status: "answered",
+            spoken: "$42,000 is the latest proposal, not approved.",
+            verdict: "QUOTED",
+            factIds: ["northstar.proposal"],
+            citations: [{ sourceId: "synthetic", start: 0, end: 10 }],
+          }),
+        },
       },
       typed,
     );

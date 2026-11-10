@@ -455,7 +455,11 @@ test("typed and voice reach the same decision on the same words", () => {
     assert.deepEqual(a.answer.factIds, b.answer.factIds, l);
     assert.equal(a.answer.verdict, b.answer.verdict, l);
     assert.equal(a.answer.screen, b.answer.screen, l);
-    assert.ok(sentences(b.answer.spoken) <= 2, `voice stays short: ${l}`);
+    assert.equal(
+      b.answer.spoken,
+      a.answer.spoken,
+      `voice preserves the entire answer: ${l}`,
+    );
   }
 });
 
@@ -551,6 +555,10 @@ test("first-time caller journey (fixture) runs end to end in voice mode", () => 
       );
     if (e.records !== undefined)
       assert.equal(c.records.calls.length - before, e.records, where);
-    assert.ok(sentences(t.answer.spoken) <= 2, `${where} stays short in voice`);
+    assert.equal(
+      t.answer.spoken,
+      t.answer.screen,
+      `${where} never clips factual sentences`,
+    );
   }
 });

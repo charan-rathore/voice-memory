@@ -66,7 +66,7 @@ an answer this server committed for this call and source version.
     modelUsed: false,
   },
   answer: {
-    spoken,            // voice: at most two sentences
+    spoken,            // voice: complete factual text; never silently clipped
     screen,            // full text
     verdict, citations, factIds,
     fingerprint,       // subject + dimension + fact ids + source version
@@ -128,6 +128,11 @@ delivery of one utterance returns no answer and commits nothing.
 | Same subject, new dimension              | Sentences already heard are dropped, except corrections, refusals, unit, identity and status distinctions |
 | New fact for a subject                   | Full answer (the fingerprint changed)                                                                     |
 
+A shorter repeat must retain later corrections, units and status caveats; if
+there is no safe shorter sentence, the full answer is repeated. Partially
+answered and compound record turns are not valid implicit referents: vague
+follow-ups need clarification.
+
 ## State lifecycle and bounds
 
 - Per call: at most `maxTurns` (8) committed turns and `maxBytes` (16 KiB);
@@ -151,6 +156,9 @@ delivery of one utterance returns no answer and commits nothing.
   facts still come from the engine.
 - the result is attached to `onTurn(...).conversation` and returned by
   `adapter.lastConversation(token)`. Nothing spoken changes.
+- **Shadow's `completed: true` means response emission only**. This is not
+  a Bolna audio-delivery acknowledgement; playback could be cut off. Never
+  use shadow-committed memory as proof of a heard answer at cut-over.
 
 Each observation reports `decision: { legacy, contract }` and `diverges`. The
 first known divergence: on a noise fragment ("uh"), the legacy path says "I

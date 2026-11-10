@@ -67,7 +67,7 @@ function trimmed(state) {
   const { maxTurns, maxBytes, maxSeen } = state.limits;
   let turns = state.turns.slice(-maxTurns);
   let total = turns.reduce((n, t) => n + turnBytes(t), 0);
-  while (turns.length > 1 && total > maxBytes) {
+  while (turns.length > 0 && total > maxBytes) {
     total -= turnBytes(turns[0]);
     turns = turns.slice(1);
   }
@@ -101,7 +101,7 @@ function bind(prior, input) {
         limits: prior.limits,
       }),
       seq: prior.seq,
-      seen: prior.seen,
+      seen: [], // previous document generations cannot make current deliveries duplicates
       resetReason: "source_version",
     };
     return { state: fresh, scopeChanged: hadContext };
@@ -222,7 +222,9 @@ export function selfRepair(text, vocabulary = []) {
   const question = /\?\s*$/.test(text) ? "?" : "";
   if (!hs.length) return { text: tail + question, repaired: true };
   const from = hs[0];
-  const newHead = head.replace(aliasRe(from.alias), ts[0].alias);
+  // Preserve every word after the correction. Replacing the old subject with
+  // only the first tail alias silently discarded additional requests.
+  const newHead = head.replace(aliasRe(from.alias), tail);
   return { text: newHead + question, repaired: true };
 }
 
@@ -333,6 +335,15 @@ export function splitParts(text, vocabulary = []) {
   return parts;
 }
 
+// A narrow *negative* guard: do not treat an unsplit coordinated request as
+// certified complete when a later clause carries a separate answer obligation
+// but does not repeat the subject. This is not a general language parser.
+function unresolvedCompound(text) {
+  return /(?:\b(?:and|also|aur)\s+|\?\s+)(?:when|what|why|how|who|which|where|is|was|were|are|do|did|does|has|have|can|could)\b|\b(?:and|also)\s+(?:the\s+)?(?:approval\s+(?:date|status)|status|deadline|reason|history)\b/i.test(
+    text,
+  );
+}
+
 /** The structured frame for one (already repaired) utterance. */
 export function frameOf(text, vocabulary = []) {
   const subjects = findSubjects(text, vocabulary);
@@ -403,20 +414,27 @@ export function stripRepeated(spoken, priorSpoken) {
 
 /** The first sentences that stand alone, for "say that again, shorter". */
 export function shorterOf(text) {
+  const parts = sentencesOf(text);
   let out = "";
-  for (const p of sentencesOf(text)) {
+  for (const p of parts) {
     out = (out + " " + p).trim();
     if (out.split(/\s+/).length >= 4) break;
   }
+  // An instruction to be brief never authorises dropping later correction,
+  // refusal, identity, quantity, unit or status qualifications.
+  const critical =
+    /\d|\b(?:not|no|never|only|pending|proposed|approved|amended|corrected|superseded|different|patient|units?|refused|cannot|can't|isn't|wasn't)\b|नहीं|मंज़ूर/i;
+  if (parts.some((p) => !out.includes(p) && critical.test(p)))
+    return String(text ?? "").trim();
   return out || String(text ?? "").trim();
 }
 
-/** Voice keeps the primary answer to two sentences; the screen keeps all of it. */
+/** Never silently drop factual sentences to satisfy a voice-length target.
+ * The record renderer must produce a shorter answer, or the caller must hear
+ * the whole supported answer. `max` remains accepted for compatibility. */
 export function voiceClip(spoken, max = 2) {
-  const parts = sentencesOf(spoken);
-  return parts.length > max
-    ? parts.slice(0, max).join(" ")
-    : String(spoken ?? "").trim();
+  void max;
+  return String(spoken ?? "").trim();
 }
 
 const fingerprintOf = (subjectId, dimension, factIds, version) =>
@@ -435,12 +453,18 @@ const fingerprintOf = (subjectId, dimension, factIds, version) =>
 // ------------------------------------------------------------ referents
 
 // The last completed record answer in this source version, if any.
-const lastRecord = (state) =>
-  [...state.turns]
+const lastRecord = (state) => {
+  // A partial or unsupported recent answer is an ambiguity barrier. A vague
+  // follow-up must not jump over it to borrow a previous, unrelated subject.
+  const last = [...state.turns]
     .reverse()
     .find(
-      (t) => t.kind === "record" && t.sourceVersion === state.sourceVersion,
-    ) ?? null;
+      (t) =>
+        t.sourceVersion === state.sourceVersion &&
+        ["record", "partial", "abstain"].includes(t.kind),
+    );
+  return last?.kind === "record" ? last : null;
+};
 
 const recordTurns = (state) =>
   state.turns.filter(
@@ -640,7 +664,7 @@ export function resolveConversationTurn(input, prior = null) {
         outcome: "interrupted",
         scopeChanged,
       }),
-      state: advanced,
+      state: { ...advanced, seen: base.seen },
     };
   }
 
@@ -688,6 +712,9 @@ export function resolveConversationTurn(input, prior = null) {
           ...staged,
           turnId,
           sourceVersion: version,
+          // Transport IDs never enter committed record history; this temporary
+          // field is used only to roll back seen IDs on interrupted delivery.
+          utteranceId: input.utteranceId ?? null,
           factIds,
           citations,
           verdict,
@@ -834,6 +861,33 @@ export function resolveConversationTurn(input, prior = null) {
   if (!parts) {
     if (frame.subjects.length) {
       const pieces = splitParts(text, vocabulary);
+      // Two explicitly named subjects do not prove a comparison is answered
+      // by returning two independent values. An unsplit multi-subject query
+      // is likewise not a certified single-subject lookup.
+      const unsupportedComparison =
+        frame.subjects.length > 1 &&
+        /\b(?:compare|comparison|difference|differences|versus|vs\.?|between)\b|तुलना|अंतर/i.test(
+          text,
+        );
+      if (
+        unsupportedComparison ||
+        (pieces.length === 1 &&
+          (unresolvedCompound(text) || frame.subjects.length > 1))
+      ) {
+        understanding.confidence = "low";
+        understanding.needsClarification = true;
+        return finish({
+          outcome: "clarify",
+          spoken:
+            lang === "hi"
+              ? "इस सवाल के कई हिस्से हो सकते हैं। हर हिस्से का जवाब जाँचने के लिए उन्हें अलग-अलग पूछिए।"
+              : "That may ask more than one thing. Please ask each part separately so I don't leave one unanswered.",
+          staged: { kind: "clarify" },
+          pendingAfter: null,
+          dimension: "clarify",
+          complete: false,
+        });
+      }
       parts =
         pieces.length > 1
           ? pieces.map((pt) => {
@@ -955,15 +1009,17 @@ export function resolveConversationTurn(input, prior = null) {
     verdict: single ? single.verdict : segments.map((s) => s.verdict).join("+"),
     citations: segments.flatMap((s) => s.citations),
     factIds: [...new Set(segments.flatMap((s) => s.factIds))],
-    staged: {
-      kind: "record",
-      subject: single
-        ? single.subject
-        : segments.map((s) => s.subject).join("+"),
-      dimension: single ? single.dimension : null,
-      fingerprint: single ? single.fingerprint : null,
-      temporal: segments.some((s) => s.temporal),
-    },
+    staged: answered.length
+      ? {
+          kind: complete && single ? "record" : "partial",
+          subject: single
+            ? single.subject
+            : segments.map((s) => s.subject).join("+"),
+          dimension: single ? single.dimension : null,
+          fingerprint: single ? single.fingerprint : null,
+          temporal: segments.some((s) => s.temporal),
+        }
+      : { kind: "abstain" },
     pendingAfter: null,
     dimension: single ? single.dimension : null,
     complete,
@@ -1016,9 +1072,19 @@ export function commitConversationTurn(
   { completed = true } = {},
 ) {
   if (!state?.staged || state.staged.turnId !== turnId) return state;
-  const { pendingAfter, ...entry } = state.staged;
+  const { pendingAfter, utteranceId, ...entry } = state.staged;
   const base = { ...state, staged: null };
-  if (!completed) return base;
+  if (!completed) {
+    // Aborted utterances are retryable. Do not make an unplayed utterance ID
+    // look as if it was successfully committed.
+    return {
+      ...base,
+      seen:
+        utteranceId == null
+          ? base.seen
+          : base.seen.filter((s) => s.turnId !== turnId),
+    };
+  }
   return trimmed({
     ...base,
     turns: [...state.turns, entry],

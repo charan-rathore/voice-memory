@@ -443,6 +443,8 @@ export function createVoiceAdapter({
       }
       if (scopeGone || scopeBad) {
         shadow.forget(shadowKey);
+        // The last diagnostic must not outlive the owning workspace.
+        grant.conversation = null;
         // Their workspace expired (30 idle minutes) or was replaced, or the
         // call names a scope this server cannot read. Say so plainly, and
         // show the same words on the page; never answer from the fictional
@@ -1583,29 +1585,36 @@ export function createVoiceAdapter({
           while (cache.size > 16) cache.delete(cache.keys().next().value);
         }
         let conversation = null;
+        // Do not expose a previous call's diagnostic if shadow observation
+        // throws, or if the current response has become scope-invalid.
+        grant.conversation = null;
         let observation = null;
         try {
-          observation = shadow.observe({
-            key: shadowKey,
-            bundle,
-            version: startingVersion,
-            heard: askedRaw,
-            // The final admitted answer: shared rendering, the coverage
-            // disclosure and any scope-change replacement all happen
-            // above, so the shadow never sees a preliminary candidate.
-            legacy: {
-              spoken,
-              verdict: turn?.spokenTurn?.verdict ?? null,
-              intent: social?.intent ?? turn?.spokenTurn?.intent ?? null,
-              citations: turn?.spokenTurn?.citations ?? [],
-              evidence: turn?.result?.evidence?.length ?? 0,
-            },
-          });
-          // The page and grant memory see the payload only; the delivery
-          // acknowledgement (commit) is not part of it.
-          conversation = observation
-            ? (({ commit, ...payload }) => payload)(observation)
-            : null;
+          if (turn?.spokenTurn?.intent === "SCOPE_CHANGED") {
+            shadow.forget(shadowKey);
+          } else {
+            observation = shadow.observe({
+              key: shadowKey,
+              bundle,
+              version: startingVersion,
+              heard: askedRaw,
+              // The final admitted answer: shared rendering, the coverage
+              // disclosure and any scope-change replacement all happen
+              // above, so the shadow never sees a preliminary candidate.
+              legacy: {
+                spoken,
+                verdict: turn?.spokenTurn?.verdict ?? null,
+                intent: social?.intent ?? turn?.spokenTurn?.intent ?? null,
+                citations: turn?.spokenTurn?.citations ?? [],
+                evidence: turn?.result?.evidence?.length ?? 0,
+              },
+            });
+            // The page and grant memory see the payload only; the delivery
+            // acknowledgement (commit) is not part of it.
+            conversation = observation
+              ? (({ commit, ...payload }) => payload)(observation)
+              : null;
+          }
           grant.conversation = conversation;
         } catch {
           /* the shadow never breaks a call */

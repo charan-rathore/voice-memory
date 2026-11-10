@@ -184,6 +184,16 @@ Not done, deliberately:
   scrolling; not changed here.
 - A broader visual redesign was not attempted without a design direction.
 
+## Additional release review checkpoint (2026-11-10)
+
+A separate draft PR #79 adds conservative code repairs and regressions. It
+must not be merged or deployed as an active conversation resolver until the
+real record adapter, typed/voice parity, Bolna delivery acknowledgement and
+runtime qualification are complete. Shadow memory is committed when SSE is
+produced, not when TTS is confirmed heard. A cut-off audio response therefore
+cannot be proven absent from the shadow state. No automatic switch-over is
+permitted on this evidence alone.
+
 ## Step 5: cut-over (next engineer: start here)
 
 1. On a machine with dependencies, run the full validation block above.
