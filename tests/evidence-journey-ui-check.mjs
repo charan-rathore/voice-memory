@@ -86,6 +86,58 @@ try {
       fail(`${width}: budget promised`);
     if (/Looking up “/.test(reading) && !/not your search/.test(reading))
       fail(`${width}: an index example is not labelled as an example`);
+
+    // Read the server-owned upload log/digest. The UI must display these
+    // facts, not frame numbers or fabricated "completed" milestones.
+    const observed = await page.evaluate(async () => {
+      const workspace = sessionStorage.getItem("vm_ws");
+      const response = await fetch("/api/public/workspace/" + workspace);
+      return { workspace, status: await response.json() };
+    });
+    const uploaded = observed.status.documents.find(
+      (d) => d.filename === file.name,
+    );
+    if (!uploaded) fail(width + ": uploaded document missing from workspace status");
+    for (const id of ["received", "pages", "records", "facts", "indexed", "ready"]) {
+      const details = page.locator('.rd-stage[data-stage="' + id + '"] details');
+      await details.waitFor({ timeout: 10000 });
+      if (!(await details.evaluate((el) => el.open)))
+        await details.locator("summary").click();
+    }
+    const received = await page.locator('.rd-stage[data-stage="received"]').innerText();
+    if (!received.includes(uploaded.filename) ||
+        !received.includes(String(uploaded.bytes)) ||
+        !received.includes(uploaded.kind))
+      fail(width + ": receipt details do not match server-owned upload metadata");
+    const pages = await page.locator('.rd-stage[data-stage="pages"]').innerText();
+    if (!pages.includes(String(uploaded.pages) + " pages"))
+      fail(width + ": the real page count did not reach the page disclosure");
+    const records = await page.locator('.rd-stage[data-stage="records"]').innerText();
+    if (!records.includes(String(uploaded.digest?.records?.length ?? 0) + " records"))
+      fail(width + ": record boundaries do not match the actual digest");
+    const facts = uploaded.digest?.inspectedFacts ?? [];
+    const factView = await page.locator('.rd-stage[data-stage="facts"]').innerText();
+    if (!factView.includes(String(facts.length) + " cited rows"))
+      fail(width + ": extracted-fact count differs from the digest");
+    for (const fact of facts) {
+      if (!fact.citation?.quote || !fact.citation?.location?.focus)
+        fail(width + ": a displayed fact lacks an exact canonical citation");
+      if (!factView.includes(fact.label))
+        fail(width + ": a digest fact was omitted from the disclosure");
+    }
+    const indexed = await page.locator('.rd-stage[data-stage="indexed"]').innerText();
+    if (uploaded.digest?.index &&
+        !indexed.includes(String(uploaded.digest.index.passages) + " passages"))
+      fail(width + ": indexed passage count differs from the digest");
+    if (/confidence score|retrieval score/i.test(indexed))
+      fail(width + ": index metrics were presented as answer confidence");
+    const readyAction = page.locator('.rd-stage[data-stage="ready"] [data-ready], .rd-stage[data-stage="ready"] .rd-ready-button');
+    if (uploaded.answerable) {
+      await readyAction.click();
+      if (!(await page.evaluate(() => document.activeElement?.id === "q")))
+        fail(width + ": Ready must focus the real question input");
+    }
+
     await page.screenshot({
       path: join(shots, `journey-${width}-reading.png`),
       fullPage: false,
@@ -103,10 +155,131 @@ try {
       path: join(shots, `journey-${width}-viewer.png`),
       fullPage: false,
     });
+
+    // Verify that the *real* typed response, not the highest-ranked passage,
+    // determines the query activity and its canonical admitted citations.
+    const submit = async (q) => {
+      const done = page.waitForResponse(
+        (r) => r.url().includes("/api/public/ask") &&
+          r.request().method() === "POST",
+        { timeout: 45000 },
+      );
+      await page.locator("#q").fill(q);
+      await page.locator("#askbar").evaluate((f) => f.requestSubmit());
+      const response = await done;
+      if (!response.ok()) fail(width + ": ask failed: " + response.status());
+      const body = await response.json();
+      if (!body.final) fail(width + ": canonical final missing on live answer");
+      await page.locator(".rd-query:not([hidden])").waitFor({ timeout: 15000 });
+      const verdict = await page.locator(".rd-query-verdict").innerText();
+      const supported = typeof body.final.admittedText === "string";
+      if (!verdict.includes(supported ? body.final.admittedText : "No supported answer"))
+        fail(width + ": query display diverges from final.admittedText");
+      const admitted = body.final.citations ?? [];
+      const citedButtons = page.locator("#answer .cites .cite");
+      if (await citedButtons.count() !== admitted.length)
+        fail(width + ": the answer promoted a non-admitted retrieval passage");
+      const queryText = await page.locator(".rd-query").innerText();
+      for (const cite of admitted)
+        if (!queryText.includes(cite.quote))
+          fail(width + ": a canonical citation is missing from the query journey");
+      if ((body.final.relatedEvidence ?? []).length &&
+          !queryText.includes("Related evidence — not an answer"))
+        fail(width + ": related evidence was not separated from admissions");
+      return body.final;
+    };
+
+    const first = await submit("What is the notice period?");
+    if (first.citations?.length) {
+      const cite = first.citations[0];
+      await page.locator("#answer .cite").first().click();
+      await page.locator("#viewer-body .rd-doc.focus").waitFor();
+      const originalText = await page.locator("#viewer-body").innerText();
+      const hasPdfBox = (await page.locator("#viewer-body .rd-canvas .box").count()) > 0;
+      const hasTextMark = (await page.locator("#viewer-body mark").count()) > 0;
+      if (!hasPdfBox && !hasTextMark && !originalText.includes(cite.quote))
+        fail(width + ": citation did not open its original source");
+    }
+    const unknown = await submit("What is the private admin password?");
+    if (unknown.admittedText !== null)
+      fail(width + ": unsupported question was admitted as a confident answer");
+    const label = await page.locator("#answer .verdict-chip").innerText();
+    if (!/no supported answer|needs clarification/i.test(label))
+      fail(width + ": unsupported question has a confident visual status");
+    if (width === 390 || width === 1280) {
+      await page.locator("#desk").screenshot({
+        path: join(shots, "journey-" + width + "-unsupported-after.png"),
+      });
+    }
+
+    // Synthetic UI stress inputs are NOT evidence-engine accuracy tests.
+    // They exercise state rendering with 101 pages, a long name, failed OCR,
+    // and zero pages without using private files or fabricating a real upload.
+    await page.evaluate((entry) => {
+      const workspace = sessionStorage.getItem("vm_ws");
+      const doc = structuredClone(entry);
+      doc.id = "synthetic-browser-ocr";
+      doc.filename = "very-long-" + "x".repeat(225) + ".pdf";
+      doc.title = entry.title;
+      doc.pages = 101;
+      doc.answerable = false;
+      doc.progress = {
+        ...doc.progress,
+        age: 2000,
+        log: [],
+        pages: Array.from({ length: 101 }, (_, i) => ({
+          n: i + 1,
+          state: i === 1 ? "ocr-done" : "text",
+          chars: i === 1 ? 0 : 15,
+          uncertain: i === 1 ? 2 : 0,
+        })),
+      };
+      window.__journeyNav = null;
+      window.VMReading.render(document.getElementById("upl-flow"), [doc], {
+        workspace,
+        generation: entry.bundleGeneration,
+        openSource: async (title, citations) => {
+          window.__journeyNav = { title, citations };
+        },
+      });
+    }, uploaded);
+    const pageStage = page.locator('.rd-stage[data-stage="pages"] details');
+    if (!(await pageStage.evaluate((el) => el.open)))
+      await pageStage.locator("summary").click();
+    const warning = page.locator('.rd-stage[data-stage="pages"] .rd-data-row.warn');
+    await warning.first().getByRole("button", { name: "Open page to review" }).click();
+    const jump = await page.evaluate(() => window.__journeyNav);
+    if (!jump || jump.title !== uploaded.title)
+      fail(width + ": OCR warning did not open the correct synthetic page source");
+    while ((await page.locator(".rd-pages [data-expand-pages]").count()) > 0) {
+      await page.locator(".rd-pages [data-expand-pages]").click();
+    }
+    if ((await page.locator(".rd-pages .rd-pg").count()) !== 101)
+      fail(width + ": 101 pages are not reachable by explicit expansion");
+    const longName = await page.locator('.rd-stage[data-stage="received"]').innerText();
+    if (!longName.includes("x".repeat(225)))
+      fail(width + ": a long filename was lost rather than wrapped");
+
+    await page.evaluate((entry) => {
+      const doc = structuredClone(entry);
+      doc.id = "synthetic-browser-zero-pages";
+      doc.pages = 0;
+      doc.digest = null;
+      doc.status = "failed";
+      doc.answerable = false;
+      doc.progress = { log: [], pages: [], age: 0 };
+      window.VMReading.render(document.getElementById("upl-flow"), [doc], {
+        workspace: sessionStorage.getItem("vm_ws"),
+      });
+    }, uploaded);
+    const zeroPages = await page.locator('.rd-stage[data-stage="pages"]').innerText();
+    if (!/0 pages/.test(zeroPages) || !/Zero readable pages/.test(zeroPages))
+      fail(width + ": zero-page state was not truthful");
+
     await page.close();
   }
   console.log(
-    "evidence-journey-ui-check OK: tiles are buttons at 320/390/768/1280, Enter opens the document, no budget, example labelled. Shots:",
+    "evidence-journey-ui-check OK: six real-data disclosures, original-page navigation, canonical query/citation rendering, safe unsupported answers, 101/0 pages and OCR review at 320/390/768/1280. Shots:",
     shots,
   );
 } finally {
