@@ -97,26 +97,52 @@ try {
     const uploaded = observed.status.documents.find(
       (d) => d.filename === file.name,
     );
-    if (!uploaded) fail(width + ": uploaded document missing from workspace status");
-    for (const id of ["received", "pages", "records", "facts", "indexed", "ready"]) {
-      const details = page.locator('.rd-stage[data-stage="' + id + '"] details');
+    if (!uploaded)
+      fail(width + ": uploaded document missing from workspace status");
+    for (const id of [
+      "received",
+      "pages",
+      "records",
+      "facts",
+      "indexed",
+      "ready",
+    ]) {
+      const details = page.locator(
+        '.rd-stage[data-stage="' + id + '"] details',
+      );
       await details.waitFor({ timeout: 10000 });
       if (!(await details.evaluate((el) => el.open)))
         await details.locator("summary").click();
     }
-    const received = await page.locator('.rd-stage[data-stage="received"]').innerText();
-    if (!received.includes(uploaded.filename) ||
-        !received.includes(String(uploaded.bytes)) ||
-        !received.includes(uploaded.kind))
-      fail(width + ": receipt details do not match server-owned upload metadata");
-    const pages = await page.locator('.rd-stage[data-stage="pages"]').innerText();
+    const received = await page
+      .locator('.rd-stage[data-stage="received"]')
+      .innerText();
+    if (
+      !received.includes(uploaded.filename) ||
+      !received.includes(String(uploaded.bytes)) ||
+      !received.includes(uploaded.kind)
+    )
+      fail(
+        width + ": receipt details do not match server-owned upload metadata",
+      );
+    const pages = await page
+      .locator('.rd-stage[data-stage="pages"]')
+      .innerText();
     if (!pages.includes(String(uploaded.pages) + " pages"))
       fail(width + ": the real page count did not reach the page disclosure");
-    const records = await page.locator('.rd-stage[data-stage="records"]').innerText();
-    if (!records.includes(String(uploaded.digest?.records?.length ?? 0) + " records"))
+    const records = await page
+      .locator('.rd-stage[data-stage="records"]')
+      .innerText();
+    if (
+      !records.includes(
+        String(uploaded.digest?.records?.length ?? 0) + " records",
+      )
+    )
       fail(width + ": record boundaries do not match the actual digest");
     const facts = uploaded.digest?.inspectedFacts ?? [];
-    const factView = await page.locator('.rd-stage[data-stage="facts"]').innerText();
+    const factView = await page
+      .locator('.rd-stage[data-stage="facts"]')
+      .innerText();
     if (!factView.includes(String(facts.length) + " cited rows"))
       fail(width + ": extracted-fact count differs from the digest");
     for (const fact of facts) {
@@ -125,13 +151,19 @@ try {
       if (!factView.includes(fact.label))
         fail(width + ": a digest fact was omitted from the disclosure");
     }
-    const indexed = await page.locator('.rd-stage[data-stage="indexed"]').innerText();
-    if (uploaded.digest?.index &&
-        !indexed.includes(String(uploaded.digest.index.passages) + " passages"))
+    const indexed = await page
+      .locator('.rd-stage[data-stage="indexed"]')
+      .innerText();
+    if (
+      uploaded.digest?.index &&
+      !indexed.includes(String(uploaded.digest.index.passages) + " passages")
+    )
       fail(width + ": indexed passage count differs from the digest");
     if (/confidence score|retrieval score/i.test(indexed))
       fail(width + ": index metrics were presented as answer confidence");
-    const readyAction = page.locator('.rd-stage[data-stage="ready"] [data-ready], .rd-stage[data-stage="ready"] .rd-ready-button');
+    const readyAction = page.locator(
+      '.rd-stage[data-stage="ready"] [data-ready], .rd-stage[data-stage="ready"] .rd-ready-button',
+    );
     if (uploaded.answerable) {
       await readyAction.click();
       if (!(await page.evaluate(() => document.activeElement?.id === "q")))
@@ -160,7 +192,8 @@ try {
     // determines the query activity and its canonical admitted citations.
     const submit = async (q) => {
       const done = page.waitForResponse(
-        (r) => r.url().includes("/api/public/ask") &&
+        (r) =>
+          r.url().includes("/api/public/ask") &&
           r.request().method() === "POST",
         { timeout: 45000 },
       );
@@ -173,18 +206,26 @@ try {
       await page.locator(".rd-query:not([hidden])").waitFor({ timeout: 15000 });
       const verdict = await page.locator(".rd-query-verdict").innerText();
       const supported = typeof body.final.admittedText === "string";
-      if (!verdict.includes(supported ? body.final.admittedText : "No supported answer"))
+      if (
+        !verdict.includes(
+          supported ? body.final.admittedText : "No supported answer",
+        )
+      )
         fail(width + ": query display diverges from final.admittedText");
       const admitted = body.final.citations ?? [];
       const citedButtons = page.locator("#answer .cites .cite");
-      if (await citedButtons.count() !== admitted.length)
+      if ((await citedButtons.count()) !== admitted.length)
         fail(width + ": the answer promoted a non-admitted retrieval passage");
       const queryText = await page.locator(".rd-query").innerText();
       for (const cite of admitted)
         if (!queryText.includes(cite.quote))
-          fail(width + ": a canonical citation is missing from the query journey");
-      if ((body.final.relatedEvidence ?? []).length &&
-          !queryText.includes("Related evidence — not an answer"))
+          fail(
+            width + ": a canonical citation is missing from the query journey",
+          );
+      if (
+        (body.final.relatedEvidence ?? []).length &&
+        !queryText.includes("Related evidence — not an answer")
+      )
         fail(width + ": related evidence was not separated from admissions");
       return body.final;
     };
@@ -195,7 +236,8 @@ try {
       await page.locator("#answer .cite").first().click();
       await page.locator("#viewer-body .rd-doc.focus").waitFor();
       const originalText = await page.locator("#viewer-body").innerText();
-      const hasPdfBox = (await page.locator("#viewer-body .rd-canvas .box").count()) > 0;
+      const hasPdfBox =
+        (await page.locator("#viewer-body .rd-canvas .box").count()) > 0;
       const hasTextMark = (await page.locator("#viewer-body mark").count()) > 0;
       if (!hasPdfBox && !hasTextMark && !originalText.includes(cite.quote))
         fail(width + ": citation did not open its original source");
@@ -246,17 +288,26 @@ try {
     const pageStage = page.locator('.rd-stage[data-stage="pages"] details');
     if (!(await pageStage.evaluate((el) => el.open)))
       await pageStage.locator("summary").click();
-    const warning = page.locator('.rd-stage[data-stage="pages"] .rd-data-row.warn');
-    await warning.first().getByRole("button", { name: "Open page to review" }).click();
+    const warning = page.locator(
+      '.rd-stage[data-stage="pages"] .rd-data-row.warn',
+    );
+    await warning
+      .first()
+      .getByRole("button", { name: "Open page to review" })
+      .click();
     const jump = await page.evaluate(() => window.__journeyNav);
     if (!jump || jump.title !== uploaded.title)
-      fail(width + ": OCR warning did not open the correct synthetic page source");
+      fail(
+        width + ": OCR warning did not open the correct synthetic page source",
+      );
     while ((await page.locator(".rd-pages [data-expand-pages]").count()) > 0) {
       await page.locator(".rd-pages [data-expand-pages]").click();
     }
     if ((await page.locator(".rd-pages .rd-pg").count()) !== 101)
       fail(width + ": 101 pages are not reachable by explicit expansion");
-    const longName = await page.locator('.rd-stage[data-stage="received"]').innerText();
+    const longName = await page
+      .locator('.rd-stage[data-stage="received"]')
+      .innerText();
     if (!longName.includes("x".repeat(225)))
       fail(width + ": a long filename was lost rather than wrapped");
 
@@ -272,7 +323,9 @@ try {
         workspace: sessionStorage.getItem("vm_ws"),
       });
     }, uploaded);
-    const zeroPages = await page.locator('.rd-stage[data-stage="pages"]').innerText();
+    const zeroPages = await page
+      .locator('.rd-stage[data-stage="pages"]')
+      .innerText();
     if (!/0 pages/.test(zeroPages) || !/Zero readable pages/.test(zeroPages))
       fail(width + ": zero-page state was not truthful");
 
