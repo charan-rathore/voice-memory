@@ -165,22 +165,40 @@ first known divergence: on a noise fragment ("uh"), the legacy path says "I
 couldn't establish that from these documents" where the contract asks a short
 question.
 
-## Cut-over (not done in this branch)
+## Cut-over status
 
-1. Deploy shadow mode; log `conversation.decision` and `diverges` per turn
-   (no transcript text needed in the log).
-2. Build a record interface over the real engines (`spokenTurn` for deal
-   fields, `clinicalAnswer` for lab tests, `bundleFactAnswer` for uploaded
-   documents) that returns `ambiguous` for multi-patient matches and
-   `temporal: true` for amended or superseded values.
-3. Run `evaluation/conversation-parity.test.mjs`, `bolna-route.test.mjs`,
-   `conversation-repeat.test.mjs` and the vault with the contract deciding.
-4. Switch the voice route and `/api/ask` to the contract's decision; delete
-   `voiceQuestions` joining, the regex follow-up test, `grant.lastField`, and
-   the post-hoc sentence removal in `voice-adapter.mjs`.
+Done (see `OWNER_EXPLAINER.md`):
+
+- **Factual authority.** The canonical resolver (`resolveAnswer`) answers
+  spoken requests by default, as it answers typed ones. Evidence: with it
+  forced on, the evaluation, boundary and vault suites had no new failure
+  against `main`. `VM_SHARED_VOICE_REASONING=off` is an operator rollback.
+- **Admission.** One request admission (`admitRequest`) for both routes, and
+  for answers the adapter still renders itself.
+- **Contract on the call's screen feed.** Each spoken turn carries the
+  canonical answer contract (`contract`).
+- **The contract's reading on the plan.** `preview()` reads follow-up,
+  referenced turn and self-correction before an answer exists; it rides on
+  `questionPlan.followUp`.
+
+Not done:
+
+1. **Referent resolution.** The adapter's existing chain still decides what a
+   follow-up refers to (`voiceQuestions` joining, the follow-up test,
+   `grant.lastField`). The contract observes it (`conversation.diverges`).
+2. To finish: build `records.resolve` over the canonical resolver; give the
+   contract patient and date inheritance and the Hindi paths; collect
+   divergence on real calls; switch; then delete the chain above and the
+   post-hoc sentence removal.
 
 ## API changes (additive)
 
 - `createVoiceAdapter().lastConversation(token)`: new.
 - `onTurn(token, payload)`: `payload.conversation` added.
 - New modules: `src/conversation-turn.mjs`, `src/conversation-shadow.mjs`.
+- `final.admittedText`, `final.answeredRequirements`,
+  `final.unresolvedRequirements`, `final.scope`; `final.relatedEvidence` is
+  always an array.
+- `questionPlan.request`, `questionPlan.scope`, `questionPlan.followUp`;
+  requirement `slots` may be filled by the closed grammar.
+- `onTurn(...).contract` and `contract` on each `/api/public/voice/turns` entry.

@@ -1494,6 +1494,13 @@ export function publicAnswer(shown) {
       from: final.from,
       citations: final.citations.map(cite),
       relatedEvidence: (final.relatedEvidence ?? []).map(cite),
+      // The request view (answer-contract.mjs): what was admitted, which
+      // requirements it answers, which remain open, and the source scope
+      // and version it was made against. Additive.
+      admittedText: final.admittedText ?? null,
+      answeredRequirements: final.answeredRequirements ?? [],
+      unresolvedRequirements: final.unresolvedRequirements ?? [],
+      scope: final.scope ?? null,
       // Whole-question coverage provenance (whole-question-coverage.mjs).
       // `complete` is true only when every requirement of a qualified
       // request has an established outcome. Never inferred from wording.

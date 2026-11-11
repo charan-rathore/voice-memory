@@ -722,12 +722,36 @@ function render({
   const label = current ? docLabel(current) : null;
   // "Originally/first proposed" asks for the EARLIEST record; "what was it
   // before" asks for the latest superseded one.
-  const earlier = history.length
+  // An approved record does not erase what was proposed before it. When the
+  // engine recorded no supersession edge (three figures, one of them
+  // approved later), a history question is still answered from this field's
+  // own earlier-dated claims with a different value, never left as the
+  // approved figure alone.
+  const pool = history.length
+    ? history
+    : (intent === "HISTORY" ||
+          (intent === "LATEST" && /\bpropos\w*\b/i.test(question))) &&
+        verdict === "CONFIRMED" &&
+        current?.docDate
+      ? (citations ?? [])
+          .filter(
+            (c, i, all) =>
+              c !== current &&
+              c.field === field &&
+              c.value &&
+              c.value !== current.value &&
+              c.docDate &&
+              c.docDate < current.docDate &&
+              all.findIndex((o) => o.value === c.value) === i,
+          )
+          .sort((a, b) => a.docDate.localeCompare(b.docDate))
+      : [];
+  const earlier = pool.length
     ? /\b(original(?:ly)?|first|initial(?:ly)?)\b/i.test(question)
-      ? [...history].sort((a, b) =>
+      ? [...pool].sort((a, b) =>
           (a.docDate || "").localeCompare(b.docDate || ""),
         )[0]
-      : history[history.length - 1]
+      : pool[pool.length - 1]
     : null;
   const earlierVal = earlier ? disp(earlier.value) : null;
   const neg =
@@ -828,6 +852,14 @@ function render({
         /^\s*(?:is|was|are|were|has|have|had|did|does|do|can|could|should|would|will)\b/i.test(
           question,
         );
+      // "The latest PROPOSED figure" is not the approved one: name the last
+      // proposal on record, then what was approved after it.
+      const lastProposal =
+        !polar && intent === "LATEST" && /\bpropos\w*\b/i.test(question)
+          ? [...pool].reverse().find((c) => c.status === "proposed")
+          : null;
+      if (lastProposal && value)
+        return `The latest proposal was ${disp(lastProposal.value)}, per ${docLabel(lastProposal)}. ${cap(label)} then records the approval of ${value}.`;
       return polar
         ? `Yes. ${cap(label)} records the approval${value ? ` of ${value}` : ""}.`
         : `${cap(label)} records the approval${value ? ` of ${value}` : ""}.`;

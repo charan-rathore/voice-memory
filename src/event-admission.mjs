@@ -30,6 +30,14 @@ const canon = (actor, action, target, polarity) => {
   // into part of the actor. Entity labels retain their explicit name syntax.
   const named = new RegExp(`^${entity}$`);
   if (pronoun.test(actor) || !named.test(actor)) return null;
+  // A bare determiner is not an object: "Who approved the" is the head of
+  // a longer question ("... the $42,000 fee?"), not a request of its own.
+  if (
+    /^(?:the|a|an|this|that|these|those|its|their|our|your|my)$/i.test(
+      String(target).trim(),
+    )
+  )
+    return null;
   if (
     /\b(and|or|if|unless|before|after|when|not|no|without|subject|pending|proposed|draft|former|current|latest|yesterday|today|tomorrow|previously|originally|recently|already|still)\b/i.test(
       actor + " " + target,

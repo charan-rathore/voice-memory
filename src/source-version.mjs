@@ -10,3 +10,29 @@ export function historicalOnlyForCurrentRequest(question, text) {
     text,
   );
 }
+
+// The immutable version of a document scope: a digest of what the bundle
+// holds (scope, and each source's id, hash and title). Two bundles with the
+// same digest hold the same documents; any upload, removal or re-reading
+// changes it. Answers, plans and conversation state carry this value so a
+// consumer can tell which documents an answer was made against.
+import { createHash } from "node:crypto";
+export function sourceVersionOf(bundle) {
+  if (!bundle || typeof bundle !== "object") return null;
+  // Recomputed on every call: a workspace bundle can gain or lose a source
+  // in place, and a memoised digest would then name the wrong documents.
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        bundle.scope ?? null,
+        ...(bundle.sources ?? []).map((s) => [
+          s.id ?? null,
+          s.hash ?? null,
+          s.title ?? null,
+          typeof s.text === "string" ? s.text.length : null,
+        ]),
+      ]),
+    )
+    .digest("hex")
+    .slice(0, 16);
+}

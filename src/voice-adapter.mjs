@@ -51,6 +51,9 @@ import {
   wholeQuestionCoverage,
 } from "./whole-question-coverage.mjs";
 import { finalAnswer } from "./answer-contract.mjs";
+import { questionPlan } from "./question-plan.mjs";
+import { admitRequest } from "./answer-admission.mjs";
+import { sourceVersionOf } from "./source-version.mjs";
 import {
   voiceQuestions,
   isFragment,
@@ -799,6 +802,9 @@ export function createVoiceAdapter({
           splitCompound(normalizeSpoken(transcript) || transcript).length > 1;
         const [firstQ, secondQ0] = ownCompound ? splitCompound(asked) : [asked];
         const secondQ = mixedTurn ? null : secondQ0;
+        // The canonical resolver answers a compound request whole: it owns
+        // the split into requirements and names any part it cannot support.
+        const askedWhole = asked;
         if (secondQ) asked = firstQ;
         const streaming = true;
         // Barge-in is per call. The operator's fixed bearer is shared by every
@@ -844,18 +850,39 @@ export function createVoiceAdapter({
         // before voice-specific retrieval/renderers choose any fact. Speech
         // repair/history remain above; specialist orchestration stays below.
         let earlyUnified = null;
+        // The conversation contract's reading of this turn, before any
+        // answer exists: whether it refers back, to which committed turn,
+        // and whether the caller corrected themselves. It rides on the
+        // question plan; it does not select evidence.
+        let followUp = null;
+        try {
+          const read = shadow.preview({
+            key: shadowKey,
+            bundle,
+            version: startingVersion,
+            heard: askedRaw,
+          });
+          if (read && (read.followUp || read.correction))
+            followUp = {
+              referencedTurnId: read.referencedTurnId,
+              subject: read.subject,
+              correction: read.correction,
+            };
+        } catch {
+          followUp = null;
+        }
         if (
           resolveAnswer &&
           !mixedTurn &&
-          !secondQ &&
           !social &&
           !ownerBlocked &&
           !adviceKind(transcript) &&
           isQuestion(transcript)
         ) {
           earlyUnified = await resolveAnswer({
-            question: asked,
+            question: secondQ ? askedWhole : asked,
             originalQuestion: askedRaw,
+            followUp,
             exactSchemaOnly: false,
             bundle,
             caseId,
@@ -1332,7 +1359,10 @@ export function createVoiceAdapter({
         if (
           (!earlyUnified ||
             (earlyUnified.lead?.verdict === "UNKNOWN" &&
-              !earlyUnified.lead?.citations?.length)) &&
+              !earlyUnified.lead?.citations?.length &&
+              // "these documents don't state who ..." is an answer about
+              // THESE documents, not a question for the other demo case
+              earlyUnified.lead?.origin !== "relation-not-stated")) &&
           !social &&
           !mixedTurn &&
           (earlyUnified ||
@@ -1393,7 +1423,8 @@ export function createVoiceAdapter({
         if (!social && bundle.clinical?.length) spoken = thirdPerson(spoken);
         releaseBusy();
         let sharedRendered = false,
-          sharedCoverage = null;
+          sharedCoverage = null,
+          sharedFinal = null;
         // Optional server-owned common answer boundary. Caller messages never
         // select a provider, grant consent, or supply this resolver. Scope and
         // cancellation are checked again after the asynchronous result.
@@ -1450,6 +1481,7 @@ export function createVoiceAdapter({
               };
               grant.lastField = lead.field ?? null;
             }
+            sharedFinal = finalAnswer(unified);
             turn = {
               result: unified.raw ?? null,
               spokenTurn: {
@@ -1472,11 +1504,74 @@ export function createVoiceAdapter({
         // whole-question coverage was not verified, in the caller's language,
         // with the same sentence the screen shows.
         // Social replies (thanks, can-you-hear-me, help) assert no answer.
+        // An answer rendered here (no server resolver: a standalone adapter,
+        // or the residual mixed-domain demo orchestration) passes the same
+        // request admission the canonical resolver applies, so there is one
+        // admission rule whichever renderer produced the words.
+        let localAdmitted = null;
+        if (
+          turn?.spokenTurn &&
+          spoken &&
+          !sharedRendered &&
+          !social &&
+          !["ADVICE", "OTHER_CASE", "MIXED"].includes(turn.spokenTurn.intent)
+        ) {
+          try {
+            const plan = questionPlan({
+              originalQuestion: askedRaw,
+              sourceGeneration: 0,
+              scope: {
+                key: bundle?.scope ?? null,
+                version: sourceVersionOf(bundle),
+              },
+              followUp,
+            });
+            const shownLocal = {
+              question: askedRaw,
+              questionPlan: plan,
+              lead: {
+                text: spoken,
+                verdict: turn.spokenTurn.verdict,
+                field: turn.spokenTurn.field ?? null,
+                citations: turn.spokenTurn.citations ?? [],
+              },
+              evidence: [],
+            };
+            const before = shownLocal.lead;
+            admitRequest({ plan, shown: shownLocal, bundle });
+            localAdmitted = shownLocal;
+            if (shownLocal.lead !== before || shownLocal.lead.text !== spoken) {
+              spoken = isHindi(lang)
+                ? toHindi(shownLocal.lead.text)
+                : shownLocal.lead.text;
+              turn = {
+                ...turn,
+                spokenTurn: {
+                  ...turn.spokenTurn,
+                  verdict: shownLocal.lead.verdict,
+                  field: shownLocal.lead.field ?? null,
+                  spoken,
+                  citations: shownLocal.lead.citations ?? [],
+                },
+              };
+            }
+          } catch {
+            localAdmitted = null;
+          }
+        }
         if (turn?.spokenTurn && spoken && !sharedRendered && !social) {
           const kind = finalAnswer({
             lead: { text: spoken, verdict: turn.spokenTurn.verdict },
           }).kind;
-          const coverage = wholeQuestionCoverage({ question: askedRaw }, kind);
+          const coverage = wholeQuestionCoverage(
+            {
+              question: askedRaw,
+              ...(localAdmitted?.requirementCoverage
+                ? { requirementCoverage: localAdmitted.requirementCoverage }
+                : {}),
+            },
+            kind,
+          );
           turn.spokenTurn.wholeQuestion = coverage;
           if (coverage.state === "unverified") {
             const notice = coverageNotice(
@@ -1619,6 +1714,54 @@ export function createVoiceAdapter({
         } catch {
           /* the shadow never breaks a call */
         }
+        // The canonical answer contract for this turn (answer-contract.mjs),
+        // in the same shape the typed route returns as `final`: the page and
+        // the turn log read this; they never re-derive verdict or coverage.
+        let contract = null;
+        try {
+          const f =
+            sharedFinal ??
+            (turn?.spokenTurn
+              ? finalAnswer({
+                  ...(localAdmitted ?? {}),
+                  question: askedRaw,
+                  lead: {
+                    text: spoken,
+                    verdict: turn.spokenTurn.verdict,
+                    citations: turn.spokenTurn.citations ?? [],
+                  },
+                  wholeQuestion: turn.spokenTurn.wholeQuestion ?? undefined,
+                })
+              : null);
+          if (f && turn?.spokenTurn?.intent !== "SCOPE_CHANGED")
+            contract = {
+              kind: social ? "social" : f.kind,
+              verdict: turn?.spokenTurn?.verdict ?? f.verdict,
+              complete: turn?.spokenTurn?.wholeQuestion?.complete === true,
+              coverage: turn?.spokenTurn?.wholeQuestion?.state ?? null,
+              admitted: f.admittedText !== null && !social,
+              answeredRequirements: f.answeredRequirements ?? [],
+              unresolvedRequirements: f.unresolvedRequirements ?? [],
+              citations: (turn?.spokenTurn?.citations ?? []).map((c) => ({
+                sourceId: c.sourceId ?? null,
+                documentId: c.documentId ?? null,
+                title: c.title ?? null,
+                start: c.start ?? null,
+                end: c.end ?? null,
+                quote: c.quote ?? null,
+              })),
+              relatedEvidence: (f.relatedEvidence ?? []).length,
+              // how the conversation contract read this turn, when it
+              // refers back or the caller corrected themselves
+              followUp,
+              scope: {
+                key: bundle?.scope ?? null,
+                version: sourceVersionOf(bundle),
+              },
+            };
+        } catch {
+          contract = null;
+        }
         const id = "local-contract-" + randomBytes(8).toString("hex");
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
@@ -1631,6 +1774,7 @@ export function createVoiceAdapter({
               firstByteAt: Date.now(),
               spoken,
               verdict: turn?.spokenTurn?.verdict ?? null,
+              contract,
               outcome: "answered",
             });
             try {
@@ -1656,6 +1800,8 @@ export function createVoiceAdapter({
                 caseId,
                 // the shared contract's reading of this turn (additive)
                 conversation,
+                // the canonical answer contract for this turn (additive)
+                contract,
               });
             } catch {
               /* memory is best-effort; never break the call */
