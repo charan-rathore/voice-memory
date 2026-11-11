@@ -20,11 +20,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Temporary non-mutating formatting output for comparison capture script
-        run: |
-          printf 'VM_PRETTIER_CAPTURE='
-          ./node_modules/.bin/prettier scripts/pr-b-compare-shots.mjs | base64 -w0
-          echo
       - run: npm run build
       - run: npm run format:check
       - run: npm run typecheck
