@@ -157,6 +157,11 @@ test("two Bolna-shaped calls for one verified caller: recorded once, recalled, r
       !JSON.stringify(c1.body.receipt).includes("acct-"),
   );
   const id1 = c1.body.call.callId;
+  assert.equal(
+    c1.body.providerUserData.vm_recall,
+    "",
+    "nothing to recall on a first call",
+  );
   const pref = await api(A.apiKey, "POST", `/calls/${id1}/preferences`, {
     key: "language",
     value: "hinglish",
@@ -231,6 +236,13 @@ test("two Bolna-shaped calls for one verified caller: recorded once, recalled, r
   // ---- call two
   const c2 = await startCall(asha());
   const id2 = c2.body.call.callId;
+  // A recall line computed now, in the remembered language, for the agent's opening.
+  assert.match(
+    c2.body.providerUserData.vm_recall,
+    /^Pichli baar aapne poocha tha: "Was the revised fee approved\?"\. Tab se kuch nahi badla\./,
+  );
+  assert.match(c2.body.providerUserData.vm_recall, /manzoor nahi/);
+  assert.doesNotMatch(c2.body.providerUserData.vm_recall, /vmc_/);
   const ctx = await api(A.apiKey, "GET", `/calls/${id2}/context`);
   assert.equal(ctx.status, 200, JSON.stringify(ctx.body));
   assert.equal(ctx.body.preferences.language.value, "hinglish");

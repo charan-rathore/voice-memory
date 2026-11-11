@@ -38,6 +38,8 @@ import {
 } from "./applicability.mjs";
 import { createReceiptSigner, digest } from "../memory/receipt-signer.mjs";
 import { coverageNotice } from "./whole-question-coverage.mjs";
+import { toHinglish } from "./vernacular.mjs";
+import { toHindi } from "./conversation.mjs";
 
 export const API_VERSION = "2026-11-11";
 // What the server actually observed about an answer's delivery. Nothing
@@ -403,13 +405,39 @@ export function createMemoryApi({
         providerRef:
           typeof d.providerRef === "string" ? d.providerRef.slice(0, 80) : null,
       });
+      // A short opening line for a returning caller, computed NOW from the
+      // documents (never replayed) and in their remembered language. The
+      // agent may speak it at call start (e.g. Bolna welcome message
+      // "{vm_recall}"). Empty when there is nothing to recall.
+      let vmRecall = "";
+      if (caller && b.permissions.recall) {
+        const live = bindings.get(b.callId, tenant);
+        const rec = await memory.recall(caller, {
+          caseId: live.scope.case,
+          answer: answerFor(live),
+        });
+        const first = rec.rechecked[0];
+        const now_ = first?.now?.final;
+        if (first && typeof now_?.admittedText === "string") {
+          const q = first.previously.question;
+          const changed = first.statusChanged;
+          const ans = bareAnswer(now_.admittedText);
+          const lang = rec.preferences.language?.value;
+          vmRecall =
+            lang === "hinglish"
+              ? `Pichli baar aapne poocha tha: "${q}". ${changed ? "Tab se badlaav hua hai." : "Tab se kuch nahi badla."} ${toHinglish(ans)}`
+              : lang === "hi"
+                ? `पिछली बार आपने पूछा था: "${q}"। ${changed ? "तब से बदलाव हुआ है।" : "तब से कुछ नहीं बदला।"} ${toHindi(ans)}`
+                : `Last time you asked: "${q}". ${changed ? "That has changed." : "Nothing has changed."} ${ans}`;
+        }
+      }
       return [
         201,
         {
           call: b,
           // Pass this to Bolna as user_data; the agent prompt must contain
           // "vm_call={vm_call}" in its SYSTEM prompt.
-          providerUserData: { vm_call: b.callToken },
+          providerUserData: { vm_call: b.callToken, vm_recall: vmRecall },
           receipt: receipt(tenant, "call.start", {
             callId: b.callId,
             key,
