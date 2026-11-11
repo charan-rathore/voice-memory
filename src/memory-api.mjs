@@ -34,9 +34,10 @@ import { CallerIdentityError } from "../memory/caller-identity.mjs";
 import {
   CallerMemoryError,
   PREFERENCES,
-  subjectOfQuestion,
+  quoteKey,
 } from "../memory/caller-memory.mjs";
 import { BindingError, audienceOf } from "../memory/call-binding.mjs";
+import { applicableScope } from "./applicability.mjs";
 
 export const API_VERSION = "2026-11-11";
 const sha = (s) => createHash("sha256").update(String(s)).digest();
@@ -129,7 +130,13 @@ export function createMemoryApi({
   const receipt = (
     tenant,
     op,
-    { callId = null, key = null, sourceVersion = null, subject = null } = {},
+    {
+      callId = null,
+      key = null,
+      sourceVersion = null,
+      subject = null,
+      extra = null,
+    } = {},
   ) => {
     const r = {
       id: "rcpt_" + randomBytes(10).toString("hex"),
@@ -145,6 +152,7 @@ export function createMemoryApi({
       at: new Date(now()).toISOString(),
       idempotencyKey: key,
       sourceVersion,
+      ...(extra ? { detail: extra } : {}),
       apiVersion: API_VERSION,
     };
     r.signature = createHmac("sha256", receiptKey(tenant))
@@ -169,7 +177,12 @@ export function createMemoryApi({
         quote: c.quote ?? null,
       })),
       coverage: (got?.wholeQuestion ?? f.coverage)?.state ?? null,
-      scope: { case: caseId, sourceVersion: got?.corpus?.version ?? null },
+      scope: {
+        case: caseId,
+        sourceVersion: got?.corpus?.version ?? null,
+        appliedDocuments: got?.applicability?.applied ?? null,
+        applicabilityRule: got?.applicability?.rule ?? null,
+      },
     };
   };
   const needCaller = (b, perm) => {
@@ -182,6 +195,34 @@ export function createMemoryApi({
     if (perm && !b.permissions[perm])
       throw fail(403, "not_permitted", `This call was not granted '${perm}'.`);
   };
+
+  // The documents that apply to THIS call (src/applicability.mjs). Unknown
+  // applicability is a clarification, never a guess, and is never stored.
+  const answerFor =
+    (b) =>
+    async ({ question }) => {
+      const sc = applicableScope(b.scope, b.applicability);
+      if (sc.clarify)
+        return {
+          final: {
+            kind: "clarify",
+            verdict: null,
+            admittedText: null,
+            text: sc.clarify,
+            citations: [],
+          },
+          corpus: null,
+          applicability: { applied: null, rule: sc.rule },
+        };
+      const got = await answer({ caseId: sc.case, question });
+      return {
+        ...got,
+        corpus: got?.corpus ? { ...got.corpus, applied: sc.applied } : null,
+        applicability: sc.applied
+          ? { applied: sc.applied, rule: sc.rule }
+          : null,
+      };
+    };
 
   async function route(req, res, tenant, parts, url) {
     const [, callId, action] = parts; // ["calls", id, action]
@@ -211,6 +252,7 @@ export function createMemoryApi({
         audience: audienceOf(t.voiceKey),
         scope: { case: d.scope.case },
         permissions: d.permissions ?? {},
+        applicability: d.applicability ?? null,
         caller,
         providerRef:
           typeof d.providerRef === "string" ? d.providerRef.slice(0, 80) : null,
@@ -264,7 +306,7 @@ export function createMemoryApi({
       needCaller(b, "recall");
       const rec = await memory.recall(b.caller, {
         caseId: b.scope.case,
-        answer,
+        answer: answerFor(b),
       });
       return [
         200,
@@ -277,6 +319,7 @@ export function createMemoryApi({
             previously: x.previously,
             sourceChanged: x.sourceChanged,
             statusChanged: x.statusChanged,
+            applicabilityChanged: x.applicabilityChanged ?? false,
             verified: verifiedPart(x.now, b.scope.case),
           })),
           requests: rec.openRequests,
@@ -289,11 +332,11 @@ export function createMemoryApi({
       const q = String(d.question ?? "").trim();
       if (!q || q.length > 400)
         throw fail(400, "bad_question", "question: 1-400 characters.");
-      const got = await answer({ caseId: b.scope.case, question: q });
+      const got = await answerFor(b)({ question: q });
       const verified = verifiedPart(got, b.scope.case);
       let changedSince = null;
       if (b.caller && b.permissions.recall) {
-        const subj = subjectOfQuestion(q)?.id ?? null;
+        const subj = memory.subjectOf(q, b.scope.case)?.id ?? null;
         const prev = subj
           ? memory
               .list(b.caller)
@@ -305,7 +348,13 @@ export function createMemoryApi({
         if (prev) {
           const sourceChanged =
             prev.scope.version !== verified?.scope.sourceVersion;
-          const statusChanged = prev.outcome.verdict !== verified?.verdict;
+          const applicabilityChanged =
+            (prev.scope.applied ?? null) !==
+            (verified?.scope.appliedDocuments ?? null);
+          const statusChanged =
+            prev.outcome.verdict !== verified?.verdict ||
+            quoteKey(prev.citations?.[0]) !==
+              quoteKey(verified?.citations?.[0]);
           const newSources = (verified?.citations ?? [])
             .map((c) => c.title)
             .filter((t) => t && !prev.citations.some((p) => p.title === t));
@@ -313,21 +362,41 @@ export function createMemoryApi({
             previously: {
               at: prev.at,
               verdict: prev.outcome.verdict,
+              line: prev.citations?.[0]?.quote ?? null,
               sourceVersion: prev.scope.version,
+              appliedDocuments: prev.scope.applied ?? null,
             },
             sourceChanged,
+            applicabilityChanged,
             statusChanged,
             why: !statusChanged
-              ? sourceChanged
+              ? sourceChanged || applicabilityChanged
                 ? "The documents changed, but not in a way that changes this answer."
                 : "Nothing changed since the caller last asked."
-              : newSources.length
-                ? `The status changed because of a newer source: ${[...new Set(newSources)].join(", ")}.`
-                : "The status changed; see the cited sources.",
+              : applicabilityChanged
+                ? `A different document set now applies to this caller (${prev.scope.applied ?? "earlier"} → ${verified?.scope.appliedDocuments}). ${verified?.scope.applicabilityRule ?? ""}`.trim()
+                : newSources.length
+                  ? `The answer changed because of a newer source: ${[...new Set(newSources)].join(", ")}.`
+                  : "The answer changed; see the cited sources.",
           };
         }
       }
-      return [200, { verified, changedSince }];
+      const answerReceipt = receipt(tenant, "answer", {
+        callId,
+        key: null,
+        subject: b.caller?.subject,
+        sourceVersion: verified?.scope.sourceVersion ?? null,
+        extra: {
+          appliedDocuments: verified?.scope.appliedDocuments ?? null,
+          verdict: verified?.verdict ?? null,
+          sources: (verified?.citations ?? []).map((c) => ({
+            title: c.title,
+            start: c.start,
+            end: c.end,
+          })),
+        },
+      });
+      return [200, { verified, changedSince, receipt: answerReceipt }];
     }
     if (req.method === "POST" && action === "turns") {
       needCaller(b, "record");
@@ -341,7 +410,7 @@ export function createMemoryApi({
         return [200, { recorded: false, duplicate: true }];
       // The verdict is recomputed here; the client's text is kept only as
       // what was spoken, never as a fact.
-      const got = await answer({ caseId: b.scope.case, question: q });
+      const got = await answerFor(b)({ question: q });
       const kept = memory.recordEpisode(b.caller, {
         callId,
         caseId: b.scope.case,

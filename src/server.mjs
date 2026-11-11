@@ -157,6 +157,11 @@ import { createCallerMemory } from "../memory/caller-memory.mjs";
 import { openCallerStore } from "../memory/caller-store.mjs";
 import { createCallBindings, audienceOf } from "../memory/call-binding.mjs";
 import { createMemoryApi } from "./memory-api.mjs";
+import { applicableScope, HARBORLINE_SUBJECTS } from "./applicability.mjs";
+import {
+  HARBORLINE_2025,
+  HARBORLINE_2026,
+} from "../examples/corpus-harborline.mjs";
 import { createSarvamTts } from "./sarvam-tts.mjs";
 import {
   createElevenTts,
@@ -2665,6 +2670,18 @@ export function createLocalServer({
       });
       try {
         caseSessions.deal = await loadCase(mk("deal"), [], NORTHSTAR_DOCS);
+        // Fictional insurer: two policy wordings; which applies depends on
+        // the caller's policy issue date (src/applicability.mjs).
+        caseSessions["insurance-2025"] = await loadCase(
+          mk("insurance-2025"),
+          [],
+          HARBORLINE_2025,
+        );
+        caseSessions["insurance-2026"] = await loadCase(
+          mk("insurance-2026"),
+          [],
+          HARBORLINE_2026,
+        );
         caseSessions.health = await loadCase(mk("health"), CASE_FILES.health);
         bundleFor(voiceCase, [
           ...caseSessions.deal.library,
@@ -2999,13 +3016,20 @@ export function createLocalServer({
           return { malformed: true, call: null, caseId: null };
         }
         const tag = "vmcall:" + b.callId;
+        // Which documents apply to this caller (src/applicability.mjs).
+        // Unknown applicability answers from NEITHER set: refused, never
+        // guessed (the tenant passes policyIssuedOn at /v1/calls).
+        const sc = applicableScope(b.scope, b.applicability);
+        if (sc.clarify)
+          return { malformed: true, call: tag, caseId: b.scope.case };
         // The bundle this turn answers from, so its episode carries the
         // same corpusVersion the next call's recheck compares against.
-        b.lastBundle = caseSessions[b.scope.case]?.bundle ?? null;
+        b.lastBundle = caseSessions[sc.case]?.bundle ?? null;
+        b.lastApplied = sc.applied;
         liveCallBindings.set(tag, b);
         while (liveCallBindings.size > 2000)
           liveCallBindings.delete(liveCallBindings.keys().next().value);
-        const bundle = caseSessions[b.scope.case]?.bundle ?? null;
+        const bundle = b.lastBundle;
         return bundle
           ? { bundle, call: tag, caseId: b.scope.case }
           : { pending: true, call: tag, caseId: b.scope.case };
@@ -3466,7 +3490,12 @@ export function createLocalServer({
       for (const [kid, secret] of Object.entries(t.callerKeys ?? {}))
         keys[`${tenant}_${kid}`.slice(0, 32)] = { secret, tenant };
     const identity = createCallerIdentity({ keys });
-    const memory = createCallerMemory({ identity, store: opened.store });
+    const memory = createCallerMemory({
+      identity,
+      store: opened.store,
+      subjectsFor: (caseId) =>
+        caseId === "insurance" ? HARBORLINE_SUBJECTS : undefined,
+    });
     const answer = async ({ caseId, question }) => {
       await loadPublicCases();
       const cs = caseSessions[caseId];

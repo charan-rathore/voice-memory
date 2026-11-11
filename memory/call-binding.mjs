@@ -74,6 +74,7 @@ export function createCallBindings({
       permissions = {},
       caller = null,
       providerRef = null,
+      applicability = null,
     }) {
       if (!tenant || !audience || !scope?.case)
         throw new BindingError(
@@ -91,6 +92,12 @@ export function createCallBindings({
         audience,
         providerRef,
         scope: { case: scope.case },
+        // Verified account facts that decide which documents apply (from
+        // the tenant backend, never from the caller).
+        applicability:
+          applicability && typeof applicability === "object"
+            ? { policyIssuedOn: applicability.policyIssuedOn ?? null }
+            : null,
         // Without a verified caller there is no memory at all.
         permissions: {
           recall: !!(caller && permissions.recall),

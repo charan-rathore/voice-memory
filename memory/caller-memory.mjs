@@ -35,7 +35,15 @@
 // Durability: with `store` (memory/store.mjs, AES-256-GCM, one file per
 // caller) memory survives a process restart on a persistent disk. Without
 // it, memory lives in this process only and `durable` says so.
+import { createHash } from "node:crypto";
 import { contractVocabulary } from "../src/conversation-shadow.mjs";
+
+/** Stable identity of a cited span's exact text (the stored excerpt is cut). */
+export const quoteKey = (c) =>
+  c?.quoteHash ??
+  (typeof c?.quote === "string"
+    ? createHash("sha256").update(c.quote).digest("hex").slice(0, 32)
+    : null);
 
 const DAY = 24 * 3600 * 1000;
 export const CALLER_LIMITS = Object.freeze({
@@ -193,6 +201,8 @@ export function createCallerMemory({
   store = null,
   now = Date.now,
   retention = {},
+  // Per-case subject vocabulary for referents (default: the deal's).
+  subjectsFor = () => VOCAB,
 } = {}) {
   if (!identity?.isVerified)
     throw Error("Caller memory needs a caller identity verifier.");
@@ -273,6 +283,9 @@ export function createCallerMemory({
 
   const api = {
     durable: !!store,
+    /** Which known subject a question names, in that case's vocabulary. */
+    subjectOf: (question, caseId) =>
+      subjectOfQuestion(question, subjectsFor(caseId) ?? VOCAB),
 
     /** Everything remembered about this caller, as the caller may see it. */
     list(binding) {
@@ -365,7 +378,7 @@ export function createCallerMemory({
         return { kept: false, reason: "sensitive_scope" };
       if (!final || !corpus?.version)
         return { kept: false, reason: "no_answer" };
-      const subj = subjectOfQuestion(question);
+      const subj = subjectOfQuestion(question, subjectsFor(caseId) ?? VOCAB);
       const ep = {
         id: "e" + ++r.seq,
         at: at(),
@@ -373,7 +386,14 @@ export function createCallerMemory({
         caseId,
         question: String(question).slice(0, 300),
         outcome: { kind: final.kind ?? null, verdict: final.verdict ?? null },
-        scope: { key: caseId, version: corpus.version },
+        // `applied`: which document set actually answered (e.g. the policy
+        // wording version that applies to this caller), when it differs
+        // from the logical scope.
+        scope: {
+          key: caseId,
+          version: corpus.version,
+          applied: corpus.applied ?? null,
+        },
         // What was actually said to the caller, kept apart from the
         // verified outcome above (never read back as a fact).
         spoken: typeof spoken === "string" ? spoken.slice(0, 600) : null,
@@ -385,6 +405,7 @@ export function createCallerMemory({
           start: c.start ?? null,
           end: c.end ?? null,
           quote: typeof c.quote === "string" ? c.quote.slice(0, 300) : null,
+          quoteHash: quoteKey(c),
         })),
         expiresAt: exp("episode"),
       };
@@ -416,7 +437,7 @@ export function createCallerMemory({
       if (!r.consent.conversation) return { kept: false, reason: "no_consent" };
       if (NOT_RETAINED_SCOPES.has(caseId))
         return { kept: false, reason: "sensitive_scope" };
-      const subj = subjectOfQuestion(text);
+      const subj = subjectOfQuestion(text, subjectsFor(caseId) ?? VOCAB);
       const req = {
         id: "r" + ++r.seq,
         at: at(),
@@ -540,14 +561,21 @@ export function createCallerMemory({
             verdict: ep.outcome.verdict,
             kind: ep.outcome.kind,
             sourceVersion: ep.scope.version,
+            applied: ep.scope.applied ?? null,
           },
           now: now_,
           sourceChanged: now_?.corpus?.version
             ? now_.corpus.version !== ep.scope.version
             : null,
+          // A changed verdict, or the same verdict resting on a different
+          // line (e.g. a different excess amount), is a changed answer.
           statusChanged: now_?.final
-            ? (now_.final.verdict ?? null) !== ep.outcome.verdict
+            ? (now_.final.verdict ?? null) !== ep.outcome.verdict ||
+              quoteKey(now_.final.citations?.[0]) !==
+                quoteKey(ep.citations?.[0])
             : null,
+          applicabilityChanged:
+            (now_?.corpus?.applied ?? null) !== (ep.scope.applied ?? null),
         });
       }
       return {
