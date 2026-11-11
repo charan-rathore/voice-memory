@@ -349,7 +349,8 @@ html.dictating #q { color: var(--ink); caret-color: transparent; }
 .rp-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
 .rp-who { display: inline-flex; gap: 4px; padding: 3px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
 .rp-who b { padding: 4px 10px; font: 600 14px var(--serif); color: var(--m-ink); }
-.rp-subj { border: 0; background: transparent; padding: 5px 11px; border-radius: 8px; font: 600 13px var(--sans); color: var(--m-ink3); cursor: pointer; transition: background 160ms, color 160ms; }
+/* Unselected tabs stay clearly readable on the dark report surface (AA); selection is shown by the pill, not by dimming below contrast. */
+.rp-subj { border: 0; background: transparent; padding: 5px 11px; border-radius: 8px; font: 600 13px var(--sans); color: var(--m-ink2); cursor: pointer; transition: background 160ms, color 160ms; }
 .rp-subj[aria-selected="true"] { background: rgba(88, 196, 221, 0.14); color: var(--m-ink); }
 .vz-report .vz-trail li { color: var(--m-ink3); }
 .vz-report .vz-trail span { color: var(--m-ink); }

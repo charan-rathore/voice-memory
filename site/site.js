@@ -1089,9 +1089,11 @@
     const [cls, label] = final && !asserting
       ? final.kind === "clarify"
         ? ["v-ask", "Needs clarification"]
-        : ["v-no", "No supported answer"]
+        : final.from === "lead"
+          ? (VERDICT[final.verdict] ?? ["v-no", "No supported answer"])
+          : ["v-no", "No supported answer"]
       : final?.kind === "partial"
-        ? ["v-warn", "Partial evidence"]
+        ? (VERDICT[final.verdict] ?? ["v-warn", "Partial answer"])
         : lead
           ? verdictOf(lead.verdict)
           : ["v-ask", "No supported answer"];
@@ -1113,9 +1115,16 @@
       ? `<span class="a-opener">${spans(opener)}</span> `
       : "";
     const words = spans(text);
-    const cites = final
-      ? Array.isArray(final.citations) ? final.citations : []
-      : lead?.citations ?? [];
+    // Admitted citations when there are any. An identity clarification
+    // still shows its context-only passages (labelled "not evidence for
+    // this answer"); passages admission withheld never render as cites.
+    const cites = final?.citations?.length
+      ? final.citations
+      : final
+        ? final.verdict === "AMBIGUOUS_PATIENT"
+          ? (r.evidence ?? []).filter((c) => c?.contextOnly)
+          : []
+        : (lead?.citations ?? []);
     $("#answer").innerHTML = `
       <p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : via === "voice" ? "You said" : "You asked"}</span><q>${esc(question)}</q></p>
       <p class="a-lead"><span class="verdict-chip ${cls}">${esc(label)}</span>${openerHtml}${words}</p>
@@ -1153,7 +1162,7 @@
                       : "Computed live · same sentence a call would speak"
         }</span>
       </div>
-      ${related.length ? `<aside class="a-related" aria-label="Related evidence — not an answer"><b>Related evidence — not an answer</b>${related.map((c, i) => `<button type="button" class="related-source" data-related="${i}"><span>${esc(shortTitle(c.title ?? "Source"))}</span><q>${esc(prettyQuote(c.quote))}</q><small>Open related source — not proof of the answer</small></button>`).join("")}</aside>` : ""}
+      ${related.length ? `<aside class="a-related" aria-label="Related evidence, not an answer"><b>Related evidence, not an answer</b>${related.map((c, i) => `<button type="button" class="related-source" data-related="${i}"><span>${esc(shortTitle(c.title ?? "Source"))}</span><q>${esc(prettyQuote(c.quote))}</q><small>Open related source — not proof of the answer</small></button>`).join("")}</aside>` : ""}
       <div class="cites">${cites
         .map((c, i) => {
           // Report status (preliminary / amended) is what a reader needs on a
@@ -1185,7 +1194,10 @@
     state.currentCase = caseId;
     state.currentLang = r.semantic?.lang ?? state.lang;
     // The visual must not assert a result when request admission withheld it.
-    if (r.visual && (!final || asserting))
+    if (
+      r.visual &&
+      (!final || asserting || final.verdict === "AMBIGUOUS_PATIENT")
+    )
       loadVisual().then(() => {
         if (state.current?._src !== r || !$("#a-visual") || !window.VMVisual)
           return;
