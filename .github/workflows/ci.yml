@@ -52,6 +52,22 @@ jobs:
         run: node scripts/site-shots.mjs .shots
         env:
           CHROME_PATH: /usr/bin/google-chrome
+      - name: Before and after PR B comparison (1280 and 390 px)
+        run: |
+          git fetch --depth=1 origin a94c7c92feda8863d48a46d5f7287a781fd80186
+          git worktree add --detach "$RUNNER_TEMP/pr-b-before" a94c7c92feda8863d48a46d5f7287a781fd80186
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/pr-b-before/node_modules"
+          npm run build --prefix "$RUNNER_TEMP/pr-b-before"
+          node scripts/pr-b-compare-shots.mjs .shots/pr-b/before "$RUNNER_TEMP/pr-b-before"
+          node scripts/pr-b-compare-shots.mjs .shots/pr-b/after "$GITHUB_WORKSPACE"
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr-b-before-after-screenshots
+          path: .shots/pr-b
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
