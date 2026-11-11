@@ -237,7 +237,9 @@ try {
   const lead3Text = await lead3.innerText();
   if (!lead3Text.includes("not established an answer"))
     fail(`cold-boot promoted evidence: ${lead3Text.slice(0, 200)}`);
-  const related3 = await page3.locator("#answer .cites").innerText();
+  if (await page3.locator("#answer .cites .cite").count())
+    fail("cold boot promoted unadmitted evidence to a citation");
+  const related3 = await page3.locator("#answer .a-related").innerText();
   if (!related3.includes("27 March 2027") || !related3.includes("18,000"))
     fail(`cold-boot related evidence incomplete: ${related3.slice(0, 200)}`);
   // Path D: voice gate off (the harness never configures voice) - no call
