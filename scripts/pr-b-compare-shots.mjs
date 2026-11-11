@@ -52,8 +52,10 @@ async function pdfFixture() {
 async function ask(page, question) {
   const pending = page.waitForResponse(
     (response) =>
-      response.url().includes("/api/public/ask") &&
-      response.request().method() === "POST",
+      (response.url().includes("/api/public/ask") &&
+        response.request().method() === "POST") ||
+      (response.url().includes("/api/public/answer") &&
+        response.request().method() === "GET"),
     { timeout: 45000 },
   );
   await page.locator("#q").fill(question);
@@ -138,8 +140,12 @@ try {
     }
     if (!supported) fail("No source-admitted demo ferritin answer at " + width);
     await page.locator("#answer .cite").first().click();
+    // Citation evidence surfaces as a text mark or a drawn box on the
+    // rendered page (both builds), or a focused-document section.
     await page
-      .locator("#viewer-body .rd-doc.focus")
+      .locator(
+        "#viewer-body mark, #viewer-body .box, #viewer-body .rd-doc.focus",
+      )
       .first()
       .waitFor({ timeout: 15000 });
     await snap(page, width, "03-admitted-answer-and-source");
