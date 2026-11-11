@@ -1002,13 +1002,17 @@
   async function ask(question, { via = "typed", caseId = state.case } = {}) {
     question = String(question ?? "").trim();
     if (!question) return;
+    const btn = $(".ask-go");
+    const k = caseId + "|" + question;
+    if (btn.dataset.k === k && +btn.dataset.s === state.askSeq)
+      return void ($("#q").value = "");
     if (caseId !== state.case) setCase(caseId, { quiet: true });
     const seq = ++state.askSeq;
     // A slow answer must never land on a newer question or another case.
     const stale = () => seq !== state.askSeq || caseId !== state.case;
     $("#q").value = "";
-    const btn = $(".ask-go");
-    btn.disabled = true;
+    btn.dataset.k = k;
+    btn.dataset.s = seq;
     $("#answer").innerHTML =
       `<p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : via === "voice" ? "You said" : "You asked"}</span><q>${esc(question)}</q></p><div class="skeleton" style="width:88%"></div><div class="skeleton" style="width:64%"></div><div class="skeleton" style="width:76%"></div>`;
     let result = null;
@@ -1036,7 +1040,7 @@
         refreshWorkspace();
         syncReaderConsent();
         $("#answer").innerHTML = `<p class="a-err">${esc(e.message)}</p>`;
-        btn.disabled = false;
+        btn.dataset.k = "";
         return;
       }
       if (!window.VM_SNAPSHOT_ANSWERS) await loadSnapshotAnswers();
@@ -1053,12 +1057,12 @@
               ? "The live engine is still waking up. Try a suggested question, or ask again in a few seconds."
               : e.message,
           )}</p>`;
-        btn.disabled = false;
+        btn.dataset.k = "";
         return;
       }
     }
     if (stale()) return;
-    btn.disabled = false;
+    btn.dataset.k = "";
     if (result.lead?.field) state.context[caseId] = result.lead.field;
     if (result.semantic?.lang) state.lang = result.semantic.lang;
     renderAnswer(result, { via, source, question, caseId });
@@ -1108,9 +1112,12 @@
           : lead
             ? verdictOf(lead.verdict)
             : ["v-ask", "No supported answer"];
+    const cn = final?.coverageNotice;
     const text = final
       ? asserting
-        ? final.admittedText
+        ? cn && final.admittedText.endsWith(" " + cn)
+          ? final.admittedText.slice(0, -cn.length - 1)
+          : final.admittedText
         : `No supported answer. ${final.text ?? "The documents did not establish this."}`
       : (lead?.text ??
         "No supported answer. These documents do not establish an answer.");
