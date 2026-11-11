@@ -86,17 +86,24 @@ try {
     const surf = tab?.closest(".vz-report, .stage");
     if (!tab || !surf) return null;
     const lum = (rgb) => {
-      const [r, g, b] = rgb.match(/[\d.]+/g).slice(0, 3).map(Number).map((v) => {
-        const c = v / 255;
-        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-      });
+      const [r, g, b] = rgb
+        .match(/[\d.]+/g)
+        .slice(0, 3)
+        .map(Number)
+        .map((v) => {
+          const c = v / 255;
+          return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
       return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     };
     const L1 = lum(getComputedStyle(tab).color);
     const L2 = lum(getComputedStyle(surf).backgroundColor);
     return (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
   });
-  assert.ok(ratio && ratio >= 4.5, `unselected patient tab contrast ${ratio} < 4.5:1`);
+  assert.ok(
+    ratio && ratio >= 4.5,
+    `unselected patient tab contrast ${ratio} < 4.5:1`,
+  );
   assert.equal(
     await page.locator("#answer .rp-who [aria-selected=true]").count(),
     0,
