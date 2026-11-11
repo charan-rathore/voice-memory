@@ -66,6 +66,27 @@ const FIXTURE = await buildFixture();
 const fail = (m) => {
   throw Error(m);
 };
+// Every answer word must end up visible: the word reveal animation is the
+// only thing that lifts .a-lead .w from its base opacity 0, so a disabled
+// animation leaves the whole answer body blank (shipped regression from an
+// unscoped .desk animation-kill selector).
+const expectWordsVisible = async (p) => {
+  await p
+    .waitForFunction(
+      () => {
+        const ws = [...document.querySelectorAll("#answer .a-lead .w")];
+        return (
+          ws.length > 0 &&
+          ws.every((x) => Number(getComputedStyle(x).opacity) === 1)
+        );
+      },
+      undefined,
+      { timeout: 10000 },
+    )
+    .catch(() =>
+      fail("answer words never became visible (stuck at opacity 0)"),
+    );
+};
 const dev = spawn("node", ["scripts/site-dev.mjs"], { stdio: "ignore" });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 let browser;
@@ -115,6 +136,25 @@ try {
   const leadText = await lead.innerText();
   if (!leadText.includes("not established an answer"))
     fail(`unadmitted evidence was promoted: ${leadText.slice(0, 200)}`);
+  await expectWordsVisible(page);
+  // Under prefers-reduced-motion the reveal animation never runs, so the
+  // words depend on the explicit visible fallback in the reduce block.
+  const pageReduce = await browser.newPage({
+    viewport: { width: 1280, height: 1000 },
+    reducedMotion: "reduce",
+  });
+  await pageReduce.goto("http://127.0.0.1:4500/");
+  await pageReduce.locator('.case-tab[data-case="health"]').waitFor();
+  await pageReduce
+    .locator("#try button", { hasText: "What is SYN-0001" })
+    .first()
+    .click();
+  await pageReduce
+    .locator("#answer .a-lead .w")
+    .first()
+    .waitFor({ timeout: 60000 });
+  await expectWordsVisible(pageReduce);
+  await pageReduce.close();
   // PR A's canonical final never promotes relevant-but-unadmitted passages
   // into admitted citation buttons. Keep BOTH numbers visible as related only.
   await page.locator("#answer .a-related").waitFor();
@@ -237,6 +277,7 @@ try {
   const lead3Text = await lead3.innerText();
   if (!lead3Text.includes("not established an answer"))
     fail(`cold-boot promoted evidence: ${lead3Text.slice(0, 200)}`);
+  await expectWordsVisible(page3);
   if (await page3.locator("#answer .cites .cite").count())
     fail("cold boot promoted unadmitted evidence to a citation");
   const related3 = await page3.locator("#answer .a-related").innerText();
