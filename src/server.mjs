@@ -170,6 +170,7 @@ import { applicableScope, HARBORLINE_SUBJECTS } from "./applicability.mjs";
 import {
   HARBORLINE_2025,
   HARBORLINE_2026,
+  HARBORLINE_GLASS_SHIELD_2026,
 } from "../examples/corpus-harborline.mjs";
 import { createSarvamTts } from "./sarvam-tts.mjs";
 import {
@@ -2690,6 +2691,12 @@ export function createLocalServer({
           mk("insurance-2026"),
           [],
           HARBORLINE_2026,
+        );
+        // 2026 wording + the Glass Shield endorsement, for accounts holding it.
+        caseSessions["insurance-2026+glass-shield"] = await loadCase(
+          mk("insurance-2026+glass-shield"),
+          [],
+          [...HARBORLINE_2026, ...HARBORLINE_GLASS_SHIELD_2026],
         );
         caseSessions.health = await loadCase(mk("health"), CASE_FILES.health);
         bundleFor(voiceCase, [

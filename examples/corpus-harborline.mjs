@@ -68,3 +68,15 @@ ${header("2026.1", "on or after 1 April 2026")}
 2. Claims can be reported by phone or in the app.`,
   },
 ];
+
+// A competing endorsement: applies ONLY to 2026 policies whose account holds
+// the Glass Shield add-on (tenant account data decides, never the caller).
+export const HARBORLINE_GLASS_SHIELD_2026 = [
+  {
+    title: "03_Glass_Shield_Endorsement_2026.md",
+    text: `# Glass Shield Endorsement E-26-03
+Issuer: Harborline Assurance (fictional). Applies only to DriveSure policies that include the Glass Shield add-on.
+
+1. For a policy with the Glass Shield add-on, the windscreen excess is ₹500 per claim.`,
+  },
+];

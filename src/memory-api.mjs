@@ -32,7 +32,10 @@ import {
   quoteKey,
 } from "../memory/caller-memory.mjs";
 import { BindingError, audienceOf } from "../memory/call-binding.mjs";
-import { applicableScope } from "./applicability.mjs";
+import {
+  applicableScope,
+  normaliseHinglishQuestion,
+} from "./applicability.mjs";
 import { createReceiptSigner, digest } from "../memory/receipt-signer.mjs";
 import { coverageNotice } from "./whole-question-coverage.mjs";
 
@@ -235,20 +238,78 @@ export function createMemoryApi({
         typeof f.admittedText === "string" ? bareAnswer(f.admittedText) : null,
       clarification:
         typeof f.admittedText === "string" ? null : (f.text ?? null),
-      citations: (f.citations ?? []).map((c) => ({
-        sourceId: c.sourceId ?? null,
-        title: c.title ?? null,
-        start: c.start ?? null,
-        end: c.end ?? null,
-        quote: c.quote ?? null,
-      })),
+      citations: (f.citations ?? []).map((c) =>
+        narrowCitation(
+          {
+            sourceId: c.sourceId ?? null,
+            title: c.title ?? null,
+            start: c.start ?? null,
+            end: c.end ?? null,
+            quote: c.quote ?? null,
+          },
+          typeof f.admittedText === "string" ? bareAnswer(f.admittedText) : "",
+        ),
+      ),
       coverage: (got?.wholeQuestion ?? f.coverage)?.state ?? null,
+      normalizedQuestion: got?.normalizedQuestion ?? null,
       scope: {
         case: caseId,
         sourceVersion: got?.corpus?.version ?? null,
         appliedDocuments: got?.applicability?.applied ?? null,
         applicabilityRule: got?.applicability?.rule ?? null,
+        // Effective wording, its dates and held endorsements, from the
+        // tenant's account data (source: "tenant_account").
+        effective: got?.applicability?.effective ?? null,
       },
+    };
+  };
+  // When a cited passage holds several numbered clauses, cite the ONE clause
+  // the answer rests on: the only clause containing every figure in the
+  // answer, else the only clause sharing most of its words. Ambiguous ->
+  // the whole passage is kept (never a guess). Offsets stay exact.
+  const narrowCitation = (c, answerText) => {
+    if (typeof c.quote !== "string" || !answerText) return c;
+    const clauses = [];
+    const re = /(?:^|\n)\s*(\d+\.\s[^\n]+)/g;
+    let m;
+    while ((m = re.exec(c.quote)))
+      clauses.push({ text: m[1], at: m.index + m[0].indexOf(m[1]) });
+    if (clauses.length < 2) return c;
+    const figures = answerText.match(/[₹$]?\d[\d,]*(?:\.\d+)?/g) ?? [];
+    const words = new Set(
+      answerText.toLowerCase().match(/[a-z\u0900-\u097f]{4,}/g) ?? [],
+    );
+    let pick = null;
+    if (figures.length) {
+      const hits = clauses.filter((x) =>
+        figures.every((n) => x.text.includes(n)),
+      );
+      if (hits.length === 1) pick = hits[0];
+    } else if (words.size) {
+      const scored = clauses
+        .map((x) => ({
+          x,
+          s:
+            [...words].filter((w) => x.text.toLowerCase().includes(w)).length /
+            words.size,
+        }))
+        .sort((p, q) => q.s - p.s);
+      if (
+        scored[0].s >= 0.6 &&
+        (scored.length === 1 || scored[1].s < scored[0].s)
+      )
+        pick = scored[0].x;
+    }
+    if (!pick) return c;
+    return {
+      ...c,
+      quote: pick.text,
+      start: typeof c.start === "number" ? c.start + pick.at : null,
+      end:
+        typeof c.start === "number"
+          ? c.start + pick.at + pick.text.length
+          : null,
+      passage: { start: c.start, end: c.end },
     };
   };
   const needCaller = (b, perm) => {
@@ -280,12 +341,31 @@ export function createMemoryApi({
           corpus: null,
           applicability: { applied: null, rule: sc.rule },
         };
-      const got = await answer({ caseId: sc.case, question });
+      let got = await answer({ caseId: sc.case, question });
+      // A Hinglish question the retrieval did not understand is asked again
+      // in English through a closed list of question patterns; the answer
+      // still comes only from the documents, and the rewrite is disclosed.
+      let normalizedQuestion = null;
+      if (typeof got?.final?.admittedText !== "string") {
+        const en = normaliseHinglishQuestion(question);
+        if (en) {
+          const retry = await answer({ caseId: sc.case, question: en });
+          if (typeof retry?.final?.admittedText === "string") {
+            got = retry;
+            normalizedQuestion = en;
+          }
+        }
+      }
       return {
         ...got,
+        normalizedQuestion,
         corpus: got?.corpus ? { ...got.corpus, applied: sc.applied } : null,
         applicability: sc.applied
-          ? { applied: sc.applied, rule: sc.rule }
+          ? {
+              applied: sc.applied,
+              rule: sc.rule,
+              effective: sc.effective ?? null,
+            }
           : null,
       };
     };
@@ -463,7 +543,7 @@ export function createMemoryApi({
           const statusChanged =
             prev.outcome.verdict !== verified?.verdict ||
             quoteKey(prev.citations?.[0]) !==
-              quoteKey(verified?.citations?.[0]);
+              quoteKey(got?.final?.citations?.[0]);
           const newSources = (verified?.citations ?? [])
             .map((c) => c.title)
             .filter((t) => t && !prev.citations.some((p) => p.title === t));

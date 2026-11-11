@@ -96,7 +96,22 @@ export function createCallBindings({
         // the tenant backend, never from the caller).
         applicability:
           applicability && typeof applicability === "object"
-            ? { policyIssuedOn: applicability.policyIssuedOn ?? null }
+            ? {
+                policyIssuedOn:
+                  typeof applicability.policyIssuedOn === "string"
+                    ? applicability.policyIssuedOn.slice(0, 32)
+                    : null,
+                wordingVersion:
+                  typeof applicability.wordingVersion === "string"
+                    ? applicability.wordingVersion.slice(0, 32)
+                    : null,
+                endorsements: Array.isArray(applicability.endorsements)
+                  ? applicability.endorsements
+                      .filter((e) => typeof e === "string")
+                      .map((e) => e.slice(0, 40))
+                      .slice(0, 10)
+                  : [],
+              }
             : null,
         // Without a verified caller there is no memory at all.
         permissions: {

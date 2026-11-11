@@ -133,7 +133,7 @@ test("unknown policy date: a clarification, never a guessed amount, nothing reme
   assert.doesNotMatch(JSON.stringify(r.body.verified), /₹/);
   assert.match(
     r.body.verified.clarification,
-    /when your DriveSure policy was issued/,
+    /don.t have your policy.s issue date/,
   );
   const t = await api("POST", `/calls/${id}/turns`, {
     turnId: "u1",
