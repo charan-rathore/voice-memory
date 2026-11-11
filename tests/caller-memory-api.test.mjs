@@ -48,20 +48,25 @@ async function boot() {
 }
 
 // A tiny client: one cookie jar per call, same-origin header on writes.
-function client(base) {
-  let cookie = "";
+function client(base, jar = new Map()) {
   const req = async (method, p, body) => {
     const res = await fetch(base + "/api/public/caller" + p, {
       method,
       headers: {
         "content-type": "application/json",
         origin: base,
-        ...(cookie ? { cookie } : {}),
+        ...(jar.size
+          ? { cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; ") }
+          : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const set = res.headers.get("set-cookie");
-    if (set) cookie = set.split(";")[0].endsWith("=") ? "" : set.split(";")[0];
+    for (const c of res.headers.getSetCookie?.() ?? []) {
+      const kv = c.split(";")[0];
+      const i = kv.indexOf("=");
+      if (!kv.slice(i + 1) || /Max-Age=0/i.test(c)) jar.delete(kv.slice(0, i));
+      else jar.set(kv.slice(0, i), kv.slice(i + 1));
+    }
     return {
       status: res.status,
       cache: res.headers.get("cache-control"),
@@ -87,7 +92,8 @@ function client(base) {
 test("two calls: remembered from the conversation, verified in the documents, still unresolved", async () => {
   // ---------------------------------------------------------------- call one
   const A = await boot();
-  let asha = client(A.base);
+  const browserJar = new Map(); // Asha's browser, kept across both servers
+  let asha = client(A.base, browserJar);
   try {
     const s1 = await asha.start("asha");
     assert.equal(s1.status, 200);
@@ -147,13 +153,15 @@ test("two calls: remembered from the conversation, verified in the documents, st
     A.server.close();
   }
   assert.ok(
-    readdirSync(path.join(dataDir, "callers")).some((f) => f.endsWith(".vms")),
+    readdirSync(path.join(dataDir, "callers-demo")).some((f) =>
+      f.endsWith(".vms"),
+    ),
     "memory persisted, encrypted, in its own directory",
   );
 
   // ------------------------------------------- call two: a new server process
   const B = await boot();
-  asha = client(B.base);
+  asha = client(B.base, browserJar); // the same browser comes back
   const ravi = client(B.base);
   try {
     // Without a verified call there is no memory at all.
@@ -232,7 +240,7 @@ test("two calls: remembered from the conversation, verified in the documents, st
       0,
     );
     await asha.end();
-    const s3 = await client(B.base).start("asha");
+    const s3 = await client(B.base, browserJar).start("asha");
     assert.equal(
       s3.body.rechecked.length,
       0,

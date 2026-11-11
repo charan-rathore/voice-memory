@@ -138,6 +138,12 @@ export function createCallerIdentity({
         );
       if (typeof c.ten !== "string" || !OPAQUE.test(c.ten))
         throw new CallerIdentityError("malformed", "Bad tenant.");
+      // Only the demo-scoped key may sign the fictional demo tenant.
+      if (c.ten === DEMO_TENANT && keyTenant.get(kid) !== DEMO_TENANT)
+        throw new CallerIdentityError(
+          "wrong_tenant",
+          "Only the demo signer can sign demo callers.",
+        );
       if (keyTenant.has(kid) && keyTenant.get(kid) !== c.ten)
         throw new CallerIdentityError(
           "wrong_tenant",
@@ -180,17 +186,18 @@ export function createCallerIdentity({
   };
 }
 
-// Fictional callers for the public demo. Nothing else can be issued by the
-// demo route: no free-form subject, no real data.
+// Fictional callers for the public demo. They live in their own tenant,
+// "demo-visitors", whose signing key is scoped to it (it cannot vouch for any
+// real tenant), and each visitor gets their own Asha and Ravi: the subject is
+// derived from a server-issued, HMAC-signed visitor id (src/caller-api.mjs).
+export const DEMO_TENANT = "demo-visitors";
 export const DEMO_PERSONAS = Object.freeze({
-  asha: Object.freeze({
-    tenant: "meridian-support",
-    sub: "acct-NS-1042",
-    name: "Asha (fictional)",
-  }),
-  ravi: Object.freeze({
-    tenant: "meridian-support",
-    sub: "acct-NS-2077",
-    name: "Ravi (fictional)",
-  }),
+  asha: Object.freeze({ name: "Asha (fictional)" }),
+  ravi: Object.freeze({ name: "Ravi (fictional)" }),
 });
+/** The demo subject for one visitor's persona (never a real account). */
+export const demoSubject = (visitorId, persona) =>
+  `demo-${createHash("sha256")
+    .update("vm-demo-visitor:" + visitorId)
+    .digest("hex")
+    .slice(0, 24)}-${persona}`;

@@ -152,9 +152,16 @@ import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { createPublicApi, publicAnswer, clientAddress } from "./public-api.mjs";
 import { createCallerApi } from "./caller-api.mjs";
-import { createCallerIdentity } from "../memory/caller-identity.mjs";
+import {
+  createCallerIdentity,
+  DEMO_TENANT,
+} from "../memory/caller-identity.mjs";
 import { createCallerMemory } from "../memory/caller-memory.mjs";
-import { openCallerStore } from "../memory/caller-store.mjs";
+import {
+  openCallerStore,
+  deriveCallerKeyHex,
+  sweepStoreDir,
+} from "../memory/caller-store.mjs";
 import { createCallBindings, audienceOf } from "../memory/call-binding.mjs";
 import { createMemoryApi } from "./memory-api.mjs";
 import { applicableScope, HARBORLINE_SUBJECTS } from "./applicability.mjs";
@@ -3485,7 +3492,19 @@ export function createLocalServer({
     } catch {
       throw Error('VM_CALLER_KEYS must be JSON: {"kid": "<64+ hex>"}.');
     }
-    if (demoOn) keys = { ...keys, demo: randomBytes(32).toString("hex") };
+    // Demo signer and visitor-cookie key: derived from VM_STORE_KEY so a
+    // visitor's demo survives a restart; scoped to the demo tenant only.
+    const storeKey = process.env.VM_STORE_KEY || null;
+    const derive = (info) =>
+      deriveCallerKeyHex(storeKey, info) ?? randomBytes(32).toString("hex");
+    if (demoOn)
+      keys = {
+        ...keys,
+        demo: {
+          secret: derive("voice-memory/demo-signer/v1"),
+          tenant: DEMO_TENANT,
+        },
+      };
     for (const [tenant, t] of Object.entries(tenants))
       for (const [kid, secret] of Object.entries(t.callerKeys ?? {}))
         keys[`${tenant}_${kid}`.slice(0, 32)] = { secret, tenant };
@@ -3513,11 +3532,56 @@ export function createLocalServer({
         wholeQuestion: out.wholeQuestion,
       };
     };
+    // The public demo has its OWN store (callers-demo), key and retention:
+    // fictional visitors never share a directory with real tenants' callers.
+    let demoMemory = null;
+    if (demoOn) {
+      const DEMO_RETENTION_MS = 7 * 24 * 3600 * 1000;
+      const demoStore = openCallerStore({
+        dataDir: process.env.VM_DATA_DIR || null,
+        storeKeyHex: storeKey,
+        subdir: "callers-demo",
+        info: "voice-memory/caller-memory-demo/v1",
+      });
+      if (
+        demoStore.status === "unavailable" ||
+        (requireDurable && demoStore.status !== "durable")
+      ) {
+        console.error(
+          "caller demo disabled:",
+          demoStore.reason ?? "durable storage required",
+        );
+      } else {
+        if (demoStore.dir) {
+          sweepStoreDir(demoStore.dir, DEMO_RETENTION_MS);
+          setInterval(
+            () => sweepStoreDir(demoStore.dir, DEMO_RETENTION_MS),
+            3600 * 1000,
+          ).unref();
+        }
+        demoMemory = createCallerMemory({
+          identity,
+          store: demoStore.store,
+          retention: {
+            preference: DEMO_RETENTION_MS,
+            episode: DEMO_RETENTION_MS,
+            referent: DEMO_RETENTION_MS,
+            request: DEMO_RETENTION_MS,
+          },
+        });
+      }
+    }
     const api = createCallerApi({
       identity,
-      memory,
+      memory: demoMemory,
       cases: ["deal", "health"],
-      demo: demoOn ? { kid: "demo" } : null,
+      demo: demoMemory
+        ? {
+            kid: "demo",
+            visitorKeyHex: derive("voice-memory/demo-visitor/v1"),
+            retentionMs: 7 * 24 * 3600 * 1000,
+          }
+        : null,
       secure: !!publicHost,
       allowedOrigins: (req) =>
         [
@@ -3531,7 +3595,14 @@ export function createLocalServer({
     const memoryApi = Object.keys(tenants).length
       ? createMemoryApi({ tenants, identity, memory, bindings, answer })
       : null;
-    return { api, identity, memory, bindings, memoryApi };
+    // The public /api/public/caller routes are the fictional demo only.
+    return {
+      api: demoMemory ? api : null,
+      identity,
+      memory,
+      bindings,
+      memoryApi,
+    };
   })();
   const callerApi = callerStack?.api ?? null;
   const memoryApi = callerStack?.memoryApi ?? null;

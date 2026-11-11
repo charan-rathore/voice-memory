@@ -15,6 +15,7 @@ import {
   createCallerIdentity,
   CallerIdentityError,
   DEMO_PERSONAS,
+  demoSubject,
 } from "../memory/caller-identity.mjs";
 import {
   createCallerMemory,
@@ -121,7 +122,10 @@ test("identity: expired and future-dated assertions are refused", () => {
   });
   t -= 10 * 60_000;
   assert.throws(() => id.verify(b), { code: "future" });
-  assert.ok(DEMO_PERSONAS.asha.sub.startsWith("acct-"));
+  // Demo personas are per visitor: no fixed, shared subject exists.
+  assert.equal(DEMO_PERSONAS.asha.sub, undefined);
+  assert.notEqual(demoSubject("v1", "asha"), demoSubject("v2", "asha"));
+  assert.match(demoSubject("v1", "asha"), /^demo-[0-9a-f]{24}-asha$/);
 });
 
 // ------------------------------------------------------------ instructions

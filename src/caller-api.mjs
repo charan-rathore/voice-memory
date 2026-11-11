@@ -24,9 +24,12 @@
 //               exact citations, source scope and version
 //   unresolved  what is still open: unanswered parts, open requests, a
 //               status the documents do not establish
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   DEMO_PERSONAS,
+  DEMO_TENANT,
+  demoSubject,
+  subjectKeyOf,
   CallerIdentityError,
 } from "../memory/caller-identity.mjs";
 import {
@@ -437,6 +440,39 @@ export function createCallerApi({
     return { kind: "memory", op, say: lines.join(" "), memory: memory.list(b) };
   }
 
+  // Demo visitor namespace: a server-issued random id, HMAC-signed, in an
+  // HttpOnly cookie. Each visitor gets their own Asha and Ravi; a missing,
+  // expired or forged cookie gets a fresh namespace (never an existing one).
+  const VISITOR = "vm_demo";
+  const vkey = demo?.visitorKeyHex
+    ? Buffer.from(demo.visitorKeyHex, "hex")
+    : null;
+  const vsig = (id) =>
+    createHmac("sha256", vkey)
+      .update("vm-demo-visitor:" + id)
+      .digest("base64url");
+  const visitorOf = (req) => {
+    const raw = (req.headers.cookie || "")
+      .split(/;\s*/)
+      .find((c) => c.startsWith(VISITOR + "="))
+      ?.slice(VISITOR.length + 1);
+    const m = /^([0-9a-f]{32})\.([A-Za-z0-9_-]{43})$/.exec(raw ?? "");
+    if (!m || !vkey) return null;
+    const want = Buffer.from(vsig(m[1]));
+    const got = Buffer.from(m[2]);
+    return got.length === want.length && timingSafeEqual(got, want)
+      ? m[1]
+      : null;
+  };
+  const visitorCookie = (id) =>
+    `${VISITOR}=${id}.${vsig(id)}; HttpOnly; SameSite=Strict; Path=/api/public/caller; Max-Age=${Math.floor((demo?.retentionMs ?? 0) / 1000)}${secure ? "; Secure" : ""}`;
+  const visitorSubjects = (id) =>
+    new Set(
+      Object.keys(DEMO_PERSONAS).map((p) =>
+        subjectKeyOf(DEMO_TENANT, demoSubject(id, p)),
+      ),
+    );
+
   return async function handle(req, res, path) {
     try {
       if (path === "/caller/demo-assertion" && req.method === "POST") {
@@ -452,15 +488,28 @@ export function createCallerApi({
           : null;
         if (!p)
           return (send(res, 400, { error: "Pick a fictional caller." }), true);
+        let visitor = visitorOf(req);
+        const fresh = !visitor;
+        if (fresh) visitor = randomBytes(16).toString("hex");
         const assertion = identity.issue({
           kid: demo.kid,
-          tenant: p.tenant,
-          sub: p.sub,
+          tenant: DEMO_TENANT,
+          sub: demoSubject(visitor, persona),
           name: p.name,
           amr: "demo-fictional",
           ttlS: 120,
         });
-        return (send(res, 200, { assertion, fictional: true }), true);
+        // The cookie is refreshed on every use, so retention counts from the
+        // visitor's last demo activity.
+        return (
+          send(
+            res,
+            200,
+            { assertion, fictional: true },
+            { "Set-Cookie": visitorCookie(visitor) },
+          ),
+          true
+        );
       }
       if (path === "/caller/start" && req.method === "POST") {
         if (!sameOrigin(req))
@@ -482,6 +531,22 @@ export function createCallerApi({
             );
           throw e;
         }
+        // Public demo only: the fictional demo tenant, and only this
+        // visitor's own personas (an assertion lifted from another browser,
+        // or any real tenant's caller, is refused).
+        const visitor = visitorOf(req);
+        if (
+          binding.tenant !== DEMO_TENANT ||
+          !visitor ||
+          !visitorSubjects(visitor).has(binding.subject)
+        )
+          return (
+            send(res, 403, {
+              error: "This demo only opens your own fictional callers.",
+              code: "not_this_visitor",
+            }),
+            true
+          );
         sweep();
         const old = cookieOf(req);
         if (old) calls.delete(old); // a new start is a new call

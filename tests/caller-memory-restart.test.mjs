@@ -68,20 +68,25 @@ const stop = (s) =>
     s.child.kill("SIGTERM");
   });
 
-function client(base) {
-  let cookie = "";
+function client(base, jar = new Map()) {
   const req = async (method, p, body) => {
     const res = await fetch(base + "/api/public/caller" + p, {
       method,
       headers: {
         "content-type": "application/json",
         origin: base,
-        ...(cookie ? { cookie } : {}),
+        ...(jar.size
+          ? { cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; ") }
+          : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const set = res.headers.get("set-cookie");
-    if (set) cookie = set.split(";")[0];
+    for (const c of res.headers.getSetCookie?.() ?? []) {
+      const kv = c.split(";")[0];
+      const i = kv.indexOf("=");
+      if (!kv.slice(i + 1) || /Max-Age=0/i.test(c)) jar.delete(kv.slice(0, i));
+      else jar.set(kv.slice(0, i), kv.slice(i + 1));
+    }
     return { status: res.status, body: await res.json().catch(() => ({})) };
   };
   return {
@@ -111,31 +116,35 @@ test(
       },
       { enabled: true, storage: "durable" },
     );
-    let c = client(s.base);
+    const ashaJar = new Map(); // one browser across every restart
+    let c = client(s.base, ashaJar);
     assert.equal((await c.start("asha")).status, 200);
     const m = await c.say("Please remember that I prefer Hinglish");
     assert.equal(m.body.memory.preferences.language.value, "hinglish");
     await stop(s);
 
-    // 7. Layout: caller files only under callers/, none at the owner level.
-    assert.ok(existsSync(path.join(dataDir, "callers")));
+    const savedJar = new Map(ashaJar);
+    // 7. Layout: demo caller files only under callers-demo/, none at the owner level.
+    assert.ok(existsSync(path.join(dataDir, "callers-demo")));
     assert.equal(
       readdirSync(dataDir).filter((f) => f.endsWith(".vms")).length,
       0,
     );
     const callerFiles = () =>
-      readdirSync(path.join(dataDir, "callers")).filter((f) =>
+      readdirSync(path.join(dataDir, "callers-demo")).filter((f) =>
         f.endsWith(".vms"),
       );
     assert.equal(callerFiles().length, 1);
-    const bytes = readFileSync(path.join(dataDir, "callers", callerFiles()[0]));
+    const bytes = readFileSync(
+      path.join(dataDir, "callers-demo", callerFiles()[0]),
+    );
     assert.equal(bytes.includes(Buffer.from("hinglish")), false);
 
     // 2. Restart + redeploy (new process, new commit id, same disk)
     for (const commit of ["deploy-1", "deploy-2"]) {
       s = await boot({ VM_COMMIT: commit });
       assert.equal(s.health.commit, commit);
-      c = client(s.base);
+      c = client(s.base, ashaJar);
       const back = await c.start("asha");
       assert.equal(back.status, 200);
       assert.equal(
@@ -149,31 +158,50 @@ test(
       await stop(s);
     }
 
-    // 5. Wrong key: refused, file untouched, not a "new caller".
-    const before = readFileSync(
-      path.join(dataDir, "callers", callerFiles()[0]),
-    );
+    // 5. Wrong key. In the public demo the visitor cookie is keyed from
+    // VM_STORE_KEY too, so the browser gets a FRESH namespace (nothing of
+    // the old visitor is readable or overwritten). The encrypted file is
+    // byte-identical afterwards, and the right key brings it back.
+    // (Fail-closed 503 on an unreadable record: tests/caller-memory-durable
+    // and tests/memory-api for tenant callers.)
+    const [only] = callerFiles();
+    const before = readFileSync(path.join(dataDir, "callers-demo", only));
     s = await boot({ VM_STORE_KEY: "6b".repeat(32) });
-    c = client(s.base);
+    c = client(s.base, ashaJar);
     const wrong = await c.start("asha");
-    assert.equal(wrong.status, 503, JSON.stringify(wrong.body));
-    assert.equal(wrong.body.code, "unavailable");
+    assert.equal(wrong.status, 200, JSON.stringify(wrong.body));
+    assert.deepEqual(
+      wrong.body.preferences,
+      {},
+      "nothing readable under the wrong key",
+    );
     await stop(s);
     assert.ok(
-      readFileSync(path.join(dataDir, "callers", callerFiles()[0])).equals(
-        before,
-      ),
+      readFileSync(path.join(dataDir, "callers-demo", only)).equals(before),
+      "never overwritten",
     );
+    // Remove the fresh-namespace visitor cookie the wrong-key server set:
+    // the real browser still holds its original cookie.
+    ashaJar.clear();
+    for (const [k, v] of savedJar) ashaJar.set(k, v);
+    s = await boot();
+    c = client(s.base, ashaJar);
+    assert.equal(
+      (await c.start("asha")).body.preferences.language?.value,
+      "hinglish",
+      "the right key restores it",
+    );
+    await stop(s);
 
     // 4. Delete, restart, still deleted.
     s = await boot();
-    c = client(s.base);
+    c = client(s.base, ashaJar);
     await c.start("asha");
     const f = await c.say("Forget my language preference");
     assert.equal(f.body.op, "forget_preference");
     await stop(s);
     s = await boot();
-    c = client(s.base);
+    c = client(s.base, ashaJar);
     const gone = await c.start("asha");
     assert.deepEqual(gone.body.preferences, {}, "stays deleted");
     await stop(s);

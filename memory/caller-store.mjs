@@ -13,12 +13,13 @@
 //   "memory-only"  no VM_DATA_DIR: process memory, lost on restart
 //   "unavailable"  configured but failing: caller memory must not run
 import { hkdfSync, randomBytes } from "node:crypto";
+import { readdirSync, statSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { createStore } from "./store.mjs";
 
 export const CALLER_KEY_INFO = "voice-memory/caller-memory/v1";
 
-export function deriveCallerKeyHex(storeKeyHex) {
+export function deriveCallerKeyHex(storeKeyHex, info = CALLER_KEY_INFO) {
   if (!/^[0-9a-f]{64}$/i.test(storeKeyHex ?? "")) return null;
   return Buffer.from(
     hkdfSync(
@@ -35,10 +36,15 @@ export function deriveCallerKeyHex(storeKeyHex) {
  * @param {{ dataDir?: string|null, storeKeyHex?: string|null }} opts
  * @returns {{ store: ReturnType<typeof createStore>|null, status: string, reason: string|null, dir: string|null }}
  */
-export function openCallerStore({ dataDir = null, storeKeyHex = null } = {}) {
+export function openCallerStore({
+  dataDir = null,
+  storeKeyHex = null,
+  subdir = "callers",
+  info = CALLER_KEY_INFO,
+} = {}) {
   if (!dataDir)
     return { store: null, status: "memory-only", reason: null, dir: null };
-  const keyHex = deriveCallerKeyHex(storeKeyHex);
+  const keyHex = deriveCallerKeyHex(storeKeyHex, info);
   if (!keyHex)
     return {
       store: null,
@@ -46,7 +52,7 @@ export function openCallerStore({ dataDir = null, storeKeyHex = null } = {}) {
       reason: "VM_STORE_KEY missing or not 64 hex",
       dir: null,
     };
-  const dir = path.join(dataDir, "callers");
+  const dir = path.join(dataDir, subdir);
   let store;
   try {
     store = createStore({ dir, keyHex });
@@ -65,4 +71,30 @@ export function openCallerStore({ dataDir = null, storeKeyHex = null } = {}) {
     };
   }
   return { store, status: "durable", reason: null, dir };
+}
+
+/**
+ * Delete encrypted files not written for longer than maxAgeMs (demo
+ * retention). Returns how many were removed. Never touches other dirs.
+ */
+export function sweepStoreDir(dir, maxAgeMs, now = Date.now()) {
+  let removed = 0;
+  let names = [];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return 0;
+  }
+  for (const n of names) {
+    if (!n.endsWith(".vms")) continue;
+    try {
+      if (now - statSync(path.join(dir, n)).mtimeMs > maxAgeMs) {
+        unlinkSync(path.join(dir, n));
+        removed++;
+      }
+    } catch {
+      /* a concurrent write or delete: try again next sweep */
+    }
+  }
+  return removed;
 }
