@@ -1540,7 +1540,9 @@ export function publicAnswer(shown) {
       coverageNotice:
         ["en", "hi", "hinglish"]
           .map(coverageNotice)
-          .find((n) => typeof final.text === "string" && final.text.endsWith(n)) ?? null,
+          .find(
+            (n) => typeof final.text === "string" && final.text.endsWith(n),
+          ) ?? null,
     },
     wholeQuestion: shown.wholeQuestion ?? null,
     answer: final.text,

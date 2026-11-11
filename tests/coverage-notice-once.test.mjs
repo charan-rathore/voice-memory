@@ -78,11 +78,12 @@ test("one call: the coverage sentence is spoken once, recorded on every turn", a
   assert.match(spoken[1], /\$42,000.*not approved/);
   assert.match(spoken[2], /40\/60.*50\/50/);
   // The contract on the call's screen feed still discloses every time.
-  const covered = contracts
-    .filter(Boolean)
-    .map((c) => c.coverage ?? null);
+  const covered = contracts.filter(Boolean).map((c) => c.coverage ?? null);
   assert.ok(covered.length >= 3);
-  assert.ok(covered.every((s) => s === "unverified"), JSON.stringify(covered));
+  assert.ok(
+    covered.every((s) => s === "unverified"),
+    JSON.stringify(covered),
+  );
 });
 
 test("no server call identity (shared bearer, no handle): spoken every turn", async () => {
@@ -99,11 +100,15 @@ test("another call gets its own first disclosure", async () => {
     call: (m) => (m.length > 3 ? "call-B" : "call-A"),
   });
   const a = await call(voice, ["What is the engagement fee?"]);
-  const b = await call(voice, ["What is the engagement fee?"], [
-    { role: "user", content: "hello" },
-    { role: "assistant", content: "Hi." },
-    { role: "user", content: "fee?" },
-  ]);
+  const b = await call(
+    voice,
+    ["What is the engagement fee?"],
+    [
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "Hi." },
+      { role: "user", content: "fee?" },
+    ],
+  );
   assert.ok(hasNotice(a[0]));
   assert.ok(hasNotice(b[0]), "call-B's first unverified turn discloses");
 });
@@ -136,16 +141,33 @@ test("the public answer names its disclosure sentence so a screen shows it once"
     const base = `http://127.0.0.1:${server.address().port}/api/public/answer?case=deal&q=`;
     const get = async (q) => (await fetch(base + encodeURIComponent(q))).json();
     const a = await get("Was the revised fee approved?");
-    assert.equal(a.final.coverage?.state ?? a.wholeQuestion?.state, "unverified");
+    assert.equal(
+      a.final.coverage?.state ?? a.wholeQuestion?.state,
+      "unverified",
+    );
     assert.equal(a.final.coverageNotice, coverageNotice("en"));
-    assert.ok(a.final.text.endsWith(" " + a.final.coverageNotice), "text unchanged");
+    assert.ok(
+      a.final.text.endsWith(" " + a.final.coverageNotice),
+      "text unchanged",
+    );
     const h = await get("Kya revised fee approve hui?");
     assert.ok(NOTICES.includes(h.final.coverageNotice), h.final.text);
     const none = await get("Who approved the fee?");
     assert.equal(none.final.coverageNotice, null);
-    const site = readFileSync(new URL("../site/site.js", import.meta.url), "utf8");
-    assert.match(site, /final\?\.coverageNotice/, "the page uses the server's sentence");
-    assert.doesNotMatch(site, /\.disabled = true;\n\s+\$\("#answer"\)/, "ask never disables submit");
+    const site = readFileSync(
+      new URL("../site/site.js", import.meta.url),
+      "utf8",
+    );
+    assert.match(
+      site,
+      /final\?\.coverageNotice/,
+      "the page uses the server's sentence",
+    );
+    assert.doesNotMatch(
+      site,
+      /\.disabled = true;\n\s+\$\("#answer"\)/,
+      "ask never disables submit",
+    );
   } finally {
     server.close();
   }
