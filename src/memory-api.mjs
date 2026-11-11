@@ -38,6 +38,7 @@ import {
 } from "../memory/caller-memory.mjs";
 import { BindingError, audienceOf } from "../memory/call-binding.mjs";
 import { applicableScope } from "./applicability.mjs";
+import { coverageNotice } from "./whole-question-coverage.mjs";
 
 export const API_VERSION = "2026-11-11";
 const sha = (s) => createHash("sha256").update(String(s)).digest();
@@ -100,12 +101,11 @@ export function createMemoryApi({
     return t;
   };
   const limit = (tenant) => {
+    // Per tenant: VM_TENANTS.<tenant>.ratePerMinute, else the default.
+    const rate = tenants[tenant]?.ratePerMinute ?? ratePerMinute;
     const t = now();
-    const b = buckets.get(tenant) ?? { tokens: ratePerMinute, at: t };
-    b.tokens = Math.min(
-      ratePerMinute,
-      b.tokens + ((t - b.at) / 60000) * ratePerMinute,
-    );
+    const b = buckets.get(tenant) ?? { tokens: rate, at: t };
+    b.tokens = Math.min(rate, b.tokens + ((t - b.at) / 60000) * rate);
     b.at = t;
     if (b.tokens < 1)
       throw fail(429, "rate_limited", "Too many requests for this tenant.");
@@ -160,13 +160,25 @@ export function createMemoryApi({
       .digest("base64url");
     return r;
   };
+  const NOTICES = ["en", "hi", "hinglish"].map(coverageNotice);
+  const bareAnswer = (t) => {
+    let out = String(t).trim();
+    for (const n of NOTICES)
+      if (out.endsWith(n)) out = out.slice(0, -n.length).trim();
+    return out.replace(/\s*That's from [^.]+\.$/, "").trim();
+  };
   const verifiedPart = (got, caseId) => {
     const f = got?.final ?? null;
     if (!f) return null;
     return {
       kind: f.kind,
       verdict: f.verdict ?? null,
-      text: typeof f.admittedText === "string" ? f.admittedText : null,
+      // `say`: the canonical sentence a voice agent may speak verbatim.
+      // `text`: the same answer without the spoken source attribution and
+      // without the call-level coverage sentence (reported as `coverage`).
+      say: typeof f.admittedText === "string" ? f.admittedText : null,
+      text:
+        typeof f.admittedText === "string" ? bareAnswer(f.admittedText) : null,
       clarification:
         typeof f.admittedText === "string" ? null : (f.text ?? null),
       citations: (f.citations ?? []).map((c) => ({
