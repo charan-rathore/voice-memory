@@ -411,7 +411,8 @@ export function createMemoryApi({
       // "{vm_recall}"). Empty when there is nothing to recall.
       let vmRecall = "";
       if (caller && b.permissions.recall) {
-        const live = bindings.get(b.callId, tenant);
+        // Read without marking first use: starting a call is not using it.
+        const live = bindings.get(b.callId, tenant, { any: true });
         const rec = await memory.recall(caller, {
           caseId: live.scope.case,
           answer: answerFor(live),
