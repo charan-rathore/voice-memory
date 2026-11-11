@@ -216,7 +216,9 @@ try {
       const citedButtons = page.locator("#answer .cites .cite");
       if ((await citedButtons.count()) !== admitted.length)
         fail(width + ": the answer promoted a non-admitted retrieval passage");
-      const queryText = await page.locator(".rd-query").innerText();
+      // innerText normalizes PDF line breaks; textContent preserves the exact
+      // canonical citation quote bytes used to construct the DOM nodes.
+      const queryText = await page.locator(".rd-query").textContent();
       for (const cite of admitted)
         if (!queryText.includes(cite.quote))
           fail(
@@ -241,6 +243,11 @@ try {
       const hasTextMark = (await page.locator("#viewer-body mark").count()) > 0;
       if (!hasPdfBox && !hasTextMark && !originalText.includes(cite.quote))
         fail(width + ": citation did not open its original source");
+      if ((width === 390 || width === 1280) &&
+          typeof first.admittedText === "string")
+        await page.locator("#desk").screenshot({
+          path: join(shots, "journey-" + width + "-admitted-after.png"),
+        });
     }
     const unknown = await submit("What is the private admin password?");
     if (unknown.admittedText !== null)

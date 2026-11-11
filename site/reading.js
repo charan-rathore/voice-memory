@@ -733,46 +733,102 @@
     }
     parent.append(list);
   }
+  // General education is from the existing MedlinePlus-backed clinical
+  // glossary, never derived from the upload or substituted for a report fact.
+  const LAB_EDUCATION = [
+    {
+      match: /\bferritin\b/i,
+      name: "Ferritin",
+      measures: "Ferritin reflects how much iron the body stores.",
+      source: "https://medlineplus.gov/lab-tests/ferritin-blood-test/",
+    },
+    {
+      match: /\bcreatinine\b/i,
+      name: "Creatinine",
+      measures: "Creatinine is a muscle waste product filtered by the kidneys; the test helps describe kidney function.",
+      source: "https://medlineplus.gov/lab-tests/creatinine-test/",
+    },
+    {
+      match: /\b(?:haemoglobin|hemoglobin|hgb)\b/i,
+      name: "Hemoglobin",
+      measures: "Hemoglobin is the protein in red blood cells that carries oxygen.",
+      source: "https://medlineplus.gov/lab-tests/hemoglobin-test/",
+    },
+    {
+      match: /\b(?:tsh|thyroid.stimulating.hormone)\b/i,
+      name: "TSH",
+      measures: "TSH is a hormone that signals the thyroid how much thyroid hormone to make.",
+      source: "https://medlineplus.gov/labtests/tshthyroidstimulatinghormonetest.html",
+    },
+    {
+      match: /\b(?:ldl|low.density.lipoprotein)\b/i,
+      name: "LDL cholesterol",
+      measures: "LDL refers to cholesterol carried in low-density lipoproteins.",
+      source: "https://medlineplus.gov/lab-tests/cholesterol-levels/",
+    },
+  ];
+
   function labExplanation(host, d, q) {
     const f = q?.final;
     if (!(d.digest?.graph?.labRows > 0) ||
         typeof f?.admittedText !== "string" || !f.citations?.length) return;
     const first = f.citations[0];
+    const identifier = [first.quote, q.lead?.field].filter(Boolean).join(" ");
+    const known = LAB_EDUCATION.find((item) => item.match.test(identifier));
     const revised = f.citations.find((c) =>
       /amended|corrected|correction/i.test(c.title ?? "") ||
       /amended|corrected|correction/i.test(c.quote ?? "")
+    );
+    // An interval is named only when an admitted source actually prints
+    // "reference"/"interval"/"range". We never import population thresholds.
+    const printedRange = f.citations.find((c) =>
+      /\b(?:reference(?:\s+range)?|interval|range)\b/i.test(c.quote ?? "")
     );
     const lab = make("section", "rd-lab");
     lab.setAttribute("aria-label", "Lab result explanation");
     lab.append(make("h3", "", "Understanding this result"));
     const general = make("div", "rd-education");
     general.append(make("h4", "", "What is this"));
-    row(general, q.lead?.field ?? "The test named in your question", "Printed test identity: open the original line.", first);
+    row(general, known?.name ?? q.lead?.field ?? "The test printed in this report",
+      "Open the exact source line to verify the test's printed name.", first);
     general.append(make("h4", "", "What it measures"));
-    general.append(make("p", "", "General education is separate from the document's findings."));
-    const sources = (q.background?.sources ?? []).filter((x) => /^https:\/\//.test(x?.uri ?? ""));
-    if (sources.length) for (const x of sources) {
-      const link = make("a", "", x.title ?? "General reference");
-      link.href = x.uri;
+    general.append(make("p", "",
+      known?.measures ?? "No vetted general description is available for this test."));
+    if (known) {
+      const link = make("a", "", "MedlinePlus — general education, not this patient's finding");
+      link.href = known.source;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       general.append(link);
-    } else general.append(make("p", "", "No independently sourced general description was supplied."));
-    row(general, "Printed test name", "The record does not establish a general medical definition.", first);
+    }
+    // Any background supplied by the server is also external, never a
+    // citation to this person's report.
+    for (const item of (q.background?.sources ?? []).filter(
+      (x) => /^https:\/\//.test(x?.uri ?? "")
+    )) {
+      if (known && item.uri === known.source) continue;
+      const link = make("a", "", item.title ?? "General reference");
+      link.href = item.uri;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      general.append(link);
+    }
     lab.append(general);
     lab.append(make("h4", "", "What this report showed"));
-    row(lab, first.quote, "Admitted line from the document; no medical conclusion.", first);
+    row(lab, first.quote, "Verbatim admitted passage from the report.", first);
     lab.append(make("h4", "", "Against this lab's printed interval only"));
-    row(lab, "Open the printed interval in this report if present. No external threshold is used.",
-      "The original line, rather than a severity assessment.", first);
+    row(lab, printedRange
+      ? printedRange.quote
+      : "The admitted source lines do not establish a printed reference interval.",
+      "No outside limits or health interpretation are used.", printedRange ?? first);
     lab.append(make("h4", "", "What changed"));
     row(lab, revised
-      ? "The document records a correction; this is not evidence of a change in the body."
-      : "No correction is established by these cited lines.",
-      "Verify the original report status and value.", revised ?? first);
+      ? "A cited record is amended or corrected. This is a change to the printed record, not proof of a body change."
+      : "No correction is established by these admitted source lines.",
+      "Open the cited report to inspect the original status.", revised ?? first);
     lab.append(make("h4", "", "Why we trust this record"));
-    row(lab, "The result is linked to the admitted source passage. The document is not clinically validated by this interface.",
-      "Open the original line and printed status.", first);
+    row(lab, "This statement is admitted with the exact source passage and location.",
+      "A source citation does not establish independent clinical validation.", first);
     host.append(lab);
   }
   function paintQuery(d) {

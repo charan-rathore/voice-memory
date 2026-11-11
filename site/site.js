@@ -1101,7 +1101,9 @@
         : `No supported answer. ${final.text ?? "The documents did not establish this."}`
       : lead?.text ??
         "No supported answer. These documents do not establish an answer.";
-    const opener = asserting ? (lead?.opener ?? null) : null;
+    // The canonical final is the complete admitted wording. Never prepend an
+    // unadmitted lead opener to it.
+    const opener = final ? null : asserting ? (lead?.opener ?? null) : null;
     const spans = (value) =>
       String(value ?? "")
         .split(/(\s+)/)
@@ -1182,7 +1184,8 @@
     state.currentRelated = related;
     state.currentCase = caseId;
     state.currentLang = r.semantic?.lang ?? state.lang;
-    if (r.visual)
+    // The visual must not assert a result when request admission withheld it.
+    if (r.visual && (!final || asserting))
       loadVisual().then(() => {
         if (state.current?._src !== r || !$("#a-visual") || !window.VMVisual)
           return;
