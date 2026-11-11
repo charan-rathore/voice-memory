@@ -122,7 +122,10 @@ test("two calls: remembered from the conversation, verified in the documents, st
   } finally {
     A.server.close();
   }
-  assert.ok(readdirSync(dataDir).some((f) => f.endsWith(".vms")), "memory persisted, encrypted");
+  assert.ok(
+    readdirSync(path.join(dataDir, "callers")).some((f) => f.endsWith(".vms")),
+    "memory persisted, encrypted, in its own directory",
+  );
 
   // ------------------------------------------- call two: a new server process
   const B = await boot();

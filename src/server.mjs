@@ -154,6 +154,7 @@ import { createPublicApi, publicAnswer, clientAddress } from "./public-api.mjs";
 import { createCallerApi } from "./caller-api.mjs";
 import { createCallerIdentity } from "../memory/caller-identity.mjs";
 import { createCallerMemory } from "../memory/caller-memory.mjs";
+import { openCallerStore } from "../memory/caller-store.mjs";
 import { createSarvamTts } from "./sarvam-tts.mjs";
 import {
   createElevenTts,
@@ -3381,9 +3382,27 @@ export function createLocalServer({
   // keys from VM_CALLER_KEYS (JSON {kid: hex}). VM_CALLER_DEMO=on adds a
   // per-process key that signs ONLY the fixed fictional personas. Durable
   // only with the encrypted store (VM_DATA_DIR + VM_STORE_KEY).
+  // Caller memory status for /healthz: never secrets, paths or identities.
+  const callerMemoryStatus = { enabled: false, storage: null, reason: null };
   const callerApi = (() => {
     const demoOn = process.env.VM_CALLER_DEMO === "on";
     if (process.env.VM_CALLER_MEMORY !== "on" && !demoOn) return null;
+    // Separate directory and HKDF-derived key (memory/caller-store.mjs).
+    // VM_CALLER_REQUIRE_DURABLE=on (staging, production): no disk or a
+    // failing self-test leaves caller memory OFF, never in process memory.
+    const opened = openCallerStore({
+      dataDir: process.env.VM_DATA_DIR || null,
+      storeKeyHex: process.env.VM_STORE_KEY || null,
+    });
+    callerMemoryStatus.storage = opened.status;
+    callerMemoryStatus.reason = opened.reason;
+    const requireDurable = process.env.VM_CALLER_REQUIRE_DURABLE === "on";
+    if (opened.status === "unavailable" || (requireDurable && opened.status !== "durable")) {
+      callerMemoryStatus.reason ??= "durable storage required";
+      console.error("caller memory disabled:", callerMemoryStatus.reason);
+      return null;
+    }
+    callerMemoryStatus.enabled = true;
     let keys = {};
     try {
       keys = JSON.parse(process.env.VM_CALLER_KEYS || "{}");
@@ -3392,7 +3411,7 @@ export function createLocalServer({
     }
     if (demoOn) keys = { ...keys, demo: randomBytes(32).toString("hex") };
     const identity = createCallerIdentity({ keys });
-    const memory = createCallerMemory({ identity, store });
+    const memory = createCallerMemory({ identity, store: opened.store });
     return createCallerApi({
       identity,
       memory,
@@ -3474,6 +3493,7 @@ export function createLocalServer({
             parseCache: { ...parseCacheStats },
           },
           memory: denseStatus().memory,
+          callerMemory: callerMemoryStatus,
           dense: {
             ready: denseStatus().ready,
             disabled: denseStatus().disabled,

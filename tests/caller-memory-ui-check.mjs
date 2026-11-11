@@ -57,10 +57,17 @@ try {
       return page.locator(".msg.vm").last().innerText();
     };
 
+    // Labelled as a simulation; controls usable on touch; transcript scrolls on its own.
+    assert.match(await page.locator(".sim").innerText(), /Simulated call/);
+    for (const sel of [".seg button", "#start", ".composer input", ".composer .send"]) {
+      const box = await page.locator(sel).first().boundingBox();
+      assert.ok(box && box.height >= 44, `${sel} is ${box?.height}px tall at ${label}`);
+    }
     // Call one
     await page.click('[data-persona="asha"]');
     await page.click("#start");
     await page.locator(".msg.sys", { hasText: "Asha (fictional)" }).waitFor();
+    assert.match(await page.locator(".msg.sys").first().innerText(), /^Simulated call started/);
     assert.match(await page.locator(".msg.vm").first().innerText(), /don't have anything remembered/);
     await say("Please remember that I prefer Hinglish, and remember this conversation for next time.");
     const a1 = await say("Was the revised fee approved?");
@@ -68,7 +75,19 @@ try {
     assert.match(await page.locator("#verified").innerText(), /Proposed, not approved[\s\S]*\$42,000 is the latest proposal/);
     assert.match(await page.locator("#remembered").innerText(), /Language\s+Hinglish/);
     assert.match(await page.locator("#unresolved").innerText(), /not approved/);
-    if (label === "desktop") await page.screenshot({ path: join(shots, `call-one-${label}.png`), fullPage: true });
+    for (const sel of [".chip", "#remembered .link"]) {
+      const box = await page.locator(sel).first().boundingBox();
+      assert.ok(box && box.height >= 44, `${sel} is ${box?.height}px tall at ${label}`);
+    }
+    const tx = await page.locator("#transcript").evaluate((el) => getComputedStyle(el).overflowY);
+    assert.equal(tx, "auto", "transcript scrolls independently");
+    // The composer never covers the transcript or the suggested lines.
+    const composer = await page.locator(".composer").boundingBox();
+    const txBox = await page.locator("#transcript").boundingBox();
+    const chips = await page.locator("#script").boundingBox();
+    assert.ok(composer.y >= txBox.y + txBox.height - 1, "composer below transcript");
+    assert.ok(composer.y >= chips.y + chips.height - 1, "composer below suggestions");
+    await page.screenshot({ path: join(shots, `call-one-${label}.png`), fullPage: true });
     await page.click("#end");
 
     // Call two (new call, same verified fictional caller)

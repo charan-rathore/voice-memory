@@ -159,7 +159,7 @@
       state.recalled = s.rechecked.length;
       state.changed = false;
       tx.innerHTML = "";
-      line("sys", `Call started · ${esc(s.caller.displayName)} · verified (${esc(s.caller.method)})`);
+      line("sys", `Simulated call started · ${esc(s.caller.displayName)} · verified (${esc(s.caller.method)})`);
       line("vm", vmHtml(s.say));
       $("#status").innerHTML = `On a call as <b>${esc(s.caller.displayName)}</b>. Verified by a signed test identity at ${new Date(s.caller.verifiedAt).toLocaleTimeString()}.`;
       $("#start").hidden = true;
@@ -190,7 +190,7 @@
       await api("/end", {});
     } catch {}
     state.onCall = false;
-    line("sys", "Call ended. Start again to call back.");
+    line("sys", "Simulated call ended. Start again to call back.");
     $("#start").hidden = false;
     $("#end").hidden = true;
     $("#status").textContent = "Not on a call.";

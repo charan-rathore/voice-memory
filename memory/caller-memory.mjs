@@ -200,9 +200,11 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
     let r = live.get(binding.subject);
     if (!r && store) {
       try {
-        r = store.load(nsOf(binding));
+        r = store.load(nsOf(binding)); // null only when there is no file
       } catch {
-        r = null; // tampered or wrong key: never half-read
+        // Wrong key, tampered file or unreadable disk. Fail closed: never
+        // treat it as a new caller (that would also overwrite the file).
+        throw new CallerMemoryError("unavailable", "Caller memory is unavailable right now.");
       }
     }
     if (r && (r.subject !== binding.subject || r.tenant !== binding.tenant)) r = null;
@@ -224,10 +226,16 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
     // Bounded: oldest episodes go first, then oldest referents.
     while (JSON.stringify(r).length > CALLER_LIMITS.bytes && (r.episodes.length || r.referents.length))
       (r.episodes.length ? r.episodes : r.referents).shift();
+    if (!store) return void live.set(binding.subject, r);
+    try {
+      if (isEmpty(r)) store.remove(nsOf(binding));
+      else store.save(nsOf(binding), r);
+    } catch {
+      // Not persisted: drop the cached copy so nothing unsaved is served.
+      live.delete(binding.subject);
+      throw new CallerMemoryError("unavailable", "Caller memory could not be saved.");
+    }
     live.set(binding.subject, r);
-    if (!store) return;
-    if (isEmpty(r)) store.remove(nsOf(binding));
-    else store.save(nsOf(binding), r);
   };
   const exp = (kind) => new Date(now() + keep[kind]).toISOString();
   const at = () => new Date(now()).toISOString();
@@ -395,8 +403,13 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
       if (what.all) {
         removed =
           Object.keys(r.preferences).length + r.episodes.length + r.referents.length + r.requests.length;
+        if (store)
+          try {
+            store.remove(nsOf(binding));
+          } catch {
+            throw new CallerMemoryError("unavailable", "Caller memory could not be deleted.");
+          }
         live.delete(binding.subject);
-        if (store) store.remove(nsOf(binding));
         return { removed, all: true };
       }
       if (what.preference && r.preferences[what.preference]) {
