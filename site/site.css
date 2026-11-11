@@ -2931,7 +2931,7 @@ kbd {
 .desk .a-q .via { background: rgba(24,125,114,.09); color: var(--teal-ink); }
 .desk .a-q q { color: var(--ink-2); }
 .desk .a-lead { color: var(--ink); }
-.desk .answer.printing, .desk .answer.printing .verdict-chip, .desk .a-lead .w, .desk .cite { animation: none; }
+.desk .answer.printing, .desk .answer.printing .verdict-chip { animation: none; }
 .desk .v-latest, .desk .v-ok, .desk .tag-amended, .desk .tag-final, .desk .tag-current { color: var(--teal-ink); background: rgba(24,125,114,.1); }
 .desk .v-warn { color: var(--amber-ink); background: rgba(175,121,41,.1); }
 .desk .v-no, .desk .tag-preliminary, .desk .tag-superseded { color: var(--red-ink); background: rgba(182,82,76,.1); }
@@ -2969,6 +2969,9 @@ kbd {
 }
 @media (prefers-reduced-motion: reduce) {
   .desk *, .desk *::before, .desk *::after { animation: none !important; transition-property: opacity, color, background-color !important; }
+  /* The word reveal is an animation, so the blanket kill above would leave
+     answer words at their base opacity 0: stay visible without the reveal. */
+  .desk .a-lead .w { opacity: 1 !important; }
   .desk button:active { transform: none; }
 }
 
