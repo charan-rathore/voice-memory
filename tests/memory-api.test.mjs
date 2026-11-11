@@ -396,15 +396,21 @@ test("identity and permissions: wrong tenant, unverified inbound, consent and id
     "the client's 'Yes, approved!' is not a fact",
   );
   assert.equal(t1.body.episode.spoken, "Yes, approved!");
-  assert.equal(
-    (
-      await api(A.apiKey, "POST", `/calls/${id}/turns`, {
-        turnId: "t-1",
-        question: "x",
-      })
-    ).body.duplicate,
-    true,
-  );
+  // Identical retry: the same committed episode. Same turnId, different
+  // payload: a conflict, never a silent "duplicate".
+  const again = await api(A.apiKey, "POST", `/calls/${id}/turns`, {
+    turnId: "t-1",
+    question: "Was the revised fee approved?",
+    spoken: "Yes, approved!",
+  });
+  assert.equal(again.body.duplicate, true);
+  assert.equal(again.body.episode.id, t1.body.episode.id);
+  const clash = await api(A.apiKey, "POST", `/calls/${id}/turns`, {
+    turnId: "t-1",
+    question: "x",
+  });
+  assert.equal(clash.status, 409);
+  assert.equal(clash.body.code, "turn_conflict");
   // Unauthenticated.
   assert.equal((await fetch(S.base + "/v1/calls/x/memory")).status, 401);
 });
@@ -413,7 +419,10 @@ test("rate limit per tenant", async () => {
   const identity = createCallerIdentity({ keys: {} });
   const handler = createMemoryApi({
     tenants: {
-      t: { apiKey: "e5".repeat(32), voiceKey: "voice-key-t-0123456789abcdefg" },
+      t: {
+        apiKey: "e5".repeat(32),
+        voiceKey: "voice-key-t-0123456789abcdefghijklmn",
+      },
     },
     identity,
     memory: createCallerMemory({ identity }),

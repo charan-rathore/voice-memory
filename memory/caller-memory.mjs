@@ -283,6 +283,12 @@ export function createCallerMemory({
 
   const api = {
     durable: !!store,
+    /** The committed episode for a turn key, if any (durable dedupe). */
+    findEpisodeByTurn(binding, turnKey) {
+      must(binding);
+      const e = load(binding).episodes.find((x) => x.turnKey === turnKey);
+      return e ? structuredClone(e) : null;
+    },
     /** Which known subject a question names, in that case's vocabulary. */
     subjectOf: (question, caseId) =>
       subjectOfQuestion(question, subjectsFor(caseId) ?? VOCAB),
@@ -369,11 +375,33 @@ export function createCallerMemory({
      */
     recordEpisode(
       binding,
-      { callId, caseId, question, final, corpus, spoken = null },
+      {
+        callId,
+        caseId,
+        question,
+        final,
+        corpus,
+        spoken = null,
+        turnKey = null,
+        payloadHash = null,
+        delivery = null,
+      },
     ) {
       must(binding);
       const r = load(binding);
       if (!r.consent.conversation) return { kept: false, reason: "no_consent" };
+      // Durable idempotency: the turn key is persisted with the episode, so
+      // a retry after a restart (or on another request) returns the same
+      // committed episode instead of writing a second one.
+      if (turnKey) {
+        const prior = r.episodes.find((e) => e.turnKey === turnKey);
+        if (prior)
+          return {
+            kept: true,
+            duplicate: true,
+            episode: structuredClone(prior),
+          };
+      }
       if (NOT_RETAINED_SCOPES.has(caseId))
         return { kept: false, reason: "sensitive_scope" };
       if (!final || !corpus?.version)
@@ -397,6 +425,10 @@ export function createCallerMemory({
         // What was actually said to the caller, kept apart from the
         // verified outcome above (never read back as a fact).
         spoken: typeof spoken === "string" ? spoken.slice(0, 600) : null,
+        // What the server observed about delivery; never "heard".
+        delivery: delivery ?? null,
+        turnKey: turnKey ?? null,
+        payloadHash: payloadHash ?? null,
         subjectId: subj?.id ?? null,
         citations: (final.citations ?? []).slice(0, 6).map((c) => ({
           sourceId: c.sourceId ?? null,

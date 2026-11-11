@@ -24,6 +24,7 @@ import {
 import { labDigest } from "../clinical/answer.mjs";
 import { unboundOwnerTurn } from "./requested-owner.mjs";
 import http from "node:http";
+import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import { createCallCounters } from "./public-call-counters.mjs";
 import { selectCallCounters } from "./public-call-counters-upstash.mjs";
@@ -3613,12 +3614,42 @@ export function createLocalServer({
     Object.entries(tenants).map(([tenant, t]) => [t.voiceKey, tenant]),
   );
   const liveCallBindings = new Map(); // "vmcall:<callId>" -> binding
-  voice.setCommitListener?.(
-    ({ callTag, transcript, spoken, contract, turnKey }) => {
+  // Voice-origin memory. The adapter reports a COMPLETED document answer
+  // (its commit point); the Bolna route below records it only after the
+  // whole response was written to the provider (res "finish"). A provider
+  // disconnect mid-answer records nothing. Bolna documents no playback
+  // acknowledgement, so the strongest state is "stream_completed": the
+  // server never claims the caller heard it.
+  const voiceTurns = new AsyncLocalStorage();
+  voice.setCommitListener?.((turn) => {
+    const pending = voiceTurns.getStore();
+    if (pending)
+      pending.push({
+        ...turn,
+        applied: liveCallBindings.get(turn.callTag)?.lastApplied ?? null,
+        bundle: liveCallBindings.get(turn.callTag)?.lastBundle ?? null,
+      });
+  });
+  const recordVoiceTurns = (pending, delivered) => {
+    for (const {
+      callTag,
+      transcript,
+      spoken,
+      contract,
+      turnKey,
+      applied,
+      bundle,
+    } of pending) {
       const b = callTag ? liveCallBindings.get(callTag) : null;
-      if (!b || !callerStack || !b.caller || !b.permissions.record) return;
-      if (!contract || contract.kind === "social") return;
-      if (!callerStack.bindings.commitTurn(b, "voice:" + turnKey)) return;
+      if (
+        !delivered ||
+        !b ||
+        !callerStack ||
+        !b.caller ||
+        !b.permissions.record
+      )
+        continue;
+      if (!contract || contract.kind === "social") continue;
       try {
         callerStack.memory.recordEpisode(b.caller, {
           callId: b.callId,
@@ -3629,16 +3660,22 @@ export function createLocalServer({
             verdict: contract.verdict,
             citations: contract.citations,
           },
+          // Same scope fields as the API path: version AND applied set.
           corpus: {
-            version: b.lastBundle ? corpusVersion(b.lastBundle) : null,
+            version: bundle ? corpusVersion(bundle) : null,
+            applied: applied ?? null,
           },
           spoken,
+          // Durable dedupe: provider retries of the same turn write nothing.
+          turnKey: "voice:" + turnKey,
+          payloadHash: null,
+          delivery: "stream_completed",
         });
       } catch (e) {
-        console.warn("caller memory: turn not recorded:", e.code ?? e.message);
+        console.warn("caller memory: turn not recorded:", e.code ?? "error");
       }
-    },
-  );
+    }
+  };
   const server = http.createServer(async (req, res) => {
     watchdog.beginRequest();
     res.once("close", () => watchdog.endRequest());
@@ -4022,28 +4059,39 @@ export function createLocalServer({
         if (tv) {
           await loadPublicCases();
           const c = (tenants[tv].cases ?? ["deal"])[0];
+          // A placeholder grant: each call's real documents come from its
+          // vm_call binding. A scope with versions ("insurance") has no
+          // case of its own name, so use any loaded case of that family.
+          const placeholder =
+            caseSessions[c]?.bundle ??
+            Object.entries(caseSessions).find(
+              ([k, v]) => k.startsWith(c + "-") && v?.bundle,
+            )?.[1]?.bundle;
           try {
-            if (caseSessions[c]?.bundle)
-              voice.bind(caseSessions[c].bundle, bearer);
+            if (placeholder) voice.bind(placeholder, bearer);
           } catch {
             /* already live: keep the live grant */
           }
         }
         // Auth, body bounds, TTL and revocation all live in the adapter;
         // this route adds no state and trusts no session.
-        const response = await voice.handle(
-          new Request(origin + req.url, {
-            signal: disconnected.signal,
-            method: req.method,
-            headers: { authorization: req.headers.authorization ?? "" },
-            ...(req.method === "POST"
-              ? {
-                  body: await body(req)
-                    .then(JSON.stringify)
-                    .catch(() => ""),
-                }
-              : {}),
-          }),
+        const pendingTurns = [];
+        let streamDone = false;
+        const response = await voiceTurns.run(pendingTurns, async () =>
+          voice.handle(
+            new Request(origin + req.url, {
+              signal: disconnected.signal,
+              method: req.method,
+              headers: { authorization: req.headers.authorization ?? "" },
+              ...(req.method === "POST"
+                ? {
+                    body: await body(req)
+                      .then(JSON.stringify)
+                      .catch(() => ""),
+                  }
+                : {}),
+            }),
+          ),
         );
         res.writeHead(response.status, {
           "Content-Type":
@@ -4054,7 +4102,10 @@ export function createLocalServer({
           try {
             while (!disconnected.signal.aborted) {
               const { done, value } = await reader.read();
-              if (done) break;
+              if (done) {
+                streamDone = true;
+                break;
+              }
               if (!res.write(value))
                 await new Promise((resolve) => {
                   res.once("drain", resolve);
@@ -4064,6 +4115,11 @@ export function createLocalServer({
           } finally {
             await reader.cancel().catch(() => {});
           }
+        } else streamDone = true;
+        if (pendingTurns.length) {
+          if (!res.destroyed && streamDone && !disconnected.signal.aborted)
+            res.once("finish", () => recordVoiceTurns(pendingTurns, true));
+          else recordVoiceTurns(pendingTurns, false); // interrupted: nothing kept
         }
         if (!res.destroyed) res.end();
         return;

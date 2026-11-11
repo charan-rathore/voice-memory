@@ -41,6 +41,14 @@ import { applicableScope } from "./applicability.mjs";
 import { coverageNotice } from "./whole-question-coverage.mjs";
 
 export const API_VERSION = "2026-11-11";
+// What the server actually observed about an answer's delivery. Nothing
+// here claims the caller HEARD it (no provider offers that acknowledgement).
+export const DELIVERY = Object.freeze([
+  "reported_by_client", // a Mode B client says it delivered the answer
+  "stream_completed", // the full response was written to the provider
+  "provider_confirmed", // the provider confirmed playback (where supported)
+  "interrupted", // cut off: never recorded as a commitment
+]);
 const sha = (s) => createHash("sha256").update(String(s)).digest();
 
 /**
@@ -65,8 +73,10 @@ export function createMemoryApi({
   for (const [tenant, t] of Object.entries(tenants ?? {})) {
     if (!/^[0-9a-f]{64,}$/i.test(t.apiKey ?? ""))
       throw Error(`VM_TENANTS.${tenant}.apiKey must be 64+ hex`);
-    if (!t.voiceKey || String(t.voiceKey).length < 24)
-      throw Error(`VM_TENANTS.${tenant}.voiceKey must be 24+ chars`);
+    if (!t.voiceKey || String(t.voiceKey).length < 32)
+      throw Error(
+        `VM_TENANTS.${tenant}.voiceKey must be 32+ chars (the voice adapter requires it)`,
+      );
     auth.set(sha(t.apiKey).toString("hex"), tenant);
     identifyAuth.set(sha("identify:" + t.apiKey).toString("hex"), tenant);
   }
@@ -74,7 +84,12 @@ export function createMemoryApi({
     createHmac("sha256", tenants[tenant].apiKey)
       .update("vm-receipt-v1")
       .digest();
-  const idem = new Map(); // tenant\0key -> { at, status, body, hash }
+  // tenant\0key -> { state: "pending" | "done", hash, status, body, at }
+  const idem = new Map();
+  // Turn keys being recorded right now. Process-local: across processes or
+  // restarts, duplicate protection comes from the turn key stored on the
+  // persisted episode (memory.findEpisodeByTurn).
+  const inflight = new Set();
   const buckets = new Map();
 
   const send = (res, status, body, headers = {}) => {
@@ -112,7 +127,16 @@ export function createMemoryApi({
     b.tokens -= 1;
     buckets.set(tenant, b);
   };
+  // The body is read once (the idempotency layer hashes it before routing).
   const readJson = async (req) => {
+    if (req.vmBodyText !== undefined) {
+      if (!req.vmBodyText) return {};
+      try {
+        return JSON.parse(req.vmBodyText);
+      } catch {
+        throw fail(400, "bad_json", "Send JSON.");
+      }
+    }
     const chunks = [];
     let n = 0;
     for await (const c of req) {
@@ -284,8 +308,63 @@ export function createMemoryApi({
         },
       ];
     }
+    // Account-level deletion without a live call: the tenant proves the
+    // caller again with a FRESH assertion (single use, <= 15 min).
+    if (
+      req.method === "POST" &&
+      parts[0] === "callers" &&
+      parts[1] === "forget" &&
+      parts.length === 2
+    ) {
+      const d = await readJson(req);
+      const caller = identity.verify(d.assertion);
+      if (caller.tenant !== tenant)
+        throw fail(403, "tenant_mismatch", "Caller belongs to another tenant.");
+      const what =
+        d.all === true
+          ? { all: true }
+          : d.conversation === true
+            ? { conversation: true }
+            : typeof d.preference === "string"
+              ? { preference: d.preference }
+              : null;
+      if (!what)
+        throw fail(
+          400,
+          "bad_delete",
+          "all: true | conversation: true | preference: <key>",
+        );
+      const r = memory.forget(caller, what);
+      return [
+        200,
+        {
+          ...r,
+          receipt: receipt(tenant, "memory.delete", {
+            key,
+            subject: caller.subject,
+          }),
+        },
+      ];
+    }
     if (parts[0] !== "calls" || !callId)
       throw fail(404, "not_found", "No such route.");
+    if (req.method === "POST" && action === "end") {
+      const d = await readJson(req);
+      const ended = bindings.get(callId, tenant, { any: true });
+      return [
+        200,
+        {
+          call: bindings.end(callId, tenant, { revoke: d.revoke === true }),
+          receipt: receipt(tenant, d.revoke ? "call.revoke" : "call.end", {
+            callId,
+            key,
+            subject: ended.caller?.subject,
+          }),
+        },
+      ];
+    }
+    // Every other operation needs a call that is usable NOW (not ended,
+    // revoked or expired): memory is reached through a live call.
     const b = bindings.get(callId, tenant);
     const ctx = { callId, key, subject: b.caller?.subject };
     if (req.method === "POST" && action === "verify") {
@@ -302,18 +381,6 @@ export function createMemoryApi({
         },
       ];
     }
-    if (req.method === "POST" && action === "end") {
-      const d = await readJson(req);
-      return [
-        200,
-        {
-          call: bindings.end(callId, tenant, { revoke: d.revoke === true }),
-          receipt: receipt(tenant, d.revoke ? "call.revoke" : "call.end", ctx),
-        },
-      ];
-    }
-    if (["ended", "revoked"].includes(b.state))
-      throw fail(409, b.state, `Call ${b.state}.`);
     if (req.method === "GET" && action === "context") {
       needCaller(b, "recall");
       const rec = await memory.recall(b.caller, {
@@ -418,31 +485,75 @@ export function createMemoryApi({
         throw fail(400, "bad_turn", "turnId: 1-80 chars [A-Za-z0-9._:-].");
       const q = String(d.question ?? "").trim();
       if (!q) throw fail(400, "bad_question", "question required.");
-      if (!bindings.commitTurn(b, "api:" + turnId))
-        return [200, { recorded: false, duplicate: true }];
-      // The verdict is recomputed here; the client's text is kept only as
-      // what was spoken, never as a fact.
-      const got = await answerFor(b)({ question: q });
-      const kept = memory.recordEpisode(b.caller, {
-        callId,
-        caseId: b.scope.case,
-        question: q,
-        final: got?.final,
-        corpus: got?.corpus,
-        spoken: typeof d.spoken === "string" ? d.spoken.slice(0, 600) : null,
-      });
-      return [
-        200,
-        {
-          recorded: kept.kept,
-          reason: kept.kept ? null : kept.reason,
-          episode: kept.episode ?? null,
-          receipt: receipt(tenant, "turn.record", {
-            ...ctx,
-            sourceVersion: got?.corpus?.version ?? null,
-          }),
-        },
-      ];
+      const spoken =
+        typeof d.spoken === "string" ? d.spoken.slice(0, 600) : null;
+      const delivery = d.delivery ?? "reported_by_client";
+      if (!DELIVERY.includes(delivery))
+        throw fail(400, "bad_delivery", `delivery: ${DELIVERY.join(" | ")}`);
+      // An interrupted answer is not a conversational commitment.
+      if (delivery === "interrupted")
+        return [200, { recorded: false, reason: "interrupted", episode: null }];
+      const turnKey = `api:${callId}:${turnId}`;
+      const payloadHash = sha(JSON.stringify([q, spoken, delivery]))
+        .toString("hex")
+        .slice(0, 32);
+      // Same turn, same payload: the committed result. Same turn, different
+      // payload: conflict. In flight: retry later. A failed write leaves
+      // nothing behind, so the turn stays retryable.
+      const prior = memory.findEpisodeByTurn(b.caller, turnKey);
+      if (prior) {
+        if (prior.payloadHash !== payloadHash)
+          throw fail(
+            409,
+            "turn_conflict",
+            "This turnId was already recorded with a different payload.",
+          );
+        return [200, { recorded: true, duplicate: true, episode: prior }];
+      }
+      if (inflight.has(turnKey))
+        throw fail(
+          409,
+          "in_progress",
+          "This turn is being recorded; retry shortly.",
+        );
+      inflight.add(turnKey);
+      try {
+        // The verdict is recomputed here; the client's text is kept only as
+        // what was spoken, never as a fact.
+        const got = await answerFor(b)({ question: q });
+        const kept = memory.recordEpisode(b.caller, {
+          callId,
+          caseId: b.scope.case,
+          question: q,
+          final: got?.final,
+          corpus: got?.corpus,
+          spoken,
+          turnKey,
+          payloadHash,
+          delivery,
+        });
+        if (kept.duplicate && kept.episode?.payloadHash !== payloadHash)
+          throw fail(
+            409,
+            "turn_conflict",
+            "This turnId was already recorded with a different payload.",
+          );
+        return [
+          200,
+          {
+            recorded: kept.kept,
+            duplicate: !!kept.duplicate,
+            reason: kept.kept ? null : kept.reason,
+            episode: kept.episode ?? null,
+            receipt: receipt(tenant, "turn.record", {
+              ...ctx,
+              sourceVersion: got?.corpus?.version ?? null,
+            }),
+          },
+        ];
+      } finally {
+        inflight.delete(turnKey);
+      }
     }
     if (req.method === "POST" && action === "preferences") {
       needCaller(b, "remember");
@@ -596,16 +707,61 @@ export function createMemoryApi({
       const ik = write
         ? `${tenant}\u0000${req.method} ${url.pathname}${url.search}\u0000${key}`
         : null;
-      if (ik && idem.has(ik)) {
-        const prior = idem.get(ik);
-        return (
-          send(res, prior.status, prior.body, { "Idempotent-Replay": "true" }),
-          true
-        );
-      }
-      const [status, body] = await route(req, res, tenant, parts, url);
+      let bodyHash = null;
       if (ik) {
-        idem.set(ik, { status, body, at: now() });
+        const chunks = [];
+        let size = 0;
+        for await (const c of req) {
+          size += c.length;
+          if (size > 16 * 1024)
+            throw fail(413, "too_large", "Body over 16 KB.");
+          chunks.push(c);
+        }
+        req.vmBodyText = Buffer.concat(chunks).toString("utf8");
+        bodyHash = sha(req.vmBodyText).toString("hex");
+        const prior = idem.get(ik);
+        if (prior) {
+          // Same key, different payload: a client bug, never a silent replay.
+          if (prior.hash !== bodyHash)
+            throw fail(
+              422,
+              "idempotency_key_reused",
+              "This Idempotency-Key was used with a different request body.",
+            );
+          if (prior.state === "pending")
+            throw fail(
+              409,
+              "in_progress",
+              "The first request with this Idempotency-Key is still running.",
+            );
+          return (
+            send(res, prior.status, prior.body, {
+              "Idempotent-Replay": "true",
+            }),
+            true
+          );
+        }
+        idem.set(ik, { state: "pending", hash: bodyHash, at: now() });
+      }
+      let status, body;
+      try {
+        [status, body] = await route(req, res, tenant, parts, url);
+      } catch (e) {
+        // A failed request is not remembered: the same key may be retried.
+        if (ik) idem.delete(ik);
+        throw e;
+      }
+      if (ik) {
+        // Only successes replay; a 4xx answer is not cached either.
+        if (status < 400)
+          idem.set(ik, {
+            state: "done",
+            hash: bodyHash,
+            status,
+            body,
+            at: now(),
+          });
+        else idem.delete(ik);
         for (const [k, v] of idem)
           if (now() - v.at > 24 * 3600000) idem.delete(k);
         while (idem.size > 20000) idem.delete(idem.keys().next().value);

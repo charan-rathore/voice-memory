@@ -17,7 +17,7 @@ import { createCallerIdentity } from "../memory/caller-identity.mjs";
 
 const T = {
   apiKey: "f6".repeat(32),
-  voiceKey: "voice-key-harborline-0123456789",
+  voiceKey: "voice-key-harborline-0123456789abcdef",
   caller: "a7".repeat(32),
 };
 const signer = createCallerIdentity({
@@ -188,4 +188,66 @@ test("returning caller after renewal: recalled, rechecked under the wording that
   );
   // The remembered preference did not touch the amount.
   assert.match(ans.body.verified.text, /₹2,500/);
+});
+
+test("C4: a voice-recorded turn and an API recall store and compare the same scope", async () => {
+  const c1 = await call(meera(), "2025-09-14");
+  await api("POST", `/calls/${c1}/consent`, { conversation: true });
+  const token = (await api("GET", `/calls/${c1}/context`)).body.call
+    ? null
+    : null;
+  void token;
+  // Start a call whose token we keep, and speak one turn through the
+  // Bolna-shaped custom-LLM route.
+  const started = await api("POST", "/calls", {
+    provider: "bolna",
+    scope: { case: "insurance" },
+    permissions: { recall: true, remember: true, record: true },
+    caller: { assertion: meera() },
+    applicability: { policyIssuedOn: "2025-09-14" },
+  });
+  const vc = started.body.call.callId;
+  await api("POST", `/calls/${vc}/consent`, { conversation: true });
+  const res = await fetch(S.base + "/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer " + T.voiceKey,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "vm",
+      stream: true,
+      messages: [
+        {
+          role: "system",
+          content: `Harborline support. vm_call=${started.body.providerUserData.vm_call}.`,
+        },
+        { role: "user", content: Q },
+      ],
+    }),
+  });
+  assert.match(await res.text(), /1,000/);
+  await new Promise((r) => setTimeout(r, 50)); // recorded on response finish
+  const mem = (await api("GET", `/calls/${vc}/memory`)).body.memory;
+  const voiceEp = mem.episodes.find((e) => e.turnKey?.startsWith("voice:"));
+  assert.ok(voiceEp, "the spoken turn was recorded");
+  assert.equal(
+    voiceEp.delivery,
+    "stream_completed",
+    "observed delivery, never 'heard'",
+  );
+  assert.equal(
+    voiceEp.scope.applied,
+    "insurance-2025",
+    "voice path keeps the applied wording",
+  );
+  await api("POST", `/calls/${vc}/end`, {});
+  // Next call, same policy: the API recall must not report a change.
+  const c2 = await call(meera(), "2025-09-14");
+  const r = (await api("GET", `/calls/${c2}/context`)).body.rechecked.find(
+    (x) => x.subject.id === "policy.windscreen_excess",
+  );
+  assert.equal(r.applicabilityChanged, false);
+  assert.equal(r.sourceChanged, false);
+  assert.equal(r.statusChanged, false);
 });

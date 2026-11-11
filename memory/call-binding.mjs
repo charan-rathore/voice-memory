@@ -139,17 +139,31 @@ export function createCallBindings({
       b.state = "live";
       return b;
     },
-    get(callId, tenant) {
+    /**
+     * A call the tenant may act on NOW. Ended, revoked or expired calls are
+     * refused for every memory operation: knowing an old callId is never a
+     * standing right to a caller's memory (account-level deletion has its
+     * own route, authorised by a fresh caller assertion). API use counts as
+     * first use, like the voice provider's first request.
+     * `{ any: true }` returns the call in any state (only for /end).
+     */
+    get(callId, tenant, { any = false } = {}) {
       const b = byId.get(callId);
       if (!b || b.tenant !== tenant)
         throw new BindingError("unknown", "Unknown call.");
+      if (any) return b;
+      const t = now();
+      if (b.state === "revoked")
+        throw new BindingError("revoked", "Call revoked.");
+      if (b.state === "ended") throw new BindingError("ended", "Call ended.");
+      if (t >= b.hardExpiresAt || (b.state === "pending" && t >= b.firstUseBy))
+        throw new BindingError("expired", "Call expired.");
+      b.state = "live";
       return b;
     },
     view,
     verify(callId, tenant, caller) {
       const b = this.get(callId, tenant);
-      if (b.state === "ended" || b.state === "revoked")
-        throw new BindingError(b.state, "Call is over.");
       if (caller.tenant !== tenant)
         throw new BindingError(
           "tenant_mismatch",
@@ -165,7 +179,7 @@ export function createCallBindings({
       return view(b);
     },
     end(callId, tenant, { revoke = false } = {}) {
-      const b = this.get(callId, tenant);
+      const b = this.get(callId, tenant, { any: true });
       b.state = revoke ? "revoked" : "ended";
       b.endedAt = now();
       return view(b);
