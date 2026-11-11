@@ -237,6 +237,11 @@ try {
       const cite = first.citations[0];
       await page.locator("#answer .cite").first().click();
       await page.locator("#viewer-body .rd-doc.focus").waitFor();
+      // The PDF canvas and its source highlight render asynchronously.
+      await page
+        .locator("#viewer-body .rd-canvas .box, #viewer-body mark")
+        .first()
+        .waitFor({ timeout: 30000 });
       const originalText = await page.locator("#viewer-body").innerText();
       const hasPdfBox =
         (await page.locator("#viewer-body .rd-canvas .box").count()) > 0;

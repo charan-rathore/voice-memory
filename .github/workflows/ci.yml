@@ -15,6 +15,11 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Confirm checkout equals exact PR head
+        if: github.event_name == 'pull_request'
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -68,9 +73,11 @@ jobs:
           name: pr-b-before-after-screenshots
           path: .shots/pr-b
           retention-days: 14
+          include-hidden-files: true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: landing-screenshots
           path: .shots
           retention-days: 7
+          include-hidden-files: true

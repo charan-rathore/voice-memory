@@ -565,3 +565,11 @@
     transform: none;
   }
 }
+
+/* Recorded page/scan states update immediately, without animating width,
+   height, border, colour or other non-compositor properties. */
+.rd .rd-rail .rd-dot,
+.rd .rd-rail b,
+.rd .rd-pages .pg,
+.rd .rd-pages .pg-fill,
+.rd .rd-pages [data-state="ocr"] .pg-fill { transition: none; }
