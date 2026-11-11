@@ -19,7 +19,9 @@ const dev = spawn(process.execPath, ["scripts/site-dev.mjs"], {
 });
 let browser;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const fail = (message) => { throw Error("PR-B screenshot: " + message); };
+const fail = (message) => {
+  throw Error("PR-B screenshot: " + message);
+};
 
 async function pdfFixture() {
   const pdf = await PDFDocument.create();
@@ -31,14 +33,14 @@ async function pdfFixture() {
     "The monthly fee is Rs 12,000.",
     "Payment is due on the 5th.",
   ].forEach((line, i) =>
-    p1.drawText(line, { x: 56, y: 340 - i * 24, size: 11, font })
+    p1.drawText(line, { x: 56, y: 340 - i * 24, size: 11, font }),
   );
   [
     "Schedule B",
     "The notice period is 30 days.",
     "Signed copies are kept by the client.",
   ].forEach((line, i) =>
-    p2.drawText(line, { x: 56, y: 340 - i * 24, size: 11, font })
+    p2.drawText(line, { x: 56, y: 340 - i * 24, size: 11, font }),
   );
   return {
     name: "two-page-agreement.pdf",
@@ -72,7 +74,12 @@ async function snap(page, width, name) {
 
 try {
   for (let i = 0; i < 80; i++) {
-    if (await fetch(url + "/").then((r) => r.ok).catch(() => false)) break;
+    if (
+      await fetch(url + "/")
+        .then((r) => r.ok)
+        .catch(() => false)
+    )
+      break;
     if (i === 79) fail("site-dev did not start from " + siteRoot);
     await wait(250);
   }
@@ -94,8 +101,10 @@ try {
     await page.locator("#files").setInputFiles(fixture);
     await page.locator("#upl-flow .rd").waitFor({ timeout: 30000 });
     await snap(page, width, "01-upload-processing");
-    await page.locator("#upl-list li", { hasText: "Ready" })
-      .first().waitFor({ timeout: 60000 });
+    await page
+      .locator("#upl-list li", { hasText: "Ready" })
+      .first()
+      .waitFor({ timeout: 60000 });
     const details = page.locator('.rd-stage[data-stage="pages"] details');
     if (await details.count()) {
       await details.locator("summary").click();
@@ -119,15 +128,19 @@ try {
       "What did the amended report say about ferritin for SYN-0001?",
     ]) {
       const candidate = await ask(page, question);
-      if (typeof candidate.final.admittedText === "string" &&
-          candidate.final.citations?.length) {
+      if (
+        typeof candidate.final.admittedText === "string" &&
+        candidate.final.citations?.length
+      ) {
         supported = candidate;
         break;
       }
     }
     if (!supported) fail("No source-admitted demo ferritin answer at " + width);
     await page.locator("#answer .cite").first().click();
-    await page.locator("#viewer-body .rd-doc.focus").first()
+    await page
+      .locator("#viewer-body .rd-doc.focus")
+      .first()
       .waitFor({ timeout: 15000 });
     await snap(page, width, "03-admitted-answer-and-source");
     await page.close();
