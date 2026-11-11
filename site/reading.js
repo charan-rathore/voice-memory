@@ -175,8 +175,11 @@
       }
     }
     // Pages from a cached result arrive without page events.
-    if (!s.pages.length && doc.progress?.pages?.length && s.cached)
-      s.pages = doc.progress.pages.map((p) => ({ ...p }));
+    // The live workspace API carries per-page states even if the historical
+    // upload log is empty (cached or interrupted import). Do not invent states
+    // during replay, where only recorded events may advance the film.
+    if (!s.pages.length && livePages?.length)
+      s.pages = livePages.map((p) => ({ ...p }));
     if (!s.textAt && s.cached && s.finalAt != null) s.textAt = s.finalAt;
     // The server's status is authoritative: a settled document is done even
     // when the terminal log event falls outside the replay window (an older

@@ -119,7 +119,7 @@ try {
       .innerText();
     if (
       !received.includes(uploaded.filename) ||
-      !received.includes(String(uploaded.bytes)) ||
+      !received.includes(Number(uploaded.bytes).toLocaleString("en-US")) ||
       !received.includes(uploaded.kind)
     )
       fail(
@@ -277,6 +277,9 @@ try {
         })),
       };
       window.__journeyNav = null;
+      document.addEventListener("vm:open-page", (ev) => {
+        window.__journeyNavPage = ev.detail?.page;
+      }, { once: true });
       window.VMReading.render(document.getElementById("upl-flow"), [doc], {
         workspace,
         generation: entry.bundleGeneration,
@@ -296,7 +299,7 @@ try {
       .getByRole("button", { name: "Open page to review" })
       .click();
     const jump = await page.evaluate(() => window.__journeyNav);
-    if (!jump || jump.title !== uploaded.title)
+    if (!jump || jump.title !== uploaded.title || (await page.evaluate(() => window.__journeyNavPage)) !== 2)
       fail(
         width + ": OCR warning did not open the correct synthetic page source",
       );

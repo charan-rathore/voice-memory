@@ -1129,7 +1129,7 @@
       <div class="a-visual" id="a-visual"></div>
       <div class="a-tools">
         ${
-          lead?.text && listenOn() && source !== "saved" && !cloudAnswer
+          lead?.text && (!final || final.admittedText === lead.text) && listenOn() && source !== "saved" && !cloudAnswer
             ? `<button class="tool listen" type="button" data-listen aria-pressed="false"><i class="eq" aria-hidden="true"><b></b><b></b><b></b></i><span>Listen</span></button>`
             : ""
         }
