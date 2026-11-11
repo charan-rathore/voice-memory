@@ -165,6 +165,7 @@ import {
 } from "../memory/caller-store.mjs";
 import { createCallBindings, audienceOf } from "../memory/call-binding.mjs";
 import { createMemoryApi } from "./memory-api.mjs";
+import { createPilotContact } from "./pilot-contact.mjs";
 import { createReceiptSigner } from "../memory/receipt-signer.mjs";
 import { applicableScope, HARBORLINE_SUBJECTS } from "./applicability.mjs";
 import {
@@ -3624,6 +3625,11 @@ export function createLocalServer({
     };
   })();
   const callerApi = callerStack?.api ?? null;
+  // Private pilot enquiries: off unless the owner configures a recipient.
+  const pilotContact = createPilotContact({
+    webhookUrl: process.env.VM_PILOT_WEBHOOK_URL || null,
+    webhookToken: process.env.VM_PILOT_WEBHOOK_TOKEN || null,
+  });
   const memoryApi = callerStack?.memoryApi ?? null;
   // Calls bound through /v1/calls: the voice resolver maps a vm_call token
   // in the agent's SYSTEM prompt to its binding, and a committed turn of
@@ -3954,6 +3960,22 @@ export function createLocalServer({
       return;
     }
     // Public landing API: key-free, read-only, rate-limited (public-api.mjs).
+    if (req.url.split("?")[0] === "/api/public/pilot-contact") {
+      const o = req.headers.origin;
+      await pilotContact(req, res, {
+        ip: clientAddress(req),
+        sameOrigin:
+          !!o &&
+          [
+            publicOrigin,
+            `http://${req.headers.host}`,
+            `https://${req.headers.host}`,
+          ]
+            .filter(Boolean)
+            .includes(o),
+      });
+      return;
+    }
     if (memoryApi && req.url.startsWith("/v1/") && (await memoryApi(req, res)))
       return;
     if (callerApi && req.url.startsWith("/api/public/caller/")) {

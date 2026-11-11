@@ -16,8 +16,11 @@ services:
     name: voice-memory-staging
     runtime: node
     plan: starter
-    region: singapore # match the production service region; change if it differs
-    branch: feat/caller-memory-durable # the reviewed PR head, not main
+    region: oregon # same as production (voice-memory: Oregon), deliberately
+    # The combined release candidate, never a single feature branch. With
+    # autoDeploy off, deploy the exact reviewed SHA from the Dashboard
+    # ("Deploy a specific commit") and record it in the runbook.
+    branch: rc/voice-memory-1
     autoDeploy: false # deploy deliberately, after review
     buildCommand: npm ci && npm run build
     startCommand: npm start
@@ -45,6 +48,17 @@ services:
       # The Vercel origin that proxies /api/* to this service, for same-origin
       # writes. Use the staging preview origin, not production.
       - key: VM_PUBLIC_ORIGIN
+        sync: false
+      # Ed25519 receipt-signing seed, 64 hex (openssl rand -hex 32). If
+      # unset it is derived from VM_STORE_KEY; set it to rotate separately.
+      - key: VM_RECEIPT_KEY
+        sync: false
+      # Fictional staging tenant(s) only. JSON; contains API keys.
+      - key: VM_TENANTS
+        sync: false
+      # Private pilot recipient (https webhook). Leave unset until a real
+      # recipient is configured and tested; the page then shows no form.
+      - key: VM_PILOT_WEBHOOK_URL
         sync: false
       - key: VM_DENSE
         value: "off"

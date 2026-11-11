@@ -17,6 +17,13 @@
       .ctas { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 8px; }
       .ctas a { text-decoration: none; display: inline-flex; align-items: center; }
       .btn.light { color: var(--ink); border-color: var(--rule); background: #fff; }
+      .pilot-form { display: grid; gap: 10px; max-width: 520px; }
+      .pilot-form label { display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); }
+      .pilot-form input, .pilot-form textarea { font: 400 15px var(--sans); padding: 10px 12px; min-height: 44px; border: 1px solid var(--rule); border-radius: 10px; background: #fff; color: var(--ink); }
+      .pilot-form .consent { display: flex; gap: 8px; align-items: center; }
+      .pilot-form .consent input { min-height: auto; width: 20px; height: 20px; }
+      .pilot-form .hp { position: absolute; left: -9999px; }
+      .pilot-form .status { color: var(--ink-2); font-size: 14px; margin: 0; }
     </style>
   </head>
   <body>
@@ -61,7 +68,7 @@
       <p>By voice ("switch my language to English", "forget everything") or by API. Deletion removes the stored data immediately. Every change returns a signed receipt. Disk snapshots can bring back data deleted after the snapshot, so a restore needs a deletion replay (documented, not automated).</p>
 
       <h2>Which voice platforms can use it today?</h2>
-      <p>Bolna, through its custom-LLM setting and call variables, plus any platform via the HTTP API. Vapi, Retell and ElevenLabs Agents have designs but no tested adapter. <strong>No real Bolna phone call has been tested yet</strong>; the demo is a simulated call over the same server path.</p>
+      <p>Bolna, through its custom-LLM setting and call variables (built and tested against Bolna-shaped requests), and any stack that can call the provider-neutral HTTP API from its own backend. <strong>No real Bolna call has been placed yet.</strong> The two-call demo is a typed simulation through a demo API: it uses the same document resolver as a voice call, but not the voice provider's path, speech or telephony.</p>
 
       <h2>What latency does it add?</h2>
       <p>Measured locally on a small fictional policy (no network, no telephony): p95 about 1 ms to start a call, under 4 ms to recall and recheck, under 4 ms for a source-verified answer. Real-call first-audio latency has <strong>not</strong> been measured.</p>
@@ -71,7 +78,26 @@
 
       <h2>Pilot terms <span class="tag">Hypothesis</span></h2>
       <p>We're exploring pricing per verified answer, with abstentions and clarifications free. This is a hypothesis, not an offer. No SOC 2, DPDP compliance, SLA or clinical-safety claim is made.</p>
-      <p class="foot">Pilot contact: a private contact path is being set up.</p>
+      <section id="contact" hidden>
+        <h2>Ask about a pilot</h2>
+        <form id="pilot-form" class="pilot-form" novalidate>
+          <label>Name <input name="name" maxlength="80" required autocomplete="name" /></label>
+          <label>Work email <input name="email" type="email" maxlength="120" required autocomplete="email" /></label>
+          <label>Company <input name="company" maxlength="120" autocomplete="organization" /></label>
+          <label>What would you test? <textarea name="message" maxlength="1000" rows="4" required></textarea></label>
+          <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off" /></label>
+          <label class="consent"><input type="checkbox" name="consent" required /> I've read the privacy notice below.</label>
+          <button class="btn primary" type="submit">Send</button>
+          <p class="status" id="pilot-status" role="status" aria-live="polite"></p>
+        </form>
+        <p class="foot">
+          <b>Privacy notice.</b> We collect only what you type here, to reply about a pilot. It is forwarded to the
+          project owner's inbox and not stored by this site. No tracking, no IP address or cookies are kept with it. Ask
+          us to delete your message at any time.
+        </p>
+      </section>
+      <p class="foot" id="contact-closed">Pilot enquiries aren't open on this site yet.</p>
     </main>
+    <script src="pilot.js" defer></script>
   </body>
 </html>

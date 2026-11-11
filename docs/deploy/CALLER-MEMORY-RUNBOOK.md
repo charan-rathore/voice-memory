@@ -3,6 +3,19 @@
 Status: **staging plan, not yet executed.** Creating the service and the
 disk are paid account actions only the account owner can take.
 
+Production today (unchanged by this plan): service `voice-memory`, branch
+`main`, region Oregon, Free plan, auto-deploy on. Staging is a SEPARATE
+service in the same region, Starter plan, one instance, 1 GB disk at
+`/var/data`, auto-deploy OFF, deployed from the combined release-candidate
+SHA, fictional data only.
+
+| Secret (Dashboard only) | Format | If lost |
+| --- | --- | --- |
+| `VM_STORE_KEY` | 64 hex | Every stored file is unreadable, by design. Caller memory returns 503 for tenants; demo visitors get fresh namespaces. No recovery. |
+| `VM_RECEIPT_KEY` (optional) | 64 hex Ed25519 seed | Old receipts still verify with the old public key if you kept it; publish it alongside the new one. |
+| `VM_TENANTS` | JSON with tenant API keys | Rotate the tenant keys; nothing stored depends on them. |
+| `VM_PILOT_WEBHOOK_URL` (+ `_TOKEN`) | https URL | Enquiries stop; the form disappears. |
+
 ## 1. What runs where
 
 | Piece             | Where                                   | Notes                                                                                   |
@@ -88,3 +101,14 @@ Promotion is a separate decision:
   supported yet: changing it makes existing memory unreadable.
 - **Disk lost or full:** writes return 503 `unavailable`; nothing unsaved is
   served (tested).
+
+## 6. Rollback
+
+1. Dashboard → staging service → Events → pick the previous successful
+   deploy → **Rollback**. The disk is not rolled back.
+2. If the new code wrote data the old code can't read (none planned in this
+   release: the formats are unchanged), restore the last snapshot from
+   before the deploy, then re-apply deletions made since (section 5).
+3. To switch the public demo off instantly: set `VM_CALLER_DEMO=off` and
+   redeploy. Demo memory stays on disk and is swept after 7 days.
+4. Production is not touched by any of this.

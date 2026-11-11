@@ -16,6 +16,7 @@ if (!baseArg) {
   );
   process.exit(2);
 }
+import { readFileSync, writeFileSync } from "node:fs";
 const base = baseArg.replace(/\/$/, "");
 const origin = process.env.SMOKE_ORIGIN || base;
 let ok = true;
@@ -24,8 +25,28 @@ const check = (cond, label) => {
   if (!cond) ok = false;
 };
 
-function client() {
-  let cookie = "";
+// The demo is isolated per browser (a server-issued visitor cookie), so the
+// same "browser" must come back across runs: its cookies are kept in a
+// local file (SMOKE_JAR, default .caller-memory-smoke-jar.json). It holds
+// only demo cookies for fictional callers; delete it after the smoke test.
+const jarPath = process.env.SMOKE_JAR || ".caller-memory-smoke-jar.json";
+const loadJar = (name) => {
+  try {
+    return new Map(JSON.parse(readFileSync(jarPath, "utf8"))[name] ?? []);
+  } catch {
+    return new Map();
+  }
+};
+const saveJar = (name, jar) => {
+  let all = {};
+  try {
+    all = JSON.parse(readFileSync(jarPath, "utf8"));
+  } catch {}
+  all[name] = [...jar].filter(([k]) => k === "vm_demo");
+  writeFileSync(jarPath, JSON.stringify(all), { mode: 0o600 });
+};
+function client(name) {
+  const jar = loadJar(name);
   return async (method, p, body) => {
     const t0 = performance.now();
     const res = await fetch(base + "/api/public/caller" + p, {
@@ -33,12 +54,19 @@ function client() {
       headers: {
         "content-type": "application/json",
         origin,
-        ...(cookie ? { cookie } : {}),
+        ...(jar.size
+          ? { cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; ") }
+          : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const set = res.headers.get("set-cookie");
-    if (set) cookie = set.split(";")[0];
+    for (const c of res.headers.getSetCookie?.() ?? []) {
+      const kv = c.split(";")[0];
+      const i = kv.indexOf("=");
+      if (!kv.slice(i + 1) || /Max-Age=0/i.test(c)) jar.delete(kv.slice(0, i));
+      else jar.set(kv.slice(0, i), kv.slice(i + 1));
+    }
+    saveJar(name, jar);
     const json = await res.json().catch(() => ({}));
     return {
       status: res.status,
@@ -61,7 +89,7 @@ check(
   `storage durable (got ${health.callerMemory?.storage})`,
 );
 
-const asha = client();
+const asha = client("asha-browser");
 const s = await start(asha, "asha");
 check(s.status === 200, `Asha verified call starts (${s.ms} ms)`);
 if (step === "create") {
@@ -103,7 +131,7 @@ if (step === "create") {
   );
   check((s.body?.rechecked ?? []).length === 0, "no recalled subject");
 }
-const ravi = client();
+const ravi = client("ravi-browser");
 const r = await start(ravi, "ravi");
 check(
   r.status === 200 && Object.keys(r.body?.preferences ?? {}).length === 0,

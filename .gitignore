@@ -5,3 +5,4 @@ dist/
 evaluation/field/files/
 public-call-counters.json
 /node_modules
+.caller-memory-smoke-jar.json
