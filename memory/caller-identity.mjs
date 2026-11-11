@@ -67,11 +67,16 @@ export function createCallerIdentity({
   replayMax = 4096,
 } = {}) {
   const secrets = new Map();
-  for (const [kid, hex] of Object.entries(keys ?? {})) {
+  // A key is either "<hex>" (legacy: any tenant) or { secret, tenant }: a
+  // tenant-scoped key can only vouch for that tenant's callers.
+  const keyTenant = new Map();
+  for (const [kid, v] of Object.entries(keys ?? {})) {
     if (!/^[A-Za-z0-9_-]{1,32}$/.test(kid)) throw Error("Bad caller key id.");
+    const hex = typeof v === "string" ? v : v?.secret;
     if (!/^[0-9a-f]{64,}$/i.test(String(hex ?? "")))
       throw Error("Caller signing keys must be at least 32 bytes of hex.");
     secrets.set(kid, Buffer.from(hex, "hex"));
+    if (typeof v === "object" && v?.tenant) keyTenant.set(kid, v.tenant);
   }
   // Only objects this instance produced from a valid signature count as a
   // verified binding; a look-alike object built from request data does not.
@@ -133,6 +138,11 @@ export function createCallerIdentity({
         );
       if (typeof c.ten !== "string" || !OPAQUE.test(c.ten))
         throw new CallerIdentityError("malformed", "Bad tenant.");
+      if (keyTenant.has(kid) && keyTenant.get(kid) !== c.ten)
+        throw new CallerIdentityError(
+          "wrong_tenant",
+          "This key cannot vouch for that tenant.",
+        );
       if (typeof c.sub !== "string" || PHONE.test(c.sub) || !OPAQUE.test(c.sub))
         throw new CallerIdentityError(
           "bad_subject",

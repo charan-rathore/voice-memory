@@ -313,6 +313,10 @@ export function createCallerMemory({
       r.preferences[key] = {
         value,
         at: at(),
+        createdAt: prev?.createdAt ?? prev?.at ?? at(),
+        updatedAt: at(),
+        source: "caller_explicit",
+        consent: "caller_explicit",
         revision: (prev?.revision ?? 0) + 1,
         callId,
         channel,
@@ -350,7 +354,10 @@ export function createCallerMemory({
      * Keep one answered turn, if the caller consented to conversation
      * memory and the scope may be retained. Returns the episode or a reason.
      */
-    recordEpisode(binding, { callId, caseId, question, final, corpus }) {
+    recordEpisode(
+      binding,
+      { callId, caseId, question, final, corpus, spoken = null },
+    ) {
       must(binding);
       const r = load(binding);
       if (!r.consent.conversation) return { kept: false, reason: "no_consent" };
@@ -367,6 +374,9 @@ export function createCallerMemory({
         question: String(question).slice(0, 300),
         outcome: { kind: final.kind ?? null, verdict: final.verdict ?? null },
         scope: { key: caseId, version: corpus.version },
+        // What was actually said to the caller, kept apart from the
+        // verified outcome above (never read back as a fact).
+        spoken: typeof spoken === "string" ? spoken.slice(0, 600) : null,
         subjectId: subj?.id ?? null,
         citations: (final.citations ?? []).slice(0, 6).map((c) => ({
           sourceId: c.sourceId ?? null,

@@ -9,7 +9,7 @@ import { identifierRequest, explicitRecordRequest } from "../dist/engine.mjs";
  * Each opaque bearer capability binds ONE server-owned bundle. Request body,
  * messages, model and user_data can never select another bundle.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createCorpusHistory } from "./corpus-version.mjs";
 import {
   answer,
@@ -99,6 +99,10 @@ export function createVoiceAdapter({
   allowClientReplay = true,
 } = {}) {
   let resolveBundle = null;
+  // Told about each COMPLETED document-answer turn (same point the
+  // conversation shadow commits; never an interrupted turn). The key is
+  // stable across provider retries of the same turn.
+  let commitListener = null;
   let resolveAnswer = null;
   if (
     !Number.isSafeInteger(ttlMs) ||
@@ -1892,6 +1896,25 @@ export function createVoiceAdapter({
         } catch {
           /* the shadow never breaks a call */
         }
+        if (commitListener && callTag && contract) {
+          const userTurns = data.messages.filter(
+            (m) => m?.role === "user",
+          ).length;
+          try {
+            commitListener({
+              callTag,
+              transcript,
+              spoken,
+              contract,
+              turnKey: createHash("sha256")
+                .update(`${callTag}\u0000${userTurns}\u0000${transcript}`)
+                .digest("hex")
+                .slice(0, 32),
+            });
+          } catch {
+            /* memory never breaks a call */
+          }
+        }
         if (documentAnswer) corpusHistory.commit(corpusKey, corpus);
         grant.turn = turn;
         return new Response(stream, {
@@ -1956,6 +1979,9 @@ export function createVoiceAdapter({
     },
     setBundleResolver(fn) {
       resolveBundle = typeof fn === "function" ? fn : null;
+    },
+    setCommitListener(fn) {
+      commitListener = typeof fn === "function" ? fn : null;
     },
     setAnswerResolver(fn) {
       resolveAnswer = typeof fn === "function" ? fn : null;
