@@ -20,14 +20,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Temporary formatter output (does not modify source or bypass checks)
-        run: |
-          printf 'VM_PRETTIER_EVIDENCE='
-          ./node_modules/.bin/prettier tests/evidence-journey-ui-check.mjs | base64 -w0
-          echo
-          printf 'VM_PRETTIER_SITE='
-          ./node_modules/.bin/prettier tests/site-check.mjs | base64 -w0
-          echo
       - run: npm run build
       - run: npm run format:check
       - run: npm run typecheck

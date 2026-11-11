@@ -123,9 +123,12 @@ try {
   const related = await page.locator("#answer .a-related").innerText();
   if (!related.includes("27 March 2027") || !related.includes("18,000"))
     fail(`related source evidence incomplete: ${related.slice(0, 200)}`);
-  await page.locator("#answer .a-related .related-source", {
-    hasText: "27 March 2027",
-  }).first().click();
+  await page
+    .locator("#answer .a-related .related-source", {
+      hasText: "27 March 2027",
+    })
+    .first()
+    .click();
   // The viewer must mark only the focused line(s), not the whole document.
   // A PDF with a text layer opens as its rendered page with a box over the
   // cited line; a text document opens as text with <mark>. Either way the
@@ -146,7 +149,10 @@ try {
   } else if (boxes > 2) fail(`whole-page highlight: ${boxes} boxes`);
   else {
     // the boxed line is the cited one: the first citation names the deadline
-    const cite = await page.locator(".a-related .related-source", {hasText: "27 March 2027"}).first().innerText();
+    const cite = await page
+      .locator(".a-related .related-source", { hasText: "27 March 2027" })
+      .first()
+      .innerText();
     if (!cite.includes("27 March 2027"))
       fail(
         `the boxed citation is not the deadline line: ${cite.slice(0, 200)}`,

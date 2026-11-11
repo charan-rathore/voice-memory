@@ -243,8 +243,10 @@ try {
       const hasTextMark = (await page.locator("#viewer-body mark").count()) > 0;
       if (!hasPdfBox && !hasTextMark && !originalText.includes(cite.quote))
         fail(width + ": citation did not open its original source");
-      if ((width === 390 || width === 1280) &&
-          typeof first.admittedText === "string")
+      if (
+        (width === 390 || width === 1280) &&
+        typeof first.admittedText === "string"
+      )
         await page.locator("#desk").screenshot({
           path: join(shots, "journey-" + width + "-admitted-after.png"),
         });
