@@ -25,7 +25,10 @@
 //   unresolved  what is still open: unanswered parts, open requests, a
 //               status the documents do not establish
 import { randomBytes } from "node:crypto";
-import { DEMO_PERSONAS, CallerIdentityError } from "../memory/caller-identity.mjs";
+import {
+  DEMO_PERSONAS,
+  CallerIdentityError,
+} from "../memory/caller-identity.mjs";
 import {
   readMemoryInstructions,
   subjectOfQuestion,
@@ -39,38 +42,60 @@ const NOTICES = ["en", "hi", "hinglish"].map(coverageNotice);
 const CALL_IDLE_MS = 30 * 60000;
 const MAX_CALLS = 500;
 
-const LIST = /\bwhat do you (remember|know) about me\b|\bkya yaad hai\b|मेरे बारे में क्या याद/i;
-const FORGET_ALL = /\bforget (everything|all of it|me|all about me)\b|\bsab bhool ja/i;
-const FORGET_LANG = /\bforget (my )?(language|language preference|preference)\b|\b(language|bhasha) (wali )?(preference )?bhool/i;
-const FORGET_CONV = /\bforget (this|our|the) (conversation|call|chat)s?\b|\bstop remembering (our|my) (calls|conversations)\b/i;
+const LIST =
+  /\bwhat do you (remember|know) about me\b|\bkya yaad hai\b|मेरे बारे में क्या याद/i;
+const FORGET_ALL =
+  /\bforget (everything|all of it|me|all about me)\b|\bsab bhool ja/i;
+const FORGET_LANG =
+  /\bforget (my )?(language|language preference|preference)\b|\b(language|bhasha) (wali )?(preference )?bhool/i;
+const FORGET_CONV =
+  /\bforget (this|our|the) (conversation|call|chat)s?\b|\bstop remembering (our|my) (calls|conversations)\b/i;
 const CHANGE_LANG =
   /\b(change|switch|set|make)\b.*\blanguage\b.*\bto\s+(english|hindi|hinglish)\b|\b(speak|talk|reply|answer) (to me )?in (english|hindi|hinglish) (from now on|instead)\b/i;
 
 const said = {
   en: {
-    pref: (k, v) => `Okay. I'll remember your ${k === "language" ? "language" : "answer length"}: ${label(v)}. You can change or delete it any time.`,
-    consent: "Okay. I'll remember what we discuss on these calls, so next time I can recheck it for you. Say \"forget this conversation\" to delete it.",
-    request: "Noted as an open request. I can't promise an action; I'll recheck the documents when you call again.",
-    sensitive: "I don't keep health or medical details as a preference, so I haven't saved that.",
-    notPref: "I can remember preferences like language or answer length. What the documents say is decided by the documents, so I haven't saved that.",
+    pref: (k, v) =>
+      `Okay. I'll remember your ${k === "language" ? "language" : "answer length"}: ${label(v)}. You can change or delete it any time.`,
+    consent:
+      'Okay. I\'ll remember what we discuss on these calls, so next time I can recheck it for you. Say "forget this conversation" to delete it.',
+    request:
+      "Noted as an open request. I can't promise an action; I'll recheck the documents when you call again.",
+    sensitive:
+      "I don't keep health or medical details as a preference, so I haven't saved that.",
+    notPref:
+      "I can remember preferences like language or answer length. What the documents say is decided by the documents, so I haven't saved that.",
     forgotAll: "Done. I've deleted everything I remembered about you.",
     forgotLang: "Done. I've deleted your language preference.",
-    forgotConv: "Done. I've deleted our earlier conversations and stopped remembering them.",
+    forgotConv:
+      "Done. I've deleted our earlier conversations and stopped remembering them.",
     nothing: "I don't have anything remembered for you yet.",
   },
 };
-const label = (v) => ({ en: "English", hi: "Hindi", hinglish: "Hinglish", short: "short", detailed: "detailed" })[v] ?? v;
+const label = (v) =>
+  ({
+    en: "English",
+    hi: "Hindi",
+    hinglish: "Hinglish",
+    short: "short",
+    detailed: "detailed",
+  })[v] ?? v;
 
 const stripNotice = (t) => {
   let s = String(t ?? "").trim();
-  for (const n of NOTICES) if (s.endsWith(n) && s !== n) s = s.slice(0, -n.length).trim();
+  for (const n of NOTICES)
+    if (s.endsWith(n) && s !== n) s = s.slice(0, -n.length).trim();
   return s;
 };
 // Presentation only: deterministic templates (vernacular.mjs) that quote the
 // record verbatim when a sentence has no template. Never a free translation.
 const present = (text, lang) => {
   if (!text || !lang || lang === "en" || langOfText(text) !== "en") return text;
-  return lang === "hinglish" ? toHinglish(text) : lang === "hi" ? toHindi(text) : text;
+  return lang === "hinglish"
+    ? toHinglish(text)
+    : lang === "hi"
+      ? toHindi(text)
+      : text;
 };
 
 /**
@@ -85,7 +110,16 @@ const present = (text, lang) => {
  *   allowedOrigins?: (req:any) => string[],
  * }} deps
  */
-export function createCallerApi({ identity, memory, answer, cases, demo = null, now = Date.now, secure = false, allowedOrigins }) {
+export function createCallerApi({
+  identity,
+  memory,
+  answer,
+  cases,
+  demo = null,
+  now = Date.now,
+  secure = false,
+  allowedOrigins,
+}) {
   const calls = new Map(); // cookie id -> { binding, callId, caseId, at, noticeSaid }
   const send = (res, status, body, extra = {}) => {
     res.writeHead(status, {
@@ -100,7 +134,8 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
     let n = 0;
     for await (const c of req) {
       n += c.length;
-      if (n > 8 * 1024) throw Object.assign(Error("Request too large."), { status: 413 });
+      if (n > 8 * 1024)
+        throw Object.assign(Error("Request too large."), { status: 413 });
       chunks.push(c);
     }
     try {
@@ -128,7 +163,10 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
   const sameOrigin = (req) => {
     const o = req.headers.origin;
     if (!o) return false;
-    const ok = allowedOrigins?.(req) ?? [`http://${req.headers.host}`, `https://${req.headers.host}`];
+    const ok = allowedOrigins?.(req) ?? [
+      `http://${req.headers.host}`,
+      `https://${req.headers.host}`,
+    ];
     return ok.includes(o);
   };
 
@@ -144,7 +182,13 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
       : (final?.text ?? "These documents don't establish that.");
     let say = present(base, pres.lang);
     if (coverage === "unverified" && !call.noticeSaid) {
-      const l = /[ऀ-ॿ]/.test(say) ? "hi" : pres.lang === "hinglish" ? "hinglish" : pres.lang === "hi" ? "hi" : "en";
+      const l = /[ऀ-ॿ]/.test(say)
+        ? "hi"
+        : pres.lang === "hinglish"
+          ? "hinglish"
+          : pres.lang === "hi"
+            ? "hi"
+            : "en";
       say = `${say} ${coverageNotice(l)}`;
       call.noticeSaid = true;
     }
@@ -157,22 +201,56 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
     });
     const remembered = [];
     if (pres.lang && pres.lang !== "en")
-      remembered.push({ kind: "preference", label: "Language", detail: `${label(pres.lang)} (you asked me to remember this)` });
+      remembered.push({
+        kind: "preference",
+        label: "Language",
+        detail: `${label(pres.lang)} (you asked me to remember this)`,
+      });
     if (pres.answerLength)
-      remembered.push({ kind: "preference", label: "Answer length", detail: label(pres.answerLength) });
+      remembered.push({
+        kind: "preference",
+        label: "Answer length",
+        detail: label(pres.answerLength),
+      });
     const unresolved = [];
     if (final?.kind && !["answered", "social"].includes(final.kind))
-      unresolved.push({ kind: "answer", label: "Not established", detail: stripNotice(final.text) });
+      unresolved.push({
+        kind: "answer",
+        label: "Not established",
+        detail: stripNotice(final.text),
+      });
     for (const u of final?.unresolvedRequirements ?? [])
-      unresolved.push({ kind: "requirement", label: "Part not established", detail: u.text ?? null });
+      unresolved.push({
+        kind: "requirement",
+        label: "Part not established",
+        detail: u.text ?? null,
+      });
     if (coverage === "unverified")
-      unresolved.push({ kind: "coverage", label: "Coverage", detail: "Not checked that this covers every part of the question." });
+      unresolved.push({
+        kind: "coverage",
+        label: "Coverage",
+        detail: "Not checked that this covers every part of the question.",
+      });
     const subj = subjectOfQuestion(question)?.id ?? null;
     for (const q of memory.list(call.binding).requests)
-      if (q.status === "open" && q.caseId === call.caseId && (!subj || !q.subjectId || q.subjectId === subj))
-        unresolved.push({ kind: "request", label: "Your open request", detail: q.text });
-    if (/^(PROPOSED|OPEN|PENDING|REQUESTED|DISCUSSED)$/.test(final?.verdict ?? ""))
-      unresolved.push({ kind: "status", label: "Status", detail: `On record as ${String(final.verdict).toLowerCase()}, not approved.` });
+      if (
+        q.status === "open" &&
+        q.caseId === call.caseId &&
+        (!subj || !q.subjectId || q.subjectId === subj)
+      )
+        unresolved.push({
+          kind: "request",
+          label: "Your open request",
+          detail: q.text,
+        });
+    if (
+      /^(PROPOSED|OPEN|PENDING|REQUESTED|DISCUSSED)$/.test(final?.verdict ?? "")
+    )
+      unresolved.push({
+        kind: "status",
+        label: "Status",
+        detail: `On record as ${String(final.verdict).toLowerCase()}, not approved.`,
+      });
     return {
       kind: "answer",
       say,
@@ -184,12 +262,18 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
               verdict: final.verdict ?? null,
               text: asserting ? stripNotice(final.admittedText) : null,
               citations: final.citations ?? [],
-              scope: { key: call.caseId, version: got?.corpus?.version ?? null },
+              scope: {
+                key: call.caseId,
+                version: got?.corpus?.version ?? null,
+              },
             }
           : null,
         unresolved,
       },
-      memory: { episodeKept: kept.kept, reason: kept.kept ? null : kept.reason },
+      memory: {
+        episodeKept: kept.kept,
+        reason: kept.kept ? null : kept.reason,
+      },
     };
   }
 
@@ -203,7 +287,9 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
     const rechecked = rec.rechecked.map((x) => {
       const f = x.now?.final ?? null;
       const asserting = typeof f?.admittedText === "string";
-      const nowText = asserting ? stripNotice(f.admittedText) : (f?.text ?? null);
+      const nowText = asserting
+        ? stripNotice(f.admittedText)
+        : (f?.text ?? null);
       return {
         label: x.label,
         previously: x.previously,
@@ -216,27 +302,32 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
               verdict: f.verdict ?? null,
               text: nowText,
               citations: f.citations ?? [],
-              scope: { key: call.caseId, version: x.now?.corpus?.version ?? null },
+              scope: {
+                key: call.caseId,
+                version: x.now?.corpus?.version ?? null,
+              },
             }
           : null,
       };
     });
     const first = rechecked[0];
     const known =
-      Object.keys(rec.preferences).length > 0 || rechecked.length > 0 || rec.openRequests.length > 0;
+      Object.keys(rec.preferences).length > 0 ||
+      rechecked.length > 0 ||
+      rec.openRequests.length > 0;
     const intro = !known
       ? "You're verified. I don't have anything remembered for you yet."
       : {
-      en: first
-        ? `Welcome back. Last time you asked about ${first.label}. ${first.sourceChanged ? "The documents have changed since then." : "The documents haven't changed since then."}`
-        : "Welcome back.",
-      hinglish: first
-        ? `Welcome back. Pichli baar aapne ${first.label.replace(/^the /, "")} ke baare mein poocha tha. ${first.sourceChanged ? "Tab se documents badle hain." : "Tab se documents nahi badle."}`
-        : "Welcome back.",
-      hi: first
-        ? `फिर से स्वागत है। पिछली बार आपने ${first.label.replace(/^the /, "")} के बारे में पूछा था। ${first.sourceChanged ? "तब से दस्तावेज़ बदले हैं।" : "तब से दस्तावेज़ नहीं बदले।"}`
-        : "फिर से स्वागत है।",
-    }[lang ?? "en"];
+          en: first
+            ? `Welcome back. Last time you asked about ${first.label}. ${first.sourceChanged ? "The documents have changed since then." : "The documents haven't changed since then."}`
+            : "Welcome back.",
+          hinglish: first
+            ? `Welcome back. Pichli baar aapne ${first.label.replace(/^the /, "")} ke baare mein poocha tha. ${first.sourceChanged ? "Tab se documents badle hain." : "Tab se documents nahi badle."}`
+            : "Welcome back.",
+          hi: first
+            ? `फिर से स्वागत है। पिछली बार आपने ${first.label.replace(/^the /, "")} के बारे में पूछा था। ${first.sourceChanged ? "तब से दस्तावेज़ बदले हैं।" : "तब से दस्तावेज़ नहीं बदले।"}`
+            : "फिर से स्वागत है।",
+        }[lang ?? "en"];
     const pending = rec.openRequests.length
       ? `You also asked me to follow up: "${rec.openRequests.at(-1).text}". That is still open.`
       : null;
@@ -256,26 +347,60 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
     const t = said.en; // memory confirmations are short and fixed; English copy only in this slice
     if (LIST.test(utterance)) {
       const m = memory.list(b);
-      const any = Object.keys(m.preferences).length || m.referents.length || m.requests.length;
-      return { kind: "memory", op: "list", say: any ? "Here is everything I remember about you." : t.nothing, memory: m };
+      const any =
+        Object.keys(m.preferences).length ||
+        m.referents.length ||
+        m.requests.length;
+      return {
+        kind: "memory",
+        op: "list",
+        say: any ? "Here is everything I remember about you." : t.nothing,
+        memory: m,
+      };
     }
     if (FORGET_ALL.test(utterance)) {
       memory.forget(b, { all: true });
-      return { kind: "memory", op: "forget_all", say: t.forgotAll, memory: memory.list(b) };
+      return {
+        kind: "memory",
+        op: "forget_all",
+        say: t.forgotAll,
+        memory: memory.list(b),
+      };
     }
     if (FORGET_CONV.test(utterance)) {
       memory.forget(b, { conversation: true });
-      return { kind: "memory", op: "forget_conversation", say: t.forgotConv, memory: memory.list(b) };
+      return {
+        kind: "memory",
+        op: "forget_conversation",
+        say: t.forgotConv,
+        memory: memory.list(b),
+      };
     }
     if (FORGET_LANG.test(utterance)) {
       memory.forget(b, { preference: "language" });
-      return { kind: "memory", op: "forget_preference", say: t.forgotLang, memory: memory.list(b) };
+      return {
+        kind: "memory",
+        op: "forget_preference",
+        say: t.forgotLang,
+        memory: memory.list(b),
+      };
     }
     const change = CHANGE_LANG.exec(utterance);
     if (change) {
-      const v = { english: "en", hindi: "hi", hinglish: "hinglish" }[(change[2] ?? change[4]).toLowerCase()];
-      memory.rememberPreference(b, { key: "language", value: v, callId: call.callId });
-      return { kind: "memory", op: "correct", say: t.pref("language", v), memory: memory.list(b) };
+      const v = { english: "en", hindi: "hi", hinglish: "hinglish" }[
+        (change[2] ?? change[4]).toLowerCase()
+      ];
+      memory.rememberPreference(b, {
+        key: "language",
+        value: v,
+        callId: call.callId,
+      });
+      return {
+        kind: "memory",
+        op: "correct",
+        say: t.pref("language", v),
+        memory: memory.list(b),
+      };
     }
     const ins = readMemoryInstructions(utterance);
     if (!ins.length) return null;
@@ -283,14 +408,26 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
     let op = "remember";
     for (const i of ins) {
       if (i.type === "preference") {
-        memory.rememberPreference(b, { key: i.key, value: i.value, callId: call.callId });
+        memory.rememberPreference(b, {
+          key: i.key,
+          value: i.value,
+          callId: call.callId,
+        });
         lines.push(t.pref(i.key, i.value));
       } else if (i.type === "conversation_consent") {
         memory.consentToConversation(b, { callId: call.callId });
         lines.push(t.consent);
       } else if (i.type === "follow_up_request") {
-        const r = memory.recordRequest(b, { callId: call.callId, caseId: call.caseId, text: i.text });
-        lines.push(r.kept ? t.request : "I can only keep follow-up requests if you ask me to remember our conversations.");
+        const r = memory.recordRequest(b, {
+          callId: call.callId,
+          caseId: call.caseId,
+          text: i.text,
+        });
+        lines.push(
+          r.kept
+            ? t.request
+            : "I can only keep follow-up requests if you ask me to remember our conversations.",
+        );
       } else if (i.type === "refused") {
         op = "refused";
         lines.push(i.reason === "sensitive" ? t.sensitive : t.notPref);
@@ -304,29 +441,58 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
     try {
       if (path === "/caller/demo-assertion" && req.method === "POST") {
         if (!demo) return (send(res, 404, { error: "Not found." }), true);
-        if (!sameOrigin(req)) return (send(res, 403, { error: "Same-origin requests only." }), true);
+        if (!sameOrigin(req))
+          return (
+            send(res, 403, { error: "Same-origin requests only." }),
+            true
+          );
         const { persona } = await readJson(req);
-        const p = Object.hasOwn(DEMO_PERSONAS, persona) ? DEMO_PERSONAS[persona] : null;
-        if (!p) return (send(res, 400, { error: "Pick a fictional caller." }), true);
-        const assertion = identity.issue({ kid: demo.kid, tenant: p.tenant, sub: p.sub, name: p.name, amr: "demo-fictional", ttlS: 120 });
+        const p = Object.hasOwn(DEMO_PERSONAS, persona)
+          ? DEMO_PERSONAS[persona]
+          : null;
+        if (!p)
+          return (send(res, 400, { error: "Pick a fictional caller." }), true);
+        const assertion = identity.issue({
+          kid: demo.kid,
+          tenant: p.tenant,
+          sub: p.sub,
+          name: p.name,
+          amr: "demo-fictional",
+          ttlS: 120,
+        });
         return (send(res, 200, { assertion, fictional: true }), true);
       }
       if (path === "/caller/start" && req.method === "POST") {
-        if (!sameOrigin(req)) return (send(res, 403, { error: "Same-origin requests only." }), true);
+        if (!sameOrigin(req))
+          return (
+            send(res, 403, { error: "Same-origin requests only." }),
+            true
+          );
         const data = await readJson(req);
-        if (!cases.includes(data.case)) return (send(res, 400, { error: "Pick a case." }), true);
+        if (!cases.includes(data.case))
+          return (send(res, 400, { error: "Pick a case." }), true);
         let binding;
         try {
           binding = identity.verify(data.assertion);
         } catch (e) {
-          if (e instanceof CallerIdentityError) return (send(res, 401, { error: "Caller not verified.", code: e.code }), true);
+          if (e instanceof CallerIdentityError)
+            return (
+              send(res, 401, { error: "Caller not verified.", code: e.code }),
+              true
+            );
           throw e;
         }
         sweep();
         const old = cookieOf(req);
         if (old) calls.delete(old); // a new start is a new call
         const id = randomBytes(24).toString("hex");
-        const call = { binding, callId: "call_" + randomBytes(8).toString("hex"), caseId: data.case, at: now(), noticeSaid: false };
+        const call = {
+          binding,
+          callId: "call_" + randomBytes(8).toString("hex"),
+          caseId: data.case,
+          at: now(),
+          noticeSaid: false,
+        };
         calls.set(id, call);
         const welcome = await greeting(call);
         return (
@@ -334,44 +500,85 @@ export function createCallerApi({ identity, memory, answer, cases, demo = null, 
             res,
             200,
             {
-              caller: { displayName: binding.displayName, method: binding.method, verifiedAt: binding.verifiedAt },
+              caller: {
+                displayName: binding.displayName,
+                method: binding.method,
+                verifiedAt: binding.verifiedAt,
+              },
               callId: call.callId,
               ...welcome,
             },
-            { "Set-Cookie": `vm_call=${id}; HttpOnly; SameSite=Strict; Path=/api/public/caller${secure ? "; Secure" : ""}` },
+            {
+              "Set-Cookie": `vm_call=${id}; HttpOnly; SameSite=Strict; Path=/api/public/caller${secure ? "; Secure" : ""}`,
+            },
           ),
           true
         );
       }
       if (!path.startsWith("/caller/")) return false;
-      if (req.method !== "GET" && !sameOrigin(req)) return (send(res, 403, { error: "Same-origin requests only." }), true);
+      if (req.method !== "GET" && !sameOrigin(req))
+        return (send(res, 403, { error: "Same-origin requests only." }), true);
       const call = callOf(req);
-      if (!call) return (send(res, 401, { error: "Start a verified call first." }), true);
+      if (!call)
+        return (
+          send(res, 401, { error: "Start a verified call first." }),
+          true
+        );
       if (path === "/caller/memory" && req.method === "GET")
         return (send(res, 200, { memory: memory.list(call.binding) }), true);
       if (path === "/caller/forget" && req.method === "POST") {
         const d = await readJson(req);
-        const what = d.all === true ? { all: true } : d.conversation === true ? { conversation: true } : typeof d.preference === "string" ? { preference: d.preference } : typeof d.id === "string" ? { id: d.id } : null;
-        if (!what) return (send(res, 400, { error: "Say what to forget." }), true);
+        const what =
+          d.all === true
+            ? { all: true }
+            : d.conversation === true
+              ? { conversation: true }
+              : typeof d.preference === "string"
+                ? { preference: d.preference }
+                : typeof d.id === "string"
+                  ? { id: d.id }
+                  : null;
+        if (!what)
+          return (send(res, 400, { error: "Say what to forget." }), true);
         const r = memory.forget(call.binding, what);
-        return (send(res, 200, { ...r, memory: memory.list(call.binding) }), true);
+        return (
+          send(res, 200, { ...r, memory: memory.list(call.binding) }),
+          true
+        );
       }
       if (path === "/caller/end" && req.method === "POST") {
         calls.delete(cookieOf(req));
-        return (send(res, 200, { ended: true }, { "Set-Cookie": `vm_call=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/api/public/caller${secure ? "; Secure" : ""}` }), true);
+        return (
+          send(
+            res,
+            200,
+            { ended: true },
+            {
+              "Set-Cookie": `vm_call=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/api/public/caller${secure ? "; Secure" : ""}`,
+            },
+          ),
+          true
+        );
       }
       if (path === "/caller/turn" && req.method === "POST") {
         const { utterance } = await readJson(req);
         const u = typeof utterance === "string" ? utterance.trim() : "";
-        if (!u || u.length > 400) return (send(res, 400, { error: "Say something of up to 400 characters." }), true);
+        if (!u || u.length > 400)
+          return (
+            send(res, 400, { error: "Say something of up to 400 characters." }),
+            true
+          );
         const mem = memoryTurn(call, u);
         if (mem) return (send(res, 200, mem), true);
         return (send(res, 200, await answerTurn(call, u)), true);
       }
       return (send(res, 404, { error: "Not found." }), true);
     } catch (e) {
-      if (e instanceof CallerMemoryError) return (send(res, 400, { error: e.message, code: e.code }), true);
-      send(res, e?.status && e.status < 500 ? e.status : 500, { error: e?.status ? e.message : "Something went wrong." });
+      if (e instanceof CallerMemoryError)
+        return (send(res, 400, { error: e.message, code: e.code }), true);
+      send(res, e?.status && e.status < 500 ? e.status : 500, {
+        error: e?.status ? e.message : "Something went wrong.",
+      });
       return true;
     }
   };

@@ -62,14 +62,21 @@ function client(base) {
     });
     const set = res.headers.get("set-cookie");
     if (set) cookie = set.split(";")[0].endsWith("=") ? "" : set.split(";")[0];
-    return { status: res.status, cache: res.headers.get("cache-control"), body: await res.json() };
+    return {
+      status: res.status,
+      cache: res.headers.get("cache-control"),
+      body: await res.json(),
+    };
   };
   return {
     req,
     async start(persona) {
       const a = await req("POST", "/demo-assertion", { persona });
       assert.equal(a.status, 200);
-      return req("POST", "/start", { assertion: a.body.assertion, case: "deal" });
+      return req("POST", "/start", {
+        assertion: a.body.assertion,
+        case: "deal",
+      });
     },
     say: (utterance) => req("POST", "/turn", { utterance }),
     memory: () => req("GET", "/memory"),
@@ -88,7 +95,9 @@ test("two calls: remembered from the conversation, verified in the documents, st
     assert.equal(s1.body.caller.method, "demo-fictional");
     assert.equal(s1.body.rechecked.length, 0, "nothing remembered yet");
 
-    const m = await asha.say("Please remember that I prefer Hinglish, and remember this conversation for next time.");
+    const m = await asha.say(
+      "Please remember that I prefer Hinglish, and remember this conversation for next time.",
+    );
     assert.equal(m.body.kind, "memory");
     assert.equal(m.body.memory.preferences.language.value, "hinglish");
     assert.ok(m.body.memory.consent.conversation);
@@ -97,16 +106,28 @@ test("two calls: remembered from the conversation, verified in the documents, st
     assert.equal(a1.body.kind, "answer");
     const v1 = a1.body.sections.verified;
     assert.equal(v1.verdict, "PROPOSED");
-    assert.match(v1.text, /\$42,000 is the latest proposal, and it is not approved\./);
-    assert.ok(v1.citations.some((c) => /Commercial_Revision/.test(c.title ?? "")), JSON.stringify(v1.citations));
+    assert.match(
+      v1.text,
+      /\$42,000 is the latest proposal, and it is not approved\./,
+    );
+    assert.ok(
+      v1.citations.some((c) => /Commercial_Revision/.test(c.title ?? "")),
+      JSON.stringify(v1.citations),
+    );
     assert.ok(v1.scope.version, "answered against a named source version");
     // Presentation in the remembered language; the fact is unchanged.
-    assert.match(a1.body.say, /\$42,000 sabse naya proposal hai, aur yeh abhi manzoor nahi hua hai\./);
+    assert.match(
+      a1.body.say,
+      /\$42,000 sabse naya proposal hai, aur yeh abhi manzoor nahi hua hai\./,
+    );
     assert.deepEqual(
       a1.body.sections.remembered.map((x) => x.label),
       ["Language"],
     );
-    assert.ok(a1.body.sections.unresolved.some((x) => x.kind === "status"), "not approved is still open");
+    assert.ok(
+      a1.body.sections.unresolved.some((x) => x.kind === "status"),
+      "not approved is still open",
+    );
     assert.equal(a1.body.memory.episodeKept, true);
 
     // A caller's claim is not stored, and is not a fact.
@@ -117,12 +138,18 @@ test("two calls: remembered from the conversation, verified in the documents, st
     // Medical content never becomes a preference.
     const med = await asha.say("Remember my sugar is high and I prefer Hindi");
     assert.equal(med.body.op, "refused");
-    assert.equal((await asha.memory()).body.memory.preferences.language.value, "hinglish");
+    assert.equal(
+      (await asha.memory()).body.memory.preferences.language.value,
+      "hinglish",
+    );
     await asha.end();
   } finally {
     A.server.close();
   }
-  assert.ok(readdirSync(dataDir).some((f) => f.endsWith(".vms")), "memory persisted, encrypted");
+  assert.ok(
+    readdirSync(dataDir).some((f) => f.endsWith(".vms")),
+    "memory persisted, encrypted",
+  );
 
   // ------------------------------------------- call two: a new server process
   const B = await boot();
@@ -134,16 +161,27 @@ test("two calls: remembered from the conversation, verified in the documents, st
 
     const s2 = await asha.start("asha");
     assert.equal(s2.status, 200);
-    assert.equal(s2.body.preferences.language.value, "hinglish", "consented language recalled");
+    assert.equal(
+      s2.body.preferences.language.value,
+      "hinglish",
+      "consented language recalled",
+    );
     assert.equal(s2.body.rechecked.length, 1);
     const r = s2.body.rechecked[0];
     assert.equal(r.label, "the fee", "recognises what was discussed");
     assert.equal(r.previously.question, "Was the revised fee approved?");
-    assert.equal(r.sourceChanged, false, "rechecked against the current source version");
+    assert.equal(
+      r.sourceChanged,
+      false,
+      "rechecked against the current source version",
+    );
     assert.equal(r.statusChanged, false);
     assert.equal(r.verified.verdict, "PROPOSED", "no invented approval");
     assert.ok(r.verified.citations.length > 0);
-    assert.match(s2.body.say, /Pichli baar aapne fee ke baare mein poocha tha\. Tab se documents nahi badle\./);
+    assert.match(
+      s2.body.say,
+      /Pichli baar aapne fee ke baare mein poocha tha\. Tab se documents nahi badle\./,
+    );
     assert.match(s2.body.say, /manzoor nahi/);
 
     // A follow-up request is kept as open, never as done.
@@ -151,7 +189,9 @@ test("two calls: remembered from the conversation, verified in the documents, st
     assert.equal(fu.body.memory.requests.at(-1).status, "open");
     const withReq = await asha.say("Was the revised fee approved?");
     assert.ok(
-      withReq.body.sections.unresolved.some((x) => x.kind === "request" && /fee is approved/.test(x.detail)),
+      withReq.body.sections.unresolved.some(
+        (x) => x.kind === "request" && /fee is approved/.test(x.detail),
+      ),
       "an open request on the same subject is still unresolved",
     );
 
@@ -159,7 +199,10 @@ test("two calls: remembered from the conversation, verified in the documents, st
     const ch = await asha.say("Please switch my language to English");
     assert.equal(ch.body.op, "correct");
     const a2 = await asha.say("Was the revised fee approved?");
-    assert.match(a2.body.say, /^\$42,000 is the latest proposal, and it is not approved\./);
+    assert.match(
+      a2.body.say,
+      /^\$42,000 is the latest proposal, and it is not approved\./,
+    );
     assert.equal(a2.body.sections.remembered.length, 0);
 
     // Another verified caller sees none of it.
@@ -169,7 +212,10 @@ test("two calls: remembered from the conversation, verified in the documents, st
     assert.equal(rs.body.rechecked.length, 0);
     assert.match(rs.body.say, /don't have anything remembered/);
     const rm = (await ravi.memory()).body.memory;
-    assert.equal(rm.episodes.length + rm.referents.length + rm.requests.length, 0);
+    assert.equal(
+      rm.episodes.length + rm.referents.length + rm.requests.length,
+      0,
+    );
     const ra = await ravi.say("Was the revised fee approved?");
     assert.doesNotMatch(ra.body.say, /sabse naya/);
 
@@ -181,10 +227,17 @@ test("two calls: remembered from the conversation, verified in the documents, st
     assert.equal(f2.status, 200);
     const after = (await asha.memory()).body.memory;
     assert.deepEqual(after.preferences, {});
-    assert.equal(after.episodes.length + after.referents.length + after.requests.length, 0);
+    assert.equal(
+      after.episodes.length + after.referents.length + after.requests.length,
+      0,
+    );
     await asha.end();
     const s3 = await client(B.base).start("asha");
-    assert.equal(s3.body.rechecked.length, 0, "deleted means gone in a new call too");
+    assert.equal(
+      s3.body.rechecked.length,
+      0,
+      "deleted means gone in a new call too",
+    );
   } finally {
     B.server.close();
   }
@@ -196,21 +249,47 @@ test("identity: forged, replayed or cross-origin requests open no memory", async
     const c = client(S.base);
     const a = await c.req("POST", "/demo-assertion", { persona: "asha" });
     // Unknown persona: the demo issuer signs only fixed fictional callers.
-    assert.equal((await c.req("POST", "/demo-assertion", { persona: "+919812345678" })).status, 400);
+    assert.equal(
+      (await c.req("POST", "/demo-assertion", { persona: "+919812345678" }))
+        .status,
+      400,
+    );
     const [p, kid, body, mac] = a.body.assertion.split(".");
     const claims = JSON.parse(Buffer.from(body, "base64url"));
     claims.sub = "acct-NS-2077";
-    const forged = [p, kid, Buffer.from(JSON.stringify(claims)).toString("base64url"), mac].join(".");
-    const f = await c.req("POST", "/start", { assertion: forged, case: "deal" });
+    const forged = [
+      p,
+      kid,
+      Buffer.from(JSON.stringify(claims)).toString("base64url"),
+      mac,
+    ].join(".");
+    const f = await c.req("POST", "/start", {
+      assertion: forged,
+      case: "deal",
+    });
     assert.equal(f.status, 401);
     assert.equal(f.body.code, "bad_signature");
-    assert.equal((await c.req("POST", "/start", { assertion: a.body.assertion, case: "deal" })).status, 200);
-    const replay = await client(S.base).req("POST", "/start", { assertion: a.body.assertion, case: "deal" });
+    assert.equal(
+      (
+        await c.req("POST", "/start", {
+          assertion: a.body.assertion,
+          case: "deal",
+        })
+      ).status,
+      200,
+    );
+    const replay = await client(S.base).req("POST", "/start", {
+      assertion: a.body.assertion,
+      case: "deal",
+    });
     assert.equal(replay.body.code, "replayed");
     // Cross-origin write refused even with a valid cookie.
     const res = await fetch(S.base + "/api/public/caller/turn", {
       method: "POST",
-      headers: { "content-type": "application/json", origin: "https://evil.example" },
+      headers: {
+        "content-type": "application/json",
+        origin: "https://evil.example",
+      },
       body: JSON.stringify({ utterance: "What do you remember about me?" }),
     });
     assert.equal(res.status, 403);
@@ -220,7 +299,10 @@ test("identity: forged, replayed or cross-origin requests open no memory", async
 });
 
 test("off by default: no caller routes without VM_CALLER_MEMORY or VM_CALLER_DEMO", async () => {
-  const keep = { m: process.env.VM_CALLER_MEMORY, d: process.env.VM_CALLER_DEMO };
+  const keep = {
+    m: process.env.VM_CALLER_MEMORY,
+    d: process.env.VM_CALLER_DEMO,
+  };
   delete process.env.VM_CALLER_MEMORY;
   delete process.env.VM_CALLER_DEMO;
   try {

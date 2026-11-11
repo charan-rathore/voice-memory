@@ -21,7 +21,12 @@
 // by adding a kid; there is no revocation list beyond expiry and the replay
 // window. The demo issuer (VM_CALLER_DEMO=on) signs ONLY fixed fictional
 // personas and says so in its method (`amr: "demo-fictional"`).
-import { createHmac, createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  createHmac,
+  createHash,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
 
 export const ALLOWED_METHODS = Object.freeze([
   "account-login",
@@ -56,7 +61,11 @@ export const subjectKeyOf = (tenant, sub) =>
  * @param {{ keys: Record<string,string>, now?: () => number, replayMax?: number }} opts
  *   keys: kid -> secret (hex, >= 32 bytes). Unset/short keys are refused.
  */
-export function createCallerIdentity({ keys = {}, now = Date.now, replayMax = 4096 } = {}) {
+export function createCallerIdentity({
+  keys = {},
+  now = Date.now,
+  replayMax = 4096,
+} = {}) {
   const secrets = new Map();
   for (const [kid, hex] of Object.entries(keys ?? {})) {
     if (!/^[A-Za-z0-9_-]{1,32}$/.test(kid)) throw Error("Bad caller key id.");
@@ -69,13 +78,16 @@ export function createCallerIdentity({ keys = {}, now = Date.now, replayMax = 40
   const verified = new WeakSet();
   const seen = new Map(); // jti -> exp (s)
   const sign = (kid, body) =>
-    createHmac("sha256", secrets.get(kid)).update(`vmca1.${kid}.${body}`).digest();
+    createHmac("sha256", secrets.get(kid))
+      .update(`vmca1.${kid}.${body}`)
+      .digest();
 
   return {
     configured: secrets.size > 0,
     /** For the tenant backend (and the fictional demo issuer). */
     issue({ kid, tenant, sub, name = null, amr, ttlS = 300 }) {
-      if (!secrets.has(kid)) throw new CallerIdentityError("unknown_key", "Unknown key id.");
+      if (!secrets.has(kid))
+        throw new CallerIdentityError("unknown_key", "Unknown key id.");
       const iat = Math.floor(now() / 1000);
       const claims = {
         v: 1,
@@ -101,7 +113,10 @@ export function createCallerIdentity({ keys = {}, now = Date.now, replayMax = 40
       const want = sign(kid, body);
       const got = unb64u(mac);
       if (got.length !== want.length || !timingSafeEqual(got, want))
-        throw new CallerIdentityError("bad_signature", "Signature does not verify.");
+        throw new CallerIdentityError(
+          "bad_signature",
+          "Signature does not verify.",
+        );
       let c;
       try {
         c = JSON.parse(unb64u(body).toString("utf8"));
@@ -109,7 +124,8 @@ export function createCallerIdentity({ keys = {}, now = Date.now, replayMax = 40
         throw new CallerIdentityError("malformed", "Unreadable claims.");
       }
       const t = Math.floor(now() / 1000);
-      if (c?.v !== 1) throw new CallerIdentityError("malformed", "Unknown version.");
+      if (c?.v !== 1)
+        throw new CallerIdentityError("malformed", "Unknown version.");
       if (!ALLOWED_METHODS.includes(c.amr))
         throw new CallerIdentityError(
           "weak_method",
@@ -124,14 +140,20 @@ export function createCallerIdentity({ keys = {}, now = Date.now, replayMax = 40
         );
       if (!Number.isInteger(c.iat) || !Number.isInteger(c.exp))
         throw new CallerIdentityError("malformed", "Bad times.");
-      if (c.iat > t + SKEW_S) throw new CallerIdentityError("future", "Issued in the future.");
-      if (c.exp <= t) throw new CallerIdentityError("expired", "Assertion expired.");
+      if (c.iat > t + SKEW_S)
+        throw new CallerIdentityError("future", "Issued in the future.");
+      if (c.exp <= t)
+        throw new CallerIdentityError("expired", "Assertion expired.");
       if (c.exp - c.iat > MAX_LIFETIME_S)
-        throw new CallerIdentityError("too_long", "Assertion lifetime too long.");
+        throw new CallerIdentityError(
+          "too_long",
+          "Assertion lifetime too long.",
+        );
       if (typeof c.jti !== "string" || c.jti.length < 16)
         throw new CallerIdentityError("malformed", "Missing assertion id.");
       for (const [j, e] of seen) if (e <= t) seen.delete(j);
-      if (seen.has(c.jti)) throw new CallerIdentityError("replayed", "Assertion already used.");
+      if (seen.has(c.jti))
+        throw new CallerIdentityError("replayed", "Assertion already used.");
       seen.set(c.jti, c.exp);
       while (seen.size > replayMax) seen.delete(seen.keys().next().value);
       const binding = Object.freeze({
@@ -151,6 +173,14 @@ export function createCallerIdentity({ keys = {}, now = Date.now, replayMax = 40
 // Fictional callers for the public demo. Nothing else can be issued by the
 // demo route: no free-form subject, no real data.
 export const DEMO_PERSONAS = Object.freeze({
-  asha: Object.freeze({ tenant: "meridian-support", sub: "acct-NS-1042", name: "Asha (fictional)" }),
-  ravi: Object.freeze({ tenant: "meridian-support", sub: "acct-NS-2077", name: "Ravi (fictional)" }),
+  asha: Object.freeze({
+    tenant: "meridian-support",
+    sub: "acct-NS-1042",
+    name: "Asha (fictional)",
+  }),
+  ravi: Object.freeze({
+    tenant: "meridian-support",
+    sub: "acct-NS-2077",
+    name: "Ravi (fictional)",
+  }),
 });
