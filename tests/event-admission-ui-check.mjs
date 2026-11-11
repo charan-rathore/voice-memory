@@ -1,8 +1,12 @@
 // Local assertion-only fixture. No actual provider, secret or paid voice.
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
+const shotsDir =
+  process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-shots");
 const dev = spawn("node", ["scripts/site-dev.mjs"], {
   stdio: "ignore",
   env: {
@@ -62,7 +66,7 @@ try {
       true,
     );
   };
-  mkdirSync("/downloads", { recursive: true });
+  mkdirSync(shotsDir, { recursive: true });
   await ask("Did Arjun pay $1,500 to Nimbus?");
   assert.equal(
     await page.locator("#answer .verdict-chip").innerText(),
@@ -72,9 +76,9 @@ try {
     await page.locator("#answer").innerText(),
     /Arjun paid \$1,500 to Nimbus/,
   );
-  await page
-    .locator("#answer")
-    .screenshot({ path: "/downloads/voice-memory-event-positive-mobile.png" });
+  await page.locator("#answer").screenshot({
+    path: join(shotsDir, "voice-memory-event-positive-mobile.png"),
+  });
   await ask(
     "Did Arjun pay $1,500 to Nimbus and did Priya sign the commercial scope?",
   );
@@ -87,9 +91,9 @@ try {
     await page.locator("#answer").innerText(),
     /could not establish/,
   );
-  await page
-    .locator("#answer")
-    .screenshot({ path: "/downloads/voice-memory-event-partial-mobile.png" });
+  await page.locator("#answer").screenshot({
+    path: join(shotsDir, "voice-memory-event-partial-mobile.png"),
+  });
   await ask("Did Priya sign the commercial scope?");
   assert.equal(
     await page.locator("#answer .verdict-chip").innerText(),
@@ -97,7 +101,7 @@ try {
   );
   assert.equal(await page.locator("#answer .cites .cite").count(), 0);
   await page.locator("#answer").screenshot({
-    path: "/downloads/voice-memory-event-unsupported-mobile.png",
+    path: join(shotsDir, "voice-memory-event-unsupported-mobile.png"),
   });
   await ask("Who approved the commercial scope?");
   assert.equal(
@@ -108,25 +112,25 @@ try {
     await page.locator("#answer").innerText(),
     /The source names Priya/,
   );
-  await page
-    .locator("#answer")
-    .screenshot({ path: "/downloads/voice-memory-event-actor-mobile.png" });
+  await page.locator("#answer").screenshot({
+    path: join(shotsDir, "voice-memory-event-actor-mobile.png"),
+  });
   await ask("Who signed the commercial scope?");
   assert.equal(
     await page.locator("#answer .verdict-chip").innerText(),
     "Answer not established",
   );
   await page.locator("#answer").screenshot({
-    path: "/downloads/voice-memory-event-actor-unresolved-mobile.png",
+    path: join(shotsDir, "voice-memory-event-actor-unresolved-mobile.png"),
   });
   await ask("How much did Arjun pay to Nimbus?");
   assert.match(
     await page.locator("#answer").innerText(),
     /The source records \$1,500/,
   );
-  await page
-    .locator("#answer")
-    .screenshot({ path: "/downloads/voice-memory-event-amount-mobile.png" });
+  await page.locator("#answer").screenshot({
+    path: join(shotsDir, "voice-memory-event-amount-mobile.png"),
+  });
   await ask(
     "How much did Arjun pay to Nimbus and how much did Arjun owe to Nimbus?",
   );
@@ -139,7 +143,7 @@ try {
     /How much did Arjun owe/,
   );
   await page.locator("#answer").screenshot({
-    path: "/downloads/voice-memory-event-amount-partial-mobile.png",
+    path: join(shotsDir, "voice-memory-event-amount-partial-mobile.png"),
   });
   await ask("How much did Arjun pay to Nimbus and when and who approved it?");
   assert.equal(
@@ -150,9 +154,9 @@ try {
     await page.locator("#answer").innerText(),
     /when and who approved it/,
   );
-  await page
-    .locator("#answer")
-    .screenshot({ path: "/downloads/voice-memory-event-remainder-mobile.png" });
+  await page.locator("#answer").screenshot({
+    path: join(shotsDir, "voice-memory-event-remainder-mobile.png"),
+  });
   await ask(
     "How much did Arjun pay to Nimbus or how much did Nimbus pay to Arjun?",
   );
@@ -168,9 +172,9 @@ try {
   );
   assert.equal(await page.locator("#answer .cites .cite").count(), 0);
   assert.match(await page.locator("#answer").innerText(), /yesterday/);
-  await page
-    .locator("#answer")
-    .screenshot({ path: "/downloads/voice-memory-event-qualifier-mobile.png" });
+  await page.locator("#answer").screenshot({
+    path: join(shotsDir, "voice-memory-event-qualifier-mobile.png"),
+  });
   await ask("How much did Arjun not pay to Nimbus?");
   assert.equal(
     await page.locator("#answer .verdict-chip").innerText(),
@@ -181,7 +185,7 @@ try {
     /related evidence, not an answer/,
   );
   await page.locator("#answer").screenshot({
-    path: "/downloads/voice-memory-assertion-domain-unresolved-mobile.png",
+    path: join(shotsDir, "voice-memory-assertion-domain-unresolved-mobile.png"),
   });
   await ask("To whom did Arjun pay $1,500?");
   assert.equal(
@@ -192,9 +196,9 @@ try {
     await page.locator("#answer").innerText(),
     /Nimbus as recipient/,
   );
-  await page
-    .locator("#answer")
-    .screenshot({ path: "/downloads/voice-memory-event-recipient-mobile.png" });
+  await page.locator("#answer").screenshot({
+    path: join(shotsDir, "voice-memory-event-recipient-mobile.png"),
+  });
   await page.locator("#files").setInputFiles({
     name: "Context.txt",
     mimeType: "text/plain",
@@ -213,7 +217,7 @@ try {
     /related evidence, not an answer/,
   );
   await page.locator("#answer").screenshot({
-    path: "/downloads/voice-memory-event-candidate-unresolved-mobile.png",
+    path: join(shotsDir, "voice-memory-event-candidate-unresolved-mobile.png"),
   });
   await page.locator("#files").setInputFiles({
     name: "Purchase.txt",
@@ -232,9 +236,9 @@ try {
     await page.locator("#answer").innerText(),
     /not confirmation that the event occurred/,
   );
-  await page
-    .locator("#answer")
-    .screenshot({ path: "/downloads/voice-memory-recorded-role-mobile.png" });
+  await page.locator("#answer").screenshot({
+    path: join(shotsDir, "voice-memory-recorded-role-mobile.png"),
+  });
   await ask("Who signed the purchase order?");
   assert.equal(
     await page.locator("#answer .verdict-chip").innerText(),

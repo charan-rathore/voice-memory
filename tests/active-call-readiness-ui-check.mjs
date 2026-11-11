@@ -4,6 +4,8 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+const shotsDir =
+  process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-shots");
 const shots =
   process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-upload-audit");
 await mkdir(shots, { recursive: true });
@@ -140,8 +142,8 @@ try {
       assert.match(await page.locator("#call-label").innerText(), /Hang up/);
     await page.locator(".callbar").screenshot({
       path: pending
-        ? "/downloads/vm-active-pending-preserved.png"
-        : "/downloads/vm-active-hangup-preserved.png",
+        ? join(shotsDir, "vm-active-pending-preserved.png")
+        : join(shotsDir, "vm-active-hangup-preserved.png"),
     });
     if (pending) await page.evaluate(() => window.__expire());
     else await page.locator("#call-btn").click();

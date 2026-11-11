@@ -1,8 +1,12 @@
 // Local assertion-only fixture. No actual provider, secret or paid voice.
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
+const shotsDir =
+  process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-shots");
 const dev = spawn("node", ["scripts/site-dev.mjs"], {
   stdio: "ignore",
   env: {
@@ -62,13 +66,13 @@ try {
       true,
     );
   };
-  mkdirSync("/downloads", { recursive: true });
+  mkdirSync(shotsDir, { recursive: true });
   await ask("What is AX-113's TSH result?");
   const text = await page.locator("#answer").innerText();
   assert.match(text, /conflict/i);
   assert.doesNotMatch(text, /corrected from|result is 9.90/);
   await page.locator("#answer").screenshot({
-    path: "/downloads/voice-memory-clinical-duplicate-rows-mobile.png",
+    path: join(shotsDir, "voice-memory-clinical-duplicate-rows-mobile.png"),
   });
   console.log(
     "PASS same-unit duplicate values refuse first-row selection;320px. No providers.",

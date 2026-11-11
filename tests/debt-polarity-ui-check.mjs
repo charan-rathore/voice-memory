@@ -1,8 +1,12 @@
 // Local assertion-only fixture. No actual provider, secret or paid voice.
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
+const shotsDir =
+  process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-shots");
 const dev = spawn("node", ["scripts/site-dev.mjs"], {
   stdio: "ignore",
   env: {
@@ -60,7 +64,7 @@ try {
       true,
     );
   };
-  mkdirSync("/downloads", { recursive: true });
+  mkdirSync(shotsDir, { recursive: true });
   await ask("How much does Arjun owe?");
   assert.equal(
     await page.locator("#answer .verdict-chip").innerText(),
@@ -76,9 +80,9 @@ try {
     await page.locator("#answer").innerText(),
     /related evidence, not an answer/,
   );
-  await page
-    .locator("#answer")
-    .screenshot({ path: "/downloads/voice-memory-debt-polarity-mobile.png" });
+  await page.locator("#answer").screenshot({
+    path: join(shotsDir, "voice-memory-debt-polarity-mobile.png"),
+  });
   console.log(
     "PASS exact debt positives retained, negative amount refuses with related evidence;320px. No providers.",
   );

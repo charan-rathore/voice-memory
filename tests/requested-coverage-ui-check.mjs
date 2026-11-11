@@ -1,8 +1,12 @@
 // Local assertion-only fixture. No actual provider, secret or paid voice.
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
+const shotsDir =
+  process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-shots");
 const dev = spawn("node", ["scripts/site-dev.mjs"], {
   stdio: "ignore",
   env: {
@@ -62,7 +66,7 @@ try {
       true,
     );
   };
-  mkdirSync("/downloads", { recursive: true });
+  mkdirSync(shotsDir, { recursive: true });
   await ask("Who received order PK-101 and what is its tracking number?");
   const answer = page.locator("#answer");
   assert.equal(
@@ -73,7 +77,7 @@ try {
   assert.match(await answer.innerText(), /Related evidence, not an answer/);
   assert.match(await answer.innerText(), /Maya Rao|TRK-8273/);
   await answer.screenshot({
-    path: "/downloads/voice-memory-requested-coverage-mobile.png",
+    path: join(shotsDir, "voice-memory-requested-coverage-mobile.png"),
   });
   await ask("What is the tracking number for order PK-101?");
   assert.match(await answer.innerText(), /TRK-8273/);
