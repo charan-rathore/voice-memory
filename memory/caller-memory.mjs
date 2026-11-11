@@ -100,11 +100,17 @@ export function readMemoryInstruction(utterance, { explicit = false } = {}) {
     return SENSITIVE.test(u)
       ? { type: "refused", reason: "sensitive" }
       : { type: "follow_up_request", text: u.slice(0, 200) };
-  if (!explicit && !REMEMBER.test(u) && !/\bprefer\b|pasand/i.test(u)) return null;
+  if (!explicit && !REMEMBER.test(u) && !/\bprefer\b|pasand/i.test(u))
+    return null;
   if (SENSITIVE.test(u)) return { type: "refused", reason: "sensitive" };
   if (CONSENT_CONVERSATION.test(u)) return { type: "conversation_consent" };
   const lang = LANG_WORDS.find(([, re]) => re.test(u));
-  if (lang && /\b(prefer|speak|talk|reply|answer|language|baat|bol|mein|in)\b|पसंद|में/i.test(u))
+  if (
+    lang &&
+    /\b(prefer|speak|talk|reply|answer|language|baat|bol|mein|in)\b|पसंद|में/i.test(
+      u,
+    )
+  )
     return { type: "preference", key: "language", value: lang[0] };
   if (SHORT.test(u) && /\b(answer|repl|keep|baat|jawab)\w*/i.test(u))
     return { type: "preference", key: "answerLength", value: "short" };
@@ -135,7 +141,9 @@ export function readMemoryInstructions(utterance) {
     if (out.some((x) => JSON.stringify(x) === JSON.stringify(one))) continue;
     out.push(one);
   }
-  const useful = out.filter((x) => !(x.type === "refused" && x.reason === "not_a_preference"));
+  const useful = out.filter(
+    (x) => !(x.type === "refused" && x.reason === "not_a_preference"),
+  );
   return useful.length ? useful : out;
 }
 
@@ -144,7 +152,11 @@ const VOCAB = contractVocabulary(null);
 export function subjectOfQuestion(question, vocab = VOCAB) {
   const q = ` ${String(question ?? "").toLowerCase()} `;
   const hits = vocab.filter((v) =>
-    v.aliases.some((a) => q.includes(` ${String(a).toLowerCase()} `) || q.includes(` ${String(a).toLowerCase()}?`)),
+    v.aliases.some(
+      (a) =>
+        q.includes(` ${String(a).toLowerCase()} `) ||
+        q.includes(` ${String(a).toLowerCase()}?`),
+    ),
   );
   const ids = [...new Set(hits.map((h) => h.id))];
   // "revised fee" names both the fee and the revision: the fee is the
@@ -176,15 +188,24 @@ const emptyRecord = (binding, t) => ({
  *   retention?: Partial<typeof RETENTION>,
  * }} opts
  */
-export function createCallerMemory({ identity, store = null, now = Date.now, retention = {} } = {}) {
-  if (!identity?.isVerified) throw Error("Caller memory needs a caller identity verifier.");
+export function createCallerMemory({
+  identity,
+  store = null,
+  now = Date.now,
+  retention = {},
+} = {}) {
+  if (!identity?.isVerified)
+    throw Error("Caller memory needs a caller identity verifier.");
   const keep = { ...RETENTION, ...retention };
   const live = new Map(); // subject -> record (also the cache when durable)
   const nsOf = (b) => `caller:${b.tenant}:${b.subject}`;
 
   const must = (binding) => {
     if (!identity.isVerified(binding))
-      throw new CallerMemoryError("unverified", "Caller memory needs a verified caller.");
+      throw new CallerMemoryError(
+        "unverified",
+        "Caller memory needs a verified caller.",
+      );
   };
   const purge = (r, t) => {
     const alive = (x) => !x.expiresAt || Date.parse(x.expiresAt) > t;
@@ -207,7 +228,8 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
         throw new CallerMemoryError("unavailable", "Caller memory is unavailable right now.");
       }
     }
-    if (r && (r.subject !== binding.subject || r.tenant !== binding.tenant)) r = null;
+    if (r && (r.subject !== binding.subject || r.tenant !== binding.tenant))
+      r = null;
     r = purge(r ?? emptyRecord(binding, t), t);
     live.set(binding.subject, r);
     return r;
@@ -224,7 +246,10 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
     !r.consent.conversation;
   const save = (binding, r) => {
     // Bounded: oldest episodes go first, then oldest referents.
-    while (JSON.stringify(r).length > CALLER_LIMITS.bytes && (r.episodes.length || r.referents.length))
+    while (
+      JSON.stringify(r).length > CALLER_LIMITS.bytes &&
+      (r.episodes.length || r.referents.length)
+    )
       (r.episodes.length ? r.episodes : r.referents).shift();
     if (!store) return void live.set(binding.subject, r);
     try {
@@ -267,10 +292,16 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
       };
     },
 
-    rememberPreference(binding, { key, value, callId = null, channel = "voice" }) {
+    rememberPreference(
+      binding,
+      { key, value, callId = null, channel = "voice" },
+    ) {
       must(binding);
       if (!Object.hasOwn(PREFERENCES, key) || !PREFERENCES[key].includes(value))
-        throw new CallerMemoryError("not_allowed", "Only allow-listed preferences can be remembered.");
+        throw new CallerMemoryError(
+          "not_allowed",
+          "Only allow-listed preferences can be remembered.",
+        );
       const r = load(binding);
       const prev = r.preferences[key];
       r.preferences[key] = {
@@ -288,10 +319,16 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
     },
 
     /** Change a remembered preference. The old value is not kept. */
-    correctPreference(binding, { key, value, callId = null, channel = "voice" }) {
+    correctPreference(
+      binding,
+      { key, value, callId = null, channel = "voice" },
+    ) {
       must(binding);
       if (!load(binding).preferences[key])
-        throw new CallerMemoryError("not_found", "Nothing remembered for that yet.");
+        throw new CallerMemoryError(
+          "not_found",
+          "Nothing remembered for that yet.",
+        );
       return api.rememberPreference(binding, { key, value, callId, channel });
     },
 
@@ -311,8 +348,10 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
       must(binding);
       const r = load(binding);
       if (!r.consent.conversation) return { kept: false, reason: "no_consent" };
-      if (NOT_RETAINED_SCOPES.has(caseId)) return { kept: false, reason: "sensitive_scope" };
-      if (!final || !corpus?.version) return { kept: false, reason: "no_answer" };
+      if (NOT_RETAINED_SCOPES.has(caseId))
+        return { kept: false, reason: "sensitive_scope" };
+      if (!final || !corpus?.version)
+        return { kept: false, reason: "no_answer" };
       const subj = subjectOfQuestion(question);
       const ep = {
         id: "e" + ++r.seq,
@@ -336,7 +375,9 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
       r.episodes.push(ep);
       r.episodes = r.episodes.slice(-CALLER_LIMITS.episodes);
       if (subj) {
-        r.referents = r.referents.filter((x) => !(x.subjectId === subj.id && x.scopeKey === caseId));
+        r.referents = r.referents.filter(
+          (x) => !(x.subjectId === subj.id && x.scopeKey === caseId),
+        );
         r.referents.push({
           subjectId: subj.id,
           label: subj.label,
@@ -357,7 +398,8 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
       must(binding);
       const r = load(binding);
       if (!r.consent.conversation) return { kept: false, reason: "no_consent" };
-      if (NOT_RETAINED_SCOPES.has(caseId)) return { kept: false, reason: "sensitive_scope" };
+      if (NOT_RETAINED_SCOPES.has(caseId))
+        return { kept: false, reason: "sensitive_scope" };
       const subj = subjectOfQuestion(text);
       const req = {
         id: "r" + ++r.seq,
@@ -380,7 +422,10 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
     closeRequest(binding, id, { by }) {
       must(binding);
       if (!["caller", "operator"].includes(by))
-        throw new CallerMemoryError("not_allowed", "Requests are closed by the caller or an operator.");
+        throw new CallerMemoryError(
+          "not_allowed",
+          "Requests are closed by the caller or an operator.",
+        );
       const r = load(binding);
       const q = r.requests.find((x) => x.id === id);
       if (!q) throw new CallerMemoryError("not_found", "No such request.");
@@ -434,7 +479,15 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
         r.referents = r.referents.filter((x) => x.lastEpisodeId !== what.id);
         removed += n - r.referents.length;
       }
-      audit(r, "forget", what.preference ? `preference.${what.preference}` : what.conversation ? "conversation" : "item");
+      audit(
+        r,
+        "forget",
+        what.preference
+          ? `preference.${what.preference}`
+          : what.conversation
+            ? "conversation"
+            : "item",
+      );
       save(binding, r);
       return { removed, all: false };
     },
@@ -449,7 +502,10 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
       must(binding);
       const r = load(binding);
       const rechecked = [];
-      for (const ref of r.referents.filter((x) => x.scopeKey === caseId).slice(-3).reverse()) {
+      for (const ref of r.referents
+        .filter((x) => x.scopeKey === caseId)
+        .slice(-3)
+        .reverse()) {
         const ep = r.episodes.find((e) => e.id === ref.lastEpisodeId);
         if (!ep) continue;
         const now_ = await answer({ caseId, question: ep.question });
@@ -464,15 +520,21 @@ export function createCallerMemory({ identity, store = null, now = Date.now, ret
             sourceVersion: ep.scope.version,
           },
           now: now_,
-          sourceChanged: now_?.corpus?.version ? now_.corpus.version !== ep.scope.version : null,
-          statusChanged: now_?.final ? (now_.final.verdict ?? null) !== ep.outcome.verdict : null,
+          sourceChanged: now_?.corpus?.version
+            ? now_.corpus.version !== ep.scope.version
+            : null,
+          statusChanged: now_?.final
+            ? (now_.final.verdict ?? null) !== ep.outcome.verdict
+            : null,
         });
       }
       return {
         preferences: structuredClone(r.preferences),
         consent: structuredClone(r.consent),
         rechecked,
-        openRequests: structuredClone(r.requests.filter((q) => q.status === "open" && q.caseId === caseId)),
+        openRequests: structuredClone(
+          r.requests.filter((q) => q.status === "open" && q.caseId === caseId),
+        ),
         durable: !!store,
       };
     },

@@ -3407,7 +3407,7 @@ export function createLocalServer({
     try {
       keys = JSON.parse(process.env.VM_CALLER_KEYS || "{}");
     } catch {
-      throw Error("VM_CALLER_KEYS must be JSON: {\"kid\": \"<64+ hex>\"}.");
+      throw Error('VM_CALLER_KEYS must be JSON: {"kid": "<64+ hex>"}.');
     }
     if (demoOn) keys = { ...keys, demo: randomBytes(32).toString("hex") };
     const identity = createCallerIdentity({ keys });
@@ -3419,7 +3419,11 @@ export function createLocalServer({
       demo: demoOn ? { kid: "demo" } : null,
       secure: !!publicHost,
       allowedOrigins: (req) =>
-        [publicOrigin, `http://${req.headers.host}`, `https://${req.headers.host}`].filter(Boolean),
+        [
+          publicOrigin,
+          `http://${req.headers.host}`,
+          `https://${req.headers.host}`,
+        ].filter(Boolean),
       answer: async ({ caseId, question }) => {
         await loadPublicCases();
         const cs = caseSessions[caseId];
@@ -3428,9 +3432,14 @@ export function createLocalServer({
         const shown = await publicResolve(cs, question, "", {});
         const out = publicAnswer({
           ...shown,
-          corpus: cs.bundle === before ? { version: corpusVersion(before) } : null,
+          corpus:
+            cs.bundle === before ? { version: corpusVersion(before) } : null,
         });
-        return { final: out.final, corpus: out.corpus, wholeQuestion: out.wholeQuestion };
+        return {
+          final: out.final,
+          corpus: out.corpus,
+          wholeQuestion: out.wholeQuestion,
+        };
       },
     });
   })();
@@ -3696,7 +3705,13 @@ export function createLocalServer({
     // Public landing API: key-free, read-only, rate-limited (public-api.mjs).
     if (callerApi && req.url.startsWith("/api/public/caller/")) {
       loadPublicCases();
-      if (await callerApi(req, res, req.url.split("?")[0].slice("/api/public".length)))
+      if (
+        await callerApi(
+          req,
+          res,
+          req.url.split("?")[0].slice("/api/public".length),
+        )
+      )
         return;
     }
     if (req.url.startsWith("/api/public/")) {
