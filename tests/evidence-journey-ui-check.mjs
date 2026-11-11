@@ -277,9 +277,13 @@ try {
         })),
       };
       window.__journeyNav = null;
-      document.addEventListener("vm:open-page", (ev) => {
-        window.__journeyNavPage = ev.detail?.page;
-      }, { once: true });
+      document.addEventListener(
+        "vm:open-page",
+        (ev) => {
+          window.__journeyNavPage = ev.detail?.page;
+        },
+        { once: true },
+      );
       window.VMReading.render(document.getElementById("upl-flow"), [doc], {
         workspace,
         generation: entry.bundleGeneration,
