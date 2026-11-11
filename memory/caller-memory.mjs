@@ -225,7 +225,10 @@ export function createCallerMemory({
       } catch {
         // Wrong key, tampered file or unreadable disk. Fail closed: never
         // treat it as a new caller (that would also overwrite the file).
-        throw new CallerMemoryError("unavailable", "Caller memory is unavailable right now.");
+        throw new CallerMemoryError(
+          "unavailable",
+          "Caller memory is unavailable right now.",
+        );
       }
     }
     if (r && (r.subject !== binding.subject || r.tenant !== binding.tenant))
@@ -258,7 +261,10 @@ export function createCallerMemory({
     } catch {
       // Not persisted: drop the cached copy so nothing unsaved is served.
       live.delete(binding.subject);
-      throw new CallerMemoryError("unavailable", "Caller memory could not be saved.");
+      throw new CallerMemoryError(
+        "unavailable",
+        "Caller memory could not be saved.",
+      );
     }
     live.set(binding.subject, r);
   };
@@ -447,12 +453,18 @@ export function createCallerMemory({
       let removed = 0;
       if (what.all) {
         removed =
-          Object.keys(r.preferences).length + r.episodes.length + r.referents.length + r.requests.length;
+          Object.keys(r.preferences).length +
+          r.episodes.length +
+          r.referents.length +
+          r.requests.length;
         if (store)
           try {
             store.remove(nsOf(binding));
           } catch {
-            throw new CallerMemoryError("unavailable", "Caller memory could not be deleted.");
+            throw new CallerMemoryError(
+              "unavailable",
+              "Caller memory could not be deleted.",
+            );
           }
         live.delete(binding.subject);
         return { removed, all: true };

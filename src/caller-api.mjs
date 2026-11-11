@@ -575,8 +575,16 @@ export function createCallerApi({
       return (send(res, 404, { error: "Not found." }), true);
     } catch (e) {
       if (e instanceof CallerMemoryError)
-        return (send(res, e.code === "unavailable" ? 503 : 400, { error: e.message, code: e.code }), true);
-      send(res, e?.status && e.status < 500 ? e.status : 500, { error: e?.status ? e.message : "Something went wrong." });
+        return (
+          send(res, e.code === "unavailable" ? 503 : 400, {
+            error: e.message,
+            code: e.code,
+          }),
+          true
+        );
+      send(res, e?.status && e.status < 500 ? e.status : 500, {
+        error: e?.status ? e.message : "Something went wrong.",
+      });
       return true;
     }
   };

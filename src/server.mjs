@@ -3397,7 +3397,10 @@ export function createLocalServer({
     callerMemoryStatus.storage = opened.status;
     callerMemoryStatus.reason = opened.reason;
     const requireDurable = process.env.VM_CALLER_REQUIRE_DURABLE === "on";
-    if (opened.status === "unavailable" || (requireDurable && opened.status !== "durable")) {
+    if (
+      opened.status === "unavailable" ||
+      (requireDurable && opened.status !== "durable")
+    ) {
       callerMemoryStatus.reason ??= "durable storage required";
       console.error("caller memory disabled:", callerMemoryStatus.reason);
       return null;
