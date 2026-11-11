@@ -24,12 +24,7 @@
 // (open promises). Nothing in caller memory reaches the resolver except a
 // question; no caller statement, model output or preference can change a
 // verdict, an approval or a source version.
-import {
-  createHash,
-  createHmac,
-  randomBytes,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { CallerIdentityError } from "../memory/caller-identity.mjs";
 import {
   CallerMemoryError,
@@ -38,6 +33,7 @@ import {
 } from "../memory/caller-memory.mjs";
 import { BindingError, audienceOf } from "../memory/call-binding.mjs";
 import { applicableScope } from "./applicability.mjs";
+import { createReceiptSigner, digest } from "../memory/receipt-signer.mjs";
 import { coverageNotice } from "./whole-question-coverage.mjs";
 
 export const API_VERSION = "2026-11-11";
@@ -67,6 +63,7 @@ export function createMemoryApi({
   answer,
   now = Date.now,
   ratePerMinute = 120,
+  signer = createReceiptSigner(),
 }) {
   const auth = new Map(); // sha(apiKey) hex -> tenant
   const identifyAuth = new Map();
@@ -80,10 +77,6 @@ export function createMemoryApi({
     auth.set(sha(t.apiKey).toString("hex"), tenant);
     identifyAuth.set(sha("identify:" + t.apiKey).toString("hex"), tenant);
   }
-  const receiptKey = (tenant) =>
-    createHmac("sha256", tenants[tenant].apiKey)
-      .update("vm-receipt-v1")
-      .digest();
   // tenant\0key -> { state: "pending" | "done", hash, status, body, at }
   const idem = new Map();
   // Turn keys being recorded right now. Process-local: across processes or
@@ -151,22 +144,27 @@ export function createMemoryApi({
       throw fail(400, "bad_json", "Send JSON.");
     }
   };
+  // Signed with the SERVER's private Ed25519 key (memory/receipt-signer.mjs),
+  // never a key a tenant could derive. `answered` binds the exact question,
+  // admitted answer, cited spans, outcome and unresolved parts by digest.
   const receipt = (
     tenant,
     op,
     {
       callId = null,
       key = null,
-      sourceVersion = null,
       subject = null,
-      extra = null,
+      requestId = null,
+      answered = null,
+      sourceVersion = null,
     } = {},
-  ) => {
-    const r = {
+  ) =>
+    signer.sign({
       id: "rcpt_" + randomBytes(10).toString("hex"),
       op,
       tenant,
       callId,
+      requestId: requestId ?? key,
       // A stable, non-reversible caller reference (never the account id).
       callerRef: subject
         ? sha("vm-ref:" + tenant + ":" + subject)
@@ -174,22 +172,54 @@ export function createMemoryApi({
             .slice(0, 16)
         : null,
       at: new Date(now()).toISOString(),
-      idempotencyKey: key,
-      sourceVersion,
-      ...(extra ? { detail: extra } : {}),
       apiVersion: API_VERSION,
-    };
-    r.signature = createHmac("sha256", receiptKey(tenant))
-      .update(JSON.stringify(r))
-      .digest("base64url");
-    return r;
-  };
+      ...(answered
+        ? {
+            scope: {
+              case: answered.verified?.scope.case ?? null,
+              sourceVersion: answered.verified?.scope.sourceVersion ?? null,
+              appliedDocuments:
+                answered.verified?.scope.appliedDocuments ?? null,
+            },
+            questionDigest: digest(answered.question),
+            answerDigest: digest(
+              answered.verified?.say ??
+                answered.verified?.clarification ??
+                null,
+            ),
+            citations: (answered.verified?.citations ?? []).map((c) => ({
+              title: c.title ?? null,
+              start: c.start ?? null,
+              end: c.end ?? null,
+              quoteDigest: digest(c.fullQuote ?? c.quote),
+            })),
+            outcome: {
+              kind: answered.verified?.kind ?? null,
+              verdict: answered.verified?.verdict ?? null,
+              coverage: answered.verified?.coverage ?? null,
+              unresolved: answered.unresolved ?? [],
+            },
+          }
+        : { scope: sourceVersion ? { sourceVersion } : null }),
+    });
   const NOTICES = ["en", "hi", "hinglish"].map(coverageNotice);
   const bareAnswer = (t) => {
     let out = String(t).trim();
     for (const n of NOTICES)
       if (out.endsWith(n)) out = out.slice(0, -n.length).trim();
     return out.replace(/\s*That's from [^.]+\.$/, "").trim();
+  };
+  // What the answer left open, in words that are stable for a receipt.
+  const unresolvedOf = (v) => {
+    const out = [];
+    if (!v) return ["no answer"];
+    if (v.kind === "clarify") out.push("clarification needed");
+    else if (v.kind && v.kind !== "answered")
+      out.push(`answer kind: ${v.kind}`);
+    if (v.coverage === "unverified") out.push("coverage not verified");
+    if (/^(PROPOSED|OPEN|PENDING|REQUESTED|DISCUSSED)$/.test(v.verdict ?? ""))
+      out.push(`status ${String(v.verdict).toLowerCase()}`);
+    return out;
   };
   const verifiedPart = (got, caseId) => {
     const f = got?.final ?? null;
@@ -462,18 +492,9 @@ export function createMemoryApi({
       }
       const answerReceipt = receipt(tenant, "answer", {
         callId,
-        key: null,
+        key,
         subject: b.caller?.subject,
-        sourceVersion: verified?.scope.sourceVersion ?? null,
-        extra: {
-          appliedDocuments: verified?.scope.appliedDocuments ?? null,
-          verdict: verified?.verdict ?? null,
-          sources: (verified?.citations ?? []).map((c) => ({
-            title: c.title,
-            start: c.start,
-            end: c.end,
-          })),
-        },
+        answered: { question: q, verified, unresolved: unresolvedOf(verified) },
       });
       return [200, { verified, changedSince, receipt: answerReceipt }];
     }
@@ -547,7 +568,15 @@ export function createMemoryApi({
             episode: kept.episode ?? null,
             receipt: receipt(tenant, "turn.record", {
               ...ctx,
-              sourceVersion: got?.corpus?.version ?? null,
+              requestId: turnId,
+              answered: (() => {
+                const v = verifiedPart(got, b.scope.case);
+                return {
+                  question: q,
+                  verified: v,
+                  unresolved: unresolvedOf(v),
+                };
+              })(),
             }),
           },
         ];
@@ -683,6 +712,11 @@ export function createMemoryApi({
     )
       return false;
     try {
+      // Public: the receipt verification keys (never any private material).
+      if (url.pathname === "/v1/receipts/keys" && req.method === "GET") {
+        send(res, 200, { keys: signer.publicKeys() });
+        return true;
+      }
       if (
         url.pathname === "/v1/providers/bolna/identify" &&
         req.method === "GET"

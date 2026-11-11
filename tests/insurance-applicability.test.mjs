@@ -119,10 +119,8 @@ test("same question, two customers, two correct answers", async () => {
     b.body.verified.citations.some((c) => /Wording_2026/.test(c.title)),
   );
   // Source-linked, signed audit receipt naming the documents that applied.
-  assert.equal(a.body.receipt.detail.appliedDocuments, "insurance-2025");
-  assert.ok(
-    a.body.receipt.detail.sources.some((s) => /Wording_2025/.test(s.title)),
-  );
+  assert.equal(a.body.receipt.scope.appliedDocuments, "insurance-2025");
+  assert.ok(a.body.receipt.citations.some((s) => /Wording_2025/.test(s.title)));
   assert.ok(a.body.receipt.signature);
 });
 

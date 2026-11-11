@@ -121,7 +121,7 @@ a = await vm.answer(c.call.callId, Q);
 say("Why", a.changedSince.why);
 say(
   "Receipt",
-  `${a.receipt.id} · ${a.receipt.detail.appliedDocuments} · ${a.receipt.detail.sources.map((s) => s.title).join(", ")} · sig ${a.receipt.signature.slice(0, 10)}…`,
+  `${a.receipt.id} · ${a.receipt.scope.appliedDocuments} · ${a.receipt.citations.map((s) => s.title).join(", ")} · sig ${a.receipt.signature.slice(0, 10)}…`,
 );
 
 console.log("\nNO POLICY DATE — the agent must ask, not guess");

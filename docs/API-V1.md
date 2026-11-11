@@ -64,11 +64,26 @@ on every call, and never lets the first kind change the second:
   `unauthenticated` 401, `caller_unverified` 403, `not_permitted` 403,
   `tenant_mismatch` 403, `unknown` 404, `ended`/`revoked` 409,
   `unavailable` 503 (storage fault; nothing was changed).
-- Every write returns a **receipt**: `{ id, op, tenant, callId, callerRef,
-  at, idempotencyKey, sourceVersion, detail?, apiVersion, signature }`.
-  `signature` = base64url HMAC-SHA256 over the receipt JSON (without
-  `signature`) with key `HMAC-SHA256(apiKey, "vm-receipt-v1")`.
-  `callerRef` is a non-reversible reference, never the account id.
+- Every write and every answer returns a **receipt**, signed with the
+  server's private **Ed25519** key (`VM_RECEIPT_KEY`, 64-hex seed; else
+  derived from `VM_STORE_KEY`; else ephemeral and flagged so). Schema
+  `vm-receipt/2`: `{ id, op, tenant, callId, requestId, callerRef, at,
+  apiVersion, scope: { case, sourceVersion, appliedDocuments },
+  questionDigest, answerDigest, citations: [{ title, start, end,
+  quoteDigest }], outcome: { kind, verdict, coverage, unresolved }, schema,
+  kid, signature }`. Digests are SHA-256 of the NFC-normalised UTF-8 text;
+  the signature covers the canonical JSON (sorted keys, no whitespace)
+  without `signature`. Public keys: `GET /v1/receipts/keys` (no auth).
+  Verify anywhere: `node scripts/verify-receipt.mjs receipt.json key.pem
+  --question "..." --answer "..." --quote "..."`. `callerRef` is
+  non-reversible, never the account id.
+- **What a receipt proves, and what it does not.** It proves that Voice
+  Memory's server signed this outcome for this tenant, call, request,
+  source version, applied documents, question, answer and cited spans at
+  this time. It does not prove that the agent spoke it, that the caller
+  heard it, or that anyone made a valid decision. It is not a billing,
+  legal or non-repudiation instrument. A server operator holding the
+  private key can sign anything; keep the key out of the tenant's reach.
 
 ## Endpoints
 

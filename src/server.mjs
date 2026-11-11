@@ -165,6 +165,7 @@ import {
 } from "../memory/caller-store.mjs";
 import { createCallBindings, audienceOf } from "../memory/call-binding.mjs";
 import { createMemoryApi } from "./memory-api.mjs";
+import { createReceiptSigner } from "../memory/receipt-signer.mjs";
 import { applicableScope, HARBORLINE_SUBJECTS } from "./applicability.mjs";
 import {
   HARBORLINE_2025,
@@ -3594,7 +3595,17 @@ export function createLocalServer({
     });
     const bindings = createCallBindings();
     const memoryApi = Object.keys(tenants).length
-      ? createMemoryApi({ tenants, identity, memory, bindings, answer })
+      ? createMemoryApi({
+          tenants,
+          identity,
+          memory,
+          bindings,
+          answer,
+          signer: createReceiptSigner({
+            seedHex: process.env.VM_RECEIPT_KEY || null,
+            storeKeyHex: process.env.VM_STORE_KEY || null,
+          }),
+        })
       : null;
     // The public /api/public/caller routes are the fictional demo only.
     return {
