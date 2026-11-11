@@ -21,6 +21,7 @@ import { identityReportsFor } from "../clinical/answer.mjs";
 // Rate limits are per client address and global; voice minting has its own
 // tighter caps because each call spends the operator's Bolna credits.
 import { finalAnswer } from "./answer-contract.mjs";
+import { coverageNotice } from "./whole-question-coverage.mjs";
 import {
   dictionaryOf,
   vocabularyOf as recordVocabulary,
@@ -1533,6 +1534,15 @@ export function publicAnswer(shown) {
       // request has an established outcome. Never inferred from wording.
       complete: final.complete ?? null,
       coverage: final.coverage ?? null,
+      // The exact disclosure sentence ending `text`, when coverage is
+      // unverified, so a screen can show it once (as its coverage block)
+      // instead of twice. Additive; the text itself is unchanged.
+      coverageNotice:
+        ["en", "hi", "hinglish"]
+          .map(coverageNotice)
+          .find(
+            (n) => typeof final.text === "string" && final.text.endsWith(n),
+          ) ?? null,
     },
     wholeQuestion: shown.wholeQuestion ?? null,
     answer: final.text,
