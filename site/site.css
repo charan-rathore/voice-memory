@@ -5153,3 +5153,38 @@ html:not(.voice-on) .voice-off {
     animation: none;
   }
 }
+
+/* mid-call corpus version honesty: on the restored dark desk these resolve
+   to light-on-dark desk tokens (--ink/--ink-2/--amber-ink), so the block sits
+   on the same translucent dark surface as .cite/.related-source. */
+.corpus-version {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--amber-ink);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.corpus-notice {
+  font: 600 15px/1.5 var(--sans);
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+.corpus-version p {
+  margin: 0 0 6px;
+}
+.corpus-details {
+  font: 13px/1.5 var(--sans);
+  color: var(--ink-2);
+}
+.corpus-details summary {
+  cursor: pointer;
+}
+.corpus-details p {
+  overflow-wrap: anywhere;
+}
+.corpus-quote {
+  color: var(--ink);
+  font: 14px/1.6 var(--sans);
+}

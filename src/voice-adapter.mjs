@@ -10,6 +10,7 @@ import { identifierRequest, explicitRecordRequest } from "../dist/engine.mjs";
  * messages, model and user_data can never select another bundle.
  */
 import { randomBytes } from "node:crypto";
+import { createCorpusHistory } from "./corpus-version.mjs";
 import {
   answer,
   answerFromRetrieval,
@@ -123,6 +124,7 @@ export function createVoiceAdapter({
   // server-owned per-call state (src/conversation-shadow.mjs). It does not
   // change what is spoken yet.
   const shadow = createConversationShadow();
+  const corpusHistory = createCorpusHistory({ now, ttlMs });
   const admit = (token) => {
     const cred = credentials.get(token);
     if (cred) {
@@ -416,6 +418,11 @@ export function createVoiceAdapter({
         : credentials.has(token)
           ? null
           : JSON.stringify(["token", token]);
+      // Never infer a call from a shared fixed bearer. A scoped public call
+      // has its own handle; a standalone token is itself a conversation.
+      // Retarget drops grants but not this bounded, hash-only call history.
+      const corpusKey = shadowKey ? JSON.stringify([shadowKey, caseId]) : null;
+      const corpus = corpusHistory.compare(corpusKey, bundle);
       const askedRaw = latestUser(data.messages);
       if (!askedRaw) {
         return Response.json(
@@ -1679,6 +1686,34 @@ export function createVoiceAdapter({
           // are never truncated into a potentially misleading replay.
           while (cache.size > 16) cache.delete(cache.keys().next().value);
         }
+        // Preserve fail-closed grant and resolver rechecks above. A version
+        // notice is attached to an emitted document answer or refusal for this
+        // authenticated call+scope, never another caller sharing its bearer.
+        const documentAnswer =
+          !social &&
+          !scopeGone &&
+          !scopeBad &&
+          !scopePending &&
+          turn?.spokenTurn?.intent !== "SCOPE_CHANGED" &&
+          !!(
+            turn?.result ||
+            turn?.spokenTurn?.citations?.length ||
+            sharedRendered
+          );
+        const versionNotice = documentAnswer && corpus.changedSinceLastAnswer;
+        if (versionNotice) {
+          spoken =
+            (isHindi(lang)
+              ? "आपके दस्तावेज़ इस बातचीत के पिछले जवाब के बाद अपडेट हुए हैं। यह जवाब नए दस्तावेज़ों से है। "
+              : "Your documents changed since my previous answer in this conversation. I'm using the updated documents. ") +
+            spoken;
+        }
+        // Do not retain old documents for this feature. Existing citations
+        // already preserve quoted text and source identity with the turn.
+        const emittedCorpus =
+          turn?.spokenTurn?.intent === "SCOPE_CHANGED" ? null : { ...corpus };
+        turn = { ...turn, corpus: emittedCorpus, versionNotice };
+        if (turn.spokenTurn) turn.spokenTurn = { ...turn.spokenTurn, spoken };
         let conversation = null;
         // Do not expose a previous call's diagnostic if shadow observation
         // throws, or if the current response has become scope-invalid.
@@ -1774,6 +1809,8 @@ export function createVoiceAdapter({
               firstByteAt: Date.now(),
               spoken,
               verdict: turn?.spokenTurn?.verdict ?? null,
+              corpus: emittedCorpus,
+              versionNotice,
               contract,
               outcome: "answered",
             });
@@ -1799,6 +1836,8 @@ export function createVoiceAdapter({
                 call: callTag,
                 caseId,
                 // the shared contract's reading of this turn (additive)
+                corpus: emittedCorpus,
+                versionNotice,
                 conversation,
                 // the canonical answer contract for this turn (additive)
                 contract,
@@ -1853,6 +1892,7 @@ export function createVoiceAdapter({
         } catch {
           /* the shadow never breaks a call */
         }
+        if (documentAnswer) corpusHistory.commit(corpusKey, corpus);
         grant.turn = turn;
         return new Response(stream, {
           headers: {

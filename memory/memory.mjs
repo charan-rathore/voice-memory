@@ -45,7 +45,7 @@ const spanOf = (c) =>
  */
 export function recordTurn(
   mem,
-  { question, lead, result, channel = "typed", scope },
+  { question, lead, result, channel = "typed", scope, corpus },
 ) {
   const cited = [
     ...(lead?.citations ?? []).map(spanOf),
@@ -61,6 +61,7 @@ export function recordTurn(
     at: new Date().toISOString(),
     channel,
     scope: scope ?? null,
+    ...(corpus?.version ? { corpus: { version: corpus.version } } : {}),
     question: String(question).slice(0, 400),
     spoken: lead?.spoken ?? null,
     verdict:

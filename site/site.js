@@ -967,6 +967,12 @@
       const qs = new URLSearchParams({ case: caseId, q: question });
       if (context) qs.set("context", context);
       if (patient) qs.set("patient", patient);
+      // Cache-buster: once this view has seen a corpus version, ask the CDN
+      // for a matching entry so an edge-cached pre-update answer (served
+      // stale-while-revalidate) cannot satisfy a client that already knows
+      // the documents changed. The origin ignores the extra parameter.
+      const knownVersion = state.corpusVer?.[caseId];
+      if (knownVersion) qs.set("v", knownVersion);
       try {
         return await api("/answer?" + qs);
       } catch (e) {
@@ -1080,36 +1086,41 @@
     );
     const lead = r.lead;
     const final = r.final ?? null;
-    const asserting = final ? typeof final.admittedText === "string" : !!lead?.text;
-    const related = Array.isArray(final?.relatedEvidence) ? final.relatedEvidence : [];
+    const asserting = final
+      ? typeof final.admittedText === "string"
+      : !!lead?.text;
+    const related = Array.isArray(final?.relatedEvidence)
+      ? final.relatedEvidence
+      : [];
     const cloudAnswer =
       (r.semantic?.steps ?? []).includes(
         "whole_context_read_and_independent_audit",
       ) || /^document-/.test(lead?.origin ?? "");
-    const [cls, label] = final && !asserting
-      ? final.kind === "clarify"
-        ? ["v-ask", "Needs clarification"]
-        : final.from === "lead"
-          ? (VERDICT[final.verdict] ?? ["v-no", "No supported answer"])
-          : ["v-no", "No supported answer"]
-      : final?.kind === "partial"
-        ? (VERDICT[final.verdict] ?? ["v-warn", "Partial answer"])
-        : lead
-          ? verdictOf(lead.verdict)
-          : ["v-ask", "No supported answer"];
+    const [cls, label] =
+      final && !asserting
+        ? final.kind === "clarify"
+          ? ["v-ask", "Needs clarification"]
+          : final.from === "lead"
+            ? (VERDICT[final.verdict] ?? ["v-no", "No supported answer"])
+            : ["v-no", "No supported answer"]
+        : final?.kind === "partial"
+          ? (VERDICT[final.verdict] ?? ["v-warn", "Partial answer"])
+          : lead
+            ? verdictOf(lead.verdict)
+            : ["v-ask", "No supported answer"];
     const text = final
       ? asserting
         ? final.admittedText
         : `No supported answer. ${final.text ?? "The documents did not establish this."}`
-      : lead?.text ??
-        "No supported answer. These documents do not establish an answer.";
+      : (lead?.text ??
+        "No supported answer. These documents do not establish an answer.");
     // The canonical final is the complete admitted wording. Never prepend an
     // unadmitted lead opener to it.
     const opener = final ? null : asserting ? (lead?.opener ?? null) : null;
     const spans = (value) =>
       String(value ?? "")
         .split(/(\s+)/)
-        .map((w) => w.trim() ? `<span class="w">${esc(w)}</span>` : w)
+        .map((w) => (w.trim() ? `<span class="w">${esc(w)}</span>` : w))
         .join("");
     const openerHtml = opener
       ? `<span class="a-opener">${spans(opener)}</span> `
@@ -1140,7 +1151,11 @@
       <div class="a-visual" id="a-visual"></div>
       <div class="a-tools">
         ${
-          lead?.text && (!final || final.admittedText === lead.text) && listenOn() && source !== "saved" && !cloudAnswer
+          lead?.text &&
+          (!final || final.admittedText === lead.text) &&
+          listenOn() &&
+          source !== "saved" &&
+          !cloudAnswer
             ? `<button class="tool listen" type="button" data-listen aria-pressed="false"><i class="eq" aria-hidden="true"><b></b><b></b><b></b></i><span>Listen</span></button>`
             : ""
         }
@@ -1180,15 +1195,27 @@
             <span class="cite-q">${
               c.broadCitation
                 ? "Wider passage cited - it supports the source, not a pinpoint line."
-                : esc(
-                    prettyQuote(
-                      c.quote,
-                    ),
-                  )
+                : esc(prettyQuote(c.quote))
             }</span>
           </button>`;
         })
         .join("")}</div>`;
+    const versionKey = caseId === "own" ? state.ws : caseId;
+    if (r.corpus?.version)
+      import("./source-reader.mjs").then(({ renderCorpusNotice }) => {
+        if (
+          state.current?._src === r &&
+          (caseId !== "own" || state.ws === versionKey)
+        ) {
+          const decision = renderCorpusNotice($("#answer"), r, versionKey);
+          // The cache-buster tracks the COMMITTED version only: a replayed
+          // stale answer (a CDN entry older than the displayed one) must not
+          // roll the key back and start re-fetching the stale entry, while a
+          // flagged genuine revert still commits and advances the key.
+          if (decision?.committed)
+            (state.corpusVer ??= {})[caseId] = decision.version;
+        }
+      });
     state.currentCites = cites;
     state.currentRelated = related;
     state.currentCase = caseId;
@@ -1690,75 +1717,6 @@
       }</span>${primary ? esc(prettyQuote(primary.quote)) : "Original page, rendered from the PDF"}</p>`;
   }
   // ------------------------------------------------------------ reader
-  // Opening any document opens the whole case as one reader: every page of
-  // every document, in order, with a page strip to jump between them. The
-  // chosen document scrolls into view; a cited line is marked on its page.
-  // The cited line itself is marked, never the whole document: a small
-  // document is one retrieval chunk, so its "focus" can be every line. The
-  // quote the answer rests on is found in the text (whitespace-tolerant);
-  // focus lines are used only when they overlap that quote.
-  const words = (x) =>
-    String(x ?? "")
-      .toLowerCase()
-      .match(/[\p{L}\p{N}$%.,/-]+/gu) ?? [];
-  const overlap = (a, b) => {
-    const B = new Set(words(b));
-    const A = words(a);
-    return A.length ? A.filter((w) => B.has(w)).length / A.length : 0;
-  };
-  const findSpan = (html, quote) => {
-    const q = esc(
-      String(quote ?? "")
-        .trim()
-        .replace(/^\d+\.\s*/, ""),
-    );
-    if (q.length < 8 || q.length > 600) return null;
-    const re = new RegExp(
-      q
-        .split(/\s+/)
-        .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-        .join("\\s+"),
-    );
-    const m = re.exec(html);
-    return m ? [m.index, m.index + m[0].length] : null;
-  };
-  const markText = (text, cites) => {
-    let html = esc(text);
-    const spans = [];
-    for (const c of cites) {
-      const quote = prettyQuote(c.quote);
-      const exact = findSpan(html, quote) ?? findSpan(html, c.quote);
-      if (exact) {
-        spans.push(exact);
-        continue;
-      }
-      const lines = (c.location?.focus?.text ?? [])
-        .map((x) => String(x).trim())
-        .filter((x) => x.length > 10)
-        .filter((x, _, all) => all.length <= 2 || overlap(x, quote) >= 0.5);
-      for (const l of lines) {
-        const sp = findSpan(html, l);
-        if (sp) spans.push(sp);
-      }
-    }
-    // apply from the end so earlier offsets stay valid; skip overlaps
-    spans.sort((a, b) => b[0] - a[0]);
-    let last = Infinity;
-    for (const [a, b] of spans) {
-      if (b > last) continue;
-      html = `${html.slice(0, a)}<mark>${html.slice(a, b)}</mark>${html.slice(b)}`;
-      last = a;
-    }
-    return html.replace(/^# (.*)$/m, '<span class="h">$1</span>');
-  };
-  // Long text documents are set as pages (~42 lines), like a printout.
-  const textPages = (html) => {
-    const lines = html.split("\n");
-    const out = [];
-    for (let i = 0; i < lines.length; i += 42)
-      out.push(lines.slice(i, i + 42).join("\n"));
-    return out.length ? out : [html];
-  };
   function boxesHtml(cites) {
     return cites
       .map((c) => ({ c, r: c.location?.focus?.regions?.[0] }))
@@ -1836,11 +1794,37 @@
 
   async function openDoc(title, cites = [], primary = null) {
     emit("vm:source", { title, cited: cites.length > 0 });
+    $("#viewer-body").replaceChildren();
+    $("#viewer-meta").textContent = "Opening source...";
     loadVisual();
+    const reader = await import("./source-reader.mjs");
+    const { markText, textPages } = reader.textRenderer({ esc, prettyQuote });
+    if (state.case === "own" && primary) {
+      const workspace = state.ws;
+      const note = await reader.historicalSourceNote({
+        api,
+        workspace,
+        primary,
+        documents: () => state.cases.own?.documents ?? [],
+        esc,
+      });
+      if (state.case !== "own" || state.ws !== workspace) return;
+      if (note) {
+        $("#viewer-title").textContent = shortTitle(title);
+        $("#viewer-meta").textContent =
+          "Historical citation - current original not verified";
+        $("#viewer-body").innerHTML = note;
+        return;
+      }
+    }
     const c =
       state.cases[state.case] ?? snap.cases?.find((x) => x.id === state.case);
     const docs = c?.documents?.length
-      ? c.documents
+      ? state.case === "own" && primary
+        ? c.documents.filter(
+            (d) => d.title !== title || d.id === primary.documentId,
+          )
+        : c.documents
       : [{ title, kind: /\.pdf$/i.test(title) ? "pdf" : "md", pages: 1 }];
     $$("#doc-rail button").forEach((b) =>
       b.classList.toggle("on", b.dataset.doc === title),
@@ -2405,7 +2389,12 @@
           if (caseId !== state.case) setCase(caseId, { quiet: true });
           state.askSeq++; // supersede any typed answer still arriving
           renderAnswer(
-            { lead: t.lead, final: t.contract ?? null, evidence: [] },
+            {
+              lead: t.lead,
+              final: t.contract ?? null,
+              evidence: [],
+              corpus: t.corpus,
+            },
             { via: "call", source: "live", question: t.question, caseId },
           );
           // One truthful state per answered turn, no timers.
