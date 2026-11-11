@@ -151,6 +151,9 @@ const evidenceWithinOwner = (bundle, owner, ev) => {
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { createPublicApi, publicAnswer, clientAddress } from "./public-api.mjs";
+import { createCallerApi } from "./caller-api.mjs";
+import { createCallerIdentity } from "../memory/caller-identity.mjs";
+import { createCallerMemory } from "../memory/caller-memory.mjs";
 import { createSarvamTts } from "./sarvam-tts.mjs";
 import {
   createElevenTts,
@@ -3195,10 +3198,13 @@ export function createLocalServer({
     voice.setAnswerResolver?.(sharedVoiceAnswer);
     byoVoice.setAnswerResolver?.(sharedVoiceAnswer);
   }
+  // The demo cases' canonical resolver, shared with caller memory below so
+  // a remembered question is re-asked through exactly the same path.
+  let publicResolve = null;
   const publicApi = createPublicApi({
     cases: caseSessions,
     workspaces: workspaceApi,
-    resolve: async (cs, question, ctx, opts = {}) => {
+    resolve: (publicResolve = async (cs, question, ctx, opts = {}) => {
       const lang = langOfText(question);
       // About the page, not the records ("how can you help", "how do I use
       // my own reports", "thanks"): a fixed reply, and a page action.
@@ -3346,7 +3352,7 @@ export function createLocalServer({
         }
       }
       return { ...(await answerOne(cs, question)), question };
-    },
+    }),
     visual: (cs, lang) => caseVisual(cs.bundle, lang),
     gemini,
     sarvam: sarvamTts,
@@ -3370,6 +3376,45 @@ export function createLocalServer({
         (!fixedCap || voice.isBound(fixedCap) || !!voiceHardExpiresAtMs()),
     }),
   });
+  // Caller memory (memory/caller-memory.mjs): off unless VM_CALLER_MEMORY=on.
+  // Identity is a tenant-signed assertion (memory/caller-identity.mjs) with
+  // keys from VM_CALLER_KEYS (JSON {kid: hex}). VM_CALLER_DEMO=on adds a
+  // per-process key that signs ONLY the fixed fictional personas. Durable
+  // only with the encrypted store (VM_DATA_DIR + VM_STORE_KEY).
+  const callerApi = (() => {
+    const demoOn = process.env.VM_CALLER_DEMO === "on";
+    if (process.env.VM_CALLER_MEMORY !== "on" && !demoOn) return null;
+    let keys = {};
+    try {
+      keys = JSON.parse(process.env.VM_CALLER_KEYS || "{}");
+    } catch {
+      throw Error("VM_CALLER_KEYS must be JSON: {\"kid\": \"<64+ hex>\"}.");
+    }
+    if (demoOn) keys = { ...keys, demo: randomBytes(32).toString("hex") };
+    const identity = createCallerIdentity({ keys });
+    const memory = createCallerMemory({ identity, store });
+    return createCallerApi({
+      identity,
+      memory,
+      cases: ["deal", "health"],
+      demo: demoOn ? { kid: "demo" } : null,
+      secure: !!publicHost,
+      allowedOrigins: (req) =>
+        [publicOrigin, `http://${req.headers.host}`, `https://${req.headers.host}`].filter(Boolean),
+      answer: async ({ caseId, question }) => {
+        await loadPublicCases();
+        const cs = caseSessions[caseId];
+        if (!cs?.bundle) return { final: null, corpus: null };
+        const before = cs.bundle;
+        const shown = await publicResolve(cs, question, "", {});
+        const out = publicAnswer({
+          ...shown,
+          corpus: cs.bundle === before ? { version: corpusVersion(before) } : null,
+        });
+        return { final: out.final, corpus: out.corpus, wholeQuestion: out.wholeQuestion };
+      },
+    });
+  })();
   const server = http.createServer(async (req, res) => {
     watchdog.beginRequest();
     res.once("close", () => watchdog.endRequest());
@@ -3629,6 +3674,11 @@ export function createLocalServer({
       return;
     }
     // Public landing API: key-free, read-only, rate-limited (public-api.mjs).
+    if (callerApi && req.url.startsWith("/api/public/caller/")) {
+      loadPublicCases();
+      if (await callerApi(req, res, req.url.split("?")[0].slice("/api/public".length)))
+        return;
+    }
     if (req.url.startsWith("/api/public/")) {
       loadPublicCases();
       res.setHeader("Content-Type", "application/json");

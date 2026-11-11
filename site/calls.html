@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Two calls, one memory · Voice Memory</title>
+    <meta name="description" content="A returning caller, remembered with consent: the preference they asked you to keep, what they asked last time, rechecked against the documents now." />
+    <meta name="theme-color" content="#fbfaf2" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="fonts/plex-sans-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="calls.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="back" href="./">← Voice Memory</a>
+      <span class="badge">Fictional<span class="long"> callers · fictional Northstar deal</span></span>
+    </header>
+
+    <main class="wrap">
+      <section class="intro">
+        <h1>Two calls, one memory.</h1>
+        <p class="lede">
+          Voice Memory remembers what matters, knows what changed, and can prove what it says. A caller asks it to remember
+          a preference. They call back. It knows who they are, what they asked, and checks the documents again before it
+          answers.
+        </p>
+        <ol class="steps" aria-label="Demo steps">
+          <li data-step="1"><b>Call one.</b> Asha asks it to remember Hinglish, then asks about the fee.</li>
+          <li data-step="2"><b>Call two.</b> She calls back. It recalls, rechecks, answers.</li>
+          <li data-step="3"><b>Change or forget.</b> Then try Ravi: he sees none of it.</li>
+        </ol>
+      </section>
+
+      <div class="grid">
+        <section class="call" aria-label="Call">
+          <div class="call-head">
+            <div class="seg" role="radiogroup" aria-label="Fictional caller">
+              <button role="radio" aria-checked="true" data-persona="asha">Asha</button>
+              <button role="radio" aria-checked="false" data-persona="ravi">Ravi</button>
+            </div>
+            <button class="btn primary" id="start" type="button">Start call</button>
+            <button class="btn" id="end" type="button" hidden>End call</button>
+          </div>
+          <p class="status" id="status" aria-live="polite">
+            Not on a call. Identity comes from a signed test assertion for a fictional account, never from a phone number.
+          </p>
+          <ol class="transcript" id="transcript" aria-live="polite" aria-label="Transcript"></ol>
+          <div class="script" id="script" aria-label="Suggested lines"></div>
+          <form class="composer" id="composer" autocomplete="off">
+            <label class="sr-only" for="say">What the caller says</label>
+            <input id="say" maxlength="400" placeholder="Start a call, then say something…" />
+            <button class="btn primary send" type="submit" aria-label="Send">Send</button>
+          </form>
+        </section>
+
+        <section class="holds" aria-label="What Voice Memory holds for this answer">
+          <article class="sec" id="sec-remembered">
+            <h2><span class="dot dot-mem" aria-hidden="true"></span>Remembered from your conversation</h2>
+            <div class="body" id="remembered"><p class="empty">Nothing yet. Memory is kept only when the caller asks.</p></div>
+          </article>
+          <article class="sec" id="sec-verified">
+            <h2><span class="dot dot-ok" aria-hidden="true"></span>Verified in documents</h2>
+            <div class="body" id="verified"><p class="empty">Answers come from the documents, with the line they rest on.</p></div>
+          </article>
+          <article class="sec" id="sec-unresolved">
+            <h2><span class="dot dot-open" aria-hidden="true"></span>Still unresolved</h2>
+            <div class="body" id="unresolved"><p class="empty">What the documents don't settle, and what the caller is still waiting for.</p></div>
+          </article>
+          <details class="ledger" id="ledger">
+            <summary>Everything stored for this caller <span id="ledger-count"></span></summary>
+            <div id="ledger-body"><p class="empty">Start a call to see it.</p></div>
+            <button class="btn danger" id="forget-all" type="button" hidden>Forget everything</button>
+          </details>
+        </section>
+      </div>
+
+      <p class="foot">
+        A preference changes only how an answer is said. It never changes a fact, an approval or which document version is
+        used. Health records are never kept across calls in this demo.
+      </p>
+    </main>
+    <script src="calls.js" defer></script>
+  </body>
+</html>
