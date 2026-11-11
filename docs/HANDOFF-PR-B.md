@@ -1,7 +1,27 @@
-# Handoff: PR B — interactive evidence journey (not started)
+# Handoff: PR B — interactive evidence journey (partly done)
 
 Base: `fix/canonical-question-plan` (PR A). Branch to create:
-`feat/interactive-evidence-journey`. Nothing for PR B is implemented yet.
+`feat/interactive-evidence-journey`.
+
+## Done in the first commit
+
+- `site/reading.js`: "2:00 budget" bar and its logic removed; decorative
+  packet removed; page strip is now `role="group"` of `<button class="rd-pg">`
+  tiles (aria-label, `aria-pressed`, ≥44 px) that dispatch
+  `vm:open-page {title, page}`; replay labelled "Replay of this completed
+  ingestion"; the index lookup frame is labelled "Example of how indexing
+  works — not your search."
+- `site/site.js`: `vm:open-page` opens the document in the viewer, scrolls to
+  page N (PDF page images) and focuses it; reduced motion respected.
+- `site/reading.css`: requested palette as `.rd` tokens; dead budget/packet/
+  scan rules removed; looping "breathe" pings removed; entrances 240 ms
+  ease-out; button press/hover/focus states; reduced-motion block.
+- `src/index-digest.mjs`: `lookup.illustrative = true` and `lookup.label`.
+- `tests/evidence-journey-ui-check.mjs`: 320/390/768/1280 px; tiles are
+  buttons, ≥44 px, Enter opens the document, no budget, example labelled.
+
+Still to do: everything under "Plan" items 3-6 below, plus converting the
+dark desk surrounding the reading panel (`site/site.css`) to the palette.
 Written so another engineer or agent can start cold.
 
 ## Defects to repair first (located)
@@ -73,3 +93,39 @@ This sandbox has no npm registry. `node_modules` here is a local shim over
 preinstalled tools (see `node_modules/README-SHIM.md`, not committed);
 `playwright` and Chrome are available, so `test:browser` and
 `test:call-ui` can be tried here; CI is the source of truth.
+
+
+## Continuation — PR #81, 11 November 2026
+
+This handoff originally described the first PR B commit. The draft branch
+has since been continued; treat the current files, not the earlier "Still to
+do" section, as authoritative.
+
+- Six `<details>` stages now show workspace status, real per-page state and
+  OCR warnings, record boundaries/status, exact fact citations, index counts,
+  and the Ready workspace action. Source geometry is retained in the digest.
+- Typed and call screens consume canonical `final`. Admitted citations are
+  separate from `relatedEvidence`; unsupported results cannot activate a
+  confident chart or source-asserting Listen.
+- A MedlinePlus-backed lab explainer separates general education from report
+  findings, the lab's own printed interval and document amendments.
+- The evidence desk uses the light semantic palette and removes numbered
+  animation cards and idle progress pings.
+- `tests/evidence-journey-ui-check.mjs` exercises real four-width UI data,
+  source locations, 101-page/zero-page/failed-OCR/long-name states and
+  unsupported outcomes; `tests/site-check.mjs` strengthens related-evidence
+  isolation.
+- CI installs with real `npm ci`, verifies the exact PR head and runs the
+  browser, graph and call UI suites as well as the original gates. Comparison
+  screenshots are generated at 1280 and 390 px from original #81 head
+  `a94c7c92feda8863d48a46d5f7287a781fd80186` and the candidate head;
+  the Actions artifact retains them for 14 days.
+- `docs/INTEGRATION.md` specifies an existing Bolna custom LLM endpoint,
+  proposed vendor adapters and a versioned current-facts packet.
+
+**Merge gate:** use the latest complete CI run, not partial passes. Do not
+merge or deploy either PR from this handoff. Developer-written synthetic
+fixtures are regression tests, not independently measured accuracy.
+First-visitor check: upload → inspect the actual reading → open a page →
+ask naturally → open the exact admitted citation → ask an unsupported or
+ambiguous question and verify related passages remain non-admitted.

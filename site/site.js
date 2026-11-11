@@ -667,7 +667,12 @@
       readingView()
         .then((R) => {
           try {
-            R?.render($("#upl-flow"), state.wsDocs, { drops: state.drops });
+            R?.render($("#upl-flow"), state.wsDocs, {
+              drops: state.drops,
+              workspace: state.ws,
+              generation: state.bundleGeneration,
+              openSource: openDoc,
+            });
           } catch (e) {
             console.error("reading view failed", e);
           }
@@ -1062,44 +1067,64 @@
     stopTalking();
     state.current = { ...r, question: r.question ?? question, _src: r };
     queueMicrotask(() =>
-      emit("vm:answer", { verdict: r.lead?.verdict ?? null, via, source }),
+      emit("vm:answer", {
+        verdict: r.final?.verdict ?? r.lead?.verdict ?? null,
+        final: r.final ?? null,
+        lead: r.lead ?? null,
+        background: r.lead?.background ?? null,
+        via,
+        source,
+        question,
+        caseId,
+      }),
     );
     const lead = r.lead;
+    const final = r.final ?? null;
+    const asserting = final ? typeof final.admittedText === "string" : !!lead?.text;
+    const related = Array.isArray(final?.relatedEvidence) ? final.relatedEvidence : [];
     const cloudAnswer =
       (r.semantic?.steps ?? []).includes(
         "whole_context_read_and_independent_audit",
       ) || /^document-/.test(lead?.origin ?? "");
-    const [cls, label] = lead
-      ? verdictOf(lead.verdict)
-      : (r.evidence ?? []).length
-        ? ["v-ask", "Related evidence"]
-        : verdictOf(null);
-    const ev = r.evidence ?? [];
-    const retrieved = /Relevant source excerpts\n\n([\s\S]*?)\n\[[^\n]+\]/
-      .exec(r.retrieval?.text ?? r.answer ?? "")?.[1]
-      ?.trim();
-    const text =
-      lead?.text ??
-      r.final?.text ??
-      (ev.length
-        ? `From the document: “${prettyQuote(retrieved || ev[0].quote).slice(0, 280)}”${ev.length > 1 ? ` (and ${ev.length - 1} more cited passage${ev.length > 2 ? "s" : ""})` : ""}`
-        : "That isn't covered in these documents, so I can't answer it from them. Ask me about anything they contain: results, dates, changes, amounts or who signed what.");
-    const opener = lead?.opener ?? null;
-    let wi = 0;
-    const spans = (t, offset) =>
-      t
+    const [cls, label] = final && !asserting
+      ? final.kind === "clarify"
+        ? ["v-ask", "Needs clarification"]
+        : final.from === "lead"
+          ? (VERDICT[final.verdict] ?? ["v-no", "No supported answer"])
+          : ["v-no", "No supported answer"]
+      : final?.kind === "partial"
+        ? (VERDICT[final.verdict] ?? ["v-warn", "Partial answer"])
+        : lead
+          ? verdictOf(lead.verdict)
+          : ["v-ask", "No supported answer"];
+    const text = final
+      ? asserting
+        ? final.admittedText
+        : `No supported answer. ${final.text ?? "The documents did not establish this."}`
+      : lead?.text ??
+        "No supported answer. These documents do not establish an answer.";
+    // The canonical final is the complete admitted wording. Never prepend an
+    // unadmitted lead opener to it.
+    const opener = final ? null : asserting ? (lead?.opener ?? null) : null;
+    const spans = (value) =>
+      String(value ?? "")
         .split(/(\s+)/)
-        .map((w, i) =>
-          w.trim()
-            ? `<span class="w" data-i="${wi++}" style="animation-delay:${reduced ? 0 : Math.min((i + offset) * 18, 1400)}ms">${esc(w)}</span>`
-            : w,
-        )
+        .map((w) => w.trim() ? `<span class="w">${esc(w)}</span>` : w)
         .join("");
     const openerHtml = opener
-      ? `<span class="a-opener">${spans(opener, 0)}</span> `
+      ? `<span class="a-opener">${spans(opener)}</span> `
       : "";
-    const words = spans(text, opener ? opener.split(/\s+/).length * 2 : 0);
-    const cites = lead?.citations?.length ? lead.citations : (r.evidence ?? []);
+    const words = spans(text);
+    // Admitted citations when there are any. An identity clarification
+    // still shows its context-only passages (labelled "not evidence for
+    // this answer"); passages admission withheld never render as cites.
+    const cites = final?.citations?.length
+      ? final.citations
+      : final
+        ? final.verdict === "AMBIGUOUS_PATIENT"
+          ? (r.evidence ?? []).filter((c) => c?.contextOnly)
+          : []
+        : (lead?.citations ?? []);
     $("#answer").innerHTML = `
       <p class="a-q"><span class="via">${via === "call" ? "Heard on the call" : via === "voice" ? "You said" : "You asked"}</span><q>${esc(question)}</q></p>
       <p class="a-lead"><span class="verdict-chip ${cls}">${esc(label)}</span>${openerHtml}${words}</p>
@@ -1115,7 +1140,7 @@
       <div class="a-visual" id="a-visual"></div>
       <div class="a-tools">
         ${
-          lead?.text && listenOn() && source !== "saved" && !cloudAnswer
+          lead?.text && (!final || final.admittedText === lead.text) && listenOn() && source !== "saved" && !cloudAnswer
             ? `<button class="tool listen" type="button" data-listen aria-pressed="false"><i class="eq" aria-hidden="true"><b></b><b></b><b></b></i><span>Listen</span></button>`
             : ""
         }
@@ -1137,7 +1162,7 @@
                       : "Computed live · same sentence a call would speak"
         }</span>
       </div>
-      ${r.final?.relatedEvidence?.length ? '<p class="a-understood">Related evidence, not an answer</p>' : ""}
+      ${related.length ? `<aside class="a-related" aria-label="Related evidence, not an answer"><b>Related evidence, not an answer</b>${related.map((c, i) => `<button type="button" class="related-source" data-related="${i}"><span>${esc(shortTitle(c.title ?? "Source"))}</span><q>${esc(prettyQuote(c.quote))}</q><small>Open related source — not proof of the answer</small></button>`).join("")}</aside>` : ""}
       <div class="cites">${cites
         .map((c, i) => {
           // Report status (preliminary / amended) is what a reader needs on a
@@ -1152,12 +1177,12 @@
             }</span>
             ${c.record ? `<span class="cite-owner">Record: ${esc(c.record.patientName ?? "Unidentified")} (${esc(c.record.patientId ?? "no verified ID")})</span>` : ""}
             ${c.contextOnly ? `<span class="cite-context">Context only - not evidence for this answer</span>` : ""}
-            <span class="cite-q" ${!lead && retrieved ? 'style="display:block"' : ""}>${
+            <span class="cite-q">${
               c.broadCitation
                 ? "Wider passage cited - it supports the source, not a pinpoint line."
                 : esc(
                     prettyQuote(
-                      !lead && i === 0 && retrieved ? retrieved : c.quote,
+                      c.quote,
                     ),
                   )
             }</span>
@@ -1165,9 +1190,14 @@
         })
         .join("")}</div>`;
     state.currentCites = cites;
+    state.currentRelated = related;
     state.currentCase = caseId;
     state.currentLang = r.semantic?.lang ?? state.lang;
-    if (r.visual)
+    // The visual must not assert a result when request admission withheld it.
+    if (
+      r.visual &&
+      (!final || asserting || final.verdict === "AMBIGUOUS_PATIENT")
+    )
       loadVisual().then(() => {
         if (state.current?._src !== r || !$("#a-visual") || !window.VMVisual)
           return;
@@ -1259,7 +1289,9 @@
     const c = r.wholeQuestion ?? r.final?.coverage;
     if (!c || c.state === "not_applicable") return "";
     const outcomes = r.requirementCoverage?.outcomes ?? [];
-    const named = outcomes.filter((o) => typeof o.text === "string" && o.text.trim());
+    const named = outcomes.filter(
+      (o) => typeof o.text === "string" && o.text.trim(),
+    );
     const delay = (i) => (reduced ? 0 : 120 + i * 110);
     if (c.state === "unverified")
       return `<details class="cov cov-unverified">
@@ -1270,22 +1302,41 @@
       </details>`;
     const answered = named.filter((o) => o.status === "answered").length;
     const total = named.length;
-    const title = c.state === "established"
-      ? total > 1 ? `All ${total} parts answered from the source` : "Answered from the source"
-      : total
-        ? `${answered} of ${total} parts answered`
-        : "Not every requested part was established";
-    const label = { answered: "Answered", not_established: "Not in these documents", clarify: "Readings disagreed" };
+    const title =
+      c.state === "established"
+        ? total > 1
+          ? `All ${total} parts answered from the source`
+          : "Answered from the source"
+        : total
+          ? `${answered} of ${total} parts answered`
+          : "Not every requested part was established";
+    const label = {
+      answered: "Answered",
+      not_established: "Not in these documents",
+      clarify: "Readings disagreed",
+    };
     return `<div class="cov cov-${esc(c.state)}" role="group" aria-label="${esc(title)}">
       <div class="cov-head"><span class="cov-meter" aria-hidden="true">${named
-        .map((o, i) => `<i class="cov-seg cov-seg-${esc(o.status)}" style="animation-delay:${delay(i)}ms"></i>`)
+        .map(
+          (o, i) =>
+            `<i class="cov-seg cov-seg-${esc(o.status)}" style="animation-delay:${delay(i)}ms"></i>`,
+        )
         .join("")}</span><span class="cov-title">${esc(title)}</span></div>
-      ${total ? `<ol class="cov-parts">${named
-        .map((o, i) => `<li class="cov-part cov-part-${esc(o.status)}" style="animation-delay:${delay(i) + 80}ms">
+      ${
+        total
+          ? `<ol class="cov-parts">${named
+              .map(
+                (
+                  o,
+                  i,
+                ) => `<li class="cov-part cov-part-${esc(o.status)}" style="animation-delay:${delay(i) + 80}ms">
           <span class="cov-dot" aria-hidden="true"></span>
           <q>${esc(o.text.trim().replace(/[,;:]$/, ""))}</q>
-          <span class="cov-status">${esc(label[o.status] ?? o.status)}</span></li>`)
-        .join("")}</ol>` : ""}
+          <span class="cov-status">${esc(label[o.status] ?? o.status)}</span></li>`,
+              )
+              .join("")}</ol>`
+          : ""
+      }
     </div>`;
   }
 
@@ -2354,12 +2405,13 @@
           if (caseId !== state.case) setCase(caseId, { quiet: true });
           state.askSeq++; // supersede any typed answer still arriving
           renderAnswer(
-            { lead: t.lead, evidence: [] },
+            { lead: t.lead, final: t.contract ?? null, evidence: [] },
             { via: "call", source: "live", question: t.question, caseId },
           );
           // One truthful state per answered turn, no timers.
           const asks =
-            !(t.lead?.citations?.length > 0) && /\?\s*$/.test(t.lead?.text ?? "");
+            !(t.lead?.citations?.length > 0) &&
+            /\?\s*$/.test(t.lead?.text ?? "");
           callState(
             asks
               ? "<b>Need one detail.</b> Answer the question, or ask something else."
@@ -2537,7 +2589,7 @@
   // ------------------------------------------------------------ wiring
   document.addEventListener("click", (e) => {
     const t = e.target.closest(
-      "[data-q],[data-ask],[data-cite],[data-closest],.tm-tabs [data-plug],[data-doc],[data-files],[data-listen],[data-start-call],[data-lang],[data-jump],[data-switch-case],.case-tab",
+      "[data-q],[data-ask],[data-cite],[data-related],[data-closest],.tm-tabs [data-plug],[data-doc],[data-files],[data-listen],[data-start-call],[data-lang],[data-jump],[data-switch-case],.case-tab",
     );
     if (!t) return;
     if (t.matches(".case-tab")) return setCase(t.dataset.case);
@@ -2559,6 +2611,11 @@
     if (t.matches("[data-q]"))
       return ask(t.dataset.q, { caseId: t.dataset.case || state.case });
     if (t.matches("[data-cite]")) return openCitation(Number(t.dataset.cite));
+    if (t.matches("[data-related]")) {
+      const c = state.currentRelated?.[Number(t.dataset.related)];
+      if (c?.title && c?.quote) return openDoc(c.title, [c], c);
+      return;
+    }
     if (t.matches(".tm-tabs [data-plug]")) {
       $$(".tm-tabs [data-plug]").forEach((b) =>
         b.setAttribute("aria-selected", String(b === t)),

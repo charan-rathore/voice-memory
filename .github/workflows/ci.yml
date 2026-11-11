@@ -12,9 +12,14 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Confirm checkout equals exact PR head
+        if: github.event_name == 'pull_request'
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -29,6 +34,19 @@ jobs:
       - run: npm run test:ingest
       - run: npm run test:clinical
       - run: npm run test:vault
+      - name: Browser regression suite (four viewports, real source links)
+        run: npm run test:browser
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          VM_SHOTS_DIR: .shots
+      - name: Graph regression suite
+        run: npm run test:graph
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: Call UI and scope regression suite
+        run: npm run test:call-ui
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
       - name: Bring-your-own documents flow in a real browser
         run: node tests/site-check.mjs
         env:
@@ -41,9 +59,27 @@ jobs:
         run: node scripts/site-shots.mjs .shots
         env:
           CHROME_PATH: /usr/bin/google-chrome
+      - name: Before and after PR B comparison (1280 and 390 px)
+        run: |
+          git fetch --depth=1 origin a94c7c92feda8863d48a46d5f7287a781fd80186
+          git worktree add --detach "$RUNNER_TEMP/pr-b-before" a94c7c92feda8863d48a46d5f7287a781fd80186
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/pr-b-before/node_modules"
+          npm run build --prefix "$RUNNER_TEMP/pr-b-before"
+          node scripts/pr-b-compare-shots.mjs .shots/pr-b/before "$RUNNER_TEMP/pr-b-before"
+          node scripts/pr-b-compare-shots.mjs .shots/pr-b/after "$GITHUB_WORKSPACE"
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr-b-before-after-screenshots
+          path: .shots/pr-b
+          retention-days: 14
+          include-hidden-files: true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: landing-screenshots
           path: .shots
           retention-days: 7
+          include-hidden-files: true

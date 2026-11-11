@@ -1,7 +1,11 @@
 import { chromium } from "playwright";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
+const shotsDir =
+  process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-shots");
 const port = 4879;
 const env = {
   ...process.env,
@@ -79,6 +83,31 @@ try {
   assert.match(answer, /TV-P2002/);
   const blocks = await page.locator("#answer .cite-context").count();
   assert.ok(blocks >= 2);
+  // The patient chooser is operable and readable on the dark report surface:
+  // unselected tabs must keep AA contrast (selection is the pill, not dimming).
+  const ratio = await page.evaluate(() => {
+    const tab = document.querySelector("#answer .rp-subj");
+    const surf = tab?.closest(".vz-report, .stage");
+    if (!tab || !surf) return null;
+    const lum = (rgb) => {
+      const [r, g, b] = rgb
+        .match(/[\d.]+/g)
+        .slice(0, 3)
+        .map(Number)
+        .map((v) => {
+          const c = v / 255;
+          return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const L1 = lum(getComputedStyle(tab).color);
+    const L2 = lum(getComputedStyle(surf).backgroundColor);
+    return (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+  });
+  assert.ok(
+    ratio && ratio >= 4.5,
+    `unselected patient tab contrast ${ratio} < 4.5:1`,
+  );
   assert.equal(
     await page.locator("#answer .rp-who [aria-selected=true]").count(),
     0,
@@ -87,14 +116,14 @@ try {
     await page.locator("#answer .rp-detail, #answer .rp-timeline").count(),
     0,
   );
-  await mkdir("/downloads", { recursive: true });
+  await mkdir(shotsDir, { recursive: true });
   await page
     .locator("#answer")
-    .screenshot({ path: "/downloads/r6-evidence-context-desktop.png" });
+    .screenshot({ path: join(shotsDir, "r6-evidence-context-desktop.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .locator("#answer")
-    .screenshot({ path: "/downloads/r6-evidence-context-mobile.png" });
+    .screenshot({ path: join(shotsDir, "r6-evidence-context-mobile.png") });
 
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page
@@ -137,11 +166,11 @@ try {
   assert.doesNotMatch(await page.locator("#answer .vz").innerText(), /40 ng/);
   await page
     .locator("#answer")
-    .screenshot({ path: "/downloads/r6-evidence-selected-desktop.png" });
+    .screenshot({ path: join(shotsDir, "r6-evidence-selected-desktop.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .locator("#answer")
-    .screenshot({ path: "/downloads/r6-evidence-selected-mobile.png" });
+    .screenshot({ path: join(shotsDir, "r6-evidence-selected-mobile.png") });
   // A production-extracted 60-character ID, selected by an actual tab click.
   const lp = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await lp.goto(`http://127.0.0.1:${port}`);
@@ -182,7 +211,7 @@ try {
   );
   await lp
     .locator("#answer")
-    .screenshot({ path: "/downloads/r6-long-id-mobile.png" });
+    .screenshot({ path: join(shotsDir, "r6-long-id-mobile.png") });
   console.log(
     "PASS actual long patient ID survives upload, tab selection, separate API field, answer and source",
   );

@@ -115,14 +115,20 @@ try {
   const leadText = await lead.innerText();
   if (!leadText.includes("not established an answer"))
     fail(`unadmitted evidence was promoted: ${leadText.slice(0, 200)}`);
-  await page
-    .locator("#answer .a-understood", {
-      hasText: "Related evidence, not an answer",
-    })
-    .waitFor();
-  const related = await page.locator("#answer .cites").innerText();
+  // PR A's canonical final never promotes relevant-but-unadmitted passages
+  // into admitted citation buttons. Keep BOTH numbers visible as related only.
+  await page.locator("#answer .a-related").waitFor();
+  if (await page.locator("#answer .cites .cite").count())
+    fail("an unadmitted passage was displayed as a verified citation");
+  const related = await page.locator("#answer .a-related").innerText();
   if (!related.includes("27 March 2027") || !related.includes("18,000"))
     fail(`related source evidence incomplete: ${related.slice(0, 200)}`);
+  await page
+    .locator("#answer .a-related .related-source", {
+      hasText: "27 March 2027",
+    })
+    .first()
+    .click();
   // The viewer must mark only the focused line(s), not the whole document.
   // A PDF with a text layer opens as its rendered page with a box over the
   // cited line; a text document opens as text with <mark>. Either way the
@@ -143,7 +149,10 @@ try {
   } else if (boxes > 2) fail(`whole-page highlight: ${boxes} boxes`);
   else {
     // the boxed line is the cited one: the first citation names the deadline
-    const cite = await page.locator(".cite .cite-q").first().innerText();
+    const cite = await page
+      .locator(".a-related .related-source", { hasText: "27 March 2027" })
+      .first()
+      .innerText();
     if (!cite.includes("27 March 2027"))
       fail(
         `the boxed citation is not the deadline line: ${cite.slice(0, 200)}`,
@@ -228,7 +237,9 @@ try {
   const lead3Text = await lead3.innerText();
   if (!lead3Text.includes("not established an answer"))
     fail(`cold-boot promoted evidence: ${lead3Text.slice(0, 200)}`);
-  const related3 = await page3.locator("#answer .cites").innerText();
+  if (await page3.locator("#answer .cites .cite").count())
+    fail("cold boot promoted unadmitted evidence to a citation");
+  const related3 = await page3.locator("#answer .a-related").innerText();
   if (!related3.includes("27 March 2027") || !related3.includes("18,000"))
     fail(`cold-boot related evidence incomplete: ${related3.slice(0, 200)}`);
   // Path D: voice gate off (the harness never configures voice) - no call

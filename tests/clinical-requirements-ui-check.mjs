@@ -1,8 +1,12 @@
 // Local assertion-only fixture. No actual provider, secret or paid voice.
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
+const shotsDir =
+  process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-shots");
 const dev = spawn("node", ["scripts/site-dev.mjs"], {
   stdio: "ignore",
   env: {
@@ -54,7 +58,7 @@ try {
       true,
     );
   };
-  mkdirSync("/downloads", { recursive: true });
+  mkdirSync(shotsDir, { recursive: true });
   await ask("What are SYN-0001's ferritin and sodium results?");
   const answer = page.locator("#answer");
   assert.equal(
@@ -64,7 +68,10 @@ try {
   assert.match(await answer.innerText(), /50 ng\/mL/);
   assert.match(await answer.innerText(), /sodium: I could not establish/);
   await answer.screenshot({
-    path: "/downloads/voice-memory-clinical-requirements-partial-mobile.png",
+    path: join(
+      shotsDir,
+      "voice-memory-clinical-requirements-partial-mobile.png",
+    ),
   });
   await ask("What are SYN-0001's ferritin and TSH results?");
   assert.equal(
@@ -74,7 +81,10 @@ try {
   assert.match(await answer.innerText(), /50 ng\/mL/);
   assert.match(await answer.innerText(), /0\.30 mIU\/L/);
   await answer.screenshot({
-    path: "/downloads/voice-memory-clinical-requirements-complete-mobile.png",
+    path: join(
+      shotsDir,
+      "voice-memory-clinical-requirements-complete-mobile.png",
+    ),
   });
   await ask("What is SYN-0001's ferritin result and who approved treatment?");
   assert.equal(
@@ -87,7 +97,7 @@ try {
     /who approved treatment\? I have not established/,
   );
   await answer.screenshot({
-    path: "/downloads/voice-memory-clinical-unresolved-tail-mobile.png",
+    path: join(shotsDir, "voice-memory-clinical-unresolved-tail-mobile.png"),
   });
   await ask("What is ferritin for SYN-0001 and SYN-0003?");
   assert.equal(
@@ -99,7 +109,7 @@ try {
     /SYN-0003.*could not establish/s,
   );
   await page.locator("#answer").screenshot({
-    path: "/downloads/voice-memory-multi-owner-partial-mobile.png",
+    path: join(shotsDir, "voice-memory-multi-owner-partial-mobile.png"),
   });
   await ask("What is TSH for SYN-0001 and SYN-0003?");
   assert.match(await page.locator("#answer").innerText(), /0.30/);
@@ -116,7 +126,7 @@ try {
     2,
   );
   await answer.screenshot({
-    path: "/downloads/voice-memory-owner-test-matrix-mobile.png",
+    path: join(shotsDir, "voice-memory-owner-test-matrix-mobile.png"),
   });
   await ask("What is TSH for SYN-0001 and SYN-0003 yesterday?");
   assert.equal(
@@ -124,7 +134,7 @@ try {
     "Answer not established",
   );
   await answer.screenshot({
-    path: "/downloads/voice-memory-owner-test-constraint-mobile.png",
+    path: join(shotsDir, "voice-memory-owner-test-constraint-mobile.png"),
   });
   console.log(
     "PASS explicit single-ID multi-test coverage; positive Ferritin/TSH, missing Sodium partial;320px screenshots. No providers.",

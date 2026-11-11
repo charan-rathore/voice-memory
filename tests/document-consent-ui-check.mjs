@@ -1,10 +1,13 @@
 // Actual browser + local server, with a fake document model. No external
+import { tmpdir } from "node:os";
 // provider, secret, paid speech or network inference is used.
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
-import { extname } from "node:path";
+import { extname, join } from "node:path";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
+const shotsDir =
+  process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-shots");
 const names = [
   "VM_DOCUMENT_REASONING",
   "VM_GEMINI",
@@ -233,13 +236,13 @@ try {
     /OpenRouter/,
   );
   await page.locator("#document-consent").scrollIntoViewIfNeeded();
-  await mkdir("/downloads", { recursive: true });
+  await mkdir(shotsDir, { recursive: true });
   await page.screenshot({
-    path: "/downloads/voice-memory-document-consent-mobile.png",
+    path: join(shotsDir, "voice-memory-document-consent-mobile.png"),
     fullPage: false,
   });
   await page.locator("#document-consent").screenshot({
-    path: "/downloads/voice-memory-document-consent-mobile-card.png",
+    path: join(shotsDir, "voice-memory-document-consent-mobile-card.png"),
   });
   const box = await page.locator("#document-consent").boundingBox();
   assert.ok(box.x >= 0 && box.x + box.width <= 321);
@@ -266,9 +269,9 @@ try {
         .map((a) => a.finished.catch(() => {})),
     );
   });
-  await page
-    .locator("#answer")
-    .screenshot({ path: "/downloads/voice-memory-opaque-question-mobile.png" });
+  await page.locator("#answer").screenshot({
+    path: join(shotsDir, "voice-memory-opaque-question-mobile.png"),
+  });
   await input.uncheck();
   await ask("Which retention window is in the policy?");
   assert.equal(requests.at(-1).semantic, false);
@@ -347,7 +350,7 @@ try {
     );
   });
   await answer.screenshot({
-    path: "/downloads/voice-memory-partial-document-mobile.png",
+    path: join(shotsDir, "voice-memory-partial-document-mobile.png"),
   });
   rejectedAudit = true;
   await ask("What is the retention window, and was the policy approved?");
@@ -369,7 +372,7 @@ try {
     );
   });
   await answer.screenshot({
-    path: "/downloads/voice-memory-rejected-cloud-footer-mobile.png",
+    path: join(shotsDir, "voice-memory-rejected-cloud-footer-mobile.png"),
   });
   console.log(
     "PASS rejected cloud audit is not labeled computed or source-verified; mobile screenshot captured.",
