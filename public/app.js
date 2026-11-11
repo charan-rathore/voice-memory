@@ -50,7 +50,7 @@ async function renderVoiceTurn(final = false) {
     $("voice-turn").hidden = false;
     $("voice-turn").textContent = `${
       final ? "Final verified turn of the last call" : "Last verified turn"
-    } (${st.verdict}, ${when}): ${st.spoken}`;
+    } (${st.verdict}, ${when}): ${st.spoken}${r.turn?.corpus?.version ? ` [Indexed document set ${r.turn.corpus.version.slice(0, 12)}]` : ""}`;
     $("voice-turn-evidence").replaceChildren(
       ...(st.citations ?? []).map((c) => {
         const d = document.createElement("details"),

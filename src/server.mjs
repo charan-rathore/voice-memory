@@ -1,3 +1,4 @@
+import { corpusVersion } from "./corpus-version.mjs";
 import { finalAnswer } from "./answer-contract.mjs";
 import {
   clinicalListPlan,
@@ -785,6 +786,8 @@ export function createLocalServer({
       publicTurns.push({
         at: Date.now(),
         question: t.question,
+        corpus: t.corpus ?? null,
+        versionNotice: t.versionNotice ?? false,
         lead,
         call: t.call ?? null,
         case: t.caseId ?? "demo",
@@ -2937,6 +2940,17 @@ export function createLocalServer({
       return {
         ready: !!ws.bundle && committed.size > 0,
         bundleGeneration: ws.bundleGeneration ?? 0,
+        corpus: ws.bundle
+          ? {
+              version: corpusVersion(ws.bundle),
+              sources: ws.bundle.sources.map((src) => ({
+                sourceId: src.id,
+                hash: src.hash,
+                title: src.title,
+                documentId: ws.sourceToEntry?.get(src.id)?.id ?? null,
+              })),
+            }
+          : null,
         documents: libraryOf(ws).map((e) => ({
           ...publicEntry(e),
           answerable: !!ws.bundle && committed.has(e),
@@ -4066,6 +4080,13 @@ export function createLocalServer({
         out = cached.shown;
         if (out.lead) s.lastField = out.lead.field ?? s.lastField ?? null;
         out.cache = cache;
+        out.corpus = {
+          version: corpusVersion(bundle),
+          changedSinceLastAnswer:
+            !!s.lastCorpusVersion &&
+            s.lastCorpusVersion !== corpusVersion(bundle),
+        };
+        s.lastCorpusVersion = out.corpus.version;
         // Episodic memory: interaction only, exact spans, never authority.
         out.episode = recordTurn(s.memory, {
           question: data.question,
@@ -4073,6 +4094,7 @@ export function createLocalServer({
           result: out,
           channel: data.channel === "note" ? "note" : "typed",
           scope: bundle.scope,
+          corpus: out.corpus,
         }).id;
         schedulePersist(s);
       } else if (req.url === "/api/memory/forget") {

@@ -1,3 +1,4 @@
+import { corpusVersion } from "./corpus-version.mjs";
 import { identityReportsFor } from "../clinical/answer.mjs";
 // Public, key-free API for the landing page. Visitors ask questions about
 // built-in fictional cases (synthetic lab reports for SYN-0001, and the
@@ -707,16 +708,39 @@ export function createPublicApi({
           });
           return true;
         }
+        const answeringBundle = s.bundle;
         const shown = await resolve(s, q, ctx, {
           // A visitor's own passages reach the model only on their say-so.
           consent: data.semantic === true,
           ip,
           patient,
         });
+        const sourceMoved = s.bundle !== answeringBundle;
+        // Keep the engine's existing fact-free stale-scope refusal intact.
+        // A resolver that still offers facts after a swap is rejected here.
+        const alreadyRefusedStale =
+          shown.admission?.reason === "stale_or_wrong_request" &&
+          shown.admission?.userReady === false &&
+          !shown.evidence?.length &&
+          !shown.lead?.citations?.length &&
+          !shown.visual &&
+          !shown.closest &&
+          !shown.also?.length;
+        if (sourceMoved && !alreadyRefusedStale) {
+          send(res, 409, {
+            error: "Documents changed while answering; ask again.",
+          });
+          return true;
+        }
         send(
           res,
           200,
-          publicAnswer(shown),
+          publicAnswer({
+            ...shown,
+            corpus: sourceMoved
+              ? null
+              : { version: corpusVersion(answeringBundle) },
+          }),
           cacheable
             ? {
                 "Cache-Control": "public, max-age=300",
@@ -1402,6 +1426,8 @@ export function createPublicApi({
 export function publicAnswer(shown) {
   const final = finalAnswer(shown);
   const cite = (c) => ({
+    sourceId: c.sourceId ?? null,
+    hash: c.hash ?? null,
     documentId: c.documentId ?? null,
     title: c.title ?? c.sourceTitle ?? null,
     quote: c.quote ?? null,
@@ -1421,6 +1447,7 @@ export function publicAnswer(shown) {
       : null,
   });
   return {
+    corpus: shown.corpus ?? null,
     question: shown.question,
     questionPlan: shown.questionPlan ?? null,
     admission: shown.admission ?? null,
