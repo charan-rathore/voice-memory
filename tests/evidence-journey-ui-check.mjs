@@ -303,7 +303,11 @@ try {
       .getByRole("button", { name: "Open page to review" })
       .click();
     const jump = await page.evaluate(() => window.__journeyNav);
-    if (!jump || jump.title !== uploaded.title || (await page.evaluate(() => window.__journeyNavPage)) !== 2)
+    if (
+      !jump ||
+      jump.title !== uploaded.title ||
+      (await page.evaluate(() => window.__journeyNavPage)) !== 2
+    )
       fail(
         width + ": OCR warning did not open the correct synthetic page source",
       );
