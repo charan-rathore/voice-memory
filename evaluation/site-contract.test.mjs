@@ -238,7 +238,14 @@ test("first load stays inside its weight budget (3D graph, call library and film
   // (server-recorded coverage on every answer card) plus rejection-aware
   // upload states that stop cold-start retries on quota/request rejections.
   // Measured combined head: 530,136 bytes.
-  assert.ok(bytes < 531_000, `first load is ${bytes} bytes`);
+  // 531 KB -> 535 KB (2026-11-11): the owner rejected the d006abe
+  // event-state palette and asked for the previous evidence-desk design
+  // back. Restoring it brings back the larger pre-restyle stylesheet
+  // (+~7.1 KB of css, incl. the ported related-evidence rules and their
+  // dark-surface contrast fix); the citation/answer-visibility fixes
+  // since are kept. No new lazy weight.
+  // Measured combined head: 534,140 bytes.
+  assert.ok(bytes < 535_000, `first load is ${bytes} bytes`);
 });
 
 test("the motion bundle is built from the committed sources", async () => {
