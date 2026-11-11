@@ -163,6 +163,52 @@ try {
   const related = await page.locator("#answer .a-related").innerText();
   if (!related.includes("27 March 2027") || !related.includes("18,000"))
     fail(`related source evidence incomplete: ${related.slice(0, 200)}`);
+  // The related-evidence card must stay AA-readable on the desk palette
+  // (regression: a light card here renders the desk's pale ink on near-white).
+  const relContrast = await page.evaluate(() => {
+    const card = document.querySelector("#answer .a-related .related-source");
+    const q = card?.querySelector("q");
+    const small = card?.querySelector("small");
+    if (!card || !q || !small) return null;
+    const lum = (rgb) => {
+      const [r, g, b] = rgb
+        .match(/[\d.]+/g)
+        .slice(0, 3)
+        .map(Number)
+        .map((v) => {
+          const c = v / 255;
+          return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const alpha = (c) => {
+      const m = c.match(/rgba\((?:[^,]+,){3}\s*([\d.]+)\s*\)/);
+      return m ? Number(m[1]) : c === "transparent" ? 0 : 1;
+    };
+    let surf = card;
+    let bg = getComputedStyle(surf).backgroundColor;
+    while (surf && surf !== document.documentElement && alpha(bg) < 0.99) {
+      surf = surf.parentElement;
+      bg = getComputedStyle(surf).backgroundColor;
+    }
+    const ratio = (fg) => {
+      const a = lum(fg);
+      const b = lum(bg);
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    };
+    return {
+      quote: ratio(getComputedStyle(q).color),
+      note: ratio(getComputedStyle(small).color),
+      title: ratio(getComputedStyle(card).color),
+      bg,
+    };
+  });
+  if (!relContrast) fail("related-evidence card not found for contrast check");
+  for (const [part, r] of Object.entries(relContrast))
+    if (part !== "bg" && r < 4.5)
+      fail(
+        `related-evidence ${part} contrast ${r} < 4.5:1 on ${relContrast.bg}`,
+      );
   await page
     .locator("#answer .a-related .related-source", {
       hasText: "27 March 2027",
