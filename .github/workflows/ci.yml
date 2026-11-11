@@ -41,6 +41,8 @@ jobs:
           VM_SHOTS_DIR: .shots
       - name: Graph regression suite
         run: npm run test:graph
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
       - name: Call UI and scope regression suite
         run: npm run test:call-ui
         env:
