@@ -80,6 +80,8 @@ export function docLabelOf(src) {
     .replace(/^\d+[_\s-]*/, "")
     .replace(/[_-]+/g, " ")
     .replace(/\bv\d+\b/gi, "")
+    // Never let a title carry ":" - "per <label>:" splits on the first colon.
+    .replace(/:/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim()
     .toLowerCase();

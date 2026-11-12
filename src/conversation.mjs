@@ -434,7 +434,7 @@ const HI = [
     /^(.+) is the only record, and it is not approved\.$/,
     "$1 ही एकमात्र रिकॉर्ड है, और यह मंज़ूर नहीं हुआ है।",
   ],
-  [/^(.+) is approved, per (.+)\.$/, "$1 मंज़ूर है, $2 के अनुसार।"],
+  [/^(.+) is approved, per (.+)\.$/, "$1 मंज़ूर है (स्रोत: $2)।"],
   [/^(.+) is approved\.$/, "$1 मंज़ूर है।"],
   [
     /^Yes, the earlier record was (.+)\. It was superseded by (.+), which is still not approved\.$/,
@@ -474,9 +474,15 @@ const HI = [
     /^I could not find supporting evidence in these documents\.$/,
     "मुझे इन दस्तावेज़ों में इसका कोई सबूत नहीं मिला।",
   ],
-  [/^No\. Per (.+?): (.+)$/, "नहीं। $1 के अनुसार: $2"],
-  [/^Yes\. (.+) records the approval(.*)\.$/, "हाँ। $1 में मंज़ूरी दर्ज है$2।"],
-  [/^Still open, per (.+?): (.+)$/, "अभी खुले मुद्दे, $1 के अनुसार: $2"],
+  [/^No\. Per (.+?): (.+)$/, "नहीं। $2 (स्रोत: $1)।"],
+  // An approving document's label is a citation, never Hindi sentence
+  // grammar: values stay verbatim, the source trails as स्रोत.
+  [
+    /^Yes\. (.+) records the approval of (.+)\.$/,
+    "हाँ। $2 की मंज़ूरी दर्ज है (स्रोत: $1)।",
+  ],
+  [/^Yes\. (.+) records the approval\.$/, "हाँ। मंज़ूरी दर्ज है (स्रोत: $1)।"],
+  [/^Still open, per (.+?): (.+)$/, "अभी खुले मुद्दे: $2 (स्रोत: $1)"],
 ];
 /**
  * Hindi for an English template answer; record quotes stay verbatim. Falls

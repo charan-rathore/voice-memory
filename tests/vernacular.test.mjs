@@ -145,17 +145,72 @@ test("Hinglish rendering is romanised and keeps values verbatim", () => {
     toHinglish(
       "No. Per the internal action log from October 9: no signed commercial agreement exists for the revised terms.",
     ),
-    "Nahi. the internal action log from October 9 ke hisaab se: no signed commercial agreement exists for the revised terms.",
+    "Nahi. no signed commercial agreement exists for the revised terms. (source: the internal action log from October 9).",
   );
   assert.doesNotMatch(
     toHinglish("That is still open: 40/60 versus 50/50 are both on record."),
     /[ऀ-ॿ]/,
   );
   // "No. Per ..." is one template, not two sentences, in Hindi too
-  assert.match(
+  assert.equal(
     toHindi("No. Per the action log: nothing signed."),
-    /^नहीं। the action log के अनुसार/,
+    "नहीं। nothing signed. (स्रोत: the action log)।",
   );
+});
+
+test("Hindi/Hinglish answers cite the source, never splice it into the sentence", () => {
+  // REVIEW-2026-11-11 P0: "The finance approval from November 2 मंज़ूरी दर्ज
+  // है of $42,000" - an English record label spliced into Hindi grammar.
+  // Source labels are citations and trail; values/record text stay verbatim.
+  assert.equal(
+    toHindi(
+      "Yes. The finance approval from November 2 records the approval of $42,000.",
+    ),
+    "हाँ। $42,000 की मंज़ूरी दर्ज है (स्रोत: The finance approval from November 2)।",
+  );
+  assert.equal(
+    toHindi("Yes. The finance approval records the approval."),
+    "हाँ। मंज़ूरी दर्ज है (स्रोत: The finance approval)।",
+  );
+  assert.equal(
+    toHindi("$42,000 is approved, per the commercial revision memo."),
+    "$42,000 मंज़ूर है (स्रोत: the commercial revision memo)।",
+  );
+  assert.equal(
+    toHindi(
+      "Still open, per the internal action log from October 9: final payment schedule; and pilot deadline.",
+    ),
+    "अभी खुले मुद्दे: final payment schedule; and pilot deadline. (स्रोत: the internal action log from October 9)",
+  );
+  // a joined answer translates sentence by sentence without splicing
+  assert.equal(
+    toHindi(
+      "Yes. The finance approval from November 2 records the approval of $42,000. Approved internally; the client has not accepted; no signed agreement is on record.",
+    ),
+    "हाँ। $42,000 की मंज़ूरी दर्ज है (स्रोत: The finance approval from November 2)। रिकॉर्ड में लिखा है: Approved internally; the client has not accepted; no signed agreement is on record.",
+  );
+  assert.equal(
+    toHinglish(
+      "Yes. The finance approval from November 2 records the approval of $42,000.",
+    ),
+    "Haan. $42,000 ki manzoori darj hai (source: The finance approval from November 2).",
+  );
+  assert.equal(
+    toHinglish(
+      "Still open, per the internal action log from October 9: final payment schedule; and pilot deadline.",
+    ),
+    "Abhi open: final payment schedule; and pilot deadline. (source: the internal action log from October 9)",
+  );
+  // no English grammatical argument left inside a Hindi clause
+  for (const s of [
+    toHindi(
+      "Yes. The finance approval from November 2 records the approval of $42,000.",
+    ),
+    toHindi("$42,000 is approved, per the commercial revision memo."),
+  ]) {
+    assert.doesNotMatch(s, /[a-z][a-z ]+ में मंज़ूरी/);
+    assert.doesNotMatch(s, /[a-z][a-z ]+ के अनुसार/);
+  }
 });
 
 test("Hindi deal questions with spoken amounts map to the engine's question", () => {
@@ -196,4 +251,30 @@ test("cross-lingual bridge adds English search terms only for Hindi domain words
     "signed signature",
   );
   assert.equal(bridgeToEnglish("What is the engagement fee?"), "");
+});
+
+test("source labels can never carry the citation delimiter", async () => {
+  // The Hindi/Hinglish templates split "Per <label>: <record>" on the first
+  // colon, so a label must never contain one: both label builders strip it.
+  const { docLabel } = await import("../src/spoken.mjs");
+  const { docLabelOf } = await import("../src/spoken-routes.mjs");
+  const fromClaim = docLabel({
+    title: "Memo: Commercial Revision.md",
+    docDate: "2026-03-04",
+  });
+  const fromSrc = docLabelOf({
+    title: "Memo: Commercial Revision.md",
+    text: "Date: 2026-03-04",
+  });
+  assert.doesNotMatch(fromClaim, /:/);
+  assert.doesNotMatch(fromSrc, /:/);
+  // A label that once carried a colon still cites intact end to end.
+  assert.equal(
+    toHindi(`No. Per ${fromSrc}: no signed agreement exists.`),
+    `नहीं। no signed agreement exists. (स्रोत: ${fromSrc})।`,
+  );
+  assert.equal(
+    toHinglish(`Still open, per ${fromSrc}: final payment schedule.`),
+    `Abhi open: final payment schedule. (source: ${fromSrc})`,
+  );
 });
