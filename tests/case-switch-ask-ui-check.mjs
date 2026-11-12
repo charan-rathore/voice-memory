@@ -185,10 +185,13 @@ try {
           requestAnimationFrame(() => requestAnimationFrame(r)),
         ),
     );
+    // The in-flight lock is the ask key, not a disabled button (an ask may
+    // supersede one in flight; the old result is dropped as stale). The old
+    // fallback settling must not steal the newer ask's lock.
     assert.equal(
-      await page.locator(".ask-go").isEnabled(),
-      false,
-      "old fallback cannot unlock newer pending ask",
+      await page.locator(".ask-go").getAttribute("data-k"),
+      "deal|Unique new question?",
+      "old fallback cannot steal the newer pending ask's lock",
     );
     assert.doesNotMatch(
       await page.locator("#answer").innerText(),
