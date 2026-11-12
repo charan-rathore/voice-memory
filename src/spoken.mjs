@@ -153,12 +153,14 @@ function speakDate(iso) {
   return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}`;
 }
 // "03_Commercial_Revision.md" -> "the commercial revision memo"
-function docLabel(claim) {
+export function docLabel(claim) {
   const base = (claim.title || "")
     .replace(/\.md$/i, "")
     .replace(/^\d+_/, "")
     .replace(/_/g, " ")
     .replace(/\bv\d+\b/g, "")
+    // Never let a title carry ":" - "Per <label>:" splits on the first colon.
+    .replace(/:/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim()
     .toLowerCase();

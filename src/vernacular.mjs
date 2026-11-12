@@ -474,7 +474,7 @@ const HL = [
     /^(.+) is the only record, and it is not approved\.$/,
     "$1 hi akela record hai, aur yeh manzoor nahi hua hai.",
   ],
-  [/^(.+) is approved, per (.+)\.$/, "$1 manzoor hai, $2 ke hisaab se."],
+  [/^(.+) is approved, per (.+)\.$/, "$1 manzoor hai (source: $2)."],
   [/^(.+) is approved\.$/, "$1 manzoor hai."],
   [
     /^Yes, the earlier record was (.+)\. It was superseded by (.+), which is still not approved\.$/,
@@ -497,12 +497,18 @@ const HL = [
     /^I could not find supporting evidence in these documents\.$/,
     "Mujhe in documents mein iska koi saboot nahi mila.",
   ],
-  [/^No\. Per (.+?): (.+)$/, "Nahi. $1 ke hisaab se: $2"],
+  [/^No\. Per (.+?): (.+)$/, "Nahi. $2 (source: $1)."],
+  // An approving document's label is a citation, never sentence grammar:
+  // values stay verbatim, the source trails as "source:".
   [
-    /^Yes\. (.+) records the approval(.*)\.$/,
-    "Haan. $1 mein manzoori darj hai$2.",
+    /^Yes\. (.+) records the approval of (.+)\.$/,
+    "Haan. $2 ki manzoori darj hai (source: $1).",
   ],
-  [/^Still open, per (.+?): (.+)$/, "Abhi open hai, $1 ke hisaab se: $2"],
+  [
+    /^Yes\. (.+) records the approval\.$/,
+    "Haan. Manzoori darj hai (source: $1).",
+  ],
+  [/^Still open, per (.+?): (.+)$/, "Abhi open: $2 (source: $1)"],
   [
     /^These documents don't record an invoice\.$/,
     "In documents mein koi invoice darj nahi hai.",
