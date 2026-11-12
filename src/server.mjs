@@ -24,6 +24,7 @@ import {
 import { labDigest } from "../clinical/answer.mjs";
 import { unboundOwnerTurn } from "./requested-owner.mjs";
 import http from "node:http";
+import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import { createCallCounters } from "./public-call-counters.mjs";
 import { selectCallCounters } from "./public-call-counters-upstash.mjs";
@@ -151,6 +152,27 @@ const evidenceWithinOwner = (bundle, owner, ev) => {
 import { readdirSync } from "node:fs";
 import { NORTHSTAR_DOCS } from "../examples/corpus-northstar.mjs";
 import { createPublicApi, publicAnswer, clientAddress } from "./public-api.mjs";
+import { createCallerApi } from "./caller-api.mjs";
+import {
+  createCallerIdentity,
+  DEMO_TENANT,
+} from "../memory/caller-identity.mjs";
+import { createCallerMemory } from "../memory/caller-memory.mjs";
+import {
+  openCallerStore,
+  deriveCallerKeyHex,
+  sweepStoreDir,
+} from "../memory/caller-store.mjs";
+import { createCallBindings, audienceOf } from "../memory/call-binding.mjs";
+import { createMemoryApi } from "./memory-api.mjs";
+import { createPilotContact } from "./pilot-contact.mjs";
+import { createReceiptSigner } from "../memory/receipt-signer.mjs";
+import { applicableScope, HARBORLINE_SUBJECTS } from "./applicability.mjs";
+import {
+  HARBORLINE_2025,
+  HARBORLINE_2026,
+  HARBORLINE_GLASS_SHIELD_2026,
+} from "../examples/corpus-harborline.mjs";
 import { createSarvamTts } from "./sarvam-tts.mjs";
 import {
   createElevenTts,
@@ -2659,6 +2681,24 @@ export function createLocalServer({
       });
       try {
         caseSessions.deal = await loadCase(mk("deal"), [], NORTHSTAR_DOCS);
+        // Fictional insurer: two policy wordings; which applies depends on
+        // the caller's policy issue date (src/applicability.mjs).
+        caseSessions["insurance-2025"] = await loadCase(
+          mk("insurance-2025"),
+          [],
+          HARBORLINE_2025,
+        );
+        caseSessions["insurance-2026"] = await loadCase(
+          mk("insurance-2026"),
+          [],
+          HARBORLINE_2026,
+        );
+        // 2026 wording + the Glass Shield endorsement, for accounts holding it.
+        caseSessions["insurance-2026+glass-shield"] = await loadCase(
+          mk("insurance-2026+glass-shield"),
+          [],
+          [...HARBORLINE_2026, ...HARBORLINE_GLASS_SHIELD_2026],
+        );
         caseSessions.health = await loadCase(mk("health"), CASE_FILES.health);
         bundleFor(voiceCase, [
           ...caseSessions.deal.library,
@@ -2965,13 +3005,52 @@ export function createLocalServer({
   // Only the agent's own system prompt names the scope. A caller who says
   // "vm_ws=w_..." out loud (or a transcript that contains it) is asking a
   // question, not choosing whose documents to read.
-  voice.setBundleResolver?.((messages) => {
+  voice.setBundleResolver?.((messages, bearer) => {
     for (const m of messages ?? []) {
       if (m?.role !== "system") continue;
       const text =
         typeof m?.content === "string"
           ? m.content
           : JSON.stringify(m?.content ?? "");
+      // A /v1/calls binding: only the SYSTEM prompt (Bolna user_data) can
+      // carry it, and only under the same tenant's voice key (audience).
+      const vmCall = /vm_call=(\S*)/
+        .exec(text)?.[1]
+        ?.replace(/[.,;:)\]'"]+$/, "");
+      if (
+        vmCall !== undefined &&
+        vmCall &&
+        !/^\{\s*vm_call\s*\}$/.test(vmCall)
+      ) {
+        if (!callerStack || !/^vmc_[0-9a-f]{48}$/.test(vmCall))
+          return { malformed: true, call: null, caseId: null };
+        let b;
+        try {
+          b = callerStack.bindings.resolve(vmCall, {
+            audience: audienceOf(bearer ?? ""),
+          });
+        } catch {
+          return { malformed: true, call: null, caseId: null };
+        }
+        const tag = "vmcall:" + b.callId;
+        // Which documents apply to this caller (src/applicability.mjs).
+        // Unknown applicability answers from NEITHER set: refused, never
+        // guessed (the tenant passes policyIssuedOn at /v1/calls).
+        const sc = applicableScope(b.scope, b.applicability);
+        if (sc.clarify)
+          return { malformed: true, call: tag, caseId: b.scope.case };
+        // The bundle this turn answers from, so its episode carries the
+        // same corpusVersion the next call's recheck compares against.
+        b.lastBundle = caseSessions[sc.case]?.bundle ?? null;
+        b.lastApplied = sc.applied;
+        liveCallBindings.set(tag, b);
+        while (liveCallBindings.size > 2000)
+          liveCallBindings.delete(liveCallBindings.keys().next().value);
+        const bundle = b.lastBundle;
+        return bundle
+          ? { bundle, call: tag, caseId: b.scope.case }
+          : { pending: true, call: tag, caseId: b.scope.case };
+      }
       // The agent prompt reads "vm_ws={vm_ws}." Bolna substitutes the value
       // minted for a browser call; a phone call (no value) leaves the
       // placeholder or nothing, and answers from the demo records as before.
@@ -3195,10 +3274,13 @@ export function createLocalServer({
     voice.setAnswerResolver?.(sharedVoiceAnswer);
     byoVoice.setAnswerResolver?.(sharedVoiceAnswer);
   }
+  // The demo cases' canonical resolver, shared with caller memory below so
+  // a remembered question is re-asked through exactly the same path.
+  let publicResolve = null;
   const publicApi = createPublicApi({
     cases: caseSessions,
     workspaces: workspaceApi,
-    resolve: async (cs, question, ctx, opts = {}) => {
+    resolve: (publicResolve = async (cs, question, ctx, opts = {}) => {
       const lang = langOfText(question);
       // About the page, not the records ("how can you help", "how do I use
       // my own reports", "thanks"): a fixed reply, and a page action.
@@ -3346,7 +3428,7 @@ export function createLocalServer({
         }
       }
       return { ...(await answerOne(cs, question)), question };
-    },
+    }),
     visual: (cs, lang) => caseVisual(cs.bundle, lang),
     gemini,
     sarvam: sarvamTts,
@@ -3370,6 +3452,254 @@ export function createLocalServer({
         (!fixedCap || voice.isBound(fixedCap) || !!voiceHardExpiresAtMs()),
     }),
   });
+  // Caller memory (memory/caller-memory.mjs): off unless VM_CALLER_MEMORY=on.
+  // Identity is a tenant-signed assertion (memory/caller-identity.mjs) with
+  // keys from VM_CALLER_KEYS (JSON {kid: hex}). VM_CALLER_DEMO=on adds a
+  // per-process key that signs ONLY the fixed fictional personas. Durable
+  // only with the encrypted store (VM_DATA_DIR + VM_STORE_KEY).
+  // Caller memory status for /healthz: never secrets, paths or identities.
+  const callerMemoryStatus = { enabled: false, storage: null, reason: null };
+  // VM_TENANTS (JSON): { "<tenant>": { apiKey: <64+ hex>, voiceKey: <the
+  // custom-LLM key configured in that tenant's Bolna agent>, cases: ["deal"],
+  // callerKeys: { "<kid>": "<64+ hex>" } } }. Tenant caller keys are
+  // tenant-scoped: they can only vouch for that tenant's callers.
+  let tenants = {};
+  try {
+    tenants = JSON.parse(process.env.VM_TENANTS || "{}");
+  } catch {
+    throw Error("VM_TENANTS must be JSON.");
+  }
+  const callerStack = (() => {
+    const demoOn = process.env.VM_CALLER_DEMO === "on";
+    if (
+      process.env.VM_CALLER_MEMORY !== "on" &&
+      !demoOn &&
+      !Object.keys(tenants).length
+    )
+      return null;
+    // Separate directory and HKDF-derived key (memory/caller-store.mjs).
+    // VM_CALLER_REQUIRE_DURABLE=on (staging, production): no disk or a
+    // failing self-test leaves caller memory OFF, never in process memory.
+    const opened = openCallerStore({
+      dataDir: process.env.VM_DATA_DIR || null,
+      storeKeyHex: process.env.VM_STORE_KEY || null,
+    });
+    callerMemoryStatus.storage = opened.status;
+    callerMemoryStatus.reason = opened.reason;
+    const requireDurable = process.env.VM_CALLER_REQUIRE_DURABLE === "on";
+    if (
+      opened.status === "unavailable" ||
+      (requireDurable && opened.status !== "durable")
+    ) {
+      callerMemoryStatus.reason ??= "durable storage required";
+      console.error("caller memory disabled:", callerMemoryStatus.reason);
+      return null;
+    }
+    callerMemoryStatus.enabled = true;
+    let keys = {};
+    try {
+      keys = JSON.parse(process.env.VM_CALLER_KEYS || "{}");
+    } catch {
+      throw Error('VM_CALLER_KEYS must be JSON: {"kid": "<64+ hex>"}.');
+    }
+    // Demo signer and visitor-cookie key: derived from VM_STORE_KEY so a
+    // visitor's demo survives a restart; scoped to the demo tenant only.
+    const storeKey = process.env.VM_STORE_KEY || null;
+    const derive = (info) =>
+      deriveCallerKeyHex(storeKey, info) ?? randomBytes(32).toString("hex");
+    if (demoOn)
+      keys = {
+        ...keys,
+        demo: {
+          secret: derive("voice-memory/demo-signer/v1"),
+          tenant: DEMO_TENANT,
+        },
+      };
+    for (const [tenant, t] of Object.entries(tenants))
+      for (const [kid, secret] of Object.entries(t.callerKeys ?? {}))
+        keys[`${tenant}_${kid}`.slice(0, 32)] = { secret, tenant };
+    const identity = createCallerIdentity({ keys });
+    const memory = createCallerMemory({
+      identity,
+      store: opened.store,
+      subjectsFor: (caseId) =>
+        caseId === "insurance" ? HARBORLINE_SUBJECTS : undefined,
+    });
+    const answer = async ({ caseId, question }) => {
+      await loadPublicCases();
+      const cs = caseSessions[caseId];
+      if (!cs?.bundle) return { final: null, corpus: null };
+      const before = cs.bundle;
+      const shown = await publicResolve(cs, question, "", {});
+      const out = publicAnswer({
+        ...shown,
+        corpus:
+          cs.bundle === before ? { version: corpusVersion(before) } : null,
+      });
+      return {
+        final: out.final,
+        corpus: out.corpus,
+        wholeQuestion: out.wholeQuestion,
+      };
+    };
+    // The public demo has its OWN store (callers-demo), key and retention:
+    // fictional visitors never share a directory with real tenants' callers.
+    let demoMemory = null;
+    if (demoOn) {
+      const DEMO_RETENTION_MS = 7 * 24 * 3600 * 1000;
+      const demoStore = openCallerStore({
+        dataDir: process.env.VM_DATA_DIR || null,
+        storeKeyHex: storeKey,
+        subdir: "callers-demo",
+        info: "voice-memory/caller-memory-demo/v1",
+      });
+      if (
+        demoStore.status === "unavailable" ||
+        (requireDurable && demoStore.status !== "durable")
+      ) {
+        console.error(
+          "caller demo disabled:",
+          demoStore.reason ?? "durable storage required",
+        );
+      } else {
+        if (demoStore.dir) {
+          sweepStoreDir(demoStore.dir, DEMO_RETENTION_MS);
+          setInterval(
+            () => sweepStoreDir(demoStore.dir, DEMO_RETENTION_MS),
+            3600 * 1000,
+          ).unref();
+        }
+        demoMemory = createCallerMemory({
+          identity,
+          store: demoStore.store,
+          retention: {
+            preference: DEMO_RETENTION_MS,
+            episode: DEMO_RETENTION_MS,
+            referent: DEMO_RETENTION_MS,
+            request: DEMO_RETENTION_MS,
+          },
+        });
+      }
+    }
+    const api = createCallerApi({
+      identity,
+      memory: demoMemory,
+      cases: ["deal", "health"],
+      demo: demoMemory
+        ? {
+            kid: "demo",
+            visitorKeyHex: derive("voice-memory/demo-visitor/v1"),
+            retentionMs: 7 * 24 * 3600 * 1000,
+          }
+        : null,
+      secure: !!publicHost,
+      allowedOrigins: (req) =>
+        [
+          publicOrigin,
+          `http://${req.headers.host}`,
+          `https://${req.headers.host}`,
+        ].filter(Boolean),
+      answer,
+    });
+    const bindings = createCallBindings();
+    const memoryApi = Object.keys(tenants).length
+      ? createMemoryApi({
+          tenants,
+          identity,
+          memory,
+          bindings,
+          answer,
+          signer: createReceiptSigner({
+            seedHex: process.env.VM_RECEIPT_KEY || null,
+            storeKeyHex: process.env.VM_STORE_KEY || null,
+          }),
+        })
+      : null;
+    // The public /api/public/caller routes are the fictional demo only.
+    return {
+      api: demoMemory ? api : null,
+      identity,
+      memory,
+      bindings,
+      memoryApi,
+    };
+  })();
+  const callerApi = callerStack?.api ?? null;
+  // Private pilot enquiries: off unless the owner configures a recipient.
+  const pilotContact = createPilotContact({
+    webhookUrl: process.env.VM_PILOT_WEBHOOK_URL || null,
+    webhookToken: process.env.VM_PILOT_WEBHOOK_TOKEN || null,
+  });
+  const memoryApi = callerStack?.memoryApi ?? null;
+  // Calls bound through /v1/calls: the voice resolver maps a vm_call token
+  // in the agent's SYSTEM prompt to its binding, and a committed turn of
+  // that call (never an interrupted or repeated one) becomes an episode.
+  const tenantVoice = new Map(
+    Object.entries(tenants).map(([tenant, t]) => [t.voiceKey, tenant]),
+  );
+  const liveCallBindings = new Map(); // "vmcall:<callId>" -> binding
+  // Voice-origin memory. The adapter reports a COMPLETED document answer
+  // (its commit point); the Bolna route below records it only after the
+  // whole response was written to the provider (res "finish"). A provider
+  // disconnect mid-answer records nothing. Bolna documents no playback
+  // acknowledgement, so the strongest state is "stream_completed": the
+  // server never claims the caller heard it.
+  const voiceTurns = new AsyncLocalStorage();
+  voice.setCommitListener?.((turn) => {
+    const pending = voiceTurns.getStore();
+    if (pending)
+      pending.push({
+        ...turn,
+        applied: liveCallBindings.get(turn.callTag)?.lastApplied ?? null,
+        bundle: liveCallBindings.get(turn.callTag)?.lastBundle ?? null,
+      });
+  });
+  const recordVoiceTurns = (pending, delivered) => {
+    for (const {
+      callTag,
+      transcript,
+      spoken,
+      contract,
+      turnKey,
+      applied,
+      bundle,
+    } of pending) {
+      const b = callTag ? liveCallBindings.get(callTag) : null;
+      if (
+        !delivered ||
+        !b ||
+        !callerStack ||
+        !b.caller ||
+        !b.permissions.record
+      )
+        continue;
+      if (!contract || contract.kind === "social") continue;
+      try {
+        callerStack.memory.recordEpisode(b.caller, {
+          callId: b.callId,
+          caseId: b.scope.case,
+          question: transcript,
+          final: {
+            kind: contract.kind,
+            verdict: contract.verdict,
+            citations: contract.citations,
+          },
+          // Same scope fields as the API path: version AND applied set.
+          corpus: {
+            version: bundle ? corpusVersion(bundle) : null,
+            applied: applied ?? null,
+          },
+          spoken,
+          // Durable dedupe: provider retries of the same turn write nothing.
+          turnKey: "voice:" + turnKey,
+          payloadHash: null,
+          delivery: "stream_completed",
+        });
+      } catch (e) {
+        console.warn("caller memory: turn not recorded:", e.code ?? "error");
+      }
+    }
+  };
   const server = http.createServer(async (req, res) => {
     watchdog.beginRequest();
     res.once("close", () => watchdog.endRequest());
@@ -3429,6 +3759,7 @@ export function createLocalServer({
             parseCache: { ...parseCacheStats },
           },
           memory: denseStatus().memory,
+          callerMemory: callerMemoryStatus,
           dense: {
             ready: denseStatus().ready,
             disabled: denseStatus().disabled,
@@ -3629,6 +3960,35 @@ export function createLocalServer({
       return;
     }
     // Public landing API: key-free, read-only, rate-limited (public-api.mjs).
+    if (req.url.split("?")[0] === "/api/public/pilot-contact") {
+      const o = req.headers.origin;
+      await pilotContact(req, res, {
+        ip: clientAddress(req),
+        sameOrigin:
+          !!o &&
+          [
+            publicOrigin,
+            `http://${req.headers.host}`,
+            `https://${req.headers.host}`,
+          ]
+            .filter(Boolean)
+            .includes(o),
+      });
+      return;
+    }
+    if (memoryApi && req.url.startsWith("/v1/") && (await memoryApi(req, res)))
+      return;
+    if (callerApi && req.url.startsWith("/api/public/caller/")) {
+      loadPublicCases();
+      if (
+        await callerApi(
+          req,
+          res,
+          req.url.split("?")[0].slice("/api/public".length),
+        )
+      )
+        return;
+    }
     if (req.url.startsWith("/api/public/")) {
       loadPublicCases();
       res.setHeader("Content-Type", "application/json");
@@ -3729,21 +4089,49 @@ export function createLocalServer({
       }
       res.setHeader("Content-Type", "application/json");
       if (isBolnaRoute) {
+        // A tenant's own custom-LLM key (VM_TENANTS.voiceKey) is bound on
+        // demand to the tenant's first case; each call's real scope comes
+        // from its vm_call binding in the resolver below.
+        const bearer = /^Bearer\s+(\S+)$/.exec(
+          req.headers.authorization ?? "",
+        )?.[1];
+        const tv = bearer ? tenantVoice.get(bearer) : null;
+        if (tv) {
+          await loadPublicCases();
+          const c = (tenants[tv].cases ?? ["deal"])[0];
+          // A placeholder grant: each call's real documents come from its
+          // vm_call binding. A scope with versions ("insurance") has no
+          // case of its own name, so use any loaded case of that family.
+          const placeholder =
+            caseSessions[c]?.bundle ??
+            Object.entries(caseSessions).find(
+              ([k, v]) => k.startsWith(c + "-") && v?.bundle,
+            )?.[1]?.bundle;
+          try {
+            if (placeholder) voice.bind(placeholder, bearer);
+          } catch {
+            /* already live: keep the live grant */
+          }
+        }
         // Auth, body bounds, TTL and revocation all live in the adapter;
         // this route adds no state and trusts no session.
-        const response = await voice.handle(
-          new Request(origin + req.url, {
-            signal: disconnected.signal,
-            method: req.method,
-            headers: { authorization: req.headers.authorization ?? "" },
-            ...(req.method === "POST"
-              ? {
-                  body: await body(req)
-                    .then(JSON.stringify)
-                    .catch(() => ""),
-                }
-              : {}),
-          }),
+        const pendingTurns = [];
+        let streamDone = false;
+        const response = await voiceTurns.run(pendingTurns, async () =>
+          voice.handle(
+            new Request(origin + req.url, {
+              signal: disconnected.signal,
+              method: req.method,
+              headers: { authorization: req.headers.authorization ?? "" },
+              ...(req.method === "POST"
+                ? {
+                    body: await body(req)
+                      .then(JSON.stringify)
+                      .catch(() => ""),
+                  }
+                : {}),
+            }),
+          ),
         );
         res.writeHead(response.status, {
           "Content-Type":
@@ -3754,7 +4142,10 @@ export function createLocalServer({
           try {
             while (!disconnected.signal.aborted) {
               const { done, value } = await reader.read();
-              if (done) break;
+              if (done) {
+                streamDone = true;
+                break;
+              }
               if (!res.write(value))
                 await new Promise((resolve) => {
                   res.once("drain", resolve);
@@ -3764,6 +4155,11 @@ export function createLocalServer({
           } finally {
             await reader.cancel().catch(() => {});
           }
+        } else streamDone = true;
+        if (pendingTurns.length) {
+          if (!res.destroyed && streamDone && !disconnected.signal.aborted)
+            res.once("finish", () => recordVoiceTurns(pendingTurns, true));
+          else recordVoiceTurns(pendingTurns, false); // interrupted: nothing kept
         }
         if (!res.destroyed) res.end();
         return;

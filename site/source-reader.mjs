@@ -151,6 +151,22 @@ export function renderCorpusNotice(answer, r, key) {
   hash.textContent = version;
   details.append(summary, hash);
   block.append(notice, note, details);
+  // Hierarchy: a version change is material (amber callout, as before). An
+  // unchanged version is provenance: one quiet line, limitation kept, so it
+  // never competes with the answer or a real caveat. CSSOM, not markup, so
+  // the landing page's first-load CSS does not grow.
+  block.classList.toggle("is-changed", changed);
+  if (!changed) {
+    Object.assign(block.style, {
+      borderLeft: "0",
+      background: "none",
+      padding: "0",
+      margin: "8px 0",
+      fontSize: "12.5px",
+    });
+    Object.assign(notice.style, { font: "inherit", color: "inherit", margin: "0", display: "inline" });
+    Object.assign(note.style, { display: "inline", margin: "0 0 0 4px" });
+  }
   answer.querySelector(".a-q").after(block);
   // The caller (site.js) advances its cache-busting key ONLY on versions
   // this history actually commits: a replayed stale answer must never roll

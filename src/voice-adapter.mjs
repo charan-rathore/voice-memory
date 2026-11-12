@@ -9,7 +9,7 @@ import { identifierRequest, explicitRecordRequest } from "../dist/engine.mjs";
  * Each opaque bearer capability binds ONE server-owned bundle. Request body,
  * messages, model and user_data can never select another bundle.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createCorpusHistory } from "./corpus-version.mjs";
 import {
   answer,
@@ -99,6 +99,10 @@ export function createVoiceAdapter({
   allowClientReplay = true,
 } = {}) {
   let resolveBundle = null;
+  // Told about each COMPLETED document-answer turn (same point the
+  // conversation shadow commits; never an interrupted turn). The key is
+  // stable across provider retries of the same turn.
+  let commitListener = null;
   let resolveAnswer = null;
   if (
     !Number.isSafeInteger(ttlMs) ||
@@ -124,6 +128,27 @@ export function createVoiceAdapter({
   // server-owned per-call state (src/conversation-shadow.mjs). It does not
   // change what is spoken yet.
   const shadow = createConversationShadow();
+  // Voice response contract: the unverified-coverage sentence is a property
+  // of how every opaque question is handled, not of one answer. It is
+  // spoken on the first such turn of a call and stays on every turn's
+  // contract and screen. Keyed by the same server-owned call key as the
+  // shadow (never by request text or assistant history, which a caller can
+  // forge); a turn with no call key always speaks it. Bounded like the
+  // shadow (64 calls), forgotten with it.
+  const noticeSpoken = new Map(); // call key -> expires at (ms)
+  const noticeAlreadySpoken = (key) => {
+    if (!key) return false;
+    const at = noticeSpoken.get(key);
+    return typeof at === "number" && at > now();
+  };
+  const markNoticeSpoken = (key) => {
+    if (!key) return;
+    for (const [k, v] of noticeSpoken) if (v <= now()) noticeSpoken.delete(k);
+    noticeSpoken.delete(key);
+    noticeSpoken.set(key, now() + Math.max(ttlMs, 30 * 60000));
+    while (noticeSpoken.size > 64)
+      noticeSpoken.delete(noticeSpoken.keys().next().value);
+  };
   const corpusHistory = createCorpusHistory({ now, ttlMs });
   const admit = (token) => {
     const cred = credentials.get(token);
@@ -453,6 +478,7 @@ export function createVoiceAdapter({
       }
       if (scopeGone || scopeBad) {
         shadow.forget(shadowKey);
+        noticeSpoken.delete(shadowKey);
         // The last diagnostic must not outlive the owning workspace.
         grant.conversation = null;
         // Their workspace expired (30 idle minutes) or was replaced, or the
@@ -1581,14 +1607,40 @@ export function createVoiceAdapter({
           );
           turn.spokenTurn.wholeQuestion = coverage;
           if (coverage.state === "unverified") {
+            // Same script as the answer it follows: a Devanagari answer gets
+            // the Devanagari sentence, never a Roman one spliced after it.
             const notice = coverageNotice(
-              lang === "hi" ? "hi" : lang === "hinglish" ? "hinglish" : "en",
+              /[\u0900-\u097F]/.test(spoken)
+                ? "hi"
+                : lang === "hi"
+                  ? "hi"
+                  : lang === "hinglish"
+                    ? "hinglish"
+                    : "en",
             );
-            if (!spoken.includes(notice)) spoken = `${spoken.trim()} ${notice}`;
+            if (!noticeAlreadySpoken(shadowKey)) {
+              if (!spoken.includes(notice))
+                spoken = `${spoken.trim()} ${notice}`;
+              markNoticeSpoken(shadowKey);
+            }
             turn.spokenTurn.spoken = spoken;
           }
-        } else if (turn?.spokenTurn && sharedRendered)
+        } else if (turn?.spokenTurn && sharedRendered) {
           turn.spokenTurn.wholeQuestion = sharedCoverage;
+          // The canonical text carries the notice on every unverified turn;
+          // speech carries it once per call (see noticeSpoken above). The
+          // contract and the screen keep it on every turn.
+          if (sharedCoverage?.state === "unverified" && spoken) {
+            const notices = ["en", "hi", "hinglish"].map(coverageNotice);
+            if (noticeAlreadySpoken(shadowKey)) {
+              for (const n of notices)
+                if (spoken.trim().endsWith(n) && spoken.trim() !== n)
+                  spoken = spoken.trim().slice(0, -n.length).trim();
+            } else if (notices.some((n) => spoken.includes(n)))
+              markNoticeSpoken(shadowKey);
+            turn.spokenTurn.spoken = spoken;
+          }
+        }
         // Answer first, nothing repeated: a general explanation already spoken
         // earlier in THIS call ("Some general background: ferritin shows...")
         // is not read out again. Facts are never dropped, only these fixed
@@ -1722,6 +1774,7 @@ export function createVoiceAdapter({
         try {
           if (turn?.spokenTurn?.intent === "SCOPE_CHANGED") {
             shadow.forget(shadowKey);
+            noticeSpoken.delete(shadowKey);
           } else {
             observation = shadow.observe({
               key: shadowKey,
@@ -1892,6 +1945,25 @@ export function createVoiceAdapter({
         } catch {
           /* the shadow never breaks a call */
         }
+        if (commitListener && callTag && contract) {
+          const userTurns = data.messages.filter(
+            (m) => m?.role === "user",
+          ).length;
+          try {
+            commitListener({
+              callTag,
+              transcript,
+              spoken,
+              contract,
+              turnKey: createHash("sha256")
+                .update(`${callTag}\u0000${userTurns}\u0000${transcript}`)
+                .digest("hex")
+                .slice(0, 32),
+            });
+          } catch {
+            /* memory never breaks a call */
+          }
+        }
         if (documentAnswer) corpusHistory.commit(corpusKey, corpus);
         grant.turn = turn;
         return new Response(stream, {
@@ -1956,6 +2028,9 @@ export function createVoiceAdapter({
     },
     setBundleResolver(fn) {
       resolveBundle = typeof fn === "function" ? fn : null;
+    },
+    setCommitListener(fn) {
+      commitListener = typeof fn === "function" ? fn : null;
     },
     setAnswerResolver(fn) {
       resolveAnswer = typeof fn === "function" ? fn : null;

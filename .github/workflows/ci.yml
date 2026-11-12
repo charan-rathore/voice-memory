@@ -47,6 +47,11 @@ jobs:
         run: npm run test:call-ui
         env:
           CHROME_PATH: /usr/bin/google-chrome
+      - name: Caller memory two-call demo in a real browser (1280 and 390 px)
+        run: npm run test:caller-ui
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          VM_SHOTS_DIR: .shots/caller-memory
       - name: Bring-your-own documents flow in a real browser
         run: node tests/site-check.mjs
         env:

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Integrate and pilot · Voice Memory</title>
+    <meta name="description" content="What Voice Memory stores, how caller identity works, what happens when a document changes, and how to test it with synthetic documents." />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="calls.css" />
+    <style>
+      .qa { max-width: 760px; }
+      .qa h2 { font: 400 24px/1.2 var(--serif); margin: 30px 0 6px; }
+      .qa p, .qa li { color: var(--ink-2); max-width: 68ch; }
+      .qa table { border-collapse: collapse; font-size: 14px; margin: 8px 0; }
+      .qa td, .qa th { border-bottom: 1px solid var(--rule); padding: 6px 10px 6px 0; text-align: left; vertical-align: top; }
+      .tag { font: 600 11px var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--amber-ink); }
+      .ctas { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 8px; }
+      .ctas a { text-decoration: none; display: inline-flex; align-items: center; }
+      .btn.light { color: var(--ink); border-color: var(--rule); background: #fff; }
+      .pilot-form { display: grid; gap: 10px; max-width: 520px; }
+      .pilot-form label { display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); }
+      .pilot-form input, .pilot-form textarea { font: 400 15px var(--sans); padding: 10px 12px; min-height: 44px; border: 1px solid var(--rule); border-radius: 10px; background: #fff; color: var(--ink); }
+      .pilot-form .consent { display: flex; gap: 8px; align-items: center; }
+      .pilot-form .consent input { min-height: auto; width: 20px; height: 20px; }
+      .pilot-form .hp { position: absolute; left: -9999px; }
+      .pilot-form .status { color: var(--ink-2); font-size: 14px; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <a class="back" href="./">← Voice Memory</a>
+      <span class="badge">Integrate · pilot</span>
+    </header>
+    <main class="wrap qa">
+      <h1>Memory your voice agent can prove.</h1>
+      <p class="lede">
+        Voice Memory gives a voice agent persistent, caller-controlled memory and keeps it apart from what the documents
+        say now. A returning caller is recognised; what they asked last time is rechecked before anyone repeats it.
+      </p>
+      <div class="ctas">
+        <a class="btn primary" href="calls.html">Try the two-call demo</a>
+        <a class="btn light" href="https://github.com/charan-rathore/voice-memory/blob/main/docs/API-V1.md">Integration guide (API v1)</a>
+      </div>
+
+      <h2>What is Voice Memory?</h2>
+      <p>A service your voice agent calls at the start of a call and on each turn. It returns what this caller asked to be remembered, what they asked before, and a current answer from the documents that apply to them, with the line it rests on.</p>
+
+      <h2>Why can't the agent just remember in its prompt?</h2>
+      <p>In a prompt, last month's answer, a caller's claim ("it was approved") and the current record are all just text. Voice Memory stores them as different kinds of data, re-derives facts every call, and never lets a remembered statement change a verdict, an approval or a document version.</p>
+
+      <h2>How does caller identity work?</h2>
+      <p>Your backend authenticates the caller (login, OTP, SSO) and signs a short-lived, single-use assertion. A phone number or caller ID is never enough. Inbound calls start unverified with no memory until your backend confirms the caller.</p>
+
+      <h2>What is stored?</h2>
+      <table>
+        <tr><th>Preferences</th><td>Language and answer length, only when the caller asks. 365 days.</td></tr>
+        <tr><th>Conversation</th><td>Each completed turn: the question, the verified outcome, the source version and cited lines, and what was actually said. 90 days.</td></tr>
+        <tr><th>Open requests</th><td>"Tell me when it's approved." Open until the caller or your team closes it. 90 days.</td></tr>
+      </table>
+
+      <h2>What is never stored without consent?</h2>
+      <p>Conversation history (episodes, subjects, requests) needs the caller's consent. Health and medical details are never stored as preferences. Account ids are hashed. A caller's claim about the record is refused, not stored.</p>
+
+      <h2>What happens when a document changes?</h2>
+      <p>On the next call every remembered subject is asked again against the documents that apply to that caller now. The response says whether the source changed, whether a different policy version now applies, and why the answer changed. If applicability is unknown, the agent is told to ask, not guess.</p>
+
+      <h2>How are memories corrected and deleted?</h2>
+      <p>By voice ("switch my language to English", "forget everything") or by API. Deletion removes the stored data immediately. Every change returns a signed receipt. Disk snapshots can bring back data deleted after the snapshot, so a restore needs a deletion replay (documented, not automated).</p>
+
+      <h2>Which voice platforms can use it today?</h2>
+      <p>Bolna, through its custom-LLM setting and call variables (built and tested against Bolna-shaped requests), and any stack that can call the provider-neutral HTTP API from its own backend. <strong>No real Bolna call has been placed yet.</strong> The two-call demo is a typed simulation through a demo API: it uses the same document resolver as a voice call, but not the voice provider's path, speech or telephony.</p>
+
+      <h2>What latency does it add?</h2>
+      <p>Measured locally on a small fictional policy (no network, no telephony): p95 about 1 ms to start a call, under 4 ms to recall and recheck, under 4 ms for a source-verified answer. Real-call first-audio latency has <strong>not</strong> been measured.</p>
+
+      <h2>How do I test it with my own synthetic documents?</h2>
+      <p>Run <code>node examples/client/returning-caller-demo.mjs</code> to see three calls locally, then point the example client at a staging server with your own fictional documents. Don't use real customer data in a pilot until production readiness is complete.</p>
+
+      <h2>Pilot terms <span class="tag">Hypothesis</span></h2>
+      <p>We're exploring pricing per verified answer, with abstentions and clarifications free. This is a hypothesis, not an offer. No SOC 2, DPDP compliance, SLA or clinical-safety claim is made.</p>
+      <section id="contact" hidden>
+        <h2>Ask about a pilot</h2>
+        <form id="pilot-form" class="pilot-form" novalidate>
+          <label>Name <input name="name" maxlength="80" required autocomplete="name" /></label>
+          <label>Work email <input name="email" type="email" maxlength="120" required autocomplete="email" /></label>
+          <label>Company <input name="company" maxlength="120" autocomplete="organization" /></label>
+          <label>What would you test? <textarea name="message" maxlength="1000" rows="4" required></textarea></label>
+          <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off" /></label>
+          <label class="consent"><input type="checkbox" name="consent" required /> I've read the privacy notice below.</label>
+          <button class="btn primary" type="submit">Send</button>
+          <p class="status" id="pilot-status" role="status" aria-live="polite"></p>
+        </form>
+        <p class="foot">
+          <b>Privacy notice.</b> We collect only what you type here, to reply about a pilot. It is forwarded to the
+          project owner's inbox and not stored by this site. No tracking, no IP address or cookies are kept with it. Ask
+          us to delete your message at any time.
+        </p>
+      </section>
+      <p class="foot" id="contact-closed">Pilot enquiries aren't open on this site yet.</p>
+    </main>
+    <script src="pilot.js" defer></script>
+  </body>
+</html>

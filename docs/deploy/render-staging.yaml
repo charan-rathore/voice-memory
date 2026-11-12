@@ -1,0 +1,64 @@
+# Render Blueprint for a SEPARATE caller-memory STAGING service.
+#
+# Deliberately not at the repository root, so it can never be picked up as
+# the production service's blueprint. Create it explicitly:
+#   Render Dashboard -> New -> Blueprint -> this repo -> path
+#   docs/deploy/render-staging.yaml
+# Creating it starts paid compute (Starter, $7/month at the time of writing)
+# plus the disk ($0.25/GB-month; 1 GB here). Confirm current prices on
+# render.com/pricing before you create it.
+#
+# A disk pins the service to ONE instance and disables zero-downtime deploys
+# (Render stops the old instance before starting the new one). Daily disk
+# snapshots exist; restore is full-disk only, from the Dashboard.
+services:
+  - type: web
+    name: voice-memory-staging
+    runtime: node
+    plan: starter
+    region: oregon # same as production (voice-memory: Oregon), deliberately
+    # The combined release candidate, never a single feature branch. With
+    # autoDeploy off, deploy the exact reviewed SHA from the Dashboard
+    # ("Deploy a specific commit") and record it in the runbook.
+    branch: rc/voice-memory-1
+    autoDeploy: false # deploy deliberately, after review
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    disk:
+      name: voice-memory-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: VM_DATA_DIR
+        value: /var/data/voice-memory
+      # 64 hex characters. Generate locally: openssl rand -hex 32
+      # Set in the Dashboard only; never in the repo, a screenshot or a chat.
+      # Losing it makes every stored file unreadable (by design).
+      - key: VM_STORE_KEY
+        sync: false
+      # Leave OFF for the first deploy. Turn on only after the checks in
+      # docs/deploy/CALLER-MEMORY-RUNBOOK.md section 3 pass.
+      - key: VM_CALLER_DEMO
+        value: "off"
+      - key: VM_CALLER_REQUIRE_DURABLE
+        value: "on"
+      # The Vercel origin that proxies /api/* to this service, for same-origin
+      # writes. Use the staging preview origin, not production.
+      - key: VM_PUBLIC_ORIGIN
+        sync: false
+      # Ed25519 receipt-signing seed, 64 hex (openssl rand -hex 32). If
+      # unset it is derived from VM_STORE_KEY; set it to rotate separately.
+      - key: VM_RECEIPT_KEY
+        sync: false
+      # Fictional staging tenant(s) only. JSON; contains API keys.
+      - key: VM_TENANTS
+        sync: false
+      # Private pilot recipient (https webhook). Leave unset until a real
+      # recipient is configured and tested; the page then shows no form.
+      - key: VM_PILOT_WEBHOOK_URL
+        sync: false
+      - key: VM_DENSE
+        value: "off"
