@@ -20,7 +20,7 @@ services:
     # The combined release candidate, never a single feature branch. With
     # autoDeploy off, deploy the exact reviewed SHA from the Dashboard
     # ("Deploy a specific commit") and record it in the runbook.
-    branch: rc/voice-memory-1
+    branch: main
     autoDeploy: false # deploy deliberately, after review
     buildCommand: npm ci && npm run build
     startCommand: npm start
