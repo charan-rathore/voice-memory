@@ -65,7 +65,12 @@ export type Claim = {
   scopeEntities: string[];
 };
 
-function statusOf(line: string): ClaimStatus {
+function statusOf(
+  line: string,
+  anchor = -1,
+  gov?: { idx: number },
+): ClaimStatus {
+  if (gov) gov.idx = -2; // -2: no verb selection reached (early return)
   if (
     /pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) (approved|agreed)|no decision (was )?taken|no vote or agreement|not [^.;]{0,20}(approved|signed|countersign|confirmed|accepted|agreed|authorized|executed)|no\s+(signed|countersigned|executed)\s|\bno\s+(?:[a-z-]+\s+){0,2}[a-z-]*(?:signed|countersigned|executed)\b|does not (constitute|establish)|does not mean [^.;]{0,50}(accept|sign|approv|agree)|has not accepted|not been accepted/i.test(
       line,
@@ -74,6 +79,19 @@ function statusOf(line: string): ClaimStatus {
     return "unresolved";
   if (/subject to|provided that|conditional|only when/i.test(line))
     return "proposed";
+  // A leading if conditions everything after it: "If the board consents,
+  // the client approves the fee" is a proposal, not an approval.
+  if (/^\s*if\b/i.test(line)) return "proposed";
+  // A trailing if/unless clause makes the approval conditional ("approves
+  // the fee if the board agrees", "unless the board objects"). Only a
+  // named epistemic hedge ("if I recall", "if I'm not mistaken") is not a
+  // condition; "if it received consent", "if not disputed by Friday" and
+  // "if I pay the deposit" still govern. Unanchored callers get the
+  // clause-level reading; anchored callers bind the condition to the
+  // approval verb governing their own claim below.
+  const TRAILING_COND =
+    /\b(?:approv(?:e|es|ed)?|sign(?:s|ed)?|countersign\w*|confirm(?:s|ed)?|authoriz(?:e|es|ed)?|agree(?:s|d)?|accept(?:s|ed)?)\b[^.;]{0,160}?\b(?:if|unless)\b(?!\s+i(?:'m|'ve)?\s+(?:recall|remember|not mistaken|understood|heard)\b)/i;
+  if (anchor < 0 && TRAILING_COND.test(line)) return "proposed";
   // Approval wording is authoritative over revision/proposal wording in the
   // same sentence; check it BEFORE propos|revis. A modal "accept" states
   // capability or willingness ("we can accept delivery"), never approval.
@@ -82,13 +100,88 @@ function statusOf(line: string): ClaimStatus {
     !/\b(?:can|could|may|might|shall|should|will|would|must|willing|ready|prepared|able)\s+(?:to\s+)?(?:[a-z-]+\s+){0,2}accept(?:s|ed)?\b/i.test(
       line,
     );
-  if (
-    /\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\bagreed\b|\bauthoriz(?:e|es|ed)\b/i.test(
-      line,
-    ) ||
-    acceptVerb
-  )
-    return "approved";
+  // Like the modal accept guard above: a modal approval ("may approve",
+  // "will sign", "must be signed") states possibility or intent, never a
+  // completed approval. The modal binds to its OWN verb: "the client may
+  // approve the scope and the board approved the fee" keeps the completed
+  // fee approval while the contemplated scope approval stays out.
+  const APPROVE_VERB =
+    /\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\bagreed\b|\bauthoriz(?:e|es|ed)\b/gi;
+  const MODAL_PREFIX =
+    /\b(?:can|could|may|might|shall|should|will|would|must)\s+(?:to\s+)?(?:[a-z-]+\s+){0,2}$/i;
+  // The claim's status binds to the approval verb that GOVERNS its own
+  // anchor. A verb directly after the anchor, with no conjunction or
+  // clause boundary in between, is the claim's own predicate ("the fee
+  // ... may be approved", "the fee ... was approved") and governs it,
+  // fronted-object style. Otherwise the last verb before the anchor
+  // governs it ("approved the fee"). This keeps "the board approved the
+  // scope and the fee may be approved" contemplated, and "the board may
+  // approve the scope and the fee was approved" completed, whichever way
+  // the two objects appear.
+  let best: RegExpExecArray | null = null;
+  if (anchor < 0) {
+    for (let m = APPROVE_VERB.exec(line); m; m = APPROVE_VERB.exec(line)) {
+      const before = line.slice(Math.max(0, m.index - 40), m.index);
+      if (!MODAL_PREFIX.test(before)) {
+        best = m;
+        break;
+      }
+    }
+  } else {
+    let before: RegExpExecArray | null = null;
+    let after: RegExpExecArray | null = null;
+    for (let m = APPROVE_VERB.exec(line); m; m = APPROVE_VERB.exec(line)) {
+      if (m.index < anchor) {
+        before = m;
+        continue;
+      }
+      after = m;
+      break; // only the first verb after the anchor can be its predicate
+    }
+    // The anchor's own predicate follows it directly ("the fee ... was
+    // approved", "the fee ... may be approved"): prefer it. A pre-anchor
+    // verb only wins when a conjunction or clause boundary shows the
+    // post-anchor verb starts a NEW predicate ("approved the fee ... and
+    // may approve the scope"); with no pre-anchor verb at all, a following
+    // verb can only be the claim's own ("the East and West site scope is
+    // approved").
+    if (
+      after &&
+      (!before ||
+        !/\b(?:and|but|while)\b|[.;:]/i.test(line.slice(anchor, after.index)))
+    ) {
+      best = after; // the anchor's own predicate follows it
+    } else {
+      best = before; // active voice: the last verb before the anchor
+    }
+  }
+  if (gov) gov.idx = best ? best.index : -1;
+  const approveVerb =
+    best !== null &&
+    !MODAL_PREFIX.test(line.slice(Math.max(0, best.index - 40), best.index));
+  // An if/unless condition governs the claim only when it attaches to the
+  // claim's own governing verb: in "the board approved the fee and may
+  // approve the scope if funding arrives" the condition binds the scope's
+  // may-approve, never the completed fee approval.
+  if (anchor >= 0) {
+    if (best === null) {
+      if (TRAILING_COND.test(line)) return "proposed";
+    } else {
+      const COND_WORD =
+        /\b(?:if|unless)\b(?!\s+i(?:'m|'ve)?\s+(?:recall|remember|not mistaken|understood|heard)\b)/gi;
+      for (let c = COND_WORD.exec(line); c; c = COND_WORD.exec(line)) {
+        if (c.index <= best.index) continue;
+        let lastVerb = -1;
+        for (let v = APPROVE_VERB.exec(line); v; v = APPROVE_VERB.exec(line)) {
+          if (v.index < c.index) lastVerb = v.index;
+        }
+        APPROVE_VERB.lastIndex = 0;
+        if (lastVerb === best.index) return "proposed";
+      }
+      COND_WORD.lastIndex = 0;
+    }
+  }
+  if (approveVerb || acceptVerb) return "approved";
   if (
     /internal (delivery )?target|targeted for|\binternal(?:ly)?(?:\s+[a-z-]+){0,2}\s+target\b/i.test(
       line,
@@ -253,7 +346,63 @@ const negationBinds = (
   return false;
 };
 
-function clauseAround(line: string, idx: number): string {
+const DENIAL_RE =
+  /did not\s+(?:[a-z-]+\s+){0,2}(?:approv\w*|sign\w*|countersign\w*|confirm\w*|accept\w*|agree\w*|authoriz\w*|execut\w*)|(?:refus(?:e|es|ed)|declin(?:e|es|ed))\s+to\s+(?:[a-z-]+\s+){0,2}(?:approv\w*|sign\w*|countersign\w*|confirm\w*|accept\w*|agree\w*|authoriz\w*|execut\w*)/gi;
+const AFFIRM_RE =
+  /\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\bagreed\b|\bauthoriz(?:e|es|ed)\b/gi;
+const clauseNamesObject = (
+  field: ClaimField,
+  value: string,
+  clause: string,
+): boolean => {
+  const bare = value.replace(/[$%,\s]/g, "");
+  return (
+    FIELD_NOUN[field].test(clause) ||
+    clause.toLowerCase().includes(value.toLowerCase()) ||
+    (bare.length > 1 && clause.replace(/[$%,\s]/g, "").includes(bare)) ||
+    /\b(it|this|that)\b/i.test(clause)
+  );
+};
+/** The clause carrying a denial ("did not approve", "refused to sign") that
+ * names the claim's object, or null. */
+const denialClauses = (
+  field: ClaimField,
+  value: string,
+  line: string,
+): { clause: string; start: number; end: number }[] => {
+  DENIAL_RE.lastIndex = 0;
+  const out: { clause: string; start: number; end: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = DENIAL_RE.exec(line))) {
+    const clause = clauseAround(line, m.index);
+    if (clauseNamesObject(field, value, clause))
+      out.push({ clause, start: m.index, end: m.index + m[0].length });
+  }
+  return out;
+};
+/** A clause other than `denial` whose approval verb names the claim's
+ * object, or null: "Client finance did not approve the $42,000 fee;
+ * steering committee approved it" affirms in its second clause. */
+const affirmationClause = (
+  field: ClaimField,
+  value: string,
+  line: string,
+  denial: string,
+): string | null => {
+  AFFIRM_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = AFFIRM_RE.exec(line))) {
+    const clause = clauseAround(line, m.index);
+    if (clause !== denial && clauseNamesObject(field, value, clause))
+      return clause;
+  }
+  return null;
+};
+
+function clauseBounds(
+  line: string,
+  idx: number,
+): { start: number; end: number } {
   const bounds = /;\s+|\.\s+|,\s+(?:and|but|while|whereas|although|though)\s+/g;
   let start = 0;
   let end = line.length;
@@ -265,6 +414,11 @@ function clauseAround(line: string, idx: number): string {
     }
     start = m.index + m[0].length;
   }
+  return { start, end };
+}
+
+function clauseAround(line: string, idx: number): string {
+  const { start, end } = clauseBounds(line, idx);
   return line.slice(start, end);
 }
 
@@ -434,8 +588,11 @@ export function extractClaims(
           // Status and supersession wording bind to the clause that contains
           // the claim's own anchor: "the fee is $45,000, and the hiring plan
           // was approved" is an approved HIRING PLAN, not an approved fee.
+          const clauseStart = clauseBounds(seg, anchorIdx).start;
           const clause = clauseAround(seg, anchorIdx);
-          let status = force?.status ?? statusOf(clause);
+          const govVerb: { idx: number } = { idx: -2 };
+          let status =
+            force?.status ?? statusOf(clause, anchorIdx - clauseStart, govVerb);
           // Document authority: inside an executed agreement, a plain
           // statement of terms ("for a monthly retainer of $9,500") IS the
           // agreed term. Only "discussed" is upgraded; proposals, conditions
@@ -445,6 +602,38 @@ export function extractClaims(
           // claim's own object: "the fee was never approved" negates the fee;
           // "the fee was approved; the hiring plan was rejected" does not.
           if (negationBinds(field, value, seg)) status = "unresolved";
+          // A denial ("did not approve", "refused to sign") negates like any
+          // other, but yields to a same-line clause affirming the same
+          // object: "Client finance did not approve the fee; steering
+          // committee approved it" IS approved, credited to the committee.
+          const denials = denialClauses(field, value, seg);
+          let authority = force?.authority ?? authorityOf(clause);
+          // A denial negates this claim only when the denied verb IS the
+          // claim's own governing verb: "the client did not approve the
+          // scope and approved the fee" denies the SCOPE; the fee's own
+          // completed approval stands. Every matching denial is checked,
+          // not just the first: "did not approve the scope and did not
+          // approve the fee" binds the SECOND denial to the fee. When no
+          // verb selection happened (early return) or no verb governs the
+          // anchor, the first clause-matching denial keeps the legacy
+          // clause-level binding.
+          const denial =
+            govVerb.idx >= 0
+              ? (denials.find(
+                  (d) =>
+                    govVerb.idx >= d.start - clauseStart &&
+                    govVerb.idx < d.end - clauseStart,
+                ) ?? null)
+              : (denials[0] ?? null);
+          if (denial) {
+            const affirm = affirmationClause(field, value, seg, denial.clause);
+            status = affirm ? statusOf(affirm) : "unresolved";
+            // The affirmation that supplies the status also supplies the
+            // authority: "client finance did not approve the fee; steering
+            // committee approved it" is approved BY the committee, never
+            // credited to the denying party.
+            if (affirm && !force?.authority) authority = authorityOf(affirm);
+          }
           // A record whose own wording declares it superseded ("the earlier
           // USD 58,000 fee proposal is superseded") demotes ITSELF and its
           // value siblings; it never supersedes others.
@@ -469,7 +658,7 @@ export function extractClaims(
             status,
             supersedes,
             supersededByWording,
-            authority: force?.authority ?? authorityOf(clause),
+            authority,
             ...base,
           });
         };

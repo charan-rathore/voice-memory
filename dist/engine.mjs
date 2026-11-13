@@ -23960,20 +23960,68 @@ function lineIndexCacheStats() {
 }
 
 // src/claim-check.ts
-function statusOf(line) {
+function statusOf(line, anchor = -1, gov) {
+  if (gov) gov.idx = -2;
   if (/pending|outstanding|not recorded|not approved|not yet|open decision|has not been approved|no [^.;]{0,40}has been approved|nothing (was|is) (approved|agreed)|no decision (was )?taken|no vote or agreement|not [^.;]{0,20}(approved|signed|countersign|confirmed|accepted|agreed|authorized|executed)|no\s+(signed|countersigned|executed)\s|\bno\s+(?:[a-z-]+\s+){0,2}[a-z-]*(?:signed|countersigned|executed)\b|does not (constitute|establish)|does not mean [^.;]{0,50}(accept|sign|approv|agree)|has not accepted|not been accepted/i.test(
     line
   ))
     return "unresolved";
   if (/subject to|provided that|conditional|only when/i.test(line))
     return "proposed";
+  if (/^\s*if\b/i.test(line)) return "proposed";
+  const TRAILING_COND = /\b(?:approv(?:e|es|ed)?|sign(?:s|ed)?|countersign\w*|confirm(?:s|ed)?|authoriz(?:e|es|ed)?|agree(?:s|d)?|accept(?:s|ed)?)\b[^.;]{0,160}?\b(?:if|unless)\b(?!\s+i(?:'m|'ve)?\s+(?:recall|remember|not mistaken|understood|heard)\b)/i;
+  if (anchor < 0 && TRAILING_COND.test(line)) return "proposed";
   const acceptVerb = /\baccept(?:s|ed)?\b/i.test(line) && !/\b(?:can|could|may|might|shall|should|will|would|must|willing|ready|prepared|able)\s+(?:to\s+)?(?:[a-z-]+\s+){0,2}accept(?:s|ed)?\b/i.test(
     line
   );
-  if (/\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\bagreed\b|\bauthoriz(?:e|es|ed)\b/i.test(
-    line
-  ) || acceptVerb)
-    return "approved";
+  const APPROVE_VERB = /\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\bagreed\b|\bauthoriz(?:e|es|ed)\b/gi;
+  const MODAL_PREFIX = /\b(?:can|could|may|might|shall|should|will|would|must)\s+(?:to\s+)?(?:[a-z-]+\s+){0,2}$/i;
+  let best = null;
+  if (anchor < 0) {
+    for (let m = APPROVE_VERB.exec(line); m; m = APPROVE_VERB.exec(line)) {
+      const before = line.slice(Math.max(0, m.index - 40), m.index);
+      if (!MODAL_PREFIX.test(before)) {
+        best = m;
+        break;
+      }
+    }
+  } else {
+    let before = null;
+    let after = null;
+    for (let m = APPROVE_VERB.exec(line); m; m = APPROVE_VERB.exec(line)) {
+      if (m.index < anchor) {
+        before = m;
+        continue;
+      }
+      after = m;
+      break;
+    }
+    if (after && (!before || !/\b(?:and|but|while)\b|[.;:]/i.test(line.slice(anchor, after.index)))) {
+      best = after;
+    } else {
+      best = before;
+    }
+  }
+  if (gov) gov.idx = best ? best.index : -1;
+  const approveVerb = best !== null && !MODAL_PREFIX.test(line.slice(Math.max(0, best.index - 40), best.index));
+  if (anchor >= 0) {
+    if (best === null) {
+      if (TRAILING_COND.test(line)) return "proposed";
+    } else {
+      const COND_WORD = /\b(?:if|unless)\b(?!\s+i(?:'m|'ve)?\s+(?:recall|remember|not mistaken|understood|heard)\b)/gi;
+      for (let c = COND_WORD.exec(line); c; c = COND_WORD.exec(line)) {
+        if (c.index <= best.index) continue;
+        let lastVerb = -1;
+        for (let v = APPROVE_VERB.exec(line); v; v = APPROVE_VERB.exec(line)) {
+          if (v.index < c.index) lastVerb = v.index;
+        }
+        APPROVE_VERB.lastIndex = 0;
+        if (lastVerb === best.index) return "proposed";
+      }
+      COND_WORD.lastIndex = 0;
+    }
+  }
+  if (approveVerb || acceptVerb) return "approved";
   if (/internal (delivery )?target|targeted for|\binternal(?:ly)?(?:\s+[a-z-]+){0,2}\s+target\b/i.test(
     line
   ))
@@ -24080,7 +24128,34 @@ var negationBinds = (field, value, line) => {
   }
   return false;
 };
-function clauseAround(line, idx) {
+var DENIAL_RE = /did not\s+(?:[a-z-]+\s+){0,2}(?:approv\w*|sign\w*|countersign\w*|confirm\w*|accept\w*|agree\w*|authoriz\w*|execut\w*)|(?:refus(?:e|es|ed)|declin(?:e|es|ed))\s+to\s+(?:[a-z-]+\s+){0,2}(?:approv\w*|sign\w*|countersign\w*|confirm\w*|accept\w*|agree\w*|authoriz\w*|execut\w*)/gi;
+var AFFIRM_RE = /\bapprov(?:e|es|ed)\b|\bsigned\b|\bsigns\b|countersign|confirmed|\bagreed\b|\bauthoriz(?:e|es|ed)\b/gi;
+var clauseNamesObject = (field, value, clause) => {
+  const bare = value.replace(/[$%,\s]/g, "");
+  return FIELD_NOUN[field].test(clause) || clause.toLowerCase().includes(value.toLowerCase()) || bare.length > 1 && clause.replace(/[$%,\s]/g, "").includes(bare) || /\b(it|this|that)\b/i.test(clause);
+};
+var denialClauses = (field, value, line) => {
+  DENIAL_RE.lastIndex = 0;
+  const out = [];
+  let m;
+  while (m = DENIAL_RE.exec(line)) {
+    const clause = clauseAround(line, m.index);
+    if (clauseNamesObject(field, value, clause))
+      out.push({ clause, start: m.index, end: m.index + m[0].length });
+  }
+  return out;
+};
+var affirmationClause = (field, value, line, denial) => {
+  AFFIRM_RE.lastIndex = 0;
+  let m;
+  while (m = AFFIRM_RE.exec(line)) {
+    const clause = clauseAround(line, m.index);
+    if (clause !== denial && clauseNamesObject(field, value, clause))
+      return clause;
+  }
+  return null;
+};
+function clauseBounds(line, idx) {
   const bounds = /;\s+|\.\s+|,\s+(?:and|but|while|whereas|although|though)\s+/g;
   let start = 0;
   let end = line.length;
@@ -24092,6 +24167,10 @@ function clauseAround(line, idx) {
     }
     start = m.index + m[0].length;
   }
+  return { start, end };
+}
+function clauseAround(line, idx) {
+  const { start, end } = clauseBounds(line, idx);
   return line.slice(start, end);
 }
 function utterancesOf(line) {
@@ -24193,10 +24272,22 @@ function extractClaims(bundle, fields2) {
         };
         const push = (field, value, anchorIdx = 0, force) => {
           if (!fields2.includes(field)) return;
+          const clauseStart = clauseBounds(seg, anchorIdx).start;
           const clause = clauseAround(seg, anchorIdx);
-          let status = force?.status ?? statusOf(clause);
+          const govVerb = { idx: -2 };
+          let status = force?.status ?? statusOf(clause, anchorIdx - clauseStart, govVerb);
           if (docExecuted && status === "discussed") status = "approved";
           if (negationBinds(field, value, seg)) status = "unresolved";
+          const denials = denialClauses(field, value, seg);
+          let authority = force?.authority ?? authorityOf(clause);
+          const denial = govVerb.idx >= 0 ? denials.find(
+            (d) => govVerb.idx >= d.start - clauseStart && govVerb.idx < d.end - clauseStart
+          ) ?? null : denials[0] ?? null;
+          if (denial) {
+            const affirm = affirmationClause(field, value, seg, denial.clause);
+            status = affirm ? statusOf(affirm) : "unresolved";
+            if (affirm && !force?.authority) authority = authorityOf(affirm);
+          }
           const supersededByWording = /\b(?:is|was|stands)\s+(?:now\s+)?superseded\b/i.test(clause);
           const supersedes = force?.supersedes ?? (/revis|supersed|replaces|narrow|instead of|\bcurrent\b/i.test(
             clause
@@ -24207,7 +24298,7 @@ function extractClaims(bundle, fields2) {
             status,
             supersedes,
             supersededByWording,
-            authority: force?.authority ?? authorityOf(clause),
+            authority,
             ...base
           });
         };
