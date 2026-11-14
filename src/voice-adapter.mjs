@@ -1,7 +1,7 @@
 import { briefAnswer, briefIntent } from "./record-brief.mjs";
 import { labDigest } from "../clinical/answer.mjs";
 import { subjectOf } from "../clinical/observations.mjs";
-import { unboundOwnerTurn } from "./requested-owner.mjs";
+import { recordPatientIds, unboundOwnerTurn } from "./requested-owner.mjs";
 import { identifierRequest, explicitRecordRequest } from "../dist/engine.mjs";
 /** OpenAI-compatible streaming contract for a future Bolna custom LLM.
  * Disabled unless explicitly instantiated by a caller. No public listener,
@@ -571,7 +571,25 @@ export function createVoiceAdapter({
         // Earlier utterances are joined in only when this one is a fragment or
         // has no subject of its own ("and the other one?"); otherwise a deal
         // question right after a lab question would be answered as lab.
-        const ownOnly = hasSubject(transcript) && !isFragment(transcript);
+        // Exception: a full question that names a possessive subject without an
+        // anaphor ("kya <garble> ka <garble> kya hai?") intended a subject the
+        // recogniser lost. Joining earlier utterances would answer it with an
+        // unrelated previous topic, so it goes alone and the engine declines.
+        const anaphora =
+          /\b(it|its|that|this|them|those|they)\b|इसका|उसका|इसकी|उसकी|इसके|उसके|यह|वह|ये|वो|\b[ui]sk[ai]\b|\b[ui]ske\b|\byeh\b|\bwoh\b/i.test(
+            transcript,
+          );
+        const possessiveSubject =
+          /[a-z0-9ऀ-ॿ'-]+\s+(?:ka|ki|ke|का|की|के)\s+[a-z0-9ऀ-ॿ'-]+/i.test(
+            transcript,
+          );
+        const orphan =
+          !hasSubject(transcript) &&
+          !isFragment(transcript) &&
+          possessiveSubject &&
+          !anaphora;
+        const ownOnly =
+          (hasSubject(transcript) || orphan) && !isFragment(transcript);
         const candidates = voiceQuestions(
           ownOnly ? data.messages.slice(-1) : data.messages,
           {
@@ -681,8 +699,9 @@ export function createVoiceAdapter({
               /\b(it|its|that|this|those|them|again|same|normal|high|low|range|why|mean\w*|okay|ok|fine|good|bad|worried|worry)\b|ठीक|सामान्य|normal hai|theek/i.test(
                 transcript,
               );
-            if (DATE_ASK_RE.test(transcript)) {
-              /* a date question carries no inherited subject */
+            if (DATE_ASK_RE.test(transcript) || orphan) {
+              /* a date question - or an orphan whose subject the recogniser
+                 lost - carries no inherited subject */
             } else if (followUp) candidates.unshift(withCtx);
             else if (!own) candidates.push(withCtx);
           }
@@ -1852,6 +1871,10 @@ export function createVoiceAdapter({
         }
         const id = "local-contract-" + randomBytes(8).toString("hex");
         const encoder = new TextEncoder();
+        // Record ids are spelled for the synthesiser: "SYN-0001" spoken as
+        // "S Y N zero zero zero one", never the mangled "SOIN 01". Only the
+        // bundle's own record ids qualify.
+        const spokenForCall = spellRecordIds(spoken, bundleRecordIds(bundle));
         const stream = new ReadableStream({
           start(controller) {
             logTurn({
@@ -1860,7 +1883,7 @@ export function createVoiceAdapter({
               heardFixes,
               normalized: asked ?? null,
               firstByteAt: Date.now(),
-              spoken,
+              spoken: spokenForCall,
               verdict: turn?.spokenTurn?.verdict ?? null,
               corpus: emittedCorpus,
               versionNotice,
@@ -1880,7 +1903,7 @@ export function createVoiceAdapter({
                 lead: turn?.spokenTurn
                   ? {
                       ...turn.spokenTurn,
-                      spoken,
+                      spoken: spokenForCall,
                       action: social?.action ?? null,
                     }
                   : null,
@@ -1898,8 +1921,9 @@ export function createVoiceAdapter({
             } catch {
               /* memory is best-effort; never break the call */
             }
-            for (const content of spoken.match(/.{1,64}(?:\s|$)|.{1,64}/g) ||
-              []) {
+            for (const content of spokenForCall.match(
+              /.{1,64}(?:\s|$)|.{1,64}/g,
+            ) || []) {
               controller.enqueue(
                 encoder.encode(
                   "data: " +
@@ -2083,6 +2107,53 @@ function latestUser(messages) {
   const text = messageText(m.content).trim();
   if (!text || text.length > 4000) return null;
   return text;
+}
+
+const DIGIT_WORDS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+];
+/** "SYN-0001" -> "S Y N zero zero zero one": a bare token reaches the
+ *  synthesiser as one word and comes out as "SOIN 01"; spelled out, every
+ *  character is said. Only identifiers in the bundle's own record inventory
+ *  are spelled - arbitrary identifier-shaped text ("ISO-27001", "INV-12345")
+ *  is never reinterpreted. */
+/** The bundle's verified record-id inventory: the only identifiers the
+ *  voice wire may spell or unspell. */
+export function bundleRecordIds(bundle) {
+  const ids = new Set();
+  for (const r of bundle?.clinical ?? []) {
+    const pid = r?.meta?.patient?.id;
+    if (pid) ids.add(String(pid).toUpperCase());
+  }
+  for (const r of bundle?.sourceRecords ?? []) {
+    const pid = r?.meta?.patient?.id;
+    if (pid) ids.add(String(pid).toUpperCase());
+    for (const id of recordPatientIds(r)) ids.add(id);
+  }
+  return [...ids];
+}
+
+export function spellRecordIds(text, knownIds = []) {
+  const known = new Set([...knownIds].map((x) => String(x).toUpperCase()));
+  if (!known.size) return String(text ?? "");
+  return String(text ?? "").replace(
+    /\b([A-Z]{2,5})-(\d{3,6})\b/g,
+    (m, letters, digits) =>
+      known.has(`${letters}-${digits}`)
+        ? [...letters].join(" ") +
+          " " +
+          [...digits].map((d) => DIGIT_WORDS[Number(d)]).join(" ")
+        : m,
+  );
 }
 
 /** One fixed spoken sentence as a complete OpenAI-style SSE stream. */

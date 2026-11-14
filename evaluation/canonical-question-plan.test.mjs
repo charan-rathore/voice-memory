@@ -14,6 +14,26 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createLocalServer } from "../src/server.mjs";
+
+// The voice wire spells record ids for the synthesiser ("S Y N zero zero
+// zero one"); typed text renders the id ("SYN-0001"). The mapping is exact
+// and one-to-one: a wrong id or number on either channel still fails.
+const unspellIds = (s) =>
+  String(s).replace(
+    /\b([A-Z](?: [A-Z]){1,4}) ((?:zero|one|two|three|four|five|six|seven|eight|nine)(?: (?:zero|one|two|three|four|five|six|seven|eight|nine)){2,5})\b/g,
+    (m, letters, digits) =>
+      letters.replace(/ /g, "") +
+      "-" +
+      digits
+        .split(" ")
+        .map(
+          (w) =>
+            "zero one two three four five six seven eight nine"
+              .split(" ")
+              .indexOf(w),
+        )
+        .join(""),
+  );
 import { coverageNotice } from "../src/whole-question-coverage.mjs";
 
 const fx = JSON.parse(
@@ -477,7 +497,11 @@ test("RED typed and voice parity: text, verdict, kind, coverage and citations", 
     const label = `${c}: ${q}`;
     assert.ok(turn?.contract, `${label}: the call's turn carries a contract`);
     if (typed.final.kind !== "abstained")
-      assert.equal(spoken, typed.final.text, `${label}: same words`);
+      assert.equal(
+        unspellIds(spoken),
+        typed.final.text,
+        `${label}: same words`,
+      );
     assert.equal(turn.contract.kind, typed.final.kind, `${label}: kind`);
     assert.equal(
       turn.contract.verdict,
@@ -573,8 +597,10 @@ test("PIN conversation: new subject, pronoun follow-up, self-correction, clarifi
   const d = await call("health");
   const whose = await d.say("What is the thyroid result?");
   assert.equal(whose.turn.contract.kind, "clarify");
-  assert.match(whose.spoken, /SYN-0001/);
-  assert.match(whose.spoken, /SYN-0003/);
+  // the voice wire spells record ids for the synthesiser, exactly these ids
+  assert.match(whose.spoken, /S Y N zero zero zero one/);
+  assert.match(whose.spoken, /S Y N zero zero zero three/);
+  assert.doesNotMatch(whose.spoken, /SYN-000/);
   assert.doesNotMatch(whose.spoken, /mIU\/L/, "no person is picked");
   const reply = await d.say("SYN-0003");
   assert.match(reply.spoken, /TSH 2\.10 mIU\/L/);

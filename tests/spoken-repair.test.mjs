@@ -33,6 +33,29 @@ test("patient ids as spoken", () => {
   );
 });
 
+test("patient ids glued to the SYN word, as the recogniser writes them", () => {
+  // Live ASR on Hindi calls drops the space: "SYN001", "sin001".
+  assert.match(repairPatientIds("SYN001 ka result kya hai", ids), /SYN-0001/);
+  assert.match(repairPatientIds("syn001 ka result", ids), /SYN-0001/);
+  assert.match(repairPatientIds("sin001 report", ids), /SYN-0001/);
+  assert.match(repairPatientIds("SYN0001 ka ferritin", ids), /SYN-0001/);
+  assert.match(repairPatientIds("same003 ka deal", ids), /SYN-0003/);
+  // Glued forms that do not name a known record stay untouched.
+  assert.equal(
+    repairPatientIds("syncope was ruled out", ids),
+    "syncope was ruled out",
+  );
+  assert.equal(
+    repairPatientIds("SYN2026 is not on file", ids),
+    "SYN2026 is not on file",
+  );
+  // Spaced forms keep working.
+  assert.match(
+    repairPatientIds("kya sin zero zero one ka result kya hai", ids),
+    /SYN-0001/,
+  );
+});
+
 test("misheard test names, without touching ordinary words", () => {
   assert.match(repairTestNames("sparitine result", vocab), /Ferritin/);
   assert.match(repairTestNames("SYN-0001's fareitine", vocab), /Ferritin/);
