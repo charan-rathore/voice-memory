@@ -50,7 +50,7 @@ import {
   draft,
   validateEvidence,
 } from "../dist/engine.mjs";
-import { createVoiceAdapter } from "./voice-adapter.mjs";
+import { bundleRecordIds, createVoiceAdapter } from "./voice-adapter.mjs";
 import {
   DENSE_MODEL_ID,
   denseAvailableFor,
@@ -545,9 +545,38 @@ const TYPED_SOCIAL = new Set([
   "GREET",
 ]);
 // Replies written to be spoken, set for reading.
-const typedText = (s) =>
-  String(s)
-    .replace(/S Y N zero zero zero one/g, "SYN-0001")
+const TYPED_DIGIT = {
+  zero: "0",
+  one: "1",
+  two: "2",
+  three: "3",
+  four: "4",
+  five: "5",
+  six: "6",
+  seven: "7",
+  eight: "8",
+  nine: "9",
+};
+export const typedText = (s, knownIds = []) => {
+  // Spelled record ids ("S Y N zero zero zero one") render as ids for
+  // reading; the voice wire keeps the spelled form for the synthesiser.
+  // Only the verified record inventory is unspelled: an unrelated spoken
+  // code ("A B one two three") is never reinterpreted as a record id.
+  const known = new Set([...knownIds].map((x) => String(x).toUpperCase()));
+  return String(s)
+    .replace(
+      /\b([A-Z](?: [A-Z]){1,4}) ((?:zero|one|two|three|four|five|six|seven|eight|nine)(?: (?:zero|one|two|three|four|five|six|seven|eight|nine)){2,5})\b/g,
+      (m, letters, digits) => {
+        const id =
+          letters.replace(/ /g, "") +
+          "-" +
+          digits
+            .split(" ")
+            .map((w) => TYPED_DIGIT[w])
+            .join("");
+        return known.has(id) ? id : m;
+      },
+    )
     .replace(/forty two thousand dollar/gi, "$42,000")
     .replace(/thirty idle minutes/g, "30 idle minutes")
     .replace(/up to five/g, "up to 5")
@@ -555,6 +584,7 @@ const typedText = (s) =>
       /voice memory beige dot vercel dot app/g,
       "voice-memory-beige.vercel.app",
     );
+};
 // A strong subject: a test name or patient ID, or a deal term. Generic words
 // ("report", "result") never move a question to another case.
 const STRONG_LAB =
@@ -3311,7 +3341,7 @@ export function createLocalServer({
         return {
           question,
           lead: {
-            text: typedText(social.spoken),
+            text: typedText(social.spoken, bundleRecordIds(cs.bundle)),
             verdict: social.intent === "UPLOAD" ? "HOW_TO" : "HELP",
             field: null,
             citations: [],

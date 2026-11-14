@@ -2,6 +2,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createLocalServer } from "../src/server.mjs";
+
+// The voice wire spells record ids for the synthesiser ("S Y N zero zero
+// zero one"); typed text renders the id ("SYN-0001"). The mapping is exact
+// and one-to-one: a wrong id or number on either channel still fails.
+const unspellIds = (s) =>
+  String(s).replace(
+    /\b([A-Z](?: [A-Z]){1,4}) ((?:zero|one|two|three|four|five|six|seven|eight|nine)(?: (?:zero|one|two|three|four|five|six|seven|eight|nine)){2,5})\b/g,
+    (m, letters, digits) =>
+      letters.replace(/ /g, "") +
+      "-" +
+      digits
+        .split(" ")
+        .map((w) => "zero one two three four five six seven eight nine".split(" ").indexOf(w))
+        .join(""),
+  );
 test("multi-owner source blocks cannot promote a partly missing request to a whole answered result", async () => {
   const names = [
     "VM_SHARED_VOICE_REASONING",
@@ -84,10 +99,12 @@ test("multi-owner source blocks cannot promote a partly missing request to a who
         ["SYN-0003", "not_established"],
       ],
     );
-    assert.equal(
-      await voice([{ role: "user", content: partialQ }]),
-      partial.final.text,
-    );
+    const partialWire = await voice([{ role: "user", content: partialQ }]);
+    assert.equal(unspellIds(partialWire), partial.final.text);
+    // the voice wire spells each record id, exactly, and drops the dash form
+    assert.match(partialWire, /S Y N zero zero zero one/);
+    assert.match(partialWire, /S Y N zero zero zero three/);
+    assert.doesNotMatch(partialWire, /SYN-000/);
     const completeQ = "What is TSH for SYN-0001 and SYN-0003?";
     const complete = await ask(completeQ);
     assert.equal(complete.final.kind, "answered");
@@ -96,7 +113,7 @@ test("multi-owner source blocks cannot promote a partly missing request to a who
     assert.equal(complete.requirementCoverage.complete, true);
     assert.equal(complete.requirementCoverage.semanticAdmissionVerified, false);
     assert.equal(
-      await voice([{ role: "user", content: completeQ }]),
+      unspellIds(await voice([{ role: "user", content: completeQ }])),
       complete.final.text,
     );
     const missingQ = "What is sodium for SYN-0001 and SYN-0003?";
@@ -109,7 +126,7 @@ test("multi-owner source blocks cannot promote a partly missing request to a who
       ["not_established", "not_established"],
     );
     assert.equal(
-      await voice([{ role: "user", content: missingQ }]),
+      unspellIds(await voice([{ role: "user", content: missingQ }])),
       missing.final.text,
     );
     const reversed = await ask("What is ferritin for SYN-0003 and SYN-0001?");
