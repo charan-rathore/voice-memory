@@ -290,7 +290,9 @@ function phraseBoost(query, text) {
   const q = contentTokens(query);
   const grams = bigrams(q).filter((g) => {
     const [a, b] = g.split(" ");
-    return Boolean(a && b && !GENERIC_OPS_TERMS.has(a) && !GENERIC_OPS_TERMS.has(b));
+    return Boolean(
+      a && b && !GENERIC_OPS_TERMS.has(a) && !GENERIC_OPS_TERMS.has(b)
+    );
   });
   const hay = contentTokens(text).join(" ");
   const hayRaw = text.toLowerCase();
@@ -313,8 +315,10 @@ function topicalBoost(query, title, text) {
 ${text}`));
   let b = 0;
   if (looksLikeStampede(q) && hasAny(d, ["stampede", "redis"])) b += 0.28;
-  if (looksLikeFragmentation(q) && hasAny(d, ["fragmentation", "pending"])) b += 0.22;
-  if (looksLikeServerlessPg(q) && hasAny(d, ["pgbouncer", "postgres"])) b += 0.22;
+  if (looksLikeFragmentation(q) && hasAny(d, ["fragmentation", "pending"]))
+    b += 0.22;
+  if (looksLikeServerlessPg(q) && hasAny(d, ["pgbouncer", "postgres"]))
+    b += 0.22;
   return Math.min(0.34, b);
 }
 function maxNorm(values, value) {
@@ -346,7 +350,16 @@ function queryTokenSet(query) {
   return new Set(contentTokens(query));
 }
 function looksLikeStampede(q) {
-  return hasAny(q, ["cache", "cached", "stampede"]) && hasAny(q, ["hundred", "sudden", "expensive", "disappear", "recompute", "popular", "thundering", "herd"]);
+  return hasAny(q, ["cache", "cached", "stampede"]) && hasAny(q, [
+    "hundred",
+    "sudden",
+    "expensive",
+    "disappear",
+    "recompute",
+    "popular",
+    "thundering",
+    "herd"
+  ]);
 }
 function looksLikeFragmentation(q) {
   return hasAny(q, ["pending", "pod", "scatter", "fragment", "schedul"]) || hasAny(q, ["2gi", "2gib"]);
@@ -357,9 +370,12 @@ function looksLikeServerlessPg(q) {
 function expandQueryCues(query) {
   const q = queryTokenSet(query);
   const extra = [];
-  if (looksLikeStampede(q)) extra.push("stampede", "redis", "ttl", "jitter", "lock");
-  if (looksLikeFragmentation(q)) extra.push("fragmentation", "pending", "kubernetes");
-  if (looksLikeServerlessPg(q)) extra.push("pgbouncer", "postgres", "transaction");
+  if (looksLikeStampede(q))
+    extra.push("stampede", "redis", "ttl", "jitter", "lock");
+  if (looksLikeFragmentation(q))
+    extra.push("fragmentation", "pending", "kubernetes");
+  if (looksLikeServerlessPg(q))
+    extra.push("pgbouncer", "postgres", "transaction");
   return extra;
 }
 function calibratedScore(input) {
@@ -387,15 +403,25 @@ function rrfFuse(dense, keyword, topK) {
   return { fused, scores };
 }
 function rerankCalibrated(opts) {
-  const bm25Raw = opts.candidates.map((c) => opts.keywordScores.get(c.chunkId) ?? 0);
+  const bm25Raw = opts.candidates.map(
+    (c) => opts.keywordScores.get(c.chunkId) ?? 0
+  );
   const signals = /* @__PURE__ */ new Map();
   const scored = opts.candidates.map((c) => {
     const dense = opts.denseScores.has(c.chunkId) ? opts.denseScores.get(c.chunkId) ?? null : null;
     const bm25 = opts.keywordScores.get(c.chunkId) ?? 0;
-    const idfRecall = weightedRecall(opts.terms, `${c.title}
+    const idfRecall = weightedRecall(
+      opts.terms,
+      `${c.title}
 ${c.heading ?? ""}
-${c.text}`, opts.idf);
-    const titleRecall = weightedRecall(opts.terms, `${c.title} ${c.heading ?? ""}`, opts.idf);
+${c.text}`,
+      opts.idf
+    );
+    const titleRecall = weightedRecall(
+      opts.terms,
+      `${c.title} ${c.heading ?? ""}`,
+      opts.idf
+    );
     const phrase = phraseBoost(opts.query, `${c.title}
 ${c.text}`);
     const topical = (c.corpusId ?? SEED_CORPUS_ID) === SEED_CORPUS_ID ? topicalBoost(opts.query, c.title, c.text) : 0;
@@ -411,11 +437,21 @@ ${c.text}`);
     );
     const ents = entityTermsInQuery(opts.query);
     const titleTok = new Set(contentTokens(`${c.title} ${c.heading ?? ""}`));
-    if ((c.corpusId ?? SEED_CORPUS_ID) === SEED_CORPUS_ID && ents.some((e) => tokenSetMatches(e, titleTok))) score = Math.min(1, score + 0.12);
-    if (opts.preferredSlugs?.includes(c.slug)) score = Math.min(1, score + 0.03);
+    if ((c.corpusId ?? SEED_CORPUS_ID) === SEED_CORPUS_ID && ents.some((e) => tokenSetMatches(e, titleTok)))
+      score = Math.min(1, score + 0.12);
+    if (opts.preferredSlugs?.includes(c.slug))
+      score = Math.min(1, score + 0.03);
     const pathCost = opts.graphPathCosts?.get(c.chunkId);
-    if (pathCost !== void 0) score = Math.min(1, score + 0.04 / (1 + pathCost));
-    signals.set(c.chunkId, { idfRecall, titleRecall, phrase, topical, dense, bm25 });
+    if (pathCost !== void 0)
+      score = Math.min(1, score + 0.04 / (1 + pathCost));
+    signals.set(c.chunkId, {
+      idfRecall,
+      titleRecall,
+      phrase,
+      topical,
+      dense,
+      bm25
+    });
     return { chunk: c, score };
   });
   scored.sort((a, b) => b.score - a.score);
@@ -442,7 +478,9 @@ function isSupported(signals, calibrated) {
   return false;
 }
 function distinctiveDocHits(query, ranked, idf) {
-  const terms = contentTokens(query).filter((t) => !GENERIC_OPS_TERMS.has(t) && (idf.get(t) ?? 0) > 0.4);
+  const terms = contentTokens(query).filter(
+    (t) => !GENERIC_OPS_TERMS.has(t) && (idf.get(t) ?? 0) > 0.4
+  );
   const slugs = [];
   for (const c of ranked.slice(0, 8)) {
     const title = new Set(contentTokens(`${c.title} ${c.heading ?? ""}`));
@@ -455,7 +493,8 @@ function queryLooksMultiSource(query, ranked, idf) {
   const hits = distinctiveDocHits(query, ranked, idf);
   if (hits.length >= 2) return true;
   const q = query.toLowerCase();
-  if (/\band\b|\bshared by\b|\bboth\b|\bversus\b|\bvs\.?\b/.test(q) && hits.length >= 2) return true;
+  if (/\band\b|\bshared by\b|\bboth\b|\bversus\b|\bvs\.?\b/.test(q) && hits.length >= 2)
+    return true;
   return false;
 }
 function selectContext(ranked, signals, opts) {
@@ -466,7 +505,10 @@ function selectContext(ranked, signals, opts) {
     const qtok = contentTokens(opts.query);
     const mentioning = ranked.filter((c) => {
       if (c.score < 0.1) {
-        dropReasons.set(c.chunkId, "Underspecified query: calibrated score < 0.10. Inspect only.");
+        dropReasons.set(
+          c.chunkId,
+          "Underspecified query: calibrated score < 0.10. Inspect only."
+        );
         return false;
       }
       const doc = new Set(contentTokens(`${c.title}
@@ -484,11 +526,17 @@ ${c.text}`));
     const seen = /* @__PURE__ */ new Set();
     for (const chunk of mentioning) {
       if (packed2.length >= Math.min(3, opts.topK ?? 3)) {
-        dropReasons.set(chunk.chunkId, "Outside the packed context window (max 3 supported chunks).");
+        dropReasons.set(
+          chunk.chunkId,
+          "Outside the packed context window (max 3 supported chunks)."
+        );
         continue;
       }
       if (seen.has(chunk.slug)) {
-        dropReasons.set(chunk.chunkId, "Duplicate document. a stronger chunk from this source is already packed.");
+        dropReasons.set(
+          chunk.chunkId,
+          "Duplicate document. a stronger chunk from this source is already packed."
+        );
         continue;
       }
       packed2.push({ ...chunk, rank: packed2.length + 1 });
@@ -528,7 +576,9 @@ ${c.text}`));
     }
     afterCliff.push(c);
   }
-  const coordinating = /\band\b|\bshared by\b|\bboth\b|\bversus\b|\bvs\.?\b/.test(opts.query.toLowerCase());
+  const coordinating = /\band\b|\bshared by\b|\bboth\b|\bversus\b|\bvs\.?\b/.test(
+    opts.query.toLowerCase()
+  );
   const exclusive = entityTermsInQuery(opts.query);
   if (exclusive.length === 1 && !coordinating) {
     const holding = afterCliff.filter((c) => {
@@ -571,15 +621,28 @@ ${c.text}`));
   const second = afterCliff[1];
   let pool = afterCliff;
   if (!multi && second && peak >= second.score * CONTEXT_SOLO_MARGIN) {
+    const winner = afterCliff[0];
+    const topDense = signals.get(winner.chunkId)?.dense ?? null;
+    let challenger = null;
+    if (topDense != null) {
+      for (const c of afterCliff.slice(1)) {
+        if (c.slug === winner.slug) continue;
+        const d = signals.get(c.chunkId)?.dense ?? null;
+        if (d == null || d <= topDense) continue;
+        const best = challenger ? signals.get(challenger.chunkId)?.dense ?? null : null;
+        if (best == null || d > best) challenger = c;
+      }
+    }
     for (const c of afterCliff.slice(1)) {
-      if (c.slug === afterCliff[0].slug) continue;
+      if (challenger && c.chunkId === challenger.chunkId) continue;
+      if (!challenger && c.slug === winner.slug) continue;
       dropReasons.set(
         c.chunkId,
-        `Rank-1 margin: ${peak.toFixed(2)} is \u2265 ${CONTEXT_SOLO_MARGIN}\xD7 stronger than ${second.score.toFixed(2)}. Only the top source packed.`
+        challenger ? `Rank-1 margin: ${peak.toFixed(2)} is \u2265 ${CONTEXT_SOLO_MARGIN}\xD7 stronger than ${second.score.toFixed(2)}. Only the top source and the strongest dense challenger (${challenger.title}) are eligible to pack.` : `Rank-1 margin: ${peak.toFixed(2)} is \u2265 ${CONTEXT_SOLO_MARGIN}\xD7 stronger than ${second.score.toFixed(2)}. Only the top source packed.`
       );
     }
-    pool = afterCliff.filter((c) => c.slug === afterCliff[0].slug).slice(0, 2);
-    if (!pool.length) pool = [afterCliff[0]];
+    pool = challenger ? [winner, challenger] : afterCliff.filter((c) => c.slug === winner.slug).slice(0, 2);
+    if (!pool.length) pool = [winner];
   }
   const packed = [];
   const seenText = /* @__PURE__ */ new Set();
@@ -587,12 +650,18 @@ ${c.text}`));
   const cap = Math.min(3, opts.topK ?? 3);
   for (const chunk of pool) {
     if (packed.length >= cap) {
-      dropReasons.set(chunk.chunkId, "Outside the packed context window (max 3 supported chunks).");
+      dropReasons.set(
+        chunk.chunkId,
+        "Outside the packed context window (max 3 supported chunks)."
+      );
       continue;
     }
     const normalizedText = chunk.text.replace(/\s+/g, " ").trim();
     if (seenText.has(normalizedText)) {
-      dropReasons.set(chunk.chunkId, "Duplicate passage. the same text is already packed.");
+      dropReasons.set(
+        chunk.chunkId,
+        "Duplicate passage. the same text is already packed."
+      );
       continue;
     }
     if (used + chunk.tokenCount > maxTokens && packed.length) {
@@ -606,7 +675,9 @@ ${c.text}`));
   return { packed, dropReasons };
 }
 function payloadQuery(query) {
-  if (!/ignore (the )?(indexed )?corpus|answer from memory|from your (own )?knowledge/i.test(query)) {
+  if (!/ignore (the )?(indexed )?corpus|answer from memory|from your (own )?knowledge/i.test(
+    query
+  )) {
     return query;
   }
   const idx = query.lastIndexOf(":");
