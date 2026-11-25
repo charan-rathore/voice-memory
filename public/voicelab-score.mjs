@@ -180,7 +180,8 @@ export function scoreCall(call) {
       firstByte === null
         ? null
         : (call.agentAudioStarts.find(
-            (x) => x >= firstByte && (nextReceived === null || x < nextReceived),
+            (x) =>
+              x >= firstByte && (nextReceived === null || x < nextReceived),
           ) ?? null);
     const ref = call.script?.[i] ?? null;
     return {
