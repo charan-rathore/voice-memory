@@ -79,10 +79,11 @@ function numbersOf(s) {
   const out = [];
   // Entity scoring needs decimals and each side of a compact split. Keep
   // this tokenization independent of the WER normalization above.
-  const toks = String(s ?? "")
-    .toLowerCase()
-    .replace(/(?<=\d),(?=\d{3}\b)/g, "")
-    .match(/\d+(?:\.\d+)?|[\p{L}\p{M}]+/gu) ?? [];
+  const toks =
+    String(s ?? "")
+      .toLowerCase()
+      .replace(/(?<=\d),(?=\d{3}\b)/g, "")
+      .match(/\d+(?:\.\d+)?|[\p{L}\p{M}]+/gu) ?? [];
   let cur = null;
   let total = 0;
   const flush = () => {
