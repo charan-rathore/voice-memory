@@ -437,19 +437,58 @@ export function briefAnswer(question, bundle, cite, extra = {}) {
           w.slice(0, 3),
         );
       const diffs = [];
+      let labelCur = null;
+      let labelBad = false;
       for (const a of items(est)) {
         const sa = stem(a.label);
         const bs = items(fin).filter((b) =>
           stem(b.label).some((w) => sa.includes(w)),
         );
         if (!bs.length) continue;
-        const amt = (v) =>
-          Number(
-            (/(\d[\d,]*\.?\d*)/.exec(v.split("·").pop())?.[1] ?? "").replace(
-              /,/g,
-              "",
-            ),
-          );
+        // The amount is the numeric token tied to a currency marker, in
+        // either recorded order ("40 · USD 11,200.00", "INR 16,000.00 · 4
+        // nights", "22 Oct · USD 440.00"). Two marked amounts, or several
+        // different bare numbers with no marker, are ambiguous: the line is
+        // skipped rather than priced from a guessed token. No number at all
+        // means no amount is recorded: reporting 0 would invent a charge
+        // the record never made.
+        const CUR_SRC = "(?:USD|INR|EUR|GBP|JPY|CAD|AUD|\\$|₹|€|£)";
+        const CUR = new RegExp(CUR_SRC, "i");
+        const MARKED = new RegExp(
+          `${CUR_SRC}\\s*(-?\\d[\\d,]*\\.?\\d*)|(-?\\d[\\d,]*\\.?\\d*)\\s*${CUR_SRC}`,
+          "gi",
+        );
+        const NUM = /(-?\d[\d,]*\.?\d*)/g;
+        const amt = (v) => {
+          let m;
+          if (CUR.test(v)) {
+            let marked = null;
+            MARKED.lastIndex = 0;
+            while ((m = MARKED.exec(v)) !== null) {
+              if (marked !== null) return NaN; // two marked amounts: no safe pick
+              marked = (m[1] ?? m[2]).replace(/,/g, "");
+              if (m.index === MARKED.lastIndex) MARKED.lastIndex++;
+            }
+            if (marked !== null) return Number(marked);
+          }
+          let bare = null;
+          NUM.lastIndex = 0;
+          while ((m = NUM.exec(v)) !== null) {
+            const n = m[1].replace(/,/g, "");
+            if (bare !== null && bare !== n) return NaN; // ambiguous bare numbers
+            bare = n;
+            if (m.index === NUM.lastIndex) NUM.lastIndex++;
+          }
+          return bare !== null ? Number(bare) : NaN;
+        };
+        // The spoken label may only name a written currency code every
+        // participating fact carries; a bare symbol, an unmarked fact, or
+        // mixed codes get no label at all.
+        const CUR_WORD = new RegExp(`\\b${CUR_SRC}\\b`, "i");
+        const currencyOf = (v) => {
+          const m = CUR_WORD.exec(v);
+          return m && /[a-z]/i.test(m[0]) ? m[0].toUpperCase() : null;
+        };
         const before = amt(a.value);
         const after = bs.reduce((x, b) => x + amt(b.value), 0);
         if (
@@ -460,14 +499,21 @@ export function briefAnswer(question, bundle, cite, extra = {}) {
           diffs.push(
             `${a.label} ${before.toLocaleString("en-US")} → ${bs.map((b) => b.label).join(" + ")} ${after.toLocaleString("en-US")}`,
           );
+          for (const c of [
+            currencyOf(a.value),
+            ...bs.map((b) => currencyOf(b.value)),
+          ])
+            if (!c || (labelCur !== null && c !== labelCur)) labelBad = true;
+            else labelCur = c;
           useFact({ ...est, f: a });
           bs.forEach((b) => useFact({ ...fin, f: b }));
         }
       }
+      const label = labelBad || labelCur === null ? "" : ` (${labelCur})`;
       return say(
         `${est.f.value.split("·")[0].trim()} was the ${titleOf(est.r).toLowerCase()} (${pageOf(est.r)}, ${est.r.status}); the ${titleOf(fin.r).toLowerCase()} (${pageOf(fin.r)}, ${fin.r.status}) replaced it with ${fin.f.value.split("·")[0].trim()}.` +
           (diffs.length
-            ? ` The line items that differ (USD): ${diffs.join("; ")}.`
+            ? ` The line items that differ${label}: ${diffs.join("; ")}.`
             : "") +
           " The records don't give a reason for each difference.",
         "BILL_CHANGE",
@@ -544,18 +590,30 @@ export function briefAnswer(question, bundle, cite, extra = {}) {
 
   // ---- who treated / which doctor
   if (INTENTS.clinician.test(q)) {
-    const d = factOf(
+    const named = factOf(
       mine,
       /signator|attending|physician|consultant|doctor|ordered by/i,
-    ).find(
+    ).filter(
       (h) =>
         /dr\.?\s|physician|doctor/i.test(h.f.value) ||
         /signator/i.test(h.f.label),
     );
+    const d = named[0];
     if (d) {
       useFact(d);
+      // Report only what the records literally say: which record names which
+      // printed clinician under which printed label. Printed names are not
+      // matched for identity - the same name twice does not prove one person,
+      // and an attending-physician label does not prove signing - so no
+      // uniqueness or signing claim is ever composed here.
+      const another = named.slice(1).find((h) => h.f !== d.f);
+      if (another) useFact(another);
       return say(
-        `The ${titleOf(d.r).toLowerCase()} (${pageOf(d.r)}, ${d.r.status ?? "no status"}) names ${d.f.value} (${d.f.label.toLowerCase()}). It's the only clinician named as signing; the records don't list everyone who treated her.`,
+        `The ${titleOf(d.r).toLowerCase()} (${pageOf(d.r)}, ${d.r.status ?? "no status"}) names ${d.f.value} (${d.f.label.toLowerCase()}).` +
+          (another
+            ? ` The ${titleOf(another.r).toLowerCase()} (${pageOf(another.r)}, ${another.r.status ?? "no status"}) also names ${another.f.value} (${another.f.label.toLowerCase()}).`
+            : "") +
+          " The records don't list everyone who treated her.",
         "CLINICIAN",
       );
     }
