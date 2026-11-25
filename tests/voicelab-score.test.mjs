@@ -33,6 +33,17 @@ test("critical entities: notation-insensitive, meaning-sensitive", () => {
   );
 });
 
+test("critical entities retain decimal percentages and compact splits", () => {
+  assert.deepEqual(entityErrors("the rate is 12.5%", "the rate is 15.5%"), [
+    'number "12.5" lost', 'number "15.5" inserted',
+  ]);
+  assert.deepEqual(entityErrors("the split is 40/60", "the split is 40/50"), [
+    'number "60" lost', 'number "50" inserted',
+  ]);
+  assert.deepEqual(entityErrors("the amount is 1,234,567.25", "the amount is 1234567.25"), []);
+  assert.deepEqual(entityErrors("constructor", ""), []);
+});
+
 test("clock alignment keeps the tightest round trip", () => {
   const c = clockOffset([
     { t0: 0, serverNow: 1500, t1: 400 },
