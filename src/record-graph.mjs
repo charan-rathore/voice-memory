@@ -23,7 +23,11 @@ const AMOUNTS =
   /(?:USD|INR|EUR|GBP|RS\.?|[$₹])\s?(\d[\d,]*(?:\.\d+)?)|\b(\d[\d,]*\.\d{2})\b/gi;
 const DATES =
   /\b(?:(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b(?:\s+(\d{4}))?|(\d{4})-(\d{2})-(\d{2})\b)/gi;
-const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const MONTHS = "jan feb mar apr may jun jul aug sep oct nov dec".split(" ");
+const dateKey = (m) =>
+  m[4]
+    ? `${Number(m[6])} ${MONTHS[Number(m[5]) - 1] ?? m[5]} ${m[4]}`
+    : `${Number(m[1])} ${m[2].toLowerCase().slice(0, 3)}${m[3] ? " " + m[3] : ""}`;
 const kindKey = (v, kind) =>
   kind === "money"
     ? [...String(v).matchAll(AMOUNTS)]
@@ -31,11 +35,7 @@ const kindKey = (v, kind) =>
         .join(" ")
     : kind === "date"
       ? [...String(v).matchAll(DATES)]
-          .map(
-            (m) => m[4]
-              ? `${Number(m[6])} ${MONTHS[Number(m[5]) - 1] ?? m[5]} ${m[4]}`
-              : `${Number(m[1])} ${m[2].toLowerCase().slice(0, 3)}${m[3] ? " " + m[3] : ""}`,
-          )
+          .map(dateKey)
           .join(" ")
       : null;
 const valueKey = (v) =>
