@@ -6,6 +6,7 @@ const exec = promisify(execFile);
 for (const scenario of [
   "load-pressure",
   "warm-pressure",
+  "concurrent-warmup",
   "query-pressure",
   "text-pressure",
   "drain-before-dispose",
