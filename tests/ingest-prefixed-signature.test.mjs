@@ -23,7 +23,5 @@ test("prefixed PDFs remain recognized and actual PDF magic cannot masquerade as 
     detectFormat(Buffer.from("garbage\n%PDF-1.7"), "sample.pdf").kind,
     "pdf",
   );
-  assert.throws(() =>
-    detectFormat(Buffer.from("%PDF-1.7"), "mislabeled.txt"),
-  );
+  assert.throws(() => detectFormat(Buffer.from("%PDF-1.7"), "mislabeled.txt"));
 });
