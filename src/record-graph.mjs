@@ -34,9 +34,7 @@ const kindKey = (v, kind) =>
         .map((m) => String(Number((m[1] ?? m[2]).replace(/,/g, ""))))
         .join(" ")
     : kind === "date"
-      ? [...String(v).matchAll(DATES)]
-          .map(dateKey)
-          .join(" ")
+      ? [...String(v).matchAll(DATES)].map(dateKey).join(" ")
       : null;
 const valueKey = (v) =>
   (
