@@ -77,7 +77,13 @@ export function wer(ref, hyp) {
 /** Collapse number words so "forty two thousand" and "42,000" compare equal. */
 function numbersOf(s) {
   const out = [];
-  const toks = tokens(s);
+  // Entity scoring needs decimals and each side of a compact split. Keep
+  // this tokenization independent of the WER normalization above.
+  const toks =
+    String(s ?? "")
+      .toLowerCase()
+      .replace(/(?<=\d),(?=\d{3}\b)/g, "")
+      .match(/\d+(?:\.\d+)?|[\p{L}\p{M}]+/gu) ?? [];
   let cur = null;
   let total = 0;
   const flush = () => {
@@ -89,7 +95,7 @@ function numbersOf(s) {
     if (/^\d+(?:\.\d+)?$/.test(t)) {
       flush();
       out.push(String(Number(t)));
-    } else if (t in NUMW) {
+    } else if (Object.hasOwn(NUMW, t)) {
       cur = (cur ?? 0) + NUMW[t];
     } else if (t === "hundred" && cur !== null) {
       cur *= 100;
