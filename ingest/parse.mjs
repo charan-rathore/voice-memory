@@ -1,7 +1,7 @@
 // Format dispatch + canonical build + review policy. Pure function of the
 // bytes and filename (runs inside the ingestion worker).
 import { IngestError, LIMITS, OCR_FAIL_CONFIDENCE } from "./errors.mjs";
-import { detectFormat } from "./detect.mjs";
+import { decodeText, detectFormat } from "./detect.mjs";
 import { buildDocument, buildTextDocument } from "./canonical.mjs";
 
 import { PIPELINE_VERSION } from "./version.mjs";
@@ -25,11 +25,21 @@ export async function parseBuffer(
   const { kind, mime } = detectFormat(buf, filename);
   let doc;
   if (kind === "text" || kind === "markdown") {
-    const source = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    const source = decodeText(buf);
+    if (source === null)
+      throw new IngestError(
+        "binary_text",
+        "This file contains binary data, not readable text.",
+      );
+    // A UTF-16 upload keeps its own bytes (and hash); only the canonical text
+    // that is indexed and cited is the decoded string. Its original is
+    // served with the charset it was written in.
+    const charset =
+      buf[0] === 0xff ? "utf-16le" : buf[0] === 0xfe ? "utf-16be" : null;
     doc = buildTextDocument({
       source,
       kind,
-      mime,
+      mime: charset ? mime.replace("utf-8", charset) : mime,
       filename,
       bytes: buf,
       parser: { name: "vm-text/1", ocr: null },

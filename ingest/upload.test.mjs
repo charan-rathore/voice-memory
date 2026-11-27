@@ -340,3 +340,91 @@ test("fixed voice credential follows deletions and fails closed when no document
     await c.close();
   }
 });
+
+test("UTF-16 text with a byte-order mark is read; binary data is still refused", async () => {
+  const c = await start();
+  try {
+    const body =
+      "Lease memo\n\nThe monthly rent is 1,250 euros. Naïve café 東京 😀.\n";
+    const le = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from(body.replace(/\n/g, "\r\n"), "utf16le"),
+    ]);
+    const be = Buffer.from(le);
+    be.swap16();
+    be.writeUInt8(0xfe, 0);
+    be.writeUInt8(0xff, 1);
+    await c.upload(le, "memo-le.txt");
+    await c.upload(be, "memo-be.txt");
+    const utf32 = Buffer.concat([
+      Buffer.from([0xff, 0xfe, 0, 0]),
+      Buffer.from("rent is 1250", "utf-8"),
+    ]);
+    await c.upload(utf32, "memo-32.txt");
+    await c.upload(Buffer.from("a\0b\0 plain nul bytes".repeat(8)), "nul.txt");
+    await c.upload(
+      Buffer.from([0xff, 0xfe, 0x00, 0xd8, 0x41, 0x00]),
+      "lone-surrogate.txt",
+    );
+    await c.upload(Buffer.from([0xff, 0xfe, 0x41]), "odd.txt");
+    const lib = await c.settle();
+    const by = Object.fromEntries(lib.documents.map((d) => [d.filename, d]));
+    assert.equal(by["memo-le.txt"].status, "ready");
+    assert.equal(by["memo-be.txt"].status, "ready");
+    for (const n of [
+      "memo-32.txt",
+      "nul.txt",
+      "lone-surrogate.txt",
+      "odd.txt",
+    ]) {
+      assert.equal(by[n].status, "failed", n);
+      assert.equal(by[n].error.code, "binary_text", n);
+    }
+    const a = await (
+      await c.post("query", { question: "What is the monthly rent?" })
+    ).json();
+    assert.match(JSON.stringify(a), /1,250 euros/);
+    // The uploaded bytes are kept as uploaded and served with their own
+    // charset; only the indexed and cited text is the decoded string.
+    for (const [name, bytes, charset] of [
+      ["memo-le.txt", le, "utf-16le"],
+      ["memo-be.txt", be, "utf-16be"],
+    ]) {
+      const orig = await c.get("library/" + by[name].id + "/original");
+      assert.equal(orig.status, 200);
+      assert.equal(
+        orig.headers.get("content-type"),
+        `text/plain; charset=${charset}`,
+      );
+      assert.ok(
+        Buffer.from(await orig.arrayBuffer()).equals(bytes),
+        name + " bytes",
+      );
+      assert.equal(
+        new TextDecoder(charset)
+          .decode(bytes)
+          .replace(/\r\n/g, "\n")
+          .replace(/^\uFEFF/, ""),
+        body,
+      );
+    }
+    // Citations are spans of the decoded text, never of the raw bytes.
+    const cited =
+      (a.answer ?? a).citations?.[0] ??
+      a.final?.citations?.[0] ??
+      a.lead?.citations?.[0];
+    assert.ok(
+      cited?.quote?.includes("1,250 euros"),
+      "citation quotes the decoded text",
+    );
+    const view = await (await c.get("library/" + by["memo-le.txt"].id)).json();
+    const full = view.document.text ?? "";
+    if (full)
+      assert.ok(
+        full.includes(cited.quote),
+        "quote is a literal span of the indexed text",
+      );
+  } finally {
+    await c.close();
+  }
+});
