@@ -71,3 +71,20 @@ test("stage latencies come only from measured timestamps", () => {
   });
   assert.equal(none.rows[0].ms.speechToAnswer, null);
 });
+
+test("an interrupted turn cannot borrow the next turn's audible response", () => {
+  const result = scoreCall({
+    script: ["first question", "second question"],
+    clock: { offset: 0, errorMs: 0 },
+    speechEnds: [100, 500],
+    agentAudioStarts: [800],
+    turns: [
+      { transcript: "first question", receivedAt: 200, firstByteAt: 220 },
+      { transcript: "second question", receivedAt: 600, firstByteAt: 630 },
+    ],
+  });
+  assert.equal(result.rows[0].ms.speechToAnswer, null);
+  assert.equal(result.rows[0].ms.ttsAndNetwork, null);
+  assert.equal(result.rows[1].ms.speechToAnswer, 300);
+  assert.equal(result.speechToAnswerMs.n, 1);
+});

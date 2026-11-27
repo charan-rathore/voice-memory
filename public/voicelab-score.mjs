@@ -168,9 +168,10 @@ export function scoreCall(call) {
   const rows = call.turns.map((t, i) => {
     const received = toLocal(t.receivedAt);
     const firstByte = toLocal(t.firstByteAt);
+    const nextReceived = toLocal(call.turns[i + 1]?.receivedAt);
     // The caller's speech end is the last local speech end before the
     // server received the turn; the agent audio is the first onset after
-    // the first byte left the server.
+    // the first byte left the server, before a new turn can take ownership.
     const speechEnd =
       received === null
         ? null
@@ -178,7 +179,10 @@ export function scoreCall(call) {
     const audio =
       firstByte === null
         ? null
-        : (call.agentAudioStarts.find((x) => x >= firstByte) ?? null);
+        : (call.agentAudioStarts.find(
+            (x) =>
+              x >= firstByte && (nextReceived === null || x < nextReceived),
+          ) ?? null);
     const ref = call.script?.[i] ?? null;
     return {
       i,
