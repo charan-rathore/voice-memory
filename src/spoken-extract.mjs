@@ -53,7 +53,13 @@ function units(quote) {
       continue;
     }
     if (/^#{1,6}\s/.test(t)) continue; // headings are labels, not answers
-    for (const s of t.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g) ?? [t])
+    // A full stop ends a sentence only before whitespace or the end of the
+    // line: "28.4 BLEU" and "dropout of 0.1" stay in one unit. (The old
+    // pattern could not step over the "." in a decimal, so the text before
+    // it was dropped and the unit began mid-sentence, or vanished.)
+    for (const s of t.match(
+      /(?:[^.!?]|[.!?]+(?!\s|$))+(?:[.!?]+(?=\s|$)|$)/g,
+    ) ?? [t])
       if (s.trim()) out.push({ text: s.trim(), row: false });
   }
   return out;
