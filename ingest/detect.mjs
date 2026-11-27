@@ -56,19 +56,44 @@ function sniff(buf, ext) {
   // Some PDFs carry junk before the header. Do not mistake an inline
   // example in an explicitly named, readable text file for that header.
   const head = buf.subarray(0, 1024);
-  const declaredText = ["txt", "text", "md", "markdown", "csv", "log"].includes(ext);
-  if (head.indexOf("%PDF-") > 0 && (!declaredText || !looksLikeText(buf))) return "pdf";
+  const declaredText = ["txt", "text", "md", "markdown", "csv", "log"].includes(
+    ext,
+  );
+  if (head.indexOf("%PDF-") > 0 && (!declaredText || !looksLikeText(buf)))
+    return "pdf";
   return null;
 }
 
-function looksLikeText(buf) {
-  if (buf.includes(0x00)) return false;
-  try {
-    new TextDecoder("utf-8", { fatal: true }).decode(buf);
-    return true;
-  } catch {
-    return false;
+/**
+ * Decode a text upload, or return null when it is not readable text.
+ * UTF-8 is the default. UTF-16 is accepted only with a byte-order mark (what
+ * Windows "Unicode" saves write); without one, NUL bytes still mean binary.
+ * A UTF-32 mark (FF FE 00 00) and any NUL left after decoding are rejected,
+ * so binary data is never read as text.
+ */
+export function decodeText(buf) {
+  let label = "utf-8";
+  let body = buf;
+  if (startsWith(buf, [0xff, 0xfe]) && !startsWith(buf, [0x00, 0x00], 2)) {
+    label = "utf-16le";
+    body = buf.subarray(2);
+  } else if (startsWith(buf, [0xfe, 0xff])) {
+    label = "utf-16be";
+    body = buf.subarray(2);
+  } else if (buf.includes(0x00)) {
+    return null;
   }
+  if (label !== "utf-8" && body.length % 2 !== 0) return null;
+  try {
+    const text = new TextDecoder(label, { fatal: true }).decode(body);
+    return text.includes("\u0000") ? null : text;
+  } catch {
+    return null;
+  }
+}
+
+function looksLikeText(buf) {
+  return decodeText(buf) !== null;
 }
 
 /**
