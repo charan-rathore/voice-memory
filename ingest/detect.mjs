@@ -47,15 +47,17 @@ export function safeFilename(name) {
   return base.length > 140 ? base.slice(0, 120) + "…" + base.slice(-16) : base;
 }
 
-function sniff(buf) {
+function sniff(buf, ext) {
   if (startsWith(buf, PDF)) return "pdf";
-  // Some PDFs carry junk before the header; the spec tolerates 1024 bytes.
-  const head = buf.subarray(0, 1024);
-  if (head.indexOf("%PDF-") > 0) return "pdf";
   if (startsWith(buf, PNG)) return "png";
   if (startsWith(buf, JPEG)) return "jpeg";
   if (startsWith(buf, ZIP)) return "zip";
   if (startsWith(buf, OLE)) return "ole";
+  // Some PDFs carry junk before the header. Do not mistake an inline
+  // example in an explicitly named, readable text file for that header.
+  const head = buf.subarray(0, 1024);
+  const declaredText = ["txt", "text", "md", "markdown", "csv", "log"].includes(ext);
+  if (head.indexOf("%PDF-") > 0 && (!declaredText || !looksLikeText(buf))) return "pdf";
   return null;
 }
 
@@ -84,7 +86,7 @@ export function detectFormat(buf, filename) {
       `This file is ${(buf.length / 1048576).toFixed(1)} MB. The limit is ${LIMITS.maxFileBytes / 1048576} MB per file.`,
     );
   const ext = extensionOf(filename);
-  const sig = sniff(buf);
+  const sig = sniff(buf, ext);
   let kind = null;
   if (sig === "zip") {
     // A .docx is a ZIP with a Word main part; the part check happens in the
