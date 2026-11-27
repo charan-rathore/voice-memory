@@ -262,3 +262,31 @@ test("normalized alias refuses when another printed root is outside retrieved ev
   assert.equal(r.supported, false);
   assert.equal(extractiveSpoken(q, r, b), null);
 });
+
+test("a sentence with a decimal number is kept whole, so the line that answers can be chosen", () => {
+  const text = [
+    "Training",
+    "",
+    "We trained on the standard dataset of about 4.5 million sentence pairs. The weather was fine.",
+    "",
+    "Optimizer",
+    "",
+    "We used the Adam optimizer with beta1 = 0.9 and beta2 = 0.98. We varied the learning rate.",
+    "",
+    "Results",
+    "",
+    "Our big model achieves 28.4 BLEU on the English-to-German task. The base model uses a dropout rate of 0.1.",
+  ].join("\n");
+  const bundle = importBundle([{ title: "paper", text }]);
+  const speak = (q) => extractiveSpoken(q, answer(q, bundle), bundle);
+  for (const [q, want] of [
+    ["What optimizer was used?", "Adam optimizer"],
+    ["What BLEU score does the big model achieve?", "28.4 BLEU"],
+    ["What is the dropout rate of the base model?", "dropout rate of 0.1"],
+  ]) {
+    const s = speak(q);
+    assert.ok(s?.spoken.includes(want), q + " " + JSON.stringify(s));
+    // the quoted unit starts at the sentence, not after the decimal point
+    assert.ok(!/^\d/.test(s.spoken), q + " " + JSON.stringify(s));
+  }
+});
