@@ -571,10 +571,20 @@ test("a function word at the start of running text is never a test name", () => 
     "the 2017 Conference on Empirical Methods in Natural Language Processing, pages 670-680, Copenhagen, Denmark.";
   assert.equal(readLabLine(line), null);
   assert.equal(
-    readLabLine("in 2018 Proceedings of the Conference 12-34"),
+    readLabLine("an 2018 Proceedings of the Conference 12-34"),
     null,
   );
   assert.equal(readLabLine("of 40 mg/dL 10-20"), null);
+  // Short genuine names and element symbols still read.
+  for (const [l, name] of [
+    ["Hb 12.1 g/dL 13.0 - 17.0", "Hb"],
+    ["ALT 45 U/L 7 - 56", "ALT"],
+    ["Na 140 mmol/L 135 - 145", "Na"],
+    ["As 5 ug/L 0 - 10", "As"],
+    ["In 0.5 ug/L 0 - 1", "In"],
+    ["TSH 2.1 mIU/L 0.4 - 4.0", "TSH"],
+  ])
+    assert.equal(readLabLine(l)?.test, name, l);
   // Real names that merely contain a function word are untouched.
   assert.equal(
     readLabLine("Creatinine, Serum 0.86 mg/dL 0.67 - 1.17")?.test,

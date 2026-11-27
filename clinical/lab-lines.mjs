@@ -527,10 +527,11 @@ function validTest(t) {
   )
     return false;
   if ((t.match(/[A-Za-z]/g) ?? []).length < 2) return false;
-  // A function word is never a test name: running text ("the 2017 Conference
+  // A function word is never a test name ("As" and "In" stay: arsenic and
+  // indium are printed that way): running text ("the 2017 Conference
   // on ... pages 670-680") would otherwise read as "the = 2017" with a range.
   if (
-    /^(the|an?|of|in|on|at|to|by|for|from|with|and|or|as|is|are|was|were|than|that|this|these|those|its|their)$/i.test(
+    /^(the|an?|of|on|to|for|from|with|and|is|are|was|were|than|that|this|these|those|its|their)$/i.test(
       t,
     )
   )
