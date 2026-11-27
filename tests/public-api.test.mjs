@@ -1593,3 +1593,149 @@ test("synthetic conflicting approved fees clarify without rewriting the supporte
     await new Promise((r) => server.close(r));
   }
 });
+
+test("asking a workspace that cannot answer says why instead of 'still loading'", async () => {
+  const { readFileSync } = await import("node:fs");
+  // Own server: this file's shared one has already used its hourly workspace
+  // allowance per address.
+  const oldLimit = process.env.VM_WS_PER_IP_HOUR;
+  process.env.VM_WS_PER_IP_HOUR = "50";
+  const server = createLocalServer({ port: 0 });
+  if (oldLimit === undefined) delete process.env.VM_WS_PER_IP_HOUR;
+  else process.env.VM_WS_PER_IP_HOUR = oldLimit;
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const post = (p, init) => fetch(base + "/api/public" + p, init);
+    const upload = (id, name, body) =>
+      post(`/workspace/${id}/upload`, {
+        method: "POST",
+        headers: {
+          "x-file-name": name,
+          "content-type": "application/octet-stream",
+        },
+        body,
+      });
+    const settle = async (id) => {
+      let st;
+      for (let i = 0; i < 300; i++) {
+        st = await (await post(`/workspace/${id}`)).json();
+        if (
+          st.documents.length &&
+          st.documents.every((d) =>
+            ["ready", "needs_review", "failed"].includes(d.status),
+          )
+        )
+          return st;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return st;
+    };
+    const q = (id) =>
+      post("/ask", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ case: id, question: "What is in this?" }),
+      });
+    // Empty workspace.
+    const empty = await (await post("/workspace", { method: "POST" })).json();
+    let r = await q(empty.id);
+    assert.equal(r.status, 409);
+    assert.equal((await r.json()).code, "no_documents");
+    // Only failed documents.
+    const bad = await (await post("/workspace", { method: "POST" })).json();
+    await upload(
+      bad.id,
+      "report.pdf",
+      Buffer.from("this is plain text, not a pdf"),
+    );
+    await settle(bad.id);
+    r = await q(bad.id);
+    assert.equal(r.status, 409);
+    const body = await r.json();
+    assert.equal(body.code, "documents_failed");
+    assert.equal(body.documents[0].error.code, "signature_mismatch");
+    // Mixed: one failed, one readable. The readable one still answers.
+    const mixed = await (await post("/workspace", { method: "POST" })).json();
+    await upload(
+      mixed.id,
+      "report.pdf",
+      Buffer.from("this is plain text, not a pdf"),
+    );
+    await upload(
+      mixed.id,
+      "action-log.md",
+      readFileSync(
+        new URL(
+          "../examples/corpus-md/07_Internal_Action_Log.md",
+          import.meta.url,
+        ),
+      ),
+    );
+    const st = await settle(mixed.id);
+    assert.deepEqual(st.documents.map((d) => d.status).sort(), [
+      "failed",
+      "ready",
+    ]);
+    r = await q(mixed.id);
+    assert.equal(r.status, 200);
+    // Demo cases that are not loaded yet keep the retry-later answer.
+    const demo = await post("/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ case: "nope", question: "x" }),
+    });
+    assert.equal(demo.status, 400);
+  } finally {
+    await new Promise((r) => server.close(r));
+  }
+});
+
+test("ask on a workspace with no index: pending, failed+pending and failed-only are told apart", async () => {
+  const { createPublicApi } = await import("../src/public-api.mjs");
+  const id = "w_" + "a".repeat(32);
+  const failed = {
+    filename: "bad.pdf",
+    status: "failed",
+    error: { code: "parse_failed", message: "no" },
+  };
+  const ws = new Map();
+  const api = createPublicApi({
+    cases: {},
+    workspaces: ws,
+    resolve: async () => {
+      throw new Error("not exercised");
+    },
+    mintVoice: async () => ({}),
+    voiceState: () => ({}),
+  });
+  const srv = createServer((req, res) => api(req, res));
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  const ask = () =>
+    fetch(`http://127.0.0.1:${srv.address().port}/api/public/ask`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ case: id, question: "What is in this?" }),
+    });
+  try {
+    const cases = [
+      [[{ filename: "a.md", status: "parsing" }], 503, undefined],
+      [[{ filename: "a.md", status: "queued" }], 503, undefined],
+      [[failed, { filename: "a.md", status: "parsing" }], 503, undefined],
+      [[failed, { filename: "a.md", status: "queued" }], 503, undefined],
+      [[failed], 409, "documents_failed"],
+      [[failed, failed], 409, "documents_failed"],
+      [[], 409, "no_documents"],
+    ];
+    for (const [library, status, code] of cases) {
+      ws.set(id, { sid: id, library, bundle: null });
+      const r = await ask();
+      const j = await r.json();
+      const label = library.map((e) => e.status).join("+") || "empty";
+      assert.equal(r.status, status, label);
+      assert.equal(j.code, code, label);
+    }
+  } finally {
+    await new Promise((r) => srv.close(() => r()));
+  }
+});
