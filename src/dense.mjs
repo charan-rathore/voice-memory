@@ -30,6 +30,7 @@ const DTYPE = process.env.VM_DENSE_DTYPE || "q8";
 const MODEL_ID = DTYPE === "fp32" ? BASE_MODEL : `${BASE_MODEL}@${DTYPE}`;
 const state = { pipe: null, loading: null, retiring: null, failed: null };
 const lifetime = createModelLifetime();
+const activeWarmups = new WeakMap();
 let modelGeneration = 0;
 let pressureTimer = null;
 function stopPressureWatch() {
@@ -222,9 +223,11 @@ export function passageText(row) {
  * vectorless on failure and retrieval remains keyword-only.
  */
 export function warmDense(rows) {
+  const active = activeWarmups.get(rows);
+  if (active) return active;
   const loading = ensureLoading();
   if (!loading) return Promise.resolve(false);
-  return loading
+  const warmup = loading
     .then(async (pipe) => {
       if (!pipe) return false;
       try {
@@ -254,7 +257,10 @@ export function warmDense(rows) {
         return false;
       }
     })
-    .catch(() => false);
+    .catch(() => false)
+    .finally(() => activeWarmups.delete(rows));
+  activeWarmups.set(rows, warmup);
+  return warmup;
 }
 
 /**
