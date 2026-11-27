@@ -2,6 +2,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createLocalServer } from "../src/server.mjs";
 import { clinicalListPlan } from "../src/clinical-requirements.mjs";
+
+// The voice wire spells record ids for the synthesiser ("S Y N zero zero
+// zero one"); typed text renders the id ("SYN-0001"). The mapping is exact
+// and one-to-one: a wrong id or number on either channel still fails.
+const unspellIds = (s) =>
+  String(s).replace(
+    /\b([A-Z](?: [A-Z]){1,4}) ((?:zero|one|two|three|four|five|six|seven|eight|nine)(?: (?:zero|one|two|three|four|five|six|seven|eight|nine)){2,5})\b/g,
+    (m, letters, digits) =>
+      letters.replace(/ /g, "") +
+      "-" +
+      digits
+        .split(" ")
+        .map(
+          (w) =>
+            "zero one two three four five six seven eight nine"
+              .split(" ")
+              .indexOf(w),
+        )
+        .join(""),
+  );
 test("caller-owned explicit clinical test list has immutable separate targets, not arbitrary compound parsing", () => {
   const q = "What are SYN-0001's ferritin and TSH results?";
   const p = clinicalListPlan(q, { sources: [] }, 1, "SYN-0001");
@@ -99,7 +119,12 @@ test("actual HTTP and fake voice preserve every requested clinical test without 
     );
     assert.equal(partial.requirementCoverage.semanticAdmissionVerified, false);
     assert.equal(partial.questionPlan.originalQuestion, partialQ);
-    assert.equal(await voice(partialQ), partial.final.text);
+    const partialWire = await voice(partialQ);
+    assert.equal(unspellIds(partialWire), partial.final.text);
+    // the voice wire carries the spelled id, exactly, values untouched
+    assert.match(partialWire, /S Y N zero zero zero one/);
+    assert.match(partialWire, /50 ng\/mL/);
+    assert.doesNotMatch(partialWire, /SYN-0001/);
     const mixedQ =
       "What is SYN-0001's ferritin result and who approved treatment?";
     const mixed = await ask(mixedQ);
@@ -119,7 +144,7 @@ test("actual HTTP and fake voice preserve every requested clinical test without 
       ["answered", "not_established"],
     );
     assert.equal(mixed.requirementCoverage.semanticAdmissionVerified, false);
-    assert.equal(await voice(mixedQ), mixed.final.text);
+    assert.equal(unspellIds(await voice(mixedQ)), mixed.final.text);
     const tail = "who approved treatment and when was it signed?";
     const lossless = await ask(
       "What is SYN-0001's ferritin result and " + tail,
@@ -133,7 +158,7 @@ test("actual HTTP and fake voice preserve every requested clinical test without 
     assert.equal(complete.final.kind, "answered");
     assert.ok(complete.final.citations.some((c) => /Ferritin/.test(c.quote)));
     assert.ok(complete.final.citations.some((c) => /TSH/.test(c.quote)));
-    assert.equal(await voice(q), complete.final.text);
+    assert.equal(unspellIds(await voice(q)), complete.final.text);
     const reverse = await ask("What are SYN-0001's TSH and ferritin results?");
     assert.match(reverse.final.text, /0\.30 mIU\/L/);
     assert.match(reverse.final.text, /50 ng\/mL/);
