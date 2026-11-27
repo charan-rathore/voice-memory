@@ -656,6 +656,36 @@ export function createPublicApi({
           );
         const s = caseOf(data.case);
         if (!s) return (send(res, 400, { error: "Pick a case." }), true);
+        if (!s.bundle && isWs(data.case)) {
+          // A visitor's workspace with no index is not always "loading": say
+          // so only while a document is still being read.
+          const docs = s.library ?? [];
+          if (!docs.length)
+            return (
+              send(res, 409, {
+                error: "Upload a document first, then ask about it.",
+                code: "no_documents",
+              }),
+              true
+            );
+          if (docs.every((e) => e.status === "failed"))
+            return (
+              send(res, 409, {
+                error:
+                  docs.length === 1
+                    ? "The document could not be read, so there is nothing to ask about yet."
+                    : "None of the documents could be read, so there is nothing to ask about yet.",
+                code: "documents_failed",
+                documents: docs.map((e) => ({
+                  filename: e.filename,
+                  error: e.error
+                    ? { code: e.error.code, message: e.error.message }
+                    : null,
+                })),
+              }),
+              true
+            );
+        }
         if (!s.bundle)
           return (
             send(
