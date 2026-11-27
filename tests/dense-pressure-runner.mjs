@@ -39,6 +39,27 @@ if (scenario === "load-pressure") {
   assert.equal(probe.calls, 1, "stop before second chunk");
   assert.equal(probe.disposals, 1);
   assert.equal(rows[1].chunk.embedding, null);
+
+  rss = 100 * MiB;
+  probe.infer = undefined;
+  assert.equal(await d.warmDense(rows), true, "interrupted warmup can retry");
+  assert.ok(rows.every((r) => r.chunk.embedding_model === d.DENSE_MODEL_ID));
+  assert.equal(probe.calls, 2, "the retry fills only the unfinished row");
+} else if (scenario === "concurrent-warmup") {
+  const rows = [row(), row()];
+  const independent = [row()];
+  const results = await Promise.all([
+    ...Array.from({ length: 20 }, () => d.warmDense(rows)),
+    d.warmDense(independent),
+  ]);
+  assert.ok(results.every(Boolean));
+  assert.equal(probe.loads, 1);
+  assert.equal(probe.calls, 3, "each row should be embedded once");
+  assert.ok(
+    [...rows, ...independent].every(
+      (r) => r.chunk.embedding_model === d.DENSE_MODEL_ID,
+    ),
+  );
 } else if (scenario === "query-pressure") {
   await d.warmDense([]);
   probe.infer = () => {
