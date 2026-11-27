@@ -34,7 +34,8 @@ function fixture(a, b) {
   };
 }
 const count = (a, b) =>
-  recordGraph(fixture(a, b)).edges.filter((e) => e.kind === "supersedes").length;
+  recordGraph(fixture(a, b)).edges.filter((e) => e.kind === "supersedes")
+    .length;
 test("ISO dates preserve real changes and normalize equivalent date formats", () => {
   assert.equal(count("2026-11-15", "2026-11-26"), 1);
   assert.equal(count("26 Nov 2026", "2026-11-26"), 0);
