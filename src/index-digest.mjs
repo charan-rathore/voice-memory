@@ -14,8 +14,7 @@ import { locate } from "../ingest/canonical.mjs";
 
 // contentTokens (the index's), keeping one printed form per stem so the view
 // can show "discharged" where the index holds "discharge".
-const surface = new Map();
-function contentTokens(text) {
+function contentTokens(text, surface) {
   const out = [];
   for (const w of tokenize(text)) {
     if (w.length <= 1 || QUERY_STOPWORDS.has(w)) continue;
@@ -25,15 +24,14 @@ function contentTokens(text) {
   }
   return out;
 }
-const shown = (t) => surface.get(t) ?? t;
 
 const K1 = 1.5;
 const B = 0.75;
 const r3 = (x) => Math.round(x * 1000) / 1000;
 
-function bm25Stats(rows) {
+function bm25Stats(rows, surface) {
   const docs = rows.map((r) => {
-    const toks = contentTokens(`${r.title}\n${r.chunk.text}`);
+    const toks = contentTokens(`${r.title}\n${r.chunk.text}`, surface);
     const tf = new Map();
     for (const t of toks) tf.set(t, (tf.get(t) ?? 0) + 1);
     return { row: r, len: toks.length, tf };
@@ -126,7 +124,9 @@ export function digestFor(bundle, sourceIndex, entry, dense = null) {
   }));
 
   // The keyword index, over the whole bundle (that is what a query searches).
-  const st = bm25Stats(bundle.rows);
+  const surface = new Map();
+  const shown = (t) => surface.get(t) ?? t;
+  const st = bm25Stats(bundle.rows, surface);
   const mine = st.docs.filter((d) => d.row.slug === src.id);
   // How a question becomes numbers: a real lookup in this index, for one
   // of the document's own facts (its most authoritative record first).
@@ -137,7 +137,7 @@ export function digestFor(bundle, sourceIndex, entry, dense = null) {
       (a, b) => RANKA[b.authority] - RANKA[a.authority] || b.index - a.index,
     )
     .flatMap((r) => r.facts)
-    .find((f) => f.concept && contentTokens(f.label).length);
+    .find((f) => f.concept && contentTokens(f.label, surface).length);
   // No table fact to look up: a lab test this file reports, else its title.
   const probeLabel =
     probe?.label ??
@@ -146,7 +146,7 @@ export function digestFor(bundle, sourceIndex, entry, dense = null) {
     null;
   let lookup = null;
   if (probeLabel) {
-    const q = [...new Set(contentTokens(probeLabel))].filter((t) =>
+    const q = [...new Set(contentTokens(probeLabel, surface))].filter((t) =>
       st.df.has(t),
     );
     const scored = st.docs
