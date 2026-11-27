@@ -475,6 +475,21 @@ test("a two-part question with one unsupported part is not fully answered", () =
   assert.equal(none.outcome, "abstain");
 });
 
+test("a two-part question with both parts supported answers both, completely", () => {
+  for (const u of [
+    "what is the ferritin and what is the creatinine",
+    "what is the ferritin and the creatinine",
+    "ferritin aur creatinine dono batao",
+  ]) {
+    const t = call().say(u);
+    assert.equal(t.outcome, "answered", u);
+    assert.deepEqual(t.understanding.subject, ["ferritin", "creatinine"], u);
+    assert.equal(t.answer.complete, true, u);
+    assert.match(t.answer.spoken, /Ferritin is 50 ng\/mL/, u);
+    assert.match(t.answer.spoken, /Creatinine is 1\.1 mg\/dL/, u);
+  }
+});
+
 // ------------------------------------------------------------ 14 noisy fragments
 test("an unclear fragment gets a short question in the caller's language", () => {
   const c = call();

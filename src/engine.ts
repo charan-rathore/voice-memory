@@ -56,6 +56,7 @@ import {
 } from "../vendor/web/src/lib/rag/retrieve-core";
 import { chunkDocument } from "../vendor/web/src/lib/rag/chunking";
 import { extractiveAnswer } from "../vendor/web/src/lib/rag/extractive";
+import { selectContext } from "../vendor/web/src/lib/rag/ranking";
 
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 // Per-document text cap. Matches the ingestion pipeline's canonical-text limit
@@ -185,6 +186,10 @@ export function importBundle(
 // the answer path starts from, before any claim logic or fallback. Additive;
 // the answer path does not use it.
 export { retrieveFromRows };
+// Test hook (tests/retrieval-core.test.mjs): deterministic ordering cases for
+// the solo-source margin challenger selection. Additive; the answer path does
+// not use it.
+export { selectContext };
 export function retrieveChunks(
   query: string,
   bundle: ReturnType<typeof importBundle>,
