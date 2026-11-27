@@ -534,9 +534,20 @@ function renderCitation(c, i) {
 
 function renderTrace(r) {
   const rows = r.retrievalStages?.keyword ?? [];
-  $("trace-panel").hidden = !rows.length && !r.queryTransform;
+  const method =
+    r.actualMode === "keyword"
+      ? "keyword search"
+      : r.actualMode === "dense"
+        ? "semantic search"
+        : r.actualMode === "hybrid"
+          ? "keyword and semantic search"
+          : null;
+  $("trace-panel").hidden = !rows.length && !r.queryTransform && !method;
   $("mode").textContent =
-    "Found by keyword search over this session's documents, then checked against the original text." +
+    (method
+      ? `Search mode: ${method} over this session's documents.`
+      : "Search over this session's documents.") +
+    (rows.length ? " Scores below are keyword-stage candidates only." : "") +
     (r.evidenceStatus === "ambiguous"
       ? " Several sources were similarly relevant, so no single answer is treated as settled."
       : "");
