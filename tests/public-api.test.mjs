@@ -1544,11 +1544,20 @@ test("synthetic conflicting approved fees clarify without rewriting the supporte
     let state;
     for (let i = 0; i < 200; i++) {
       state = await fetch(`${root}/workspace/${ws.id}`).then((r) => r.json());
-      if (state.ready && state.documents?.length === 2) break;
+      if (
+        state.ready &&
+        state.documents?.length === 2 &&
+        state.documents.every((d) => d.answerable)
+      )
+        break;
       await new Promise((r) => setTimeout(r, 20));
     }
     assert.ok(state.ready);
     assert.equal(state.documents.length, 2);
+    assert.ok(
+      state.documents.every((d) => d.answerable),
+      "both documents must be answerable before asking",
+    );
     const response = await fetch(root + "/ask", {
       method: "POST",
       headers: { "content-type": "application/json" },
