@@ -3,6 +3,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { clinicalOwnerTestPlan } from "../src/clinical-requirements.mjs";
 import { createLocalServer } from "../src/server.mjs";
+
+// The voice wire spells record ids for the synthesiser ("S Y N zero zero
+// zero one"); typed text renders the id ("SYN-0001"). The mapping is exact
+// and one-to-one: a wrong id or number on either channel still fails.
+const unspellIds = (s) =>
+  String(s).replace(
+    /\b([A-Z](?: [A-Z]){1,4}) ((?:zero|one|two|three|four|five|six|seven|eight|nine)(?: (?:zero|one|two|three|four|five|six|seven|eight|nine)){2,5})\b/g,
+    (m, letters, digits) =>
+      letters.replace(/ /g, "") +
+      "-" +
+      digits
+        .split(" ")
+        .map((w) => "zero one two three four five six seven eight nine".split(" ").indexOf(w))
+        .join(""),
+  );
 test("owner-test plan consumes complete inventory and binds exact unique printed labels", () => {
   const bundle = { sources: [{ id: "x", hash: "h", text: "source" }] };
   const owners = ["AA-1", "BB-2"];
@@ -143,10 +158,12 @@ test("multi-owner test matrix requires every owner-test pair and does not discar
     assert.match(partial.final.text, /2.10/);
     assert.match(partial.final.text, /sodium.*could not establish/);
     assert.equal(partial.requirementCoverage.semanticAdmissionVerified, false);
-    assert.equal(
-      await voice([{ role: "user", content: q }]),
-      partial.final.text,
-    );
+    const partialWire = await voice([{ role: "user", content: q }]);
+    assert.equal(unspellIds(partialWire), partial.final.text);
+    // the voice wire spells each record id, exactly, and drops the dash form
+    assert.match(partialWire, /S Y N zero zero zero one/);
+    assert.match(partialWire, /S Y N zero zero zero three/);
+    assert.doesNotMatch(partialWire, /SYN-000/);
     const mixed = await ask(
       "What are ferritin and TSH results for SYN-0001 and SYN-0003?",
     );

@@ -450,6 +450,14 @@ const HI = [
     "मुझे यह इन दस्तावेज़ों में नहीं मिला।",
   ],
   [
+    /^I cannot bind the requested identifier to a record in these documents\.$/,
+    "मैं माँगा गया पहचान-संकेत इन दस्तावेज़ों की किसी रिकॉर्ड से नहीं जोड़ सकती।",
+  ],
+  [
+    /^I will not substitute another record's facts\.$/,
+    "मैं किसी और रिकॉर्ड के तथ्य उसकी जगह नहीं बताऊँगी।",
+  ],
+  [
     /^I don't see (.+) in these documents\.$/,
     "मुझे $1 इन दस्तावेज़ों में नहीं दिखा।",
   ],

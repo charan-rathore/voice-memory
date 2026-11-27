@@ -101,7 +101,7 @@ export function repairPatientIds(text, ids = []) {
       .join("");
   let out = text.replace(
     new RegExp(
-      `\\b(?:s\\s*y\\s*n|syn|sin|sign|sync|same|seen|scene|cin|s\\.y\\.n\\.?)(?:\\s*-\\s*|\\s+)((?:${digitWords}[\\s-]*){1,4})`,
+      `\\b(?:s\\s*y\\s*n|syn|sin|sign|sync|same|seen|scene|cin|s\\.y\\.n\\.?)[\\s-]*((?:${digitWords}[\\s-]*){1,4})`,
       "gi",
     ),
     (m, digits) => {

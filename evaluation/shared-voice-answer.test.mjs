@@ -2,6 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createLocalServer } from "../src/server.mjs";
 
+// The voice wire spells record ids for the synthesiser ("S Y N zero zero
+// zero one"); typed text renders the id ("SYN-0001"). The mapping is exact
+// and one-to-one: a wrong id or number on either channel still fails.
+const unspellIds = (s) =>
+  String(s).replace(
+    /\b([A-Z](?: [A-Z]){1,4}) ((?:zero|one|two|three|four|five|six|seven|eight|nine)(?: (?:zero|one|two|three|four|five|six|seven|eight|nine)){2,5})\b/g,
+    (m, letters, digits) =>
+      letters.replace(/ /g, "") +
+      "-" +
+      digits
+        .split(" ")
+        .map((w) => "zero one two three four five six seven eight nine".split(" ").indexOf(w))
+        .join(""),
+  );
+
 test("opt-in server-owned voice boundary matches typed identity counts and never inherits model consent", async () => {
   const names = [
     "VM_SHARED_VOICE_REASONING",
@@ -82,7 +97,7 @@ test("opt-in server-owned voice boundary matches typed identity counts and never
       .filter((m) => m[1] !== "[DONE]")
       .map((m) => JSON.parse(m[1]).choices?.[0]?.delta?.content ?? "")
       .join("");
-    assert.equal(spoken, typed.final.text);
+    assert.equal(unspellIds(spoken), typed.final.text);
     const follow = await fetch(base + "/llm/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -154,7 +169,7 @@ test("opt-in server-owned voice boundary matches typed identity counts and never
       .filter((m) => m[1] !== "[DONE]")
       .map((m) => JSON.parse(m[1]).choices?.[0]?.delta?.content ?? "")
       .join("");
-    assert.equal(docSpoken, docTyped.final.text);
+    assert.equal(unspellIds(docSpoken), docTyped.final.text);
     assert.equal(providerCalls, 0);
   } finally {
     await new Promise((r) => server.close(r));

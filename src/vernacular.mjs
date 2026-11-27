@@ -490,6 +490,14 @@ const HL = [
     "Mujhe yeh in documents mein nahi mila.",
   ],
   [
+    /^I cannot bind the requested identifier to a record in these documents\.$/,
+    "Main manga gaya identifier in documents ki kisi record se nahi jod sakti.",
+  ],
+  [
+    /^I will not substitute another record's facts\.$/,
+    "Main kisi doosre record ke facts iski jagah nahi bolungi.",
+  ],
+  [
     /^I don't see (.+) in these documents\.$/,
     "Mujhe $1 in documents mein nahi dikha.",
   ],

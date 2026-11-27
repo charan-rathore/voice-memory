@@ -226,6 +226,20 @@ test("Hindi deal questions with spoken amounts map to the engine's question", ()
   assert.equal(glossHindi("fee kitni hai?"), "What is the engagement fee?");
 });
 
+test("the unbound-identifier refusal speaks Hindi and Hinglish, not English", () => {
+  const refusal =
+    "I cannot bind the requested identifier to a record in these documents. " +
+    "I will not substitute another record's facts.";
+  const hi = toHindi(refusal);
+  assert.match(hi, /जोड़ सकती/);
+  assert.match(hi, /नहीं बताऊँगी/);
+  assert.doesNotMatch(hi, /cannot bind|substitute/);
+  const hl = toHinglish(refusal);
+  assert.match(hl, /nahi jod sakti/);
+  assert.match(hl, /nahi bolungi/);
+  assert.doesNotMatch(hl, /cannot bind|substitute/);
+});
+
 test("ordinary English words are not snapped to test names", () => {
   const v = new Map([
     ["ferritin", "Ferritin"],

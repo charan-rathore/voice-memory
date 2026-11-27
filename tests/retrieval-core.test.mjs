@@ -167,3 +167,226 @@ test("evidence integrity: digest reused while the text is unchanged, recomputed 
   src.text = text.replace("$84,000", "$48,000");
   if (src.text === text) assert.equal(validateEvidence(e, b), true);
 });
+
+test("the solo-source margin reserves a pool slot for the strongest dense challenger", async () => {
+  // Fail-first for the 2026-11-22 qualification finding: "What deadline does
+  // the client want to keep?" ranked 02_Client_Kickoff_Notes first on
+  // keyword-heavy calibration (rerank 0.542 vs 0.401) and the 1.35x rank-1
+  // margin rule then packed ONLY that source, discarding
+  // 06_Client_Email_Extract.md - the chunk dense scored highest (0.660 >
+  // 0.560) and the one carrying the asked fact. When the margin fires, the
+  // strongest higher-scoring dense challenger keeps one pool position,
+  // subject to the existing packing limits. Embeddings below are fabricated
+  // to the measured cosines so no model download runs.
+  const { importBundle, retrieveFromRows } = await import("../dist/engine.mjs");
+  const { DENSE_MODEL_ID, denseAvailableFor } = await import(
+    "../src/dense.mjs"
+  );
+  const { readFileSync } = await import("node:fs");
+  const titles = [
+    "01_Northstar_Proposal_v1.md",
+    "02_Client_Kickoff_Notes.md",
+    "03_Commercial_Revision.md",
+    "04_Steering_Committee_Notes.md",
+    "05_Project_Delivery_Update.md",
+    "06_Client_Email_Extract.md",
+    "07_Internal_Action_Log.md",
+  ];
+  const docs = titles.map((title) => ({
+    title,
+    text: readFileSync(
+      new URL(`../examples/corpus-md/${title}`, import.meta.url),
+      "utf8",
+    ),
+  }));
+  const b = importBundle(docs);
+  const unit = (cos) => [cos, Math.sqrt(1 - cos * cos)];
+  const queryVector = [1, 0];
+  for (const row of b.rows) {
+    const cos = row.title.startsWith("02_")
+      ? 0.56
+      : row.title.startsWith("06_")
+        ? 0.66
+        : 0.4;
+    row.chunk.embedding = JSON.stringify(unit(cos));
+    row.chunk.embedding_model = DENSE_MODEL_ID;
+  }
+  const r = retrieveFromRows({
+    query: "What deadline does the client want to keep?",
+    queryVector,
+    mode: "hybrid",
+    topK: 5,
+    embeddingModel: DENSE_MODEL_ID,
+    rows: b.rows,
+    storage: {
+      backend: "ephemeral",
+      durable: false,
+      denseAvailable: denseAvailableFor(b),
+      warning: null,
+    },
+    corpusScope: { kind: "corpus", corpusId: b.scope },
+  });
+  assert.equal(r.chunks[0]?.title, "02_Client_Kickoff_Notes.md");
+  assert.ok(
+    r.chunks.some((c) => c.title === "06_Client_Email_Extract.md"),
+    `semantic rank-1 survives the margin cut: ${r.chunks.map((c) => c.title).join(", ")}`,
+  );
+  assert.ok(
+    r.chunks.some((c) => c.text.includes("retain the original 15 November")),
+    "the packed context carries the asked fact",
+  );
+  // Provenance: the fact must stay attributed to its actual source, not just
+  // appear somewhere in the packed context.
+  const carrier = r.chunks.find((c) =>
+    c.text.includes("retain the original 15 November"),
+  );
+  assert.equal(
+    carrier?.title,
+    "06_Client_Email_Extract.md",
+    "the asked fact remains attributed to its source document",
+  );
+});
+
+// Deterministic ordering cases for the challenger selection, driven straight
+// at selectContext so calibrated order and dense scores are exact inputs
+// (ChatGPT pre-push review 2026-11-22, cases 1 and 2).
+const marginChunk = (over) => ({
+  chunkId: over.chunkId,
+  documentId: over.slug,
+  slug: over.slug,
+  title: over.title,
+  text: over.text,
+  heading: null,
+  score: over.score,
+  rank: over.rank,
+  retriever: "hybrid",
+  tokenCount: 40,
+  indexedAt: null,
+  embeddingModel: null,
+  filepath: null,
+  language: null,
+  symbol: null,
+  chunkKind: "prose",
+  corpusId: "margin-case",
+});
+const marginSignals = (entries) =>
+  new Map(
+    entries.map(([id, dense]) => [
+      id,
+      {
+        idfRecall: 0.3,
+        titleRecall: 0,
+        phrase: 0,
+        topical: 0,
+        dense,
+        bm25: null,
+      },
+    ]),
+  );
+
+test("margin: the dense challenger is not sliced away by same-source runner-ups", async () => {
+  const { selectContext } = await import("../dist/engine.mjs");
+  // Calibrated order [A1, A2, B1] with B1 the strongest dense source: a plain
+  // filter+slice(0,2) keeps A1 and A2 and discards B1, the chunk carrying the
+  // asked fact.
+  const ranked = [
+    marginChunk({
+      chunkId: "a1",
+      slug: "doc-a",
+      title: "Doc Alpha",
+      score: 0.542,
+      rank: 1,
+      text: "The client reviewed the kickoff scope and timeline notes.",
+    }),
+    marginChunk({
+      chunkId: "a2",
+      slug: "doc-a",
+      title: "Doc Alpha",
+      score: 0.401,
+      rank: 2,
+      text: "The client listed owners for each workstream.",
+    }),
+    marginChunk({
+      chunkId: "b1",
+      slug: "doc-b",
+      title: "Doc Beta",
+      score: 0.38,
+      rank: 3,
+      text: "The client asked to retain the original 15 November deadline.",
+    }),
+  ];
+  const signals = marginSignals([
+    ["a1", 0.56],
+    ["a2", 0.53],
+    ["b1", 0.66],
+  ]);
+  const { packed, dropReasons } = selectContext(ranked, signals, {
+    query: "What deadline does the client want to keep?",
+    idf: new Map(),
+    topK: 5,
+  });
+  assert.deepEqual(
+    packed.map((c) => c.chunkId),
+    ["a1", "b1"],
+  );
+  assert.equal(packed[0]?.chunkId, "a1", "calibrated rank-1 is unchanged");
+  const carrier = packed.find((c) =>
+    c.text.includes("retain the original 15 November"),
+  );
+  assert.equal(
+    carrier?.title,
+    "Doc Beta",
+    "the fact stays attributed to its source",
+  );
+  assert.match(
+    dropReasons.get("a2") ?? "",
+    /strongest dense challenger/,
+    "the displaced runner-up is told why",
+  );
+});
+
+test("margin: the strongest of several dense challengers wins the reserved slot", async () => {
+  const { selectContext } = await import("../dist/engine.mjs");
+  // Calibrated order [A1, B1, C1] with both B1 and C1 denser than A1 and C1
+  // the strongest: the reserved position goes to C1, not the first eligible.
+  const ranked = [
+    marginChunk({
+      chunkId: "a1",
+      slug: "doc-a",
+      title: "Doc Alpha",
+      score: 0.542,
+      rank: 1,
+      text: "The client reviewed the kickoff scope and timeline notes.",
+    }),
+    marginChunk({
+      chunkId: "b1",
+      slug: "doc-b",
+      title: "Doc Beta",
+      score: 0.38,
+      rank: 2,
+      text: "The client asked to retain the original 15 November deadline.",
+    }),
+    marginChunk({
+      chunkId: "c1",
+      slug: "doc-c",
+      title: "Doc Gamma",
+      score: 0.37,
+      rank: 3,
+      text: "The client confirmed the deadline stays 15 November.",
+    }),
+  ];
+  const signals = marginSignals([
+    ["a1", 0.56],
+    ["b1", 0.66],
+    ["c1", 0.7],
+  ]);
+  const { packed } = selectContext(ranked, signals, {
+    query: "What deadline does the client want to keep?",
+    idf: new Map(),
+    topK: 5,
+  });
+  assert.deepEqual(
+    packed.map((c) => c.chunkId),
+    ["a1", "c1"],
+  );
+});

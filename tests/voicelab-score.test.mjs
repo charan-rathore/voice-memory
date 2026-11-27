@@ -33,6 +33,22 @@ test("critical entities: notation-insensitive, meaning-sensitive", () => {
   );
 });
 
+test("critical entities retain decimal percentages and compact splits", () => {
+  assert.deepEqual(entityErrors("the rate is 12.5%", "the rate is 15.5%"), [
+    'number "12.5" lost',
+    'number "15.5" inserted',
+  ]);
+  assert.deepEqual(entityErrors("the split is 40/60", "the split is 40/50"), [
+    'number "60" lost',
+    'number "50" inserted',
+  ]);
+  assert.deepEqual(
+    entityErrors("the amount is 1,234,567.25", "the amount is 1234567.25"),
+    [],
+  );
+  assert.deepEqual(entityErrors("constructor", ""), []);
+});
+
 test("clock alignment keeps the tightest round trip", () => {
   const c = clockOffset([
     { t0: 0, serverNow: 1500, t1: 400 },
@@ -70,4 +86,21 @@ test("stage latencies come only from measured timestamps", () => {
     turns: [{ transcript: "x", receivedAt: 1, firstByteAt: 2 }],
   });
   assert.equal(none.rows[0].ms.speechToAnswer, null);
+});
+
+test("an interrupted turn cannot borrow the next turn's audible response", () => {
+  const result = scoreCall({
+    script: ["first question", "second question"],
+    clock: { offset: 0, errorMs: 0 },
+    speechEnds: [100, 500],
+    agentAudioStarts: [800],
+    turns: [
+      { transcript: "first question", receivedAt: 200, firstByteAt: 220 },
+      { transcript: "second question", receivedAt: 600, firstByteAt: 630 },
+    ],
+  });
+  assert.equal(result.rows[0].ms.speechToAnswer, null);
+  assert.equal(result.rows[0].ms.ttsAndNetwork, null);
+  assert.equal(result.rows[1].ms.speechToAnswer, 300);
+  assert.equal(result.speechToAnswerMs.n, 1);
 });

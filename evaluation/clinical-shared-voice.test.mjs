@@ -2,6 +2,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createLocalServer } from "../src/server.mjs";
+
+// The voice wire spells record ids for the synthesiser ("S Y N zero zero
+// zero one"); typed text renders the id ("SYN-0001"). The mapping is exact
+// and one-to-one: a wrong id or number on either channel still fails.
+const unspellIds = (s) =>
+  String(s).replace(
+    /\b([A-Z](?: [A-Z]){1,4}) ((?:zero|one|two|three|four|five|six|seven|eight|nine)(?: (?:zero|one|two|three|four|five|six|seven|eight|nine)){2,5})\b/g,
+    (m, letters, digits) =>
+      letters.replace(/ /g, "") +
+      "-" +
+      digits
+        .split(" ")
+        .map(
+          (w) =>
+            "zero one two three four five six seven eight nine"
+              .split(" ")
+              .indexOf(w),
+        )
+        .join(""),
+  );
 test("opt-in direct clinical factual turns use the typed resolver after channel repair without model consent", async () => {
   const names = [
     "VM_SHARED_VOICE_REASONING",
@@ -77,7 +97,7 @@ test("opt-in direct clinical factual turns use the typed resolver after channel 
       const typed = await ask(question);
       assert.ok(typed.final.citations.length, question);
       const spoken = await voice([{ role: "user", content: question }]);
-      assert.equal(spoken, typed.final.text, question);
+      assert.equal(unspellIds(spoken), typed.final.text, question);
     }
     for (const unsupported of [
       "What is SYN-0001's favorite food?",
@@ -94,7 +114,12 @@ test("opt-in direct clinical factual turns use the typed resolver after channel 
       assert.equal(typed.final.kind, "abstained");
       assert.equal(typed.final.citations.length, 0);
       const spoken = await voice([{ role: "user", content: unsupported }]);
-      assert.equal(spoken, typed.final.text, unsupported);
+      assert.equal(unspellIds(spoken), typed.final.text, unsupported);
+      // where the refusal names the record, the wire spells the id, exactly
+      if (/SYN-0001/.test(typed.final.text)) {
+        assert.match(spoken, /S Y N zero zero zero one/);
+        assert.doesNotMatch(spoken, /SYN-0001/);
+      }
     }
     const question = "What is SYN-0001's ferritin result?",
       first = await ask(question),
@@ -106,7 +131,7 @@ test("opt-in direct clinical factual turns use the typed resolver after channel 
       { role: "user", content: follow },
     ]);
     assert.equal(
-      spokenFollow,
+      unspellIds(spokenFollow),
       typedFollow.final.text,
       "follow-up version selection survives channel history",
     );

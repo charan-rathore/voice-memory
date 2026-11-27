@@ -42,10 +42,12 @@ export function readHostMemoryLimit({
 }
 
 export const MIB = 1024 * 1024;
+const ADMISSION_HEADROOM_FRACTION = 52 / 512;
+const RESTART_HEADROOM_FRACTION = 16 / 512;
 
-// The host's real kill line is read from the cgroup limit (see
-// readHostMemoryLimit) and surfaced on /api/readiness as memory.hostLimit:
-// 496 MiB is protective only if that line is at least 512 MiB.
+// The cgroup limit caps both thresholds using the same proportional
+// headroom as the measured defaults. The effective thresholds and the
+// detected limit are exposed on /api/readiness.
 //
 // Environment overrides: VM_RSS_WATCHDOG=off disables the watchdog entirely
 // (test suites run a model cache plus the test runner in one process and
@@ -81,18 +83,33 @@ export function createRssWatchdog({
   let stopped = false;
   // Read once: the cgroup limit does not change during the process lifetime.
   const hostLimit = readHostMemoryLimit(limitPaths);
+  const effectiveRestartHighWater =
+    hostLimit.bytes === null
+      ? restartHighWater
+      : Math.min(
+          restartHighWater,
+          Math.floor(hostLimit.bytes * (1 - RESTART_HEADROOM_FRACTION)),
+        );
+  const effectiveAdmitHighWater =
+    hostLimit.bytes === null
+      ? admitHighWater
+      : Math.min(
+          admitHighWater,
+          effectiveRestartHighWater,
+          Math.floor(hostLimit.bytes * (1 - ADMISSION_HEADROOM_FRACTION)),
+        );
   const state = () => ({
     inFlight,
     rssBytes: rss(),
-    admitHighWater,
-    restartHighWater,
+    admitHighWater: effectiveAdmitHighWater,
+    restartHighWater: effectiveRestartHighWater,
     overSince,
     hostLimit,
   });
   const maybeRestart = () => {
     if (stopped) return;
     const current = rss();
-    if (current < restartHighWater) {
+    if (current < effectiveRestartHighWater) {
       overSince = null;
       return;
     }
@@ -118,7 +135,7 @@ export function createRssWatchdog({
     state,
     // Admission gate for expensive routes (import, upload, query, voice).
     admit() {
-      if (rss() >= admitHighWater) {
+      if (rss() >= effectiveAdmitHighWater) {
         onEvent({ type: "admission-refused", ...state() });
         return false;
       }

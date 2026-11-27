@@ -19,8 +19,11 @@ test("mixed, help, overview, thanks and goodbye turns from a real call", async (
     ]);
     // Post-exposure identity contract: the historical first-person ask has
     // no identity binding. The independent deal half remains answerable.
-    assert.match(mixed.spoken, /SYN-0001/);
-    assert.match(mixed.spoken, /SYN-0003/);
+    // The voice wire spells record ids for the synthesiser; typed display
+    // reverses them (typedText in server.mjs).
+    assert.match(mixed.spoken, /S Y N zero zero zero one/);
+    assert.match(mixed.spoken, /S Y N zero zero zero three/);
+    assert.doesNotMatch(mixed.spoken, /SYN-0001|SYN-0003/);
     assert.doesNotMatch(mixed.spoken, /50 ng\/mL/);
     // Preserve the original positive value independently under explicit identity.
     const [selected] = await v.call([
@@ -35,7 +38,9 @@ test("mixed, help, overview, thanks and goodbye turns from a real call", async (
     assert.match(help.spoken, /Your documents/);
     assert.match(help.spoken, /PDF/);
     // "critical" is a summary request, never misheard as Creatinine
-    assert.match(overview.spoken, /SYN-0001/);
+    // spelled for the synthesiser, exactly this record
+    assert.match(overview.spoken, /S Y N zero zero zero one/);
+    assert.doesNotMatch(overview.spoken, /SYN-0001/);
     assert.match(overview.spoken, /TSH/);
     assert.doesNotMatch(overview.spoken, /Creatinine/);
     assert.match(overview.spoken, /निदान नहीं/);
