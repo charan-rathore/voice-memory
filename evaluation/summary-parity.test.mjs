@@ -5,6 +5,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createLocalServer } from "../src/server.mjs";
 
+// The voice wire spells record ids for the synthesiser ("S Y N zero zero
+// zero one"); typed text renders the id ("SYN-0001"). The mapping is exact
+// and one-to-one: a wrong id or number on either channel still fails.
+const unspellIds = (s) =>
+  String(s).replace(
+    /\b([A-Z](?: [A-Z]){1,4}) ((?:zero|one|two|three|four|five|six|seven|eight|nine)(?: (?:zero|one|two|three|four|five|six|seven|eight|nine)){2,5})\b/g,
+    (m, letters, digits) =>
+      letters.replace(/ /g, "") +
+      "-" +
+      digits
+        .split(" ")
+        .map((w) => "zero one two three four five six seven eight nine".split(" ").indexOf(w))
+        .join(""),
+  );
+
 const CAP = "summary" + "8".repeat(57);
 let B, srv;
 test.before(async () => {
@@ -65,11 +80,11 @@ async function run(c, qs) {
 }
 const both = (t, re, msg) => {
   assert.match(t.typed, re, `typed: ${msg}`);
-  assert.match(t.spoken, re, `voice: ${msg}`);
+  assert.match(unspellIds(t.spoken), re, `voice: ${msg}`);
 };
 const neither = (t, re, msg) => {
   assert.doesNotMatch(t.typed, re, `typed: ${msg}`);
-  assert.doesNotMatch(t.spoken, re, `voice: ${msg}`);
+  assert.doesNotMatch(unspellIds(t.spoken), re, `voice: ${msg}`);
 };
 
 const ONE_SAY = (t, re, msg) => both(t, re, msg);

@@ -57,6 +57,8 @@ http
       res.writeHead(404).end("Not found");
     }
   })
-  .listen(Number(process.env.SITE_PORT || 4500), "127.0.0.1", () =>
-    console.log("site on http://127.0.0.1:" + (process.env.SITE_PORT || 4500)),
-  );
+  .listen(Number(process.env.SITE_PORT || 4500), "127.0.0.1", function () {
+    // Print the port actually bound, so SITE_PORT=0 (let the OS pick a free
+    // port) can be read back by a caller. Unchanged output for fixed ports.
+    console.log("site on http://127.0.0.1:" + this.address().port);
+  });

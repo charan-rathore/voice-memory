@@ -10,13 +10,13 @@ import { join } from "node:path";
 
 const shots = process.env.VM_SHOTS_DIR || join(tmpdir(), "voice-memory-calls");
 await mkdir(shots, { recursive: true });
-const port = 5000 + Math.floor(Math.random() * 150);
 const env = { ...process.env };
 for (const k of Object.keys(env))
   if (k.startsWith("VM_") || /(_KEY|_TOKEN|_SECRET|PASSWORD)$/.test(k))
     delete env[k];
 Object.assign(env, {
-  SITE_PORT: String(port),
+  // 0 = the server binds a free port itself and prints it (no pre-picked port).
+  SITE_PORT: "0",
   VM_DENSE: "off",
   VM_GEMINI: "off",
   VM_RSS_WATCHDOG: "off",
@@ -27,7 +27,18 @@ Object.assign(env, {
 });
 const dev = spawn(process.execPath, ["scripts/site-dev.mjs"], {
   env,
-  stdio: "ignore",
+  stdio: ["ignore", "pipe", "pipe"],
+});
+// Keep a bounded tail of the server's output so a failed start explains itself.
+let devOut = "";
+let devExit = null;
+const keep = (d) => {
+  devOut = (devOut + d).slice(-4000);
+};
+dev.stdout.on("data", keep);
+dev.stderr.on("data", keep);
+dev.on("exit", (code, signal) => {
+  devExit = { code, signal };
 });
 const browser = await chromium.launch({
   headless: true,
@@ -35,16 +46,27 @@ const browser = await chromium.launch({
     ? { executablePath: process.env.CHROME_PATH }
     : {}),
 });
-const origin = `http://127.0.0.1:${port}`;
+let origin = null;
 for (let i = 0; i < 100; i++) {
+  const bound = /site on http:\/\/127\.0\.0\.1:(\d+)/.exec(devOut);
+  if (bound) origin = `http://127.0.0.1:${bound[1]}`;
   if (
-    await fetch(origin + "/calls.html")
+    origin &&
+    (await fetch(origin + "/calls.html")
       .then((r) => r.ok)
-      .catch(() => false)
+      .catch(() => false))
   )
     break;
   await new Promise((r) => setTimeout(r, 200));
-  if (i === 99) throw Error("local site failed to start");
+  if (i === 99) {
+    dev.kill();
+    await browser.close();
+    throw Error(
+      "local site failed to start" +
+        ` (origin: ${origin ?? "no port reported"}, server exit: ${JSON.stringify(devExit)}).` +
+        ` Server output tail:\n${devOut}`,
+    );
+  }
 }
 const errors = [];
 const timings = [];

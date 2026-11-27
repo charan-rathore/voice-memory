@@ -287,8 +287,15 @@ for (const packet of [false, true])
         }),
       });
       assert.equal(voice.status, 200);
-      const body = await voice.text();
+      // join the stream before matching: the 64-char chunker may split a
+      // word across deltas, and record ids arrive spelled for the
+      // synthesiser ("A L one zero one"), exactly
+      const body = [...(await voice.text()).matchAll(/"content":"((?:[^"\\]|\\.)*)"/g)]
+        .map((m) => JSON.parse('"' + m[1] + '"'))
+        .join("");
       assert.match(body, /conflicting records/);
+      assert.match(body, /A L one zero one/);
+      assert.doesNotMatch(body, /AL-101/);
       assert.doesNotMatch(body, /24 October|30 October/);
       assert.equal(seen.length, 0);
     } finally {

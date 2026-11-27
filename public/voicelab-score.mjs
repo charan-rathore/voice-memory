@@ -77,7 +77,13 @@ export function wer(ref, hyp) {
 /** Collapse number words so "forty two thousand" and "42,000" compare equal. */
 function numbersOf(s) {
   const out = [];
-  const toks = tokens(s);
+  // Entity scoring needs decimals and each side of a compact split. Keep
+  // this tokenization independent of the WER normalization above.
+  const toks =
+    String(s ?? "")
+      .toLowerCase()
+      .replace(/(?<=\d),(?=\d{3}\b)/g, "")
+      .match(/\d+(?:\.\d+)?|[\p{L}\p{M}]+/gu) ?? [];
   let cur = null;
   let total = 0;
   const flush = () => {
@@ -89,7 +95,7 @@ function numbersOf(s) {
     if (/^\d+(?:\.\d+)?$/.test(t)) {
       flush();
       out.push(String(Number(t)));
-    } else if (t in NUMW) {
+    } else if (Object.hasOwn(NUMW, t)) {
       cur = (cur ?? 0) + NUMW[t];
     } else if (t === "hundred" && cur !== null) {
       cur *= 100;
@@ -168,9 +174,10 @@ export function scoreCall(call) {
   const rows = call.turns.map((t, i) => {
     const received = toLocal(t.receivedAt);
     const firstByte = toLocal(t.firstByteAt);
+    const nextReceived = toLocal(call.turns[i + 1]?.receivedAt);
     // The caller's speech end is the last local speech end before the
     // server received the turn; the agent audio is the first onset after
-    // the first byte left the server.
+    // the first byte left the server, before a new turn can take ownership.
     const speechEnd =
       received === null
         ? null
@@ -178,7 +185,10 @@ export function scoreCall(call) {
     const audio =
       firstByte === null
         ? null
-        : (call.agentAudioStarts.find((x) => x >= firstByte) ?? null);
+        : (call.agentAudioStarts.find(
+            (x) =>
+              x >= firstByte && (nextReceived === null || x < nextReceived),
+          ) ?? null);
     const ref = call.script?.[i] ?? null;
     return {
       i,
