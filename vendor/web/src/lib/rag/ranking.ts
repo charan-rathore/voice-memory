@@ -54,7 +54,11 @@ function termWeight(term: string, idf: IdF): number {
   return (idf.get(term) ?? Math.log(8)) * generic;
 }
 
-export function weightedRecall(terms: string[], text: string, idf: IdF): number {
+export function weightedRecall(
+  terms: string[],
+  text: string,
+  idf: IdF,
+): number {
   if (!terms.length) return 0;
   const doc = new Set(contentTokens(text));
   let num = 0;
@@ -72,7 +76,9 @@ export function phraseBoost(query: string, text: string): number {
   const q = contentTokens(query);
   const grams = bigrams(q).filter((g) => {
     const [a, b] = g.split(" ");
-    return Boolean(a && b && !GENERIC_OPS_TERMS.has(a) && !GENERIC_OPS_TERMS.has(b));
+    return Boolean(
+      a && b && !GENERIC_OPS_TERMS.has(a) && !GENERIC_OPS_TERMS.has(b),
+    );
   });
   const hay = contentTokens(text).join(" ");
   const hayRaw = text.toLowerCase();
@@ -90,13 +96,19 @@ export function phraseBoost(query: string, text: string): number {
   return hits / den;
 }
 
-export function topicalBoost(query: string, title: string, text: string): number {
+export function topicalBoost(
+  query: string,
+  title: string,
+  text: string,
+): number {
   const q = queryTokenSet(query);
   const d = new Set(contentTokens(`${title}\n${text}`));
   let b = 0;
   if (looksLikeStampede(q) && hasAny(d, ["stampede", "redis"])) b += 0.28;
-  if (looksLikeFragmentation(q) && hasAny(d, ["fragmentation", "pending"])) b += 0.22;
-  if (looksLikeServerlessPg(q) && hasAny(d, ["pgbouncer", "postgres"])) b += 0.22;
+  if (looksLikeFragmentation(q) && hasAny(d, ["fragmentation", "pending"]))
+    b += 0.22;
+  if (looksLikeServerlessPg(q) && hasAny(d, ["pgbouncer", "postgres"]))
+    b += 0.22;
   return Math.min(0.34, b);
 }
 
@@ -142,7 +154,16 @@ function queryTokenSet(query: string): Set<string> {
 function looksLikeStampede(q: Set<string>): boolean {
   return (
     hasAny(q, ["cache", "cached", "stampede"]) &&
-    hasAny(q, ["hundred", "sudden", "expensive", "disappear", "recompute", "popular", "thundering", "herd"])
+    hasAny(q, [
+      "hundred",
+      "sudden",
+      "expensive",
+      "disappear",
+      "recompute",
+      "popular",
+      "thundering",
+      "herd",
+    ])
   );
 }
 
@@ -154,7 +175,10 @@ function looksLikeFragmentation(q: Set<string>): boolean {
 }
 
 function looksLikeServerlessPg(q: Set<string>): boolean {
-  return hasAny(q, ["postgres", "pgbouncer"]) && hasAny(q, ["pool", "serverless", "bouncer"]);
+  return (
+    hasAny(q, ["postgres", "pgbouncer"]) &&
+    hasAny(q, ["pool", "serverless", "bouncer"])
+  );
 }
 
 /**
@@ -164,9 +188,12 @@ function looksLikeServerlessPg(q: Set<string>): boolean {
 export function expandQueryCues(query: string): string[] {
   const q = queryTokenSet(query);
   const extra: string[] = [];
-  if (looksLikeStampede(q)) extra.push("stampede", "redis", "ttl", "jitter", "lock");
-  if (looksLikeFragmentation(q)) extra.push("fragmentation", "pending", "kubernetes");
-  if (looksLikeServerlessPg(q)) extra.push("pgbouncer", "postgres", "transaction");
+  if (looksLikeStampede(q))
+    extra.push("stampede", "redis", "ttl", "jitter", "lock");
+  if (looksLikeFragmentation(q))
+    extra.push("fragmentation", "pending", "kubernetes");
+  if (looksLikeServerlessPg(q))
+    extra.push("pgbouncer", "postgres", "transaction");
   return extra;
 }
 
@@ -179,7 +206,9 @@ export function calibratedScore(input: {
 }): number {
   const { dense, bm25Norm, idfRecall, titleRecall, phrase } = input;
   if (dense == null) {
-    return 0.34 * bm25Norm + 0.32 * idfRecall + 0.2 * titleRecall + 0.14 * phrase;
+    return (
+      0.34 * bm25Norm + 0.32 * idfRecall + 0.2 * titleRecall + 0.14 * phrase
+    );
   }
   return (
     0.46 * Math.max(0, dense) +
@@ -233,17 +262,36 @@ export function rerankCalibrated(opts: {
   terms: string[];
   preferredSlugs?: string[];
   graphPathCosts?: Map<string, number>;
-}): { ranked: RetrievedChunk[]; scores: Map<string, number>; signals: Map<string, RerankSignals> } {
-  const bm25Raw = opts.candidates.map((c) => opts.keywordScores.get(c.chunkId) ?? 0);
+}): {
+  ranked: RetrievedChunk[];
+  scores: Map<string, number>;
+  signals: Map<string, RerankSignals>;
+} {
+  const bm25Raw = opts.candidates.map(
+    (c) => opts.keywordScores.get(c.chunkId) ?? 0,
+  );
   const signals = new Map<string, RerankSignals>();
   const scored = opts.candidates.map((c) => {
-    const dense = opts.denseScores.has(c.chunkId) ? (opts.denseScores.get(c.chunkId) ?? null) : null;
+    const dense = opts.denseScores.has(c.chunkId)
+      ? (opts.denseScores.get(c.chunkId) ?? null)
+      : null;
     const bm25 = opts.keywordScores.get(c.chunkId) ?? 0;
-    const idfRecall = weightedRecall(opts.terms, `${c.title}\n${c.heading ?? ""}\n${c.text}`, opts.idf);
-    const titleRecall = weightedRecall(opts.terms, `${c.title} ${c.heading ?? ""}`, opts.idf);
+    const idfRecall = weightedRecall(
+      opts.terms,
+      `${c.title}\n${c.heading ?? ""}\n${c.text}`,
+      opts.idf,
+    );
+    const titleRecall = weightedRecall(
+      opts.terms,
+      `${c.title} ${c.heading ?? ""}`,
+      opts.idf,
+    );
     const phrase = phraseBoost(opts.query, `${c.title}\n${c.text}`);
     // Demo-tuned topical boost applies only to the seed corpus it was tuned on.
-    const topical = (c.corpusId ?? SEED_CORPUS_ID) === SEED_CORPUS_ID ? topicalBoost(opts.query, c.title, c.text) : 0;
+    const topical =
+      (c.corpusId ?? SEED_CORPUS_ID) === SEED_CORPUS_ID
+        ? topicalBoost(opts.query, c.title, c.text)
+        : 0;
     let score = Math.min(
       1,
       calibratedScore({
@@ -256,11 +304,24 @@ export function rerankCalibrated(opts: {
     );
     const ents = entityTermsInQuery(opts.query);
     const titleTok = new Set(contentTokens(`${c.title} ${c.heading ?? ""}`));
-    if ((c.corpusId ?? SEED_CORPUS_ID) === SEED_CORPUS_ID && ents.some((e) => tokenSetMatches(e, titleTok))) score = Math.min(1, score + 0.12);
-    if (opts.preferredSlugs?.includes(c.slug)) score = Math.min(1, score + 0.03);
+    if (
+      (c.corpusId ?? SEED_CORPUS_ID) === SEED_CORPUS_ID &&
+      ents.some((e) => tokenSetMatches(e, titleTok))
+    )
+      score = Math.min(1, score + 0.12);
+    if (opts.preferredSlugs?.includes(c.slug))
+      score = Math.min(1, score + 0.03);
     const pathCost = opts.graphPathCosts?.get(c.chunkId);
-    if (pathCost !== undefined) score = Math.min(1, score + 0.04 / (1 + pathCost));
-    signals.set(c.chunkId, { idfRecall, titleRecall, phrase, topical, dense, bm25 });
+    if (pathCost !== undefined)
+      score = Math.min(1, score + 0.04 / (1 + pathCost));
+    signals.set(c.chunkId, {
+      idfRecall,
+      titleRecall,
+      phrase,
+      topical,
+      dense,
+      bm25,
+    });
     return { chunk: c, score };
   });
   scored.sort((a, b) => b.score - a.score);
@@ -272,24 +333,41 @@ export function rerankCalibrated(opts: {
   return { ranked, scores, signals };
 }
 
-export function isSupported(signals: RerankSignals, calibrated: number): boolean {
+export function isSupported(
+  signals: RerankSignals,
+  calibrated: number,
+): boolean {
   if (calibrated < CONTEXT_ABSOLUTE_FLOOR) return false;
   if (signals.idfRecall >= 0.18) return true;
   if (signals.titleRecall >= 0.22) return true;
   if (signals.phrase >= 0.2) return true;
   if (signals.topical >= 0.18) return true;
-  if ((signals.dense ?? 0) >= 0.52 && (signals.idfRecall >= 0.05 || signals.titleRecall >= 0.08)) {
+  if (
+    (signals.dense ?? 0) >= 0.52 &&
+    (signals.idfRecall >= 0.05 || signals.titleRecall >= 0.08)
+  ) {
     return true;
   }
   if ((signals.dense ?? 0) >= 0.62 && calibrated >= 0.32) return true;
-  if (signals.dense == null && signals.idfRecall < 0.1 && signals.titleRecall < 0.12 && signals.topical < 0.18) {
+  if (
+    signals.dense == null &&
+    signals.idfRecall < 0.1 &&
+    signals.titleRecall < 0.12 &&
+    signals.topical < 0.18
+  ) {
     return false;
   }
   return false;
 }
 
-function distinctiveDocHits(query: string, ranked: RetrievedChunk[], idf: IdF): string[] {
-  const terms = contentTokens(query).filter((t) => !GENERIC_OPS_TERMS.has(t) && (idf.get(t) ?? 0) > 0.4);
+function distinctiveDocHits(
+  query: string,
+  ranked: RetrievedChunk[],
+  idf: IdF,
+): string[] {
+  const terms = contentTokens(query).filter(
+    (t) => !GENERIC_OPS_TERMS.has(t) && (idf.get(t) ?? 0) > 0.4,
+  );
   const slugs: string[] = [];
   for (const c of ranked.slice(0, 8)) {
     const title = new Set(contentTokens(`${c.title} ${c.heading ?? ""}`));
@@ -299,11 +377,19 @@ function distinctiveDocHits(query: string, ranked: RetrievedChunk[], idf: IdF): 
   return slugs;
 }
 
-export function queryLooksMultiSource(query: string, ranked: RetrievedChunk[], idf: IdF): boolean {
+export function queryLooksMultiSource(
+  query: string,
+  ranked: RetrievedChunk[],
+  idf: IdF,
+): boolean {
   const hits = distinctiveDocHits(query, ranked, idf);
   if (hits.length >= 2) return true;
   const q = query.toLowerCase();
-  if (/\band\b|\bshared by\b|\bboth\b|\bversus\b|\bvs\.?\b/.test(q) && hits.length >= 2) return true;
+  if (
+    /\band\b|\bshared by\b|\bboth\b|\bversus\b|\bvs\.?\b/.test(q) &&
+    hits.length >= 2
+  )
+    return true;
   return false;
 }
 
@@ -324,7 +410,10 @@ export function selectContext(
     const qtok = contentTokens(opts.query);
     const mentioning = ranked.filter((c) => {
       if (c.score < 0.1) {
-        dropReasons.set(c.chunkId, "Underspecified query: calibrated score < 0.10. Inspect only.");
+        dropReasons.set(
+          c.chunkId,
+          "Underspecified query: calibrated score < 0.10. Inspect only.",
+        );
         return false;
       }
       const doc = new Set(contentTokens(`${c.title}\n${c.text}`));
@@ -341,11 +430,17 @@ export function selectContext(
     const seen = new Set<string>();
     for (const chunk of mentioning) {
       if (packed.length >= Math.min(3, opts.topK ?? 3)) {
-        dropReasons.set(chunk.chunkId, "Outside the packed context window (max 3 supported chunks).");
+        dropReasons.set(
+          chunk.chunkId,
+          "Outside the packed context window (max 3 supported chunks).",
+        );
         continue;
       }
       if (seen.has(chunk.slug)) {
-        dropReasons.set(chunk.chunkId, "Duplicate document. a stronger chunk from this source is already packed.");
+        dropReasons.set(
+          chunk.chunkId,
+          "Duplicate document. a stronger chunk from this source is already packed.",
+        );
         continue;
       }
       packed.push({ ...chunk, rank: packed.length + 1 });
@@ -377,7 +472,10 @@ export function selectContext(
   const peak = supported[0]!.score;
   const afterCliff: RetrievedChunk[] = [];
   for (const c of supported) {
-    if (c.chunkId !== supported[0]!.chunkId && c.score < peak * CONTEXT_RELATIVE_FLOOR) {
+    if (
+      c.chunkId !== supported[0]!.chunkId &&
+      c.score < peak * CONTEXT_RELATIVE_FLOOR
+    ) {
       dropReasons.set(
         c.chunkId,
         `Below relative floor: ${c.score.toFixed(2)} < ${CONTEXT_RELATIVE_FLOOR} × rank-1 ${peak.toFixed(2)} (${(peak * CONTEXT_RELATIVE_FLOOR).toFixed(2)}). Not an absolute 0.55 cosine cut. Inspect only.`,
@@ -387,7 +485,10 @@ export function selectContext(
     afterCliff.push(c);
   }
 
-  const coordinating = /\band\b|\bshared by\b|\bboth\b|\bversus\b|\bvs\.?\b/.test(opts.query.toLowerCase());
+  const coordinating =
+    /\band\b|\bshared by\b|\bboth\b|\bversus\b|\bvs\.?\b/.test(
+      opts.query.toLowerCase(),
+    );
   const exclusive = entityTermsInQuery(opts.query);
   if (exclusive.length === 1 && !coordinating) {
     const holding = afterCliff.filter((c) => {
@@ -409,7 +510,10 @@ export function selectContext(
   } else if (exclusive.length >= 1 && coordinating) {
     const holding = afterCliff.filter((c) => {
       const doc = new Set(contentTokens(`${c.title}\n${c.text}`));
-      return exclusive.some((t) => tokenSetMatches(t, doc)) || hasAny(doc, ["pool", "exhaustion", "stampede"]);
+      return (
+        exclusive.some((t) => tokenSetMatches(t, doc)) ||
+        hasAny(doc, ["pool", "exhaustion", "stampede"])
+      );
     });
     if (holding.length) {
       for (const c of afterCliff) {
@@ -429,15 +533,43 @@ export function selectContext(
   const second = afterCliff[1];
   let pool = afterCliff;
   if (!multi && second && peak >= second.score * CONTEXT_SOLO_MARGIN) {
+    // The calibrated solo-source margin reserves one pool position for the
+    // strongest higher-scoring dense challenger, subject to the existing
+    // retrieval and packing limits (the gates above, and topK plus the token
+    // budget below - with topK=1 or a tight budget the challenger can still
+    // lose its seat). Keyword-only runs are unchanged because both dense
+    // signals are then null. Dense similarity is a ranking signal, not
+    // evidence authority: a challenger is a candidate for inspection, not a
+    // promise that it is the factually correct source.
+    const winner = afterCliff[0]!;
+    const topDense = signals.get(winner.chunkId)?.dense ?? null;
+    let challenger: RetrievedChunk | null = null;
+    if (topDense != null) {
+      for (const c of afterCliff.slice(1)) {
+        if (c.slug === winner.slug) continue;
+        const d = signals.get(c.chunkId)?.dense ?? null;
+        if (d == null || d <= topDense) continue;
+        const best = challenger
+          ? (signals.get(challenger.chunkId)?.dense ?? null)
+          : null;
+        // Strict > keeps the earlier calibrated position on a tie.
+        if (best == null || d > best) challenger = c;
+      }
+    }
     for (const c of afterCliff.slice(1)) {
-      if (c.slug === afterCliff[0]!.slug) continue;
+      if (challenger && c.chunkId === challenger.chunkId) continue;
+      if (!challenger && c.slug === winner.slug) continue;
       dropReasons.set(
         c.chunkId,
-        `Rank-1 margin: ${peak.toFixed(2)} is ≥ ${CONTEXT_SOLO_MARGIN}× stronger than ${second.score.toFixed(2)}. Only the top source packed.`,
+        challenger
+          ? `Rank-1 margin: ${peak.toFixed(2)} is ≥ ${CONTEXT_SOLO_MARGIN}× stronger than ${second.score.toFixed(2)}. Only the top source and the strongest dense challenger (${challenger.title}) are eligible to pack.`
+          : `Rank-1 margin: ${peak.toFixed(2)} is ≥ ${CONTEXT_SOLO_MARGIN}× stronger than ${second.score.toFixed(2)}. Only the top source packed.`,
       );
     }
-    pool = afterCliff.filter((c) => c.slug === afterCliff[0]!.slug).slice(0, 2);
-    if (!pool.length) pool = [afterCliff[0]!];
+    pool = challenger
+      ? [winner, challenger]
+      : afterCliff.filter((c) => c.slug === winner.slug).slice(0, 2);
+    if (!pool.length) pool = [winner];
   }
 
   const packed: RetrievedChunk[] = [];
@@ -446,12 +578,18 @@ export function selectContext(
   const cap = Math.min(3, opts.topK ?? 3);
   for (const chunk of pool) {
     if (packed.length >= cap) {
-      dropReasons.set(chunk.chunkId, "Outside the packed context window (max 3 supported chunks).");
+      dropReasons.set(
+        chunk.chunkId,
+        "Outside the packed context window (max 3 supported chunks).",
+      );
       continue;
     }
     const normalizedText = chunk.text.replace(/\s+/g, " ").trim();
     if (seenText.has(normalizedText)) {
-      dropReasons.set(chunk.chunkId, "Duplicate passage. the same text is already packed.");
+      dropReasons.set(
+        chunk.chunkId,
+        "Duplicate passage. the same text is already packed.",
+      );
       continue;
     }
     if (used + chunk.tokenCount > maxTokens && packed.length) {
@@ -466,7 +604,11 @@ export function selectContext(
 }
 
 export function payloadQuery(query: string): string {
-  if (!/ignore (the )?(indexed )?corpus|answer from memory|from your (own )?knowledge/i.test(query)) {
+  if (
+    !/ignore (the )?(indexed )?corpus|answer from memory|from your (own )?knowledge/i.test(
+      query,
+    )
+  ) {
     return query;
   }
   const idx = query.lastIndexOf(":");
@@ -485,6 +627,7 @@ export function retrievalQuery(query: string, vocab: Set<string>): string {
 
 export function distinctiveTerms(query: string): string[] {
   return contentTokens(query).filter(
-    (t) => t.length >= 4 && !GENERIC_OPS_TERMS.has(t) && !QUERY_STOPWORDS.has(t),
+    (t) =>
+      t.length >= 4 && !GENERIC_OPS_TERMS.has(t) && !QUERY_STOPWORDS.has(t),
   );
 }

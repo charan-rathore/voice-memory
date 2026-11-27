@@ -143,3 +143,22 @@ test("watchdog state reports the host limit once read", async () => {
     source: "cgroup-v2",
   });
 });
+
+test("admission and restart trip before the detected cgroup limit", async (t) => {
+  const { mkdtempSync, rmSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "cgroup-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const v2Path = join(dir, "memory.max");
+  writeFileSync(v2Path, "500000000\n");
+  const limitPaths = { v2Path, v1Path: join(dir, "missing") };
+
+  const { w, exits } = rig(480, { limitPaths });
+  const state = w.state();
+  assert.ok(state.admitHighWater < state.restartHighWater);
+  assert.ok(state.restartHighWater < state.hostLimit.bytes);
+  assert.equal(w.admit(), false);
+  w.tick();
+  assert.deepEqual(exits, [1]);
+});

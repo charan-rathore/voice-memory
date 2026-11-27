@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createVoiceAdapter } from "../src/voice-adapter.mjs";
+import { createVoiceAdapter, spellRecordIds } from "../src/voice-adapter.mjs";
 import { importBundle } from "../dist/engine.mjs";
 const b = () =>
   importBundle([
@@ -28,6 +28,174 @@ test("SSE streams OpenAI deltas and DONE, separately retains source proof", asyn
   assert.match(text, /data: \[DONE\]/);
   assert.ok(a.lastTurn(t).result.evidence.length);
 });
+test("record ids are spelled for the synthesiser, values untouched", () => {
+  const ids = ["SYN-0001", "SYN-0003"];
+  assert.equal(
+    spellRecordIds("SYN-0001 ka ferritin 13.0 hai.", ids),
+    "S Y N zero zero zero one ka ferritin 13.0 hai.",
+  );
+  assert.equal(
+    spellRecordIds("Compare SYN-0001 and SYN-0003.", ids),
+    "Compare S Y N zero zero zero one and S Y N zero zero zero three.",
+  );
+  assert.equal(
+    spellRecordIds("The fee is USD 42000.", ids),
+    "The fee is USD 42000.",
+  );
+  assert.equal(
+    spellRecordIds("syn-0001 lower stays", ids),
+    "syn-0001 lower stays",
+  );
+});
+
+test("only the record inventory is spelled: identifier-shaped text stays verbatim", () => {
+  const ids = ["SYN-0001", "SYN-0003", "AL-101"];
+  for (const s of [
+    "ISO-27001 certification is mentioned.",
+    "INV-12345 was paid.",
+    "USD-42000 is not a thing.",
+    "CASE-2026 stays.",
+    "SYN-0002 is not in the inventory.",
+  ])
+    assert.equal(spellRecordIds(s, ids), s, s);
+  // No inventory: nothing is spelled, however id-shaped.
+  assert.equal(spellRecordIds("SYN-0001 ka result"), "SYN-0001 ka result");
+  // An inventoried id next to numbers: only the id is spelled.
+  assert.equal(
+    spellRecordIds("AL-101 discharge 24 October 2026, bill 42000.", ids),
+    "A L one zero one discharge 24 October 2026, bill 42000.",
+  );
+});
+
+test("an orphan question with a lost subject declines instead of splicing an earlier topic", async () => {
+  const a = createVoiceAdapter();
+  const t = a.bind(
+    importBundle([
+      {
+        title: "Northstar agreement",
+        text: "The fee for the Northstar deal is USD 42000. The deadline is 30 September 2026.",
+      },
+    ]),
+  );
+  const first = await a.handle(request(t, "What is the fee?"));
+  assert.match(await first.text(), /42000/);
+  const history = (q) => [
+    { role: "user", content: "What is the fee?" },
+    {
+      role: "assistant",
+      content: "The fee for the Northstar deal is USD 42000.",
+    },
+    { role: "user", content: q },
+  ];
+  const ask = (q) =>
+    a.handle(
+      new Request("http://localhost/v1/chat/completions", {
+        method: "POST",
+        headers: { authorization: "Bearer " + t },
+        body: JSON.stringify({ stream: true, messages: history(q) }),
+      }),
+    );
+  // The recogniser lost the subject: a full possessive question with no
+  // anaphora must never be answered by splicing the previous topic.
+  const orphan = await ask("kya chamatkari chumbak ka parinam kya hai?");
+  const orphanText = await orphan.text();
+  assert.doesNotMatch(orphanText, /42000/);
+  assert.doesNotMatch(orphanText, /fee/i);
+  assert.match(a.lastTurn(t).spokenTurn.verdict, /UNKNOWN|UNBOUND/);
+  // An anaphoric follow-up still joins the caller's own history.
+  const follow = await ask("kya uska amount kya hai?");
+  assert.match(await follow.text(), /42000/);
+});
+
+test("a known subject in Hinglish possessive form is answered, never orphaned", async () => {
+  const a = createVoiceAdapter();
+  const t = a.bind(
+    importBundle([
+      {
+        title: "Northstar agreement",
+        text: "The fee for the Northstar deal is USD 42000. The deadline is 30 September 2026.",
+      },
+    ]),
+  );
+  // Known subjects that happen to be phrased as Hinglish possessives keep
+  // their normal path: the orphan rule must not decline them.
+  for (const [q, re] of [
+    ["Northstar ka deadline kya hai?", /30 September 2026/],
+    ["Northstar deal ki fee kya hai?", /42000/],
+  ]) {
+    const r = await a.handle(
+      new Request("http://localhost/v1/chat/completions", {
+        method: "POST",
+        headers: { authorization: "Bearer " + t },
+        body: JSON.stringify({
+          stream: true,
+          messages: [{ role: "user", content: q }],
+        }),
+      }),
+    );
+    assert.match(await r.text(), re, q);
+  }
+});
+
+test("spoken wire to typed display round-trips ids; non-id text is unchanged", async () => {
+  const { typedText } = await import("../src/server.mjs");
+  const ids = ["SYN-0001", "SYN-0003"];
+  const original =
+    "SYN-0001 ka ferritin 50 ng/mL hai; ISO-27001 certified. Fee USD 42000, deadline 30 September 2026.";
+  const wire = spellRecordIds(original, ids);
+  assert.match(wire, /S Y N zero zero zero one/);
+  // non-id text survives the wire untouched
+  assert.match(wire, /ISO-27001/);
+  assert.match(wire, /50 ng\/mL/);
+  assert.match(wire, /USD 42000/);
+  // typed display reverses exactly the spelled id
+  const typed = typedText(wire, ids);
+  assert.equal(typed, original);
+  // ordinary words are never reinterpreted as ids on either side
+  const plain =
+    "I am one of two people. Results for the quarter were fine, nine or ten.";
+  assert.equal(spellRecordIds(plain, ids), plain);
+  assert.equal(typedText(spellRecordIds(plain, ids), ids), plain);
+});
+
+test("typed display never reinterprets unrelated spoken codes as record ids", async () => {
+  const { typedText } = await import("../src/server.mjs");
+  const ids = ["SYN-0001", "SYN-0003"];
+  // The review counterexample: not a record id, stays verbatim.
+  assert.equal(
+    typedText("The code is A B one two three.", ids),
+    "The code is A B one two three.",
+  );
+  // A non-inventoried spelled token stays verbatim even next to a real id.
+  assert.equal(
+    typedText(
+      "S Y N zero zero zero three and I N V one two three four five.",
+      ids,
+    ),
+    "SYN-0003 and I N V one two three four five.",
+  );
+  // An id outside the inventory is not unspelled by the generic rule.
+  assert.equal(
+    typedText("S Y N nine nine nine nine ka result", ids),
+    "S Y N nine nine nine nine ka result",
+  );
+  // SYN-0001 has no special bypass: absent from the inventory it stays
+  // spelled, and an empty inventory unspells nothing.
+  assert.equal(
+    typedText("S Y N zero zero zero one ka result", ["SYN-0003"]),
+    "S Y N zero zero zero one ka result",
+  );
+  assert.equal(
+    typedText("S Y N zero zero zero one ka result"),
+    "S Y N zero zero zero one ka result",
+  );
+  // Present in the inventory, it unspells as before.
+  assert.equal(
+    typedText("S Y N zero zero zero one ka result", ["SYN-0001"]),
+    "SYN-0001 ka result",
+  );
+});
+
 test("a token bound to one workspace never reveals another workspace's records", async () => {
   const a = createVoiceAdapter();
   const tokenA = a.bind(
