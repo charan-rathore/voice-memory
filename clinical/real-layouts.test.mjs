@@ -564,3 +564,20 @@ test("an unstamped report keeps the plain printed-value wording", () => {
   assert.match(ans.spoken, /Your Creatinine, Serum result is 0.86 mg\/dL/);
   assert.doesNotMatch(ans.spoken, /overlaid stamp|embedded text/);
 });
+
+test("a function word at the start of running text is never a test name", () => {
+  // A reference list line from a research paper, as text extraction yields it.
+  const line =
+    "the 2017 Conference on Empirical Methods in Natural Language Processing, pages 670-680, Copenhagen, Denmark.";
+  assert.equal(readLabLine(line), null);
+  assert.equal(
+    readLabLine("in 2018 Proceedings of the Conference 12-34"),
+    null,
+  );
+  assert.equal(readLabLine("of 40 mg/dL 10-20"), null);
+  // Real names that merely contain a function word are untouched.
+  assert.equal(
+    readLabLine("Creatinine, Serum 0.86 mg/dL 0.67 - 1.17")?.test,
+    "Creatinine, Serum",
+  );
+});
