@@ -16,6 +16,7 @@ const LANES = [
   [["format", "format:check"]],
   [["typecheck", "typecheck"]],
   [["unit", "test"]],
+  [["watchdog", "test:watchdog"]],
   [
     ["boundaries", "test:boundaries"],
     ["browser", "test:browser"],
