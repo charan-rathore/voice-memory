@@ -339,6 +339,12 @@ button {
   line-height: 1.04;
   letter-spacing: -0.02em;
   max-width: 20ch;
+  text-wrap: balance;
+}
+/* Two-beat headlines start each sentence on its own line, so a short word
+   ("The", "typed.") is never left alone at a line end. */
+.sent {
+  display: block;
 }
 .sub {
   margin-top: 14px;
@@ -369,6 +375,7 @@ button {
   line-height: 0.99;
   letter-spacing: -0.028em;
   max-width: 13ch;
+  text-wrap: balance;
 }
 .hero h1 em {
   font-style: italic;
@@ -1894,8 +1901,12 @@ kbd {
 }
 .fig-cap {
   position: absolute;
-  left: 2px;
-  bottom: 2px;
+  left: 0;
+  bottom: 0;
+  /* Sit on the paper, not on the artwork: the chart lines ran through it. */
+  padding: 4px 8px 0 2px;
+  background: var(--paper);
+  border-radius: 0 6px 0 0;
   font-size: 11px;
   line-height: 1.35;
   color: var(--ink-3);
