@@ -177,6 +177,13 @@ function attachScripts(lines) {
       if (note && marks <= 1) kind = "note";
       else if (note || run[0].font === hostItem.font) kind = "raised";
     }
+    // Raised text that is not a bare number: a signed number ("-9") is an
+    // exponent, a different font from its base is maths type, and anything
+    // else in the base font ("th", "a", "TM", "kg") is only said to be raised.
+    if (!/^\d{1,2}$/.test(text)) {
+      if (/^[\u2212+-]\d+$/.test(text)) kind = "exponent";
+      else if (run[0].font && run[0].font === hostItem.font) kind = "raised";
+    }
     for (const it of s.items) {
       it.raised = true;
       it.kind = kind;

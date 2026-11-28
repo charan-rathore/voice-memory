@@ -203,3 +203,20 @@ test("a real exponent in its own maths font stays a power beside a footnote", as
   assert.match(t, /grows as n\^2 per step/);
   assert.match(t, /appendix\[\^3\]/);
 });
+
+test("raised letters and unit labels in the body font are only called raised", async () => {
+  const buf = await pdfWith(({ put, width }) => {
+    const a = "Due on the 5";
+    put(a, 72, 700);
+    put("th", 72 + width(a), 704, 7);
+    put(" of the month.", 72 + width(a) + width("th", 7), 700);
+    const b = "See the table";
+    put(b, 72, 688);
+    put("a", 72 + width(b), 692, 7);
+    put(" for details.", 72 + width(b) + width("a", 7), 688);
+  });
+  const t = (await blocksOf(buf)).join("\n");
+  assert.match(t, /the 5\[raised th\] of the month/);
+  assert.match(t, /table\[raised a\] for details/);
+  assert.doesNotMatch(t, /\^th|\^a/);
+});
