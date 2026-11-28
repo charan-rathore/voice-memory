@@ -33,6 +33,21 @@ test("LRU eviction, TTL expiry and hit/miss accounting", async () => {
   assert.deepEqual(c.stats.evictions >= 1, true);
 });
 
+test("an answer refilled after expiry becomes most recent, not next to evict", async () => {
+  let t = 0;
+  const c = createAnswerCache({ max: 3, ttlMs: 100, now: () => t });
+  const get = (k) => c.resolve(k, () => ({ k }));
+  await get("hot");
+  t = 50;
+  await get("x");
+  await get("y");
+  t = 120; // "hot" expired; x and y are still fresh
+  assert.equal((await get("hot")).cache, "miss");
+  await get("z"); // must evict x, the least recent, not the refilled "hot"
+  assert.equal((await get("hot")).cache, "hit");
+  assert.equal((await get("x")).cache, "miss");
+});
+
 test("concurrent identical misses share one computation", async () => {
   const c = createAnswerCache();
   let runs = 0;

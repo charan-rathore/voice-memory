@@ -33,6 +33,10 @@ export function createAnswerCache({
     store.set(key, e);
   }
   function put(key, json) {
+    // Map.set on an existing key keeps its old position. An answer recomputed
+    // after expiry must become the most recent entry, or the hottest question
+    // is evicted first, right after it was refilled.
+    store.delete(key);
     store.set(key, { json, at: now() });
     while (store.size > max) {
       store.delete(store.keys().next().value);
