@@ -175,11 +175,18 @@ function factsOfTable(table) {
   const head = rows[0].cells;
   if (LAB_HEADER.test(head.join(" "))) return [];
   const out = [];
-  const push = (label, value, row, columns = null) => {
+  const push = (label, value, row, columns = null, keyed = false) => {
     label = label.replace(/\s+/g, " ").trim();
     value = value.replace(/\s+/g, " ").trim();
     if (!label || !value || label.length > 80) return;
-    out.push({ label, value, start: row.start, end: row.end, columns });
+    out.push({
+      label,
+      value,
+      start: row.start,
+      end: row.end,
+      columns,
+      keyed,
+    });
   };
   // Stacked: a label row over a value row, repeated ("PATIENT NAME |
   // PATIENT ID" over "Maya Sharma | HLG-P1047").
@@ -213,7 +220,7 @@ function factsOfTable(table) {
         return cur && /^[\d,.]+$/.test(c) ? `${cur[1].toUpperCase()} ${c}` : c;
       })
       .join(" · ");
-    push(label, value, r, hasHeader ? head.slice(1).filter(Boolean) : null);
+    push(label, value, r, head.slice(1).filter(Boolean), true);
   }
   return out;
 }
@@ -699,12 +706,33 @@ export function factAnswer(question, entries) {
     ...stems(lead.f.label),
     ...stems(lead.r.title ?? ""),
     ...stems(lead.f.value),
+    ...(lead.f.columns ?? []).flatMap((c) => stems(c)),
   ]);
   const unmatched = [...qs].filter(
     (w) =>
       w.length >= 5 && !GENERIC_Q.has(w) && !MON.test(w) && !leadWords.has(w),
   );
   const conceptWords = lead.f.concept && qConcepts.has(lead.f.concept) ? 1 : 0;
+  // A table row is keyed by its first cell: the label names WHICH row, not
+  // what is asked of it. Matching "base model" says nothing about "dropout".
+  // A question word the row, its column names and its table title do not
+  // carry, but that the documents use elsewhere, means the question is about
+  // that other text. A word the documents never use blocks the row too,
+  // unless the question also names one of the row's columns ("hours").
+  if (lead.f.keyed && !conceptWords) {
+    const colWords = new Set((lead.f.columns ?? []).flatMap((c) => stems(c)));
+    const elsewhere = [...qs].filter(
+      (w) =>
+        w.length >= 5 &&
+        !GENERIC_Q.has(w) &&
+        !MON.test(w) &&
+        !leadWords.has(w) &&
+        vocab.has(w),
+    );
+    const namesColumn = [...qs].some((w) => colWords.has(w));
+    if (elsewhere.length) return null;
+    if (missing.length && !namesColumn) return null;
+  }
   if (unmatched.length > matched + conceptWords) return null;
   const many = (lead.en.records?.length ?? 0) > 1;
   const concept = lead.f.concept;
