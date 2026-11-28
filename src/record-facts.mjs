@@ -719,7 +719,10 @@ export function factAnswer(question, entries) {
   // carry, but that the documents use elsewhere, means the question is about
   // that other text. A word the documents never use blocks the row too,
   // unless the question also names one of the row's columns ("hours").
-  if (lead.f.keyed && !conceptWords) {
+  if (
+    (lead.f.keyed || (!lead.r.patient && !lead.r.status && !lead.f.concept)) &&
+    !conceptWords
+  ) {
     const colWords = new Set((lead.f.columns ?? []).flatMap((c) => stems(c)));
     const elsewhere = [...qs].filter(
       (w) =>
