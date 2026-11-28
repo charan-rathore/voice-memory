@@ -29,6 +29,7 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:watchdog
       - run: npm run test:boundaries
       - run: npm run test:evaluation
       - run: npm run test:ingest

@@ -104,13 +104,18 @@ export function createCallCounters({ file, now = () => Date.now() }) {
     }
     return state;
   };
-  const save = () => {
+  // A failed write must leave the cached state exactly as it was. Without
+  // this, a transient disk error kept the in-memory increment and journal
+  // entry of a refused mint, so each retry leaked capacity and, after 100
+  // tries, "journal-full" refused every mint (owner included) until restart.
+  const save = (before) => {
     try {
       mkdirSync(path.dirname(file), { recursive: true });
       const tmp = `${file}.tmp`;
       writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 });
       renameSync(tmp, file);
     } catch {
+      if (before !== undefined) state = before;
       throw fail("Call counter store is unwritable.");
     }
   };
@@ -135,6 +140,7 @@ export function createCallCounters({ file, now = () => Date.now() }) {
     // non-refundable; refundReservation on mint failure releases it).
     async admitVisitor(ip, { perIpDay, globalDay, lifetimeMax }) {
       const s = load();
+      const before = structuredClone(s);
       const b = bucket();
       if (s.lifetime >= lifetimeMax) return { ok: false, scope: "lifetime" };
       if (b.total >= globalDay) return { ok: false, scope: "global-day" };
@@ -165,22 +171,24 @@ export function createCallCounters({ file, now = () => Date.now() }) {
       // Pending reservations stay small: prune anything from older days.
       for (const [id, r] of Object.entries(s.reservations))
         if (!(r.day in s.days)) delete s.reservations[id];
-      save();
+      save(before);
       return { ok: true, reservation };
     },
     // Mint succeeded: the reservation becomes a real call, never refundable.
     async settleReservation(reservation) {
       const s = load();
+      const before = structuredClone(s);
       if (s.reservations && reservation in s.reservations) {
         delete s.reservations[reservation];
         if (s.journal) delete s.journal[reservation]; // outcome: resolved
-        save();
+        save(before);
       }
     },
     // Mint failed: exactly-once release of THIS reservation. A duplicate or
     // unknown id is a no-op - it can never release another call's capacity.
     async refundReservation(reservation) {
       const s = load();
+      const before = structuredClone(s);
       const r = s.reservations?.[reservation];
       if (!r) return; // unknown or already settled/refunded: no-op
       delete s.reservations[reservation];
@@ -195,7 +203,7 @@ export function createCallCounters({ file, now = () => Date.now() }) {
       } else if ((s.ownerLifetime ?? 0) > 0) {
         s.ownerLifetime -= 1;
       }
-      save();
+      save(before);
     },
     // Owner mint: COUNTED but never capped by the visitor abuse budget -
     // the owner's unlimited call COUNT is preserved, and the lifetime count
@@ -204,6 +212,7 @@ export function createCallCounters({ file, now = () => Date.now() }) {
     // reservation, exactly once, can be refunded or settled.
     async admitOwner() {
       const s = load();
+      const before = structuredClone(s);
       // Owner observability is a SEPARATE counter: owner mints never
       // consume the visitor lifetime admission budget (that coupling was
       // never owner-approved). Owner calls stay unlimited in count - but
@@ -228,7 +237,7 @@ export function createCallCounters({ file, now = () => Date.now() }) {
         sessionId: null,
         errorClass: null,
       };
-      save();
+      save(before);
       return { ok: true, reservation };
     },
     // Outcome update: mark a journaled reservation ambiguous (mint outcome
@@ -240,6 +249,7 @@ export function createCallCounters({ file, now = () => Date.now() }) {
     // is never thrown away) and flagged recovered - visible, never silent.
     async recordAmbiguous(rec) {
       const s = load();
+      const before = structuredClone(s);
       s.journal = s.journal ?? {};
       let j = s.journal[rec.reservation];
       if (!j) {
@@ -265,7 +275,7 @@ export function createCallCounters({ file, now = () => Date.now() }) {
         j.errorClass = String(rec.errorClass ?? "unknown");
       }
       if (rec.settleFailed) j.settleFailed = true;
-      save();
+      save(before);
     },
     // Unresolved outcomes awaiting reconciliation: ambiguous records AND
     // admitted-only records older than the stale threshold (a mint resolves
@@ -289,9 +299,10 @@ export function createCallCounters({ file, now = () => Date.now() }) {
     },
     async clearAmbiguous(reservation) {
       const s = load();
+      const before = structuredClone(s);
       if (s.journal && reservation in s.journal) {
         delete s.journal[reservation];
-        save();
+        save(before);
       }
     },
     async peek() {
