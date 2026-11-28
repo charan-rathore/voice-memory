@@ -86,6 +86,47 @@ function readingGroups(items, pageWidth) {
   return { groups, columns: 2 };
 }
 
+/**
+ * A raised exponent or lowered index sits a few points off its base's
+ * baseline, past the grouping tolerance, so it forms a line of its own that
+ * later becomes a stray paragraph ("10" and "-9" in "epsilon = 10^-9").
+ * A line made only of clearly smaller text, within about half a line of a
+ * larger line and touching one of that line's words horizontally, is that
+ * line's script. Anything farther away or not touching stays a separate line.
+ */
+function attachScripts(lines) {
+  for (let k = lines.length - 1; k >= 0; k--) {
+    const s = lines[k];
+    if (s.items.length > 4) continue;
+    let host = null;
+    for (const m of lines) {
+      if (m === s || s.size > 0.8 * m.size || s.y <= m.y) continue;
+      if (Math.abs(m.y - s.y) > 0.6 * m.size) continue;
+      const run = [...s.items].sort((p, q) => p.x0 - q.x0);
+      const chained = run.every(
+        (it, i) => i === 0 || it.x0 - run[i - 1].x1 <= 0.35 * m.size,
+      );
+      const touches =
+        chained &&
+        m.items.some(
+          (h) =>
+            run[0].size >= 0.55 * h.size &&
+            run[0].size <= 0.8 * h.size &&
+            run[0].y - h.y >= 0.2 * h.size &&
+            run[0].y - h.y <= 0.6 * h.size &&
+            run[0].x0 - h.x1 >= -0.2 * m.size &&
+            run[0].x0 - h.x1 <= 0.35 * m.size,
+        );
+      if (!touches) continue;
+      if (!host || Math.abs(m.y - s.y) < Math.abs(host.y - s.y)) host = m;
+    }
+    if (!host) continue;
+    for (const it of s.items) it.raised = true;
+    host.items.push(...s.items);
+    lines.splice(k, 1);
+  }
+}
+
 /** Baseline grouping, then cell splitting on wide gaps. */
 function toLines(group) {
   const lines = [];
@@ -98,10 +139,12 @@ function toLines(group) {
       line.size = Math.max(line.size, it.size);
     } else lines.push({ y: it.y, size: it.size, items: [it] });
   }
+  attachScripts(lines);
   for (const l of lines) {
     l.items.sort((a, b) => a.x0 - b.x0);
     const cells = [];
     let cur = null;
+    let prev = null;
     for (const it of l.items) {
       if (cur && it.x0 - cur.x1 <= Math.max(l.size * 1.0, 6)) {
         const gap = it.x0 - cur.x1;
@@ -109,12 +152,19 @@ function toLines(group) {
           gap > l.size * 0.12 &&
           !cur.text.endsWith(" ") &&
           !it.str.startsWith(" ");
-        cur.text += (needsSpace ? " " : "") + it.str;
+        // A raised script is written "^": "10" then "-9" must not read as
+        // the number "10-9" or, with "2", as "102".
+        const caret =
+          it.raised && !prev?.raised && /[0-9A-Za-z\u2212+-]/.test(it.str)
+            ? "^"
+            : "";
+        cur.text += (needsSpace && !caret ? " " : "") + caret + it.str;
         cur.x1 = Math.max(cur.x1, it.x1);
       } else {
         cur = { text: it.str, x0: it.x0, x1: it.x1 };
         cells.push(cur);
       }
+      prev = it;
     }
     l.cells = cells
       .map((c) => ({ ...c, text: c.text.replace(/\s+/g, " ").trim() }))
