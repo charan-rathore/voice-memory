@@ -735,6 +735,15 @@ export function factAnswer(question, entries) {
     const namesColumn = [...qs].some((w) => colWords.has(w));
     if (elsewhere.length) return null;
     if (missing.length && !namesColumn) return null;
+    // A short acronym in the question ("CEO") is content, not a function
+    // word. One the documents never use at all means the fact cannot be
+    // what was asked for. Only capitalised acronyms count: short lowercase
+    // words ("will", "from") are as often function words.
+    const absentShort = (question.match(/\b[A-Z]{2,4}\b/g) ?? []).filter(
+      (w) =>
+        !vocab.has(stemToken(w.toLowerCase())) && !STOP.has(w.toLowerCase()),
+    );
+    if (absentShort.length && !namesColumn) return null;
   }
   if (unmatched.length > matched + conceptWords) return null;
   const many = (lead.en.records?.length ?? 0) > 1;
