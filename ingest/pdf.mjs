@@ -99,6 +99,7 @@ function attachScripts(lines) {
     const s = lines[k];
     if (s.items.length > 4) continue;
     let host = null;
+    let hostItem = null;
     for (const m of lines) {
       if (m === s || s.size > 0.8 * m.size || s.y <= m.y) continue;
       if (Math.abs(m.y - s.y) > 0.6 * m.size) continue;
@@ -106,9 +107,9 @@ function attachScripts(lines) {
       const chained = run.every(
         (it, i) => i === 0 || it.x0 - run[i - 1].x1 <= 0.35 * m.size,
       );
-      const touches =
+      const hit =
         chained &&
-        m.items.some(
+        m.items.find(
           (h) =>
             run[0].size >= 0.55 * h.size &&
             run[0].size <= 0.8 * h.size &&
@@ -117,11 +118,69 @@ function attachScripts(lines) {
             run[0].x0 - h.x1 >= -0.2 * m.size &&
             run[0].x0 - h.x1 <= 0.35 * m.size,
         );
-      if (!touches) continue;
-      if (!host || Math.abs(m.y - s.y) < Math.abs(host.y - s.y)) host = m;
+      if (!hit) continue;
+      if (!host || Math.abs(m.y - s.y) < Math.abs(host.y - s.y)) {
+        host = m;
+        hostItem = hit;
+      }
     }
     if (!host) continue;
-    for (const it of s.items) it.raised = true;
+    const run = [...s.items].sort((p, q) => p.x0 - q.x0);
+    const text = run.map((i) => i.str.trim()).join("");
+    let kind = "exponent";
+    if (/^\d{1,2}$/.test(text)) {
+      // A bare number can be a footnote mark or a one-digit exponent. A
+      // footnote mark has its note below: the same number, in the same
+      // font and small type, at the start of a line with nothing before
+      // it. That is written "[^n]" and is not a power. A bare number with
+      // no such note stays an exponent ("^n"). An endnote whose text is
+      // not on the page cannot be told from an exponent here.
+      const note = lines.some(
+        (l) =>
+          l !== s &&
+          l.y < host.y - 2 * host.size &&
+          l.items.some(
+            (i) =>
+              i.size <= 0.8 * host.size &&
+              i.str.trim() === text &&
+              i.font === run[0].font &&
+              !lines.some((m) =>
+                m.items.some(
+                  (j) =>
+                    j !== i &&
+                    j.size > 1.2 * i.size &&
+                    Math.abs(j.y - i.y) < j.size &&
+                    i.x0 - j.x1 >= -1 &&
+                    i.x0 - j.x1 <= 0.5 * j.size,
+                ),
+              ),
+          ),
+      );
+      const flat = lines.flatMap((l) => l.items);
+      const marks = flat.filter(
+        (i) =>
+          i.size <= 0.8 * host.size &&
+          i.str.trim() === text &&
+          i.font === run[0].font &&
+          flat.some(
+            (j) =>
+              j !== i &&
+              j.size > 1.2 * i.size &&
+              Math.abs(j.y - i.y) < j.size &&
+              i.x0 - j.x1 >= -1 &&
+              i.x0 - j.x1 <= 0.5 * j.size,
+          ),
+      ).length;
+      // One raised mark with its note below is a footnote. Several of the
+      // same digit (a note mark and an exponent look alike) or a same-font
+      // digit with no note cannot be told apart: say only that it is raised.
+      if (note && marks <= 1) kind = "note";
+      else if (note || run[0].font === hostItem.font) kind = "raised";
+    }
+    for (const it of s.items) {
+      it.raised = true;
+      it.kind = kind;
+    }
     host.items.push(...s.items);
     lines.splice(k, 1);
   }
@@ -154,11 +213,23 @@ function toLines(group) {
           !it.str.startsWith(" ");
         // A raised script is written "^": "10" then "-9" must not read as
         // the number "10-9" or, with "2", as "102".
+        const note = it.raised && it.kind === "note";
+        const mark = it.raised && it.kind === "raised";
         const caret =
-          it.raised && !prev?.raised && /[0-9A-Za-z\u2212+-]/.test(it.str)
+          it.raised &&
+          !note &&
+          !mark &&
+          !prev?.raised &&
+          /[0-9A-Za-z\u2212+-]/.test(it.str)
             ? "^"
             : "";
-        cur.text += (needsSpace && !caret ? " " : "") + caret + it.str;
+        cur.text +=
+          (needsSpace && !caret && !note && !mark ? " " : "") +
+          (note
+            ? `[^${it.str.trim()}]`
+            : mark
+              ? `[raised ${it.str.trim()}]`
+              : caret + it.str);
         cur.x1 = Math.max(cur.x1, it.x1);
       } else {
         cur = { text: it.str, x0: it.x0, x1: it.x1 };
@@ -346,6 +417,7 @@ export async function parsePdf(
         const size = Math.hypot(c, d) || Math.hypot(a, b) || i.height || 10;
         return {
           str: fixLigatures(i.str),
+          font: i.fontName,
           x0: e - vx0,
           x1: e - vx0 + i.width,
           y: f,

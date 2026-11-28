@@ -43,7 +43,10 @@ test("a raised square in a formula stays on its line", async () => {
     put("2", 72 + width(a), 704, 7);
     put(" in these units.", 72 + width(a) + width("2", 7), 700);
   });
-  assert.match((await blocksOf(buf)).join("\n"), /E = mc\^2 in these units/);
+  assert.match(
+    (await blocksOf(buf)).join("\n"),
+    /E = mc\[raised 2\] in these units/,
+  );
 });
 
 test("small text far from any word on the line is not folded in", async () => {
@@ -128,4 +131,75 @@ test("an uploaded PDF answers with the exponent, not a bare 10", async () => {
   } finally {
     await new Promise((r) => srv.close(r));
   }
+});
+
+test("a footnote mark after money or a noun is not written as a power", async () => {
+  const buf = await pdfWith(({ put, width }) => {
+    const a = "The penalty applies above $5,000";
+    put(a, 72, 700);
+    put("1", 72 + width(a), 704, 7);
+    put(" of unpaid tax in a year.", 72 + width(a) + width("1", 7), 700);
+    put("The training used eight GPUs", 72, 688);
+    put("5", 72 + width("The training used eight GPUs"), 692, 7);
+    put(".", 72 + width("The training used eight GPUs") + width("5", 7), 688);
+    put("1", 72, 100, 6);
+    put(" Amounts are in US dollars.", 72 + width("1", 6), 96, 9);
+    put("5", 72, 88, 6);
+    put(" Eight NVIDIA P100 cards.", 72 + width("5", 6), 84, 9);
+  });
+  const t = (await blocksOf(buf)).join("\n");
+  assert.match(t, /\$5,000\[\^1\] of unpaid/);
+  assert.match(t, /eight GPUs\[\^5\]\./);
+  assert.doesNotMatch(t, /5,000\^1|GPUs\^5/);
+});
+
+test("the same digit as a note mark and as an exponent is not called either", async () => {
+  const buf = await pdfWith(({ put, width }) => {
+    const a = "Energy scales as n";
+    put(a, 72, 700);
+    put("2", 72 + width(a), 704, 7);
+    put(" for this method.", 72 + width(a) + width("2", 7), 700);
+    put("A claim", 72, 688);
+    put("2", 72 + width("A claim"), 692, 7);
+    put("2", 72, 100, 6);
+    put(" Source: the annual report.", 72 + width("2", 6), 96, 9);
+  });
+  const t = (await blocksOf(buf)).join("\n");
+  assert.match(t, /scales as n\[raised 2\] for/);
+  assert.match(t, /A claim\[raised 2\]/);
+  assert.doesNotMatch(t, /\^2|\[\^2\]/);
+});
+
+test("a raised digit whose note is not on the page is not called a power", async () => {
+  const buf = await pdfWith(({ put, width }) => {
+    put("The committee approved the plan", 72, 700);
+    put("7", 72 + width("The committee approved the plan"), 704, 7);
+    put(
+      " after a long debate.",
+      72 + width("The committee approved the plan") + width("7", 7),
+      700,
+    );
+  });
+  const t = (await blocksOf(buf)).join("\n");
+  assert.match(t, /plan\[raised 7\] after/);
+  assert.doesNotMatch(t, /\^7/);
+});
+
+test("a real exponent in its own maths font stays a power beside a footnote", async () => {
+  const doc = await PDFDocument.create();
+  const body = await doc.embedFont(StandardFonts.Helvetica);
+  const math = await doc.embedFont(StandardFonts.TimesRoman);
+  const page = doc.addPage([612, 792]);
+  const draw = (t, x, y, size, font) => page.drawText(t, { x, y, size, font });
+  const a = "The cost grows as n";
+  draw(a, 72, 700, 10, body);
+  draw("2", 72 + body.widthOfTextAtSize(a, 10), 704, 7, math);
+  draw(" per step.", 72 + body.widthOfTextAtSize(a, 10) + 4, 700, 10, body);
+  draw("See the appendix", 72, 688, 10, body);
+  draw("3", 72 + body.widthOfTextAtSize("See the appendix", 10), 692, 7, body);
+  draw("3", 72, 100, 6, body);
+  draw(" Appendix B lists the data.", 76, 96, 9, body);
+  const t = (await blocksOf(Buffer.from(await doc.save()))).join("\n");
+  assert.match(t, /grows as n\^2 per step/);
+  assert.match(t, /appendix\[\^3\]/);
 });
